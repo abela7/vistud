@@ -791,6 +791,7 @@ Every item below is an automated Playwright test unless marked *review*.
 
 **Decided by the PM for WP6 (M1):**
 - **Design guide and brand.** [DESIGN.md](../../DESIGN.md) is the shared UI and UX guide, under this ADR's authority. The owner's ViStud logo sets the brand colours (deep blue to ocean to teal), replacing the earlier indigo proposal. Gradients are part of the identity and fully theme-controlled (§6). WP6 uses the shared visual foundations for its functional screens, replacing the earlier "unstyled markup" direction; this does not start M2.
+- **Design review of PR #3** (at `8ac9f03`). The visual direction is approved for continuation; WP6 is not accepted. Keep "Your study brain, kept for you." for now. Keep Ember as the third built-in theme. Prefer the white logo directly on dark or gradient surfaces and the full-colour logo on light surfaces (not implemented yet; [DESIGN.md](../../DESIGN.md) §2.3).
 
 **Decided by the PM before WP4 (M1):**
 - **D9 A (staged):** G1a measures in-app queries, starting at M4; G1b later checks chat queries, once MCP capture exists (M6). The agreed evidence thresholds apply to each stage. If the evidence is insufficient, the result is reported as **inconclusive**; nothing is decided just because 4–6 weeks have passed. See ADR 0001, G1.

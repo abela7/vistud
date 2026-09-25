@@ -44,6 +44,8 @@ The wordmark is a left-to-right gradient: `#003272` at 0%, `#006E91` at 60%, `#0
 
 ### 2.3 Logo treatments
 
+> **PM decision (design review of PR #3): prefer the white logo directly on dark or gradient surfaces, and keep the full-colour logo on light surfaces.** This is **not implemented yet**. The table below describes the current code, which still puts the full-colour logo on a light plate on dark surfaces. Changing it is the first next task in [LOCAL-TAKEOVER.md](docs/handoff/LOCAL-TAKEOVER.md#4-what-is-left-in-wp6); update this section when it lands.
+
 The artwork is never recoloured, stretched, outlined, rotated or given effects. Treatments differ only in what sits behind it.
 
 | Surface | Treatment | Why |
@@ -167,7 +169,7 @@ The generated files are checked for freshness in CI: changing a theme without re
 |---|---|---|
 | **ViStud Light** (`vistud-light`) | Light | The default. The brand's deep blue to ocean to teal gradients |
 | **ViStud Dark** (`vistud-dark`) | Dark | The default dark theme. Deep brand gradients, light teal accents, the logo plate |
-| **Ember** (`ember`) | Light | An alternate preset proving the system's flexibility: a plum to berry to amber brand gradient at a different angle and stop positions, and a **solid** primary action. It uses exactly the same components |
+| **Ember** (`ember`) | Light | An alternate preset proving the system's flexibility: a plum to berry to amber brand gradient at a different angle and stop positions, and a **solid** primary action. It uses exactly the same components. Kept as the third built-in theme (PM decision) |
 
 Themes are JSON in `resources/themes/`. After editing one, run `php artisan vistud:themes:build`, which validates contrast and regenerates the stylesheet.
 
@@ -303,7 +305,7 @@ At least 44 × 44 px for every interactive element on touch devices (`pointer: c
 
 ### 7.1 Signed-out screens
 
-Login, two-factor challenge, password reset and invitation acceptance share `<x-layouts.auth>`: a `surface-brand` panel with the white logo and a short line of copy, and the form on a calm card over `surface-subtle`. The appearance switcher sits below the form. These screens submit as normal forms because the session changes; that is the one place a full page load is expected.
+Login, two-factor challenge, password reset and invitation acceptance share `<x-layouts.auth>`: a `surface-brand` panel with the white logo and a short line of copy, and the form on a calm card over `surface-subtle`. The brand line "Your study brain, kept for you." stays for now (PM decision). The appearance switcher sits below the form. These screens submit as normal forms because the session changes; that is the one place a full page load is expected.
 
 Previews of the login screen: [docs/design/previews/](docs/design/previews/).
 
