@@ -1,0 +1,13 @@
+{
+    "about": "Colours measured from the owner's original logo (vistud-logo-original.png). They describe the artwork and are never written into CSS; DESIGN.md §2 explains how they were measured and how the themes adapt them.",
+    "logo": {
+        "deep-blue": "#003272",
+        "lower-leaf": "#003e7c",
+        "ocean": "#006e91",
+        "teal": "#009b9e"
+    },
+    "wordmark-gradient": {
+        "angle": 90,
+        "stops": [["#003272", 0], ["#006e91", 60], ["#009b9e", 100]]
+    }
+}

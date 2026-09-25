@@ -34,4 +34,12 @@ return [
         'ttl_hours' => 72,
     ],
 
+    'appearance' => [
+        // The default light and dark themes. In "system" mode the browser's
+        // preference picks between them before the first paint
+        // (ADR 0003 §6.4, DESIGN.md §3.6).
+        'light' => 'vistud-light',
+        'dark' => 'vistud-dark',
+    ],
+
 ];

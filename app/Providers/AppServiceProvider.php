@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Appearance\Themes;
 use App\Platform\Database\RuntimeGrants;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\MigrationsEnded;
@@ -12,7 +13,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->singleton(Themes::class, fn () => new Themes(resource_path('themes')));
     }
 
     public function boot(): void
