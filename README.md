@@ -10,6 +10,7 @@ derives where each topic stands, independent of any AI model.
 
 - [PROJECT.md](PROJECT.md) explains what ViStud is, how it is built, how we collaborate, and the order to read everything else in.
 - [STATUS.md](docs/coordination/STATUS.md) shows every work package's owner and state, open decisions and blockers. Update only your own package's entry; scope and ownership changes go through the PM.
+- **Taking over locally?** [docs/handoff/LOCAL-TAKEOVER.md](docs/handoff/LOCAL-TAKEOVER.md) lists the branches, what works, what is left, and which setup steps have been verified where.
 
 ## Where to find things
 
@@ -27,9 +28,16 @@ derives where each topic stands, independent of any AI model.
 
 ## Quick start
 
+The supported environment is PHP 8.4 and MySQL 8.4. The broader PHP constraint in `composer.json` does not change that. XAMPP's PHP 8.0 and MariaDB installation does not meet the baseline. Full instructions: [docs/development/setup.md](docs/development/setup.md).
+
+The database command is a **Unix shell** command. It uses input redirection and is not a PowerShell command. A Windows procedure has not been verified.
+
 ```bash
+# Unix shell only (bash). Not PowerShell.
 sudo mysql < database/scripts/local-mysql-users.sql   # once per machine
 composer setup
 npm ci && npm run build                               # front-end assets
 composer test
 ```
+
+Process-forking concurrency tests need a Unix environment with `pcntl` and `posix`. A skipped concurrency test on Windows does not satisfy the M1 gate.
