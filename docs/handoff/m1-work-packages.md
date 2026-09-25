@@ -43,7 +43,7 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 
 ## Rules for everyone
 
-- **One branch per package,** named `m1/<id>-<slug>` (for example `m1/wp5-redaction`), with small pull requests. CI must be green before review. *The PM decides the integration branch; today the only branch is this one.*
+- **One branch per package,** named `m1/<id>-<slug>` (for example `m1/wp5-redaction`), with small pull requests. CI must be green before review. The integration branch is `claude/persistent-study-context-zsilo6` (PM decision).
 - **Files have one owner.** Each package lists its files below. Shared files have the owners listed in [modules.md](../architecture/modules.md#shared-files). If you need a change in a file you don't own, ask in your pull request or open a `contract-change` issue.
 - **Contracts change only through [the contract-change process](../architecture/contracts.md#changing-a-contract).**
 - **Acceptance tests are independent.** Validators write them from the ADRs and specs only. Implementers never edit them. If a test and the ADR disagree, or the spec is ambiguous, the validator raises it with the PM; nobody resolves it by editing the other side's files.
@@ -225,10 +225,12 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 
 ---
 
-## Questions for the PM
+## Questions for the PM (decided)
 
-| # | Question | What the code does now |
+Q1–Q3 were decided by the PM; the decisions are recorded in [STATUS.md](../coordination/STATUS.md#decisions).
+
+| # | Question | Decision |
 |---|---|---|
-| Q1 | ADR 0003 §10.3 says an admin without 2FA "is sent to enrol and can reach nothing else". Does "nothing else" mean nothing in the **admin** workspace, or nothing at all, including their own student workspace? | Admin only: every `/admin` route and every admin service need 2FA; the admin's own student workspace still works. Making it global is a small middleware change |
-| Q2 | Fortify 1.40 now requires `laravel/passkeys` and its WebAuthn libraries as hard dependencies (MIT and similar licences). They are installed but the passkeys feature is **off**. Is that acceptable, or should we pin Fortify below the release that added them? | Installed, feature off |
-| Q3 | Invitation emails: M1 sends none. The admin screen shows the link once for the admin to pass on. Is that enough for the pilot? | No email |
+| Q1 | Does an admin without 2FA lose access to everything, or only to the admin workspace? | Only admin access and operations; the account's own student workspace stays available |
+| Q2 | Fortify 1.40 requires `laravel/passkeys` and WebAuthn libraries. Acceptable? | Yes, with passkeys disabled |
+| Q3 | Is a link shown once to the admin enough, without email, for the pilot? | Yes: manually shared, expiring, single-use links, with tokens kept out of logs |

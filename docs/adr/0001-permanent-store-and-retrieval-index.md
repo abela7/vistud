@@ -413,7 +413,8 @@ The pass thresholds below are proposals. The owner confirms them before any data
 **When:** after about 4–6 weeks of pilot use, counted from the start of milestone M4 (ADR 0003).
 - **Where the cases come from.** Cases come from queries made inside the app (search and the brief preview) and from the owner's study activity.
 - **Chat queries.** These join the test set once MCP capture exists (milestone M6).
-- **Two stages.** ADR 0003 proposes a first decision on the in-app cases (G1a), confirmed later against chat cases (G1b). This is decision D9 in ADR 0003.
+- **Two stages** (ADR 0003, decision D9). G1a decides on the in-app cases; G1b later checks it against chat cases.
+- **Insufficient evidence is inconclusive.** If a stage doesn't reach the pass thresholds' minimums (case counts, categories, confidence interval), it is reported as inconclusive and collection continues. Nothing is decided just because 4–6 weeks have passed.
 
 **If it fails:** embeddings are removed from V1 retrieval, and we reassess whether Qdrant is still worth running for keyword search alone. The choice of permanent store is unaffected.
 
