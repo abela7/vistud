@@ -100,16 +100,20 @@ questions:
   <id>: { state, flags: [...], resurfaced_count }
         # states: open, being_answered, partially_answered, answered,
         #         resolved_learner_confirmed, resolved_demonstrated
-        # flags:  reopened, dormant, split, learner_thought_resolved
+        # flags:  reopened, dormant, merged, split, learner_thought_resolved
 profile:
   <approach>: { helped, no_effect, confused, examples: [...] }
 attempts:
   <event id>: { task, overall, topics: {<topic>: value}, misconceptions: {<id>: bool | disputed},
-                repeat: none | immediate | delayed, checker_suspect }
+                repeat: none | immediate | delayed, checker_suspect, overridden: [claim ids] }
 rejected_pairs: [{ target, entity }]
 ```
 
 The key names and the value vocabularies are Stable, because the acceptance tests assert on them. `facts` stays Provisional until M4 builds screens on it.
+
+**Proposed in WP4 (additive, awaiting PM approval):**
+- `attempts.<id>.overridden`: the IDs of verdict claims that a higher-authority verdict overrode, sorted. ADR 0002 §6 requires them to be "kept and shown as overridden".
+- The question flag `merged`, on a question that others were merged into. ADR 0002 §7 lists `merged`; this document had left it out.
 
 ## Services (Provisional until their increment merges)
 

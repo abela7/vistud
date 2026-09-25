@@ -86,11 +86,16 @@ The live state of milestone M1: who owns each work package, where it stands, and
 |---|---|
 | Owner | Architect (backend lead), as proposed |
 | State | **In progress** (started on the PM's instruction) |
-| Branch / PR | `m1/wp4-projection`, from `242317c`. Pull request to follow |
+| Branch / PR | `m1/wp4-projection`, from `a154850` (the integration branch after the decisions were recorded). Pull request: see below |
 | Depends on | WP1 (done). Independent acceptance tests (V1) will be assigned separately; WP4 starts with its own rule-level developer tests and does not take ownership of V1's files |
 | Next handoff | A focused pull request with implemented rules, test coverage, actual results, remaining gaps, specification questions and any proposed contract changes |
 
-**Starting point:** the untested draft from commit `95904c2` in `app/Brain/Projection/`. It had never been run against the golden replay. The pull request records what changed and what the tests show.
+**Starting point:** the untested draft from commit `95904c2` in `app/Brain/Projection/`.
+
+**Progress:**
+- `rules@1` fixes in `Replay` and `Derivation`: supersession only among verdicts of equal authority; `same_as` honours the named survivor; split assignments applied to every kind of evidence (attempts, verdicts, teaching, asks, answers, self-reports, exhibits); self-report flags scoped as ADR 0002 words them; `weak_part` through nested sub-topics; retired questions and misconceptions dropped; `merged` question flag; overridden verdicts listed per attempt.
+- 93 rule-level developer tests in `tests/Unit/Brain/Projection/` (plain PHPUnit, no framework or database), plus `tests/Architecture/ProjectionPurityTest.php`. A developer run of the golden replay reproduces every checkpoint, A4–A6, V1, V2, V4 and V5, with three differences raised as specification questions (WP4-Q1 to WP4-Q3 in the pull request).
+- Not touched: V1's acceptance files (`tests/Acceptance/**`) and every other package.
 
 ### WP5 · Redaction, clean-up and canonical files
 
