@@ -86,7 +86,7 @@ The live state of milestone M1: who owns each work package, where it stands, and
 |---|---|
 | Owner | Architect (backend lead), as proposed |
 | State | **In progress** (started on the PM's instruction) |
-| Branch / PR | `m1/wp4-projection`, from `a154850` (the integration branch after the decisions were recorded). Pull request: see below |
+| Branch / PR | `m1/wp4-projection`, from `a154850` (the integration branch after the decisions were recorded). Pull request: [abela7/vistud#2](https://github.com/abela7/vistud/pull/2) |
 | Depends on | WP1 (done). Independent acceptance tests (V1) will be assigned separately; WP4 starts with its own rule-level developer tests and does not take ownership of V1's files |
 | Next handoff | A focused pull request with implemented rules, test coverage, actual results, remaining gaps, specification questions and any proposed contract changes |
 
