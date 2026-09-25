@@ -20,7 +20,7 @@ M1 is complete when the PM confirms all of these ([ADR 0003 §14](../adr/0003-we
 | ID | Package | Proposed owner | Needs first | Size |
 |---|---|---|---|---|
 | **WP1** | Foundations and contracts | Architect | — | Done in increment 1 |
-| **WP2** | Identity and access services | Architect | WP1 | Medium |
+| **WP2** | Identity and access services | Architect | WP1 | Done in increment 2 |
 | **WP3** | Journal writer and store | Architect | WP1 | Medium |
 | **WP4** | Projection engine to `rules@1` | Architect | WP1 (entry format) | Medium |
 | **WP5** | Redaction, clean-up and canonical files | A second backend developer | WP1, WP3's writer | Medium |
@@ -37,7 +37,7 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
       └── V1 (starts now) ┴── the M1 gate
 ```
 
-**Order of the architect's own work:** WP2 first (WP6 and V2 wait on it), then WP3 (WP5 waits on the writer), then WP4 against V1's tests as they land.
+**Order of the architect's own work:** WP2 first (WP6 and V2 wait on it; delivered in increment 2), then WP3 (WP5 waits on the writer), then WP4 against V1's tests as they land.
 
 **Parallel from today:** V1 can start immediately, because the entry format and projection output are Stable. WP5 can start on the file service and outbox straight away, and pick up the writer when WP3 lands. WP6 can start once WP2's service signatures are merged.
 
@@ -73,7 +73,7 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 
 ## WP2 · Identity and access services
 
-**Owner:** architect (proposed). **Needs:** WP1.
+**Owner:** architect (proposed). **Needs:** WP1. **Status:** delivered in increment 2, awaiting PM review. Developer tests: `tests/Feature/Identity/**`, `tests/Feature/Audit/**`, `tests/Feature/Api/OpenApiContractTest.php`.
 
 **Scope** (ADR 0003 §10.2–10.3):
 - Install and configure **Fortify 1.40**: login, logout, two-factor with confirmation, recovery codes, password confirmation, password reset. Registration off. Views are left to WP6.
@@ -93,7 +93,7 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 - `GET /api/v1/me` matches its OpenAPI definition.
 - The service signatures in contracts.md become Stable when this merges.
 
-**Owns:** `app/Identity/**`, `app/Audit/**`, `app/Http/Middleware/**`, `app/Http/Controllers/Api/V1/MeController.php`, `app/Console/Commands/{CreateAccount,GrantAdmin,ResetTwoFactor}.php`, `app/Providers/FortifyServiceProvider.php`, `config/fortify.php`, `app/Models/{User,UserRole,Learner,Invitation}.php`, `database/factories/**`, `database/seeders/**`, `routes/web/admin.php` (the protected group only; WP6 adds screens inside it), `docs/api/openapi.yaml` (first version), `tests/Feature/Identity/**`, `tests/Feature/Audit/**`, `tests/Unit/Identity/**`.
+**Owns:** `app/Identity/**`, `app/Audit/**`, `app/Http/AdminRoutes.php`, `app/Http/Middleware/**`, `app/Http/Controllers/{WorkspaceController,InvitationAcceptanceController}.php`, `app/Http/Controllers/Api/V1/MeController.php`, `app/Console/Commands/{CreateAccount,GrantAdmin,ResetTwoFactor}.php`, `app/Providers/FortifyServiceProvider.php`, `config/fortify.php`, `app/Models/User.php`, `database/factories/**`, `database/seeders/**`, `routes/web/admin.php` (the protected group), `routes/web/identity.php`, `docs/api/openapi.json` (WP3 adds its endpoint), `tests/Support/OpenApi.php`, `tests/Concerns/CreatesAccounts.php`, `tests/Feature/Identity/**`, `tests/Feature/Audit/**`, `tests/Feature/Api/**`.
 
 ---
 
@@ -176,7 +176,7 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 - Every ID a component receives from the browser is `#[Locked]`.
 - No styling beyond what's needed to be usable, and no theme work.
 
-**Owns:** `app/Livewire/**`, `resources/views/**`, `routes/web/auth.php`, `routes/web/student.php`, the screen routes inside `routes/web/admin.php`, `app/Providers/FortifyViewsServiceProvider.php`, `tests/Feature/Web/**`.
+**Owns:** `app/Livewire/**`, `resources/views/**`, `routes/web/auth.php`, `routes/web/student.php`, `routes/web/admin-screens.php` (loaded inside the protected admin group), `app/Providers/FortifyViewsServiceProvider.php`, `tests/Feature/Web/**`. Turning on Fortify's views (`'views' => true` in `config/fortify.php`) is a one-line change the architect makes when WP6 asks.
 
 ---
 
@@ -221,3 +221,13 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 - **Testing the tests:** at least three deliberate breaks, each on a throwaway branch, make the suite fail: removing the learner filter in `LearnerTables`, removing `Guard::protectedAdmin()` from one service, and removing `#[Locked]` from one component. The results are recorded in the pull request.
 
 **Owns:** `tests/Acceptance/Security/**`.
+
+---
+
+## Questions for the PM
+
+| # | Question | What the code does now |
+|---|---|---|
+| Q1 | ADR 0003 §10.3 says an admin without 2FA "is sent to enrol and can reach nothing else". Does "nothing else" mean nothing in the **admin** workspace, or nothing at all, including their own student workspace? | Admin only: every `/admin` route and every admin service need 2FA; the admin's own student workspace still works. Making it global is a small middleware change |
+| Q2 | Fortify 1.40 now requires `laravel/passkeys` and its WebAuthn libraries as hard dependencies (MIT and similar licences). They are installed but the passkeys feature is **off**. Is that acceptable, or should we pin Fortify below the release that added them? | Installed, feature off |
+| Q3 | Invitation emails: M1 sends none. The admin screen shows the link once for the admin to pass on. Is that enough for the pilot? | No email |

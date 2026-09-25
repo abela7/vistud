@@ -35,7 +35,30 @@ To run the app locally:
 php artisan serve        # http://localhost:8000
 ```
 
-There are no screens yet: login pages and the admin shell come from work package WP6. Until then, M1 is exercised through tests and the console.
+There are no screens yet: login pages and the admin shell come from work package WP6. Until then, M1 is exercised through tests, the console and the JSON endpoints.
+
+## Local accounts
+
+Either seed the synthetic accounts (local only; the seeder refuses to run in production):
+
+```bash
+php artisan migrate:fresh --database=mysql_owner --seed
+#   owner@vistud.test      student and admin
+#   student.a@vistud.test  student
+#   student.b@vistud.test  student
+#   password for all:      local-password-only
+```
+
+or set up an account the way a real installation does (ADR 0003 §10.3):
+
+```bash
+php artisan vistud:account:create you@example.com --name="Your Name" --timezone=Europe/London
+php artisan vistud:admin:grant you@example.com
+# If an admin loses their 2FA device and codes, and no other admin can help:
+php artisan vistud:admin:reset-2fa you@example.com
+```
+
+Admins must set up two-factor authentication before entering the admin workspace. Every one of these commands is written to the audit log as a system action.
 
 ## Database users
 

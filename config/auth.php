@@ -112,6 +112,8 @@ return [
     |
     */
 
-    'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
+    // "Recent password confirmation" is 10 minutes (ADR 0003 §10.2), including for
+    // Fortify's two-factor management endpoints.
+    'password_timeout' => 600,
 
 ];

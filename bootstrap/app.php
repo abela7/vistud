@@ -1,5 +1,11 @@
 <?php
 
+use App\Http\Middleware\EnsureAccountActive;
+use App\Http\Middleware\EnsureRole;
+use App\Http\Middleware\EnsureTwoFactorEnrolled;
+use App\Http\Middleware\EnterAdminWorkspace;
+use App\Http\Middleware\RequirePasswordConfirmation;
+use App\Http\Middleware\ShowRecoveryCodesOnce;
 use App\Platform\Errors\AppError;
 use App\Platform\Http\ErrorEnvelope;
 use App\Platform\Http\Middleware\AddAccountHeader;
@@ -31,7 +37,16 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(AssignRequestId::class);
+        $middleware->appendToGroup('web', [EnsureAccountActive::class, ShowRecoveryCodesOnce::class]);
         $middleware->group('api.v1', [AddAccountHeader::class]);
+        $middleware->alias([
+            'role' => EnsureRole::class,
+            'two_factor' => EnsureTwoFactorEnrolled::class,
+            'admin.workspace' => EnterAdminWorkspace::class,
+            'password.confirm' => RequirePasswordConfirmation::class,
+        ]);
+        // Login pages arrive with work package WP6. Until then, guests go home.
+        $middleware->redirectGuestsTo(fn () => Route::has('login') ? route('login') : '/');
     })
     ->withExceptions(function (Exceptions $exceptions) use ($wantsJson): void {
         // Expected failures reported to callers are not application errors.

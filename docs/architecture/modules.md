@@ -16,15 +16,16 @@ app/
     Errors/            AppError and its subclasses
     Http/              Error envelope, request ID, account header
     Ids.php            ID rules and UUIDv7 generation
-  Identity/            Accounts, roles, learners, invitations, 2FA, workspaces   (increment 2)
-  Audit/               The append-only audit log                                   (increment 2)
+  Identity/            Accounts, roles, learners, invitations, 2FA, workspaces
+  Audit/               The append-only audit log
   Brain/               The learning memory engine (ADR 0001, ADR 0002)
     Journal/           Entry value objects, vocabulary, validation, review policy (pure PHP)
     Projection/        rules@1: topic labels, misconceptions, questions, profile  (pure PHP)
     Store/             Journal persistence and learner-scoped reads               (increment 3)
     Writer/            The append service                                         (increment 3)
     Redaction/         Redaction, clean-up, reconciliation                        (work package WP5)
-  Http/Controllers/    JSON API adapters (Api/V1/...)
+  Http/Controllers/    HTTP adapters: JSON API (Api/V1/...) and form endpoints
+  Http/Middleware/     Route checks: account status, role, 2FA, admin workspace
   Livewire/            Web screen adapters                                        (work package WP6)
   Console/Commands/    Console adapters
   Models/              Eloquent models: data mapping only, no business rules

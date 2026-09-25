@@ -1,0 +1,82 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ViStud API",
+    "version": "1",
+    "description": "The JSON API under /api/v1. Conventions: docs/architecture/conventions.md. Stability of each operation: x-stability, and docs/architecture/contracts.md. Browser clients authenticate with the session cookie and send X-XSRF-TOKEN on writes."
+  },
+  "paths": {
+    "/api/v1/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "The current account, its roles, its learner and the active workspace",
+        "x-stability": "provisional",
+        "responses": {
+          "200": {
+            "description": "The current account",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } }
+          },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "Error": {
+        "description": "The error envelope",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "schemas": {
+      "Me": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["account", "learner", "workspace"],
+        "properties": {
+          "account": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name", "email", "roles", "two_factor_confirmed"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "email": { "type": "string" },
+              "roles": { "type": "array", "items": { "type": "string", "enum": ["student", "admin"] } },
+              "two_factor_confirmed": { "type": "boolean" }
+            }
+          },
+          "learner": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["id", "timezone"],
+            "properties": {
+              "id": { "type": "string" },
+              "timezone": { "type": "string" }
+            }
+          },
+          "workspace": { "type": ["string", "null"], "enum": ["student", "admin", null] }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message", "request_id"],
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" },
+              "request_id": { "type": ["string", "null"] },
+              "details": { "type": "object" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -109,19 +109,33 @@ The key names and the value vocabularies are Stable, because the acceptance test
 
 Every service method takes a `Principal` (or a `LearnerScope` for learner data), runs its own permission checks through `Guard`, and throws `AppError` subclasses. Signatures below are the plan; each becomes Stable when its increment is merged.
 
-### Identity and audit (increment 2)
+### Identity and audit (increment 2: implemented)
+
+Provisional until the PM approves increment 2, then Stable.
 
 | Service | Methods | Checks |
 |---|---|---|
-| `Identity\PrincipalFactory` | `fromRequest(Request): Principal` · `forUser(User, channel, ?passwordConfirmedAt): Principal` | Refuses suspended (`access_revoked`) and deleted (`account_deleted`) accounts |
-| `Identity\Accounts` | `create(Principal, name, email, password, student: true, timezone?)` · `suspend(Principal, userId)` · `reactivate(Principal, userId)` · `requestDeletion(Principal, userId)` · `details(Principal, userId): AccountDetails` · `list(Principal, cursor?)` | Protected admin, or system for `create`. `requestDeletion` also allows the account's own user, with a recent password confirmation. The last-admin safeguard applies to suspend and delete |
-| `Identity\Roles` | `grantAdmin(Principal, userId)` · `revokeAdmin(Principal, userId)` | Protected admin; system may grant. Last-admin safeguard on revoke |
-| `Identity\Invitations` | `invite(Principal, email): IssuedInvitation` · `revoke(Principal, invitationId)` · `accept(token, name, password): User` | Protected admin to invite and revoke. `accept` takes no role and always creates a student |
-| `Identity\TwoFactorReset` | `reset(Principal, userId)` | Protected admin, or system from the console |
-| `Identity\Workspaces` | `enter(Principal, Workspace)` | `admin`: protected admin. `student`: the student role |
-| `Audit\AuditLog` | `record(Principal, action, targetType?, targetId?, metadata = [])` · `list(Principal, filters, cursor?)` | `list` needs an admin with 2FA |
+| `Identity\PrincipalFactory` | `fromRequest(Request): Principal` (cached per request) · `forUser(User, channel, ?passwordConfirmedAt, ?workspace, ?ip, ?userAgent, ?requestId): Principal` · `forget(Request)` | Reads status and 2FA from the database on every call. Suspended: `403 access_revoked`. Deleted or missing: `401 account_deleted` |
+| `Identity\Accounts` | `create(Principal, name, email, password, student = true, ?timezone): User` · `suspend(Principal, userId)` · `reactivate(Principal, userId)` · `requestDeletion(Principal, userId)` · `details(Principal, userId): AccountDetails` · `list(Principal, ?cursor, limit = 50): {data: list<AccountDetails>, next_cursor}` | `create`: protected admin, or the console. `suspend`, `reactivate`: protected admin. `requestDeletion`: protected admin, or the account's own user with a recent confirmation. `details`, `list`: admin with 2FA. Last-admin safeguard on suspend and delete |
+| `Identity\Roles` | `grantAdmin(Principal, userId)` · `revokeAdmin(Principal, userId)` | Protected admin. The console may grant, never revoke. Last-admin safeguard on revoke |
+| `Identity\Invitations` | `invite(Principal, email): IssuedInvitation` · `revoke(Principal, invitationId)` · `accept(token, name, password, ?timezone): User` | Protected admin to invite and revoke. `accept` takes no role, always creates a student, and answers every invalid token with the same `422 invitation_invalid` |
+| `Identity\TwoFactorReset` | `reset(Principal, userId)` | Protected admin, or the console. Ends the user's sessions |
+| `Identity\Workspaces` | `enter(Principal, Workspace)` | `admin`: protected admin (2FA and a recent confirmation). `student`: the student role |
+| `Audit\AuditLog` | `record(Principal, action, ?targetType, ?targetId, metadata = [], ?role)` · `list(Principal, filters = [], ?cursor, limit = 50)` | `record` refuses metadata strings that aren't ID tokens (so no email addresses or free text). `list`: admin with 2FA |
 
-`AccountDetails` holds email, dates, status, roles and counts. **No admin service has a method that returns learning content** (ADR 0003 §10.4).
+- `AccountDetails` holds id, name, email, status, roles, 2FA status, created, status changed and last active. **No admin service has a method that returns learning content** (ADR 0003 §10.4).
+- `IssuedInvitation` holds id, token and expiry. The token is returned once and only its hash is stored. M1 sends no email: the admin screen (WP6) shows the link once.
+- `Platform\Access\Workspace` (enum `student`, `admin`) and `Principal::$workspace` were added in increment 2. Both are additive.
+
+**Web adapters and middleware (increment 2).** These are what WP6 builds screens on:
+
+| Route or middleware | Behaviour |
+|---|---|
+| `App\Http\AdminRoutes::group()` | The `/admin` group: `auth`, `role:admin` (403 and an audit record otherwise), `two_factor` (403 `two_factor_required`, or a redirect to the `two-factor.setup` page once WP6 adds it), `admin.workspace` (entering needs a recent password confirmation: 423, or a redirect to the confirm-password page). WP6 adds screens in `routes/web/admin-screens.php`. Any other `/admin` URL is 403 for non-admins and 404 for admins |
+| `POST /workspace/{student\|admin}` | Switches workspace. `204` for JSON, a redirect otherwise |
+| `POST /invitations/accept` | `token`, `name`, `password`, `password_confirmation`, optional `timezone`. Creates the student, logs them in, `201 {id}` for JSON |
+| Fortify endpoints | `POST /login`, `POST /logout`, `POST /two-factor-challenge`, `POST /forgot-password`, `POST /reset-password`, `PUT /user/password`, `POST /user/confirm-password`, `GET /user/confirmed-password-status`, and the `/user/two-factor-*` endpoints. Success formats are Fortify's own; errors use the envelope. `GET /user/two-factor-recovery-codes` answers once after codes are generated in the session, then `403 recovery_codes_already_shown` |
+| `EnsureAccountActive` (every web and API request) | Logs out a suspended or deleted account on its next request |
 
 ### Journal (increment 3)
 
@@ -135,11 +149,11 @@ The writer trusts nothing about the actor or learner from outside: adapters set 
 
 ## HTTP API
 
-Conventions are in [conventions.md](conventions.md#json-api). An OpenAPI definition (`docs/api/openapi.yaml`) starts with the first endpoint, with contract tests against it (ADR 0003 §8).
+Conventions are in [conventions.md](conventions.md#json-api). The OpenAPI definition is [`docs/api/openapi.json`](../api/openapi.json). `tests/Feature/Api/OpenApiContractTest.php` fails if a `/api/v1` route is missing from it, or a response doesn't match its schema (ADR 0003 §8).
 
 | Endpoint | Status | Arrives | Purpose |
 |---|---|---|---|
-| `GET /api/v1/me` | Provisional | Increment 2 | The account, its roles, its learner ID and the active workspace |
+| `GET /api/v1/me` | Provisional | Increment 2 (implemented) | The account, its roles, its learner ID and the active workspace |
 | `GET /api/v1/journal/entries/{id}` | Provisional | Increment 3 | One of the learner's own entries, with content unless blocked. Another learner's ID gets 404 |
 | `POST /api/v1/notes`, `PUT /api/v1/notes/{id}`, `GET /api/v1/sync/tombstones` | Draft | M2 | Note sync and deletion records ([ADR 0003 §5.3–5.4](../adr/0003-web-workspaces-and-study-content.md#53-autosave-drafts-ordering-and-conflicts)). Not built in M1 |
 
@@ -153,10 +167,10 @@ Stable. New codes may be added; existing codes never change meaning.
 |---|---|
 | 400 | `bad_request` |
 | 401 | `unauthenticated` · `account_deleted` (clients purge that account's drafts) |
-| 403 | `forbidden` · `admin_role_required` · `student_role_required` · `two_factor_required` · `access_revoked` (clients stop retrying) · `system_not_allowed` |
+| 403 | `forbidden` · `admin_role_required` · `student_role_required` · `two_factor_required` · `access_revoked` (clients stop retrying) · `system_not_allowed` · `recovery_codes_already_shown` |
 | 404 | `not_found`: identical for missing records and other learners' records |
 | 405 | `method_not_allowed` |
-| 409 | `conflict` · `version_conflict` (`details.current_version`) · `id_conflict` · `capture_key_conflict` · `last_admin` |
+| 409 | `conflict` · `version_conflict` (`details.current_version`) · `id_conflict` · `capture_key_conflict` · `last_admin` · `email_taken` · `target_deleted` (an admin action on an account that was deleted) |
 | 410 | `gone` (`details.reason`: `trashed` · `deleted` · `redacted`) |
 | 413 | `too_large` |
 | 419 | `session_expired` |
@@ -168,7 +182,7 @@ Stable. New codes may be added; existing codes never change meaning.
 
 ## Audit actions
 
-Provisional names; they become Stable with increment 2.
+Implemented in increment 2 (`App\Audit\AuditAction`). Provisional until the PM approves the increment, then Stable.
 
 | Action | Target |
 |---|---|
@@ -176,5 +190,6 @@ Provisional names; they become Stable with increment 2.
 | `invitation.created`, `invitation.revoked`, `invitation.accepted` | invitation |
 | `role.granted`, `role.revoked` (`metadata.role`) | user |
 | `two_factor.reset` | user |
+| `two_factor.confirmed`, `two_factor.disabled`, `two_factor.recovery_codes_generated`, `two_factor.recovery_code_used` | user |
 | `workspace.admin_entered` | user |
 | `admin.access_denied` (a non-admin reached an admin route) | route name |

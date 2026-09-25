@@ -8,11 +8,13 @@ These rules apply to every work package. Where code already enforces a rule, the
 
 ## Authentication
 
-- **Web sessions through Fortify** (increment 2): login, logout, two-factor challenge, recovery codes, password confirmation and password reset. **Registration is off**; accounts come from invitations or the console (ADR 0003 D4).
+- **Web sessions through Fortify:** login, logout, two-factor challenge, recovery codes, password confirmation and password reset. **Registration is off**; accounts come from invitations or the console (ADR 0003 D4). Only active accounts can log in, and a refused login looks the same whatever the reason.
+- **Fortify's own endpoints** (`/login`, `/user/...`) keep Fortify's success formats. Their errors use the envelope, like everything else.
 - **The JSON API uses the same session.** `/api/v1` runs on the `web` middleware group, so browser calls send the session cookie and the `X-XSRF-TOKEN` header. There are no API tokens until Passport arrives in M6 for external clients.
-- **Account status is checked on every authenticated request** (increment 2). A suspended account is logged out and gets `403 access_revoked`. A deleted account gets `401 account_deleted`.
-- **Two-factor authentication** counts only once confirmed (`users.two_factor_confirmed_at`). It is mandatory for admins (D5).
-- **Password confirmation** is Laravel's session timestamp (`auth.password_confirmed_at`). "Recent" means within the last 600 seconds (`config('vistud.access.password_confirmation_seconds')`).
+- **Account status is checked on every authenticated request,** from the database. A suspended account is logged out and gets `403 access_revoked`. A deleted account gets `401 account_deleted`.
+- **Two-factor authentication** counts only once confirmed (`users.two_factor_confirmed_at`). It is mandatory for everything admin (D5): every `/admin` route and every admin service. An admin who hasn't enrolled can still use their own student workspace. *(An interpretation of ADR 0003 §10.3, "can reach nothing else": question Q1 in [m1-work-packages.md](../handoff/m1-work-packages.md#questions-for-the-pm).)*
+- **Recovery codes are shown once:** one read after they are generated in a session, then `403 recovery_codes_already_shown`.
+- **Password confirmation** is Laravel's session timestamp (`auth.password_confirmed_at`). "Recent" means within the last 600 seconds, for the services (`config('vistud.access.password_confirmation_seconds')`) and for Fortify's two-factor endpoints (`config('auth.password_timeout')`) alike.
 - **The `Principal`** is built once per request by `Identity\PrincipalFactory` and passed to services. The console builds `Principal::system()` only for the bootstrap commands ADR 0003 §10.3 names.
 
 ## Authorization
@@ -32,8 +34,8 @@ Three layers, and only the second one is the real control:
 | Admin actions need the admin role and confirmed 2FA | `Guard::admin()` |
 | Protected admin actions also need a recent password confirmation | `Guard::protectedAdmin()` |
 | The console's system principal is refused by default | Services opt in per operation with `allowSystem: true`. Only account creation, granting admin and resetting 2FA do |
-| A student on an admin route gets 403 | The `/admin` route group (increment 2) |
-| No operation may leave zero active admins | Enforced inside the Identity service, with the admin rows locked (increment 2) |
+| A student on an admin route gets 403 | `App\Http\AdminRoutes`, including a fallback for unknown `/admin` URLs |
+| No operation may leave zero active admins | `App\Identity\AdminSafeguard`, with the active admins' rows locked, so concurrent requests run one after the other |
 | Roles are never set by mass assignment | `role` and `status` aren't fillable. Invitation acceptance takes no role |
 | Livewire components can't be trusted with IDs | IDs are `#[Locked]`, and every action calls a service that authorises again |
 
