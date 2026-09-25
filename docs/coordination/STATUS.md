@@ -7,7 +7,7 @@ The live state of milestone M1: who owns each work package, where it stands, and
 | Who | Current activity |
 |---|---|
 | PM | Reviews, coordinates, assigns packages, approves gates |
-| Architect (backend lead) | WP4 delivered, awaiting review |
+| Architect (backend lead) | WP4, in progress |
 | Grok | Reviewing the onboarding documents only. No package assigned |
 | Gemini | Not started. No package assigned |
 
