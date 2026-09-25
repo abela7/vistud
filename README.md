@@ -26,8 +26,15 @@ derives where each topic stands, independent of any AI model.
 
 ## Quick start
 
+The supported environment is PHP 8.4 and MySQL 8.4. The broader PHP constraint in `composer.json` does not change that. XAMPP's PHP 8.0 and MariaDB installation does not meet the baseline. Full instructions: [docs/development/setup.md](docs/development/setup.md).
+
+The database command is a **Unix shell** command. It uses input redirection and is not a PowerShell command. A Windows procedure has not been verified.
+
 ```bash
+# Unix shell only (bash). Not PowerShell.
 sudo mysql < database/scripts/local-mysql-users.sql   # once per machine
 composer setup
 composer test
 ```
+
+Process-forking concurrency tests need a Unix environment with `pcntl` and `posix`. A skipped concurrency test on Windows does not satisfy the M1 gate.
