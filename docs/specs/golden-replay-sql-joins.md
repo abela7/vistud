@@ -1,6 +1,6 @@
 # Golden replay: SQL JOINs
 
-This is the reference scenario for [ADR 0002](../adr/0002-learning-event-schema.md). It is an executable test, `tests/Unit/Projection/GoldenReplayTest.php`: the test feeds the entries below to the projector in `position` order and checks the expected state at every checkpoint. The edge cases at the end of this document have their own test files, which are named there.
+This is the reference scenario for [ADR 0002](../adr/0002-learning-event-schema.md). It is an executable test, `tests/Acceptance/Brain/GoldenReplayTest.php`: the test feeds the entries below to the projector in `position` order and checks the expected state at every checkpoint. The edge cases at the end of this document have their own test files, which are named there.
 
 ## Fixture settings
 
@@ -174,7 +174,7 @@ Expected results:
 - **Ordering.** E13 is placed at the start of its day, before E12. It is still after the latest exhibit, E7, so it counts as a counter.
 - **Retention at E14.** This uses E13's interval end, 00:00 on 23 Oct. The guaranteed gap is 25 days 19 hours, so checkpoint 10 is still **durable**.
 
-**V3. Redaction.** This variant runs as a database test, `tests/Feature/RedactionTest.php`. On 16 Oct, `E6.content.answer` is redacted with reason `secret`.
+**V3. Redaction.** This variant runs as a database test, `tests/Acceptance/Brain/RedactionTest.php`. On 16 Oct, `E6.content.answer` is redacted with reason `secret`.
 
 Expected results:
 - **Unchanged:** the envelope and body of E6 remain, and derived state is identical at every checkpoint.
@@ -202,7 +202,7 @@ Expected results:
 
 ## Edge-case tests
 
-### Task identity (`tests/Unit/Projection/TaskIdentityTest.php`)
+### Task identity (`tests/Acceptance/Brain/TaskIdentityTest.php`)
 
 | Case | Setup | Expected |
 |---|---|---|
@@ -212,7 +212,7 @@ Expected results:
 | X4 | The same task solved on day 1 and on day 25, with nothing in between | The day-25 attempt is **retained**. By contrast, weekly successes on days 1, 8, 15 and 22 are **practised**, never retained |
 | X5 | Two task records merged with `same_as` | Their attempts count as one task. If the merge is rejected, they count as two |
 
-### Disputes (`tests/Unit/Projection/DisputeTest.php`)
+### Disputes (`tests/Acceptance/Brain/DisputeTest.php`)
 
 | Case | Setup | Expected |
 |---|---|---|
@@ -223,7 +223,7 @@ Expected results:
 | D5 | An auto-checked "incorrect" outcome is disputed | An interpreter adjudication is ignored, because the interpreter ranks below auto. A re-run of the checker citing the dispute settles it |
 | D6 | An active misconception blocks a topic that has a qualifying success, and the learner disputes the misconception's definition | The misconception becomes `disputed`, and the topic becomes **working** with the flag `rests_on_dispute`. A new exhibit, on an attempt made after the dispute, makes the misconception active again, and the topic goes back to **developing** |
 
-### Redaction and restore (`tests/Feature/RedactionTest.php`)
+### Redaction and restore (`tests/Acceptance/Brain/RedactionTest.php`)
 
 | Case | Setup | Expected |
 |---|---|---|

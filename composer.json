@@ -1,10 +1,14 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "vistud/vistud",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
-    "license": "MIT",
+    "description": "ViStud: a persistent study brain and study platform.",
+    "keywords": [
+        "laravel",
+        "study",
+        "learning"
+    ],
+    "license": "proprietary",
     "require": {
         "php": "^8.3",
         "laravel/framework": "^13.17",
@@ -36,9 +40,10 @@
             "composer install",
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
-            "@php artisan migrate --force",
-            "npm install --ignore-scripts",
-            "npm run build"
+            "@migrate"
+        ],
+        "migrate": [
+            "@php artisan migrate --database=mysql_owner --force"
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
@@ -47,6 +52,9 @@
         "test": [
             "@php artisan config:clear --ansi @no_additional_args",
             "@php artisan test"
+        ],
+        "lint": [
+            "vendor/bin/pint --test"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",

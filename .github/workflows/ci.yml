@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, mbstring, intl, sodium
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Create databases and users
+        run: mysql -h127.0.0.1 -uroot -proot < database/scripts/local-mysql-users.sql
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Code style
+        run: vendor/bin/pint --test
+
+      - name: Tests
+        run: php artisan test --testsuite=Unit,Feature,Architecture
+
+      # Independent acceptance tests may land before the code passes them.
+      # This step reports without failing the build until the PM declares
+      # the M1 gate (docs/handoff/m1-work-packages.md); then remove
+      # continue-on-error.
+      - name: Acceptance tests (M1 gate, not yet blocking)
+        if: hashFiles('tests/Acceptance/**/*Test.php') != ''
+        continue-on-error: true
+        run: php artisan test --testsuite=Acceptance
