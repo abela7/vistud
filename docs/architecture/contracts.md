@@ -107,13 +107,17 @@ attempts:
   <event id>: { task, overall, topics: {<topic>: value}, misconceptions: {<id>: bool | disputed},
                 repeat: none | immediate | delayed, checker_suspect, overridden: [claim ids] }
 rejected_pairs: [{ target, entity }]
+invalid_splits: [{ claim, entity, problems: [...], unassigned: [refs] }]
 ```
 
 The key names and the value vocabularies are Stable, because the acceptance tests assert on them. `facts` stays Provisional until M4 builds screens on it.
 
-**Proposed in WP4 (additive, awaiting PM approval):**
-- `attempts.<id>.overridden`: the IDs of verdict claims that a higher-authority verdict overrode, sorted. ADR 0002 §6 requires them to be "kept and shown as overridden".
-- The question flag `merged`, on a question that others were merged into. ADR 0002 §7 lists `merged`; this document had left it out.
+**Approved as contract clarifications in the WP4 review (PM):**
+- **`attempts.<id>.overridden`:** a sorted list of verdict claim IDs overridden by a higher authority (ADR 0002 §6: "kept and shown as overridden"). A claim is listed when it is accepted and not rejected, its value for some facet differs from that facet's effective value, and its authority is lower than the effective verdict's. Not listed: verdicts that agree; verdicts superseded by one of equal authority; verdicts on a facet that is disputed; the attempt's recorded outcome, which is not a claim. Tested in `VerdictAuthorityRulesTest`.
+- **The question flag `merged`:** on the surviving question of a `same_as` merge; the merged-away question no longer appears. Rejecting the merge restores both questions with their separate histories and no flag. ADR 0002 §7 lists `merged`; this document had left it out. Tested in `QuestionRulesTest`.
+
+**Contract change in the WP4 revision (explicit, for PM approval):**
+- **`invalid_splits`:** splits that are effective in the journal but could not validly apply, so the previous interpretation stays in force (ADR 0002 §5, split completeness). Each has the split claim's ID, the split entity, `problems` (sorted codes: `no_parts`, `part_not_defined`, `assignment_outside_parts`, `assignment_not_evidence`, `unassigned_evidence`) and `unassigned` (sorted evidence references, event references where the evidence has one). Normally empty, because the writer refuses incomplete splits; it matters for journals written before that check, or restored from elsewhere. Tested in `SplitRulesTest`.
 
 ## Services (Provisional until their increment merges)
 
@@ -163,6 +167,7 @@ Provisional until the PM approves increment 3, then Stable.
 - Every reference resolves inside the learner's own journal: entries through `event:` and `claim:` (each with the right prefix), entities through a `defines` claim or a record earlier in the journal or the same batch. Otherwise `422 unknown_reference`, which is the same answer for a missing ID and another learner's ID.
 - An entry with a `learner` actor must be in that learner's own journal.
 - Reviews ADR 0002 §6 forbids are refused with `422 review_not_allowed`. When the learner tries to accept or reject a verdict on their own work, `details.use` is `dispute`.
+- **Incomplete splits never take effect (contract change in the WP4 revision).** A `splits_into` claim written as accepted, or a review accepting one, is refused with `422 split_incomplete` unless the split is complete as defined in ADR 0002 §5. `details` has `claim`, `problems` and `unassigned`, with the same codes as the projection's `invalid_splits`, because the writer runs the projection's own check (`Replay::splitProblems`) over the journal including the new entry. A pending (proposed) split may be incomplete. Tested in `JournalWriterTest`.
 - Contract violations are `422 invalid_entry` with `details.field`. Messages never repeat submitted values.
 
 **Not in M1:** the writer does not yet check that `review.state: accepted` matches `policy@1` (ADR 0002 §8). The capture services that create claims (M6) will apply the policy.
@@ -194,7 +199,7 @@ Stable. New codes may be added; existing codes never change meaning.
 | 410 | `gone` (`details.reason`: `trashed` · `deleted` · `redacted`) |
 | 413 | `too_large` |
 | 419 | `session_expired` |
-| 422 | `validation_failed` (`details.fields`) · `invalid_entry` · `unknown_reference` · `review_not_allowed` · `invitation_invalid` |
+| 422 | `validation_failed` (`details.fields`) · `invalid_entry` · `unknown_reference` · `review_not_allowed` · `invitation_invalid` · `split_incomplete` (`details.claim`, `details.problems`, `details.unassigned`) |
 | 423 | `password_confirmation_required` |
 | 429 | `rate_limited` |
 | 500 | `server_error` |

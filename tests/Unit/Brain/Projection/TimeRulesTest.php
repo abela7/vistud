@@ -107,4 +107,30 @@ class TimeRulesTest extends TestCase
         $this->assertTopic($s->project('2026-10-03 10:00', observedUntil: '2026-10-03 10:00'), 'T', 'developing');
         $this->assertTopic($s->project('2026-10-06 10:00'), 'T', 'working');
     }
+
+    public function test_the_review_boundary_is_strict_and_measured_from_the_contacts_upper_bound(): void
+    {
+        // PM ruling WP4-Q3: at exactly the interval, false; immediately after, true.
+        $lecture = Scenario::make()->topic('T')->task('TK-1')->task('TK-2')->task('TK-EX')->exercises('TK-1', 'T')->exercises('TK-2', 'T')->exercises('TK-EX', 'T')
+            ->attempt('A1', '2026-10-01T10:00:00+00:00', 'TK-1', 'correct', 'auto', ['session' => 'S1'])
+            ->attempt('A2', '2026-10-02T10:00:00+00:00', 'TK-2', 'correct', 'auto', ['session' => 'S2'])
+            ->attempt('A3', '2026-10-02T10:30:00+00:00', 'TK-EX', 'correct', 'auto', ['session' => 'S2', 'form' => 'explain'])
+            ->judges('J3', 'A3', ['own_words' => true], '2026-10-02T10:40:00+00:00')
+            // A two-hour lecture: its interval ends at 14:00.
+            ->exposure('LECTURE', '2026-10-02T12:00:00+00:00', ['topic:T'], ['format' => 'lecture', 'until' => '2026-10-02T14:00:00+00:00']);
+
+        $flags = fn (string $now) => $lecture->project($now)['topics']['T']['flags'];
+        $this->assertSame([], $flags('2026-11-01T13:59:59+00:00'), 'Before the boundary');
+        $this->assertSame([], $flags('2026-11-01T14:00:00+00:00'), 'Exactly 30 days after the upper bound');
+        $this->assertSame(['needs_review'], $flags('2026-11-01T14:00:01+00:00'), 'Immediately after');
+
+        // A day-precision contact ends at the end of its local day.
+        $day = Scenario::make()->topic('T')->task('TK-1')->task('TK-2')->task('TK-EX')->exercises('TK-1', 'T')->exercises('TK-2', 'T')->exercises('TK-EX', 'T')
+            ->attempt('A1', '2026-11-01T10:00:00+00:00', 'TK-1', 'correct', 'auto', ['session' => 'S1'])
+            ->attempt('A2', '2026-11-02T10:00:00+00:00', 'TK-2', 'correct', 'auto', ['session' => 'S2'])
+            ->attempt('A3', '2026-11-03T10:30:00+00:00', 'TK-EX', 'correct', 'auto', ['session' => 'S3', 'form' => 'explain', 'precision' => 'day'])
+            ->judges('J3', 'A3', ['own_words' => true], '2026-11-03T10:40:00+00:00');
+        $this->assertSame([], $day->project('2026-12-04T00:00:00+00:00')['topics']['T']['flags']);
+        $this->assertSame(['needs_review'], $day->project('2026-12-04T00:00:01+00:00')['topics']['T']['flags']);
+    }
 }

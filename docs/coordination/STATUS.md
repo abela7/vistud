@@ -7,7 +7,7 @@ The live state of milestone M1: who owns each work package, where it stands, and
 | Who | Current activity |
 |---|---|
 | PM | Reviews, coordinates, assigns packages, approves gates |
-| Architect (backend lead) | WP4, in progress |
+| Architect (backend lead) | WP4 delivered, awaiting review |
 | Grok | Reviewing the onboarding documents only. No package assigned |
 | Gemini | Not started. No package assigned |
 
@@ -85,17 +85,20 @@ The live state of milestone M1: who owns each work package, where it stands, and
 | | |
 |---|---|
 | Owner | Architect (backend lead), as proposed |
-| State | **In progress** (started on the PM's instruction) |
-| Branch / PR | `m1/wp4-projection`, from `a154850` (the integration branch after the decisions were recorded). Pull request: [abela7/vistud#2](https://github.com/abela7/vistud/pull/2) |
-| Depends on | WP1 (done). Independent acceptance tests (V1) will be assigned separately; WP4 starts with its own rule-level developer tests and does not take ownership of V1's files |
-| Next handoff | A focused pull request with implemented rules, test coverage, actual results, remaining gaps, specification questions and any proposed contract changes |
+| State | **Delivered, awaiting review** (revised with the PM's rulings on WP4-Q1 to WP4-Q6) |
+| Branch / PR | `m1/wp4-projection`, from `a154850`. Pull request: [abela7/vistud#2](https://github.com/abela7/vistud/pull/2) |
+| Depends on | WP1 (done). Independent acceptance tests (V1) will be assigned separately; WP4 used its own developer tests and does not own V1's files |
+| Next handoff | PM review of the revised pull request, including the explicit writer contract change for split completeness. Not accepted, and M1 is not complete until the independent acceptance tests exist and pass |
 
 **Starting point:** the untested draft from commit `95904c2` in `app/Brain/Projection/`.
 
-**Progress:**
-- `rules@1` fixes in `Replay` and `Derivation`: supersession only among verdicts of equal authority; `same_as` honours the named survivor; split assignments applied to every kind of evidence (attempts, verdicts, teaching, asks, answers, self-reports, exhibits); self-report flags scoped as ADR 0002 words them; `weak_part` through nested sub-topics; retired questions and misconceptions dropped; `merged` question flag; overridden verdicts listed per attempt.
-- 93 rule-level developer tests in `tests/Unit/Brain/Projection/` (plain PHPUnit, no framework or database), plus `tests/Architecture/ProjectionPurityTest.php`. A developer run of the golden replay reproduces every checkpoint, A4–A6, V1, V2, V4 and V5, with three differences raised as specification questions (WP4-Q1 to WP4-Q3 in the pull request).
-- Not touched: V1's acceptance files (`tests/Acceptance/**`) and every other package.
+**Delivered:**
+- `rules@1` fixes in `Replay` and `Derivation`: supersession only among verdicts of equal authority; `same_as` honours the named survivor; split assignments applied to every kind of evidence; self-report flags scoped as ADR 0002 words them; `weak_part` through nested parts, safe with cycles; retired questions and misconceptions dropped; the `merged` question flag; overridden verdicts listed per attempt.
+- The PM's rulings (review of #2): `underconfident` and `practised` as ADR 0002 states them, with `practised` recomputed after a regression; a strict `needs_review` boundary from the contact's upper bound; `merged` on the survivor and undoable; never-asked questions open with nothing invented; the approved `overridden` and `merged` clarifications documented and tested.
+- Split completeness: an incomplete split never takes effect. The projection reports it in `invalid_splits` and keeps the previous interpretation; the writer refuses it with `422 split_incomplete` (an explicit contract change, awaiting approval).
+- ADR 0002, the golden replay spec and `contracts.md` updated together, marked as PM-approved clarifications.
+
+**Evidence:** 106 projection developer tests in `tests/Unit/Brain/Projection/` (plain PHPUnit, no framework or database), `tests/Architecture/ProjectionPurityTest.php`, and a writer test for split refusal. The developer run of the golden replay reproduces every checkpoint, A4–A6, V1, V2, V4 and V5 as the spec now states them. Full suite: 225 tests pass (Unit 128, Feature 92, Architecture 5). V1's acceptance files (`tests/Acceptance/**`) are untouched.
 
 ### WP5 · Redaction, clean-up and canonical files
 

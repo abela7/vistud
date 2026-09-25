@@ -149,4 +149,39 @@ class QuestionRulesTest extends TestCase
         $this->assertQuestion($p, 'Q', 'open', [], 0);
         $this->assertArrayNotHasKey('OLD', $p['questions']);
     }
+
+    public function test_undoing_a_merge_restores_both_separate_histories(): void
+    {
+        // PM ruling WP4-Q4: merged belongs to the survivor, and the merge can be undone.
+        $s = $this->asked()
+            ->exposure('ANSWER', '2026-10-01 19:02', ['topic:T'], ['by' => 'chat_ai', 'responds_to' => 'ASK', 'session' => 'S1'])
+            ->judges('J', 'ANSWER', ['answer' => [['question' => 'question:Q', 'adequacy' => 'full']]], '2026-10-01 19:30')
+            ->ask('ASK2', '2026-10-05 19:00', [], 'S2')
+            ->question('DEF2', 'Q2', '2026-10-05 19:00')
+            ->refersTo('REF2', 'ASK2', 'Q2', '2026-10-05 19:00');
+        $before = $s->project('2026-10-05 19:05');
+
+        $s->sameAs('SAME', 'question', 'Q2', 'Q', '2026-10-05 19:10');
+        $merged = $s->project('2026-10-05 19:15');
+        $this->assertArrayNotHasKey('Q2', $merged['questions']);
+        // Q was answered, not resolved, when ASK2 came in: not a resurfacing.
+        $this->assertQuestion($merged, 'Q', 'open', ['merged'], 0);
+
+        $s->learnerReview('UNDO', 'claim:SAME', 'reject', '2026-10-05 19:20');
+        $undone = $s->project('2026-10-05 19:05');
+        $this->assertSame($before['questions'], $undone['questions']);
+        $this->assertSame([['target' => 'question:Q2', 'entity' => 'question:Q']], $undone['rejected_pairs']);
+    }
+
+    public function test_a_defined_but_never_asked_question_gets_no_invented_activity(): void
+    {
+        // PM ruling WP4-Q6: open, with no ask, resurfacing or dormancy made up.
+        $s = Scenario::make()->topic('T')->question('DEF', 'Q', '2026-10-01 10:00');
+        $this->assertQuestion($s->project('2027-06-01 10:00'), 'Q', 'open', [], 0);
+
+        // Uncertainty about it doesn't reopen or resurface anything.
+        $s->selfReport('UNSURE', '2026-10-02 10:00', 'unsure', ['question:Q']);
+        $this->assertQuestion($s->project('2026-10-03 10:00'), 'Q', 'open', [], 0);
+        $this->assertTopic($s->project('2026-10-03 10:00'), 'T', 'not_started');
+    }
 }

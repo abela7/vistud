@@ -16,6 +16,15 @@
   - `course` and `module` records;
   - purging browser drafts when content is redacted;
   - batched attempts, now scheduled with flashcards.
+- **Revised:** 2026-09-25. **PM-approved clarifications from the WP4 review** (projection engine), marked "(WP4 clarification)" below:
+  - `underconfident` counts qualifying topic-specific successes whatever the overall outcome;
+  - `practised` is computed within the current window, and never suppresses `needs_review`;
+  - `needs_review` is a strict "longer than", measured from the latest contact's upper bound;
+  - `weak_part` includes nested parts, and cycles are safe;
+  - `merged` belongs to the surviving question, and a merge can be undone;
+  - a defined question nobody has asked is `open`, with nothing invented;
+  - verdicts overridden by a higher authority are listed per attempt;
+  - a split takes effect only when complete; an incomplete one changes nothing.
 - **Decision owner:** project owner (project manager and system architect)
 - **Depends on:** [ADR 0001](0001-permanent-store-and-retrieval-index.md)
 
@@ -249,6 +258,15 @@ Two entities of the same type (topic, question, misconception or task) are one.
 One entity turns out to be several.
 - **`targets`:** `[A]`
 - **`value`:** `{into: [B, C, …], assignments: [{ref, to}]}`. Every piece of A's evidence must be assigned, and each new entity needs its own `defines` claim.
+- **Completeness (WP4 clarification).** A split takes effect only if, at the moment it becomes effective (when it is recorded as accepted, or when a review accepts it), all of these hold:
+  - `into` names at least one entity of the same type as A, each already introduced (by a `defines` claim, or a record for tasks), and none of them A itself;
+  - every assignment's `to` is one of `into`;
+  - every assignment's `ref` names a piece of A's evidence;
+  - every piece of A's evidence recorded before that moment is assigned.
+
+  **A's evidence** is, as things stand with earlier merges and splits applied: attempts on A (for a topic, through the task's `exercises`; for a task, directly); exposures and self-reports `about` A; verdicts whose facets name A (topics, misconceptions, `demonstrates`, `answer`, `effect`); `refers_to` claims matching an ask to A; and `addresses` relations to A. Each piece is identified by its claim (if any) and by the event it is about; an assignment to either covers it, the claim taking precedence.
+
+  **Failure behaviour.** The writer refuses to make an incomplete split effective (`split_incomplete`, listing the problems and the unassigned evidence). A pending split may be incomplete, since it is only a proposal. If an incomplete split is in the journal anyway, the projection does not apply it: the previous interpretation stays in force, and the split is reported as invalid. A split is never partially applied. Evidence recorded after the split took effect stays with A until it is assigned by a later claim.
 
 ### `relates`
 A typed link between two things.
@@ -347,7 +365,7 @@ Each facet is resolved on its own, in this order:
    - **disputed** applies to every topic the task exercises.
 
 **Disagreements:**
-- A lower-authority verdict that disagrees is kept and shown as overridden.
+- A lower-authority verdict that disagrees is kept and shown as overridden. **(WP4 clarification)** Each attempt lists the verdict claims that were overridden: accepted, unrejected verdicts whose value for a facet differs from that facet's effective value, and whose authority is lower than the effective verdict's. Verdicts that agree, verdicts superseded by one of equal authority, and verdicts on a disputed facet are not listed. A recorded outcome is not a claim and is never listed.
 - If the interpreter disagrees with `auto`, the attempt is flagged `checker_suspect`.
 
 ### Disputes
@@ -413,7 +431,7 @@ A rejection by an authorised reviewer removes the claim, and ordinary precedence
 - **Regression point:** an unaided failure on T, whose cause is not `slip`, at a moment when T's label was `working` or better. A cause that hasn't been judged yet counts as not a slip.
 - **Window:** evidence from the latest regression point onwards, including that failure. If there has been no regression point, the window is all evidence.
 - **Retained, on a qualifying success s:** there is at least one earlier contact with T. Every contact c that possibly came before s (`c.lo ≤ s.hi`, with `c ≠ s`) is at least 21 days before s, measured as a guaranteed gap (`s.lo − c.hi`).
-- **Practised:** qualifying successes in at least 3 sessions, where the guaranteed gap from the first to the last is at least 21 days. Every practice session is a contact, so frequent practice never produces *retained*. Being practised does hold off `needs_review`.
+- **Practised:** qualifying successes in at least 3 sessions, where the guaranteed gap from the first to the last is at least 21 days. Every practice session is a contact, so frequent practice never produces *retained*. **(WP4 clarification)** Practised is computed within the window, so after a regression it starts again from the regression point. "Being practised holds off `needs_review`" means only that practice sessions are contacts, so recent practice moves the latest-contact time forward; the `practised` flag itself never suppresses `needs_review`.
 - **Explained:** a qualifying success with form `explain` and `own_words` true.
 - **Active misconception on T:** a misconception whose topics include T, in state detected, recurring, resurfaced or addressed.
 - **Topics of a question:** the topics it stems from, plus the topics of any misconception it stems from.
@@ -438,11 +456,11 @@ Labels are calculated within the window. `not_started` and `introduced` look at 
 | `regressed` | The window starts at a regression point, and the label is `developing` |
 | `claimed_only` | A `confident` or `clicked` self-report about T, or about a question whose topics include T, and no attempts on T |
 | `overconfident` | The latest `confident` or `clicked` self-report about T is followed by an unaided failure on T, with no qualifying success after that failure |
-| `underconfident` | The latest `confused`, `unsure` or `stuck` self-report about T is followed by at least 2 qualifying successes |
+| `underconfident` | The latest `confused`, `unsure` or `stuck` self-report about T is followed by at least 2 qualifying successes on T. **(WP4 clarification)** A qualifying success on T counts whatever the attempt's overall outcome, for example T judged correct on an attempt whose overall outcome is incorrect |
 | `practised` | As defined above |
-| `needs_review` | The label is `secure` or `durable`, and `now − (latest contact).hi` is longer than the review interval |
+| `needs_review` | The label is `secure` or `durable`, and `now − (latest contact).hi` is longer than the review interval. **(WP4 clarification)** Strictly longer: at exactly the interval it is false, and immediately after it is true. `hi` is the upper bound of the contact's interval (its end for a lecture, the end of the day for day precision). There is no rounding |
 | `exam_relevant` | There is an effective `emphasizes` claim marking T as exam-relevant |
-| `weak_part` | A topic that is part of T is `developing`, while T is `working` or better |
+| `weak_part` | A topic that is part of T is `developing`, while T is `working` or better. **(WP4 clarification)** "Part of" includes nested parts through effective `part_of` relations. If those relations form a cycle, the traversal still ends, and a failure is never left unblamed: when no task topic is more specific than the others, it falls on all of them |
 | `includes_ai_judged` | The label would be lower if only outcomes judged by `auto` or `person` counted |
 | `rests_on_dispute` | The label would be lower if every dispute were ignored |
 
@@ -491,7 +509,8 @@ The active states are detected, recurring, resurfaced and addressed.
   - `resurfaced_count`
   - `reopened`
   - `dormant`: states 4–6, with no evidence for 21 days
-  - `merged` or `split`
+  - `merged` or `split`. **(WP4 clarification)** `merged` is on the surviving question; the merged-away question no longer appears on its own. Rejecting the `same_as` claim undoes the merge and restores both separate histories. `split` is on a question whose split took effect.
+- **Defined but never asked (WP4 clarification).** An effective question definition with no opening event appears as `open`, with no flags and `resurfaced_count` 0. Nothing is invented: no ask, no resurfacing, no dormancy and no learner activity.
 
 ### Learning profile
 

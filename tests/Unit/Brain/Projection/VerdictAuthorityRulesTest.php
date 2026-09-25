@@ -146,4 +146,39 @@ class VerdictAuthorityRulesTest extends TestCase
         $s->attempt('A2', '2026-10-03 10:00', 'TK-1', 'correct', 'auto', ['session' => 'S2']);
         $this->assertTopic($s->project('2026-10-04 10:00'), 'T', 'working', []);
     }
+
+    public function test_overridden_lists_only_disagreeing_verdicts_of_lower_authority(): void
+    {
+        // Contract clarification approved in the WP4 review.
+        $s = $this->base()
+            ->attempt('A1', '2026-10-01 10:00', 'TK-1', 'incorrect', 'auto', ['session' => 'S1'])
+            ->judges('AGREES', 'A1', ['overall' => 'incorrect'], '2026-10-01 10:20')
+            ->judges('DISAGREES', 'A1', ['overall' => 'correct'], '2026-10-01 10:30')
+            ->judges('REJECTED', 'A1', ['overall' => 'partial'], '2026-10-01 10:40', ['method' => 'chat_ai'])
+            ->claim('NO', 'reviews', ['claim:REJECTED'], ['decision' => 'reject', 'reason' => 'wrong_outcome'], method: 'interpreter', at: '2026-10-01 10:50');
+
+        $this->assertSame(['DISAGREES'], $s->project('2026-10-02 10:00')['attempts']['A1']['overridden']);
+    }
+
+    public function test_a_superseded_verdict_of_equal_authority_is_not_overridden(): void
+    {
+        $p = $this->base()
+            ->attempt('A1', '2026-10-01 10:00', 'TK-1', 'unjudged', 'none', ['session' => 'S1'])
+            ->judges('OLD', 'A1', ['overall' => 'incorrect'], '2026-10-01 10:30')
+            ->judges('NEW', 'A1', ['overall' => 'correct'], '2026-10-01 10:40', ['supersedes' => ['claim:OLD']])
+            ->project('2026-10-02 10:00');
+
+        $this->assertSame([], $p['attempts']['A1']['overridden']);
+    }
+
+    public function test_a_disputed_facet_overrides_nothing(): void
+    {
+        $p = $this->base()
+            ->attempt('A1', '2026-10-01 10:00', 'TK-1', 'correct', 'ai', ['session' => 'S1'])
+            ->judges('INTERP', 'A1', ['overall' => 'incorrect'], '2026-10-01 10:30')
+            ->learnerReview('D', 'claim:INTERP', 'dispute', '2026-10-01 11:00')
+            ->project('2026-10-02 10:00');
+
+        $this->assertSame([], $p['attempts']['A1']['overridden']);
+    }
 }

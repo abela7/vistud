@@ -12,15 +12,16 @@ use Tests\Unit\Brain\Projection\Support\Scenario;
  * The golden replay (docs/specs/golden-replay-sql-joins.md) run as a WP4
  * developer check. The independent acceptance tests are work package V1's.
  *
- * Where ADR 0002's rules give more than a checkpoint lists, this test
- * follows the ADR and marks the difference; each is raised with the PM as a
- * specification question (WP4-Q1 to WP4-Q3 in the pull request):
+ * The expectations include the PM's rulings on the WP4 review, which the
+ * spec now states too (PM-approved clarifications):
  * - WP4-Q1 `underconfident` on T-LEFT from CP6: E2 (confused about T-LEFT)
- *   is followed by two qualifying successes.
- * - WP4-Q2 `practised` on T-LEFT and T-LFILTER from CP10: qualifying
- *   successes in three sessions spanning at least 21 days.
- * - WP4-Q3 A5: `needs_review` appears when the gap is *longer than* 60
- *   days, so at 18:06 rather than exactly 18:05 on 16 Jan.
+ *   is followed by two qualifying topic successes, E6 and E7, even though
+ *   their overall outcomes are incorrect.
+ * - WP4-Q2 `practised` where three sessions span at least 21 days within the
+ *   current window: from CP10, and no longer on T-LFILTER after its
+ *   regression at E16.
+ * - WP4-Q3 A5: `needs_review` needs a gap strictly longer than 60 days from
+ *   the latest contact's upper bound: false at exactly 18:05, true after.
  */
 class GoldenScenarioDevTest extends TestCase
 {
@@ -37,24 +38,24 @@ class GoldenScenarioDevTest extends TestCase
         yield 'CP4' => [47, '2026-10-13 20:14', ['T-LEFT' => ['introduced', ['claimed_only', 'exam_relevant']]], [], ['Q1' => ['resolved_learner_confirmed', 0]]];
         yield 'CP5' => [49, '2026-10-15 14:21', ['T-LFILTER' => ['developing', []], 'T-LEFT' => ['developing', ['exam_relevant']]], ['M1' => null], []];
         yield 'CP6' => [52, '2026-10-15 14:50', [
-            'T-LEFT' => ['working', ['weak_part', 'includes_ai_judged', 'exam_relevant', 'underconfident']], // + WP4-Q1
+            'T-LEFT' => ['working', ['weak_part', 'includes_ai_judged', 'exam_relevant', 'underconfident']],
             'T-LFILTER' => ['developing', []],
         ], ['M1' => ['recurring', 0]], []];
         yield 'CP7' => [61, '2026-10-15 15:52', [
             'T-LFILTER' => ['developing', []],
-            'T-LEFT' => ['working', ['weak_part', 'exam_relevant', 'underconfident']], // + WP4-Q1
+            'T-LEFT' => ['working', ['weak_part', 'exam_relevant', 'underconfident']],
         ], ['M1' => ['addressed', 0]], ['Q2' => ['answered', 0]]];
         yield 'CP8' => [64, '2026-10-15 16:15', [
             'T-LFILTER' => ['developing', []],
-            'T-LEFT' => ['working', ['weak_part', 'exam_relevant', 'underconfident']], // + WP4-Q1
+            'T-LEFT' => ['working', ['weak_part', 'exam_relevant', 'underconfident']],
         ], ['M1' => ['addressed', 0]], ['Q2' => ['answered', 0]]];
         yield 'CP9' => [74, '2026-10-22 19:42', [
             'T-LFILTER' => ['secure', ['includes_ai_judged']],
-            'T-LEFT' => ['secure', ['includes_ai_judged', 'exam_relevant', 'underconfident']], // + WP4-Q1
+            'T-LEFT' => ['secure', ['includes_ai_judged', 'exam_relevant', 'underconfident']],
         ], ['M1' => ['apparently_resolved', 0]], ['Q1' => ['resolved_demonstrated', 0], 'Q2' => ['resolved_demonstrated', 0]]];
         yield 'CP10' => [76, '2026-11-17 18:35', [
-            'T-LFILTER' => ['durable', ['practised']], // + WP4-Q2
-            'T-LEFT' => ['durable', ['exam_relevant', 'practised', 'underconfident']], // + WP4-Q1, WP4-Q2
+            'T-LFILTER' => ['durable', ['practised']],
+            'T-LEFT' => ['durable', ['exam_relevant', 'practised', 'underconfident']],
         ], ['M1' => ['resolved_retained', 0]], []];
         yield 'CP11' => [76, '2027-01-20 12:00', [
             'T-LFILTER' => ['durable', ['needs_review', 'practised']],
@@ -116,9 +117,10 @@ class GoldenScenarioDevTest extends TestCase
         $this->assertSame('working', $at('2026-10-22 19:05')['label']);
         $this->assertSame('secure', $at('2026-10-22 19:12')['label']);
         $this->assertSame('durable', $at('2026-11-17 18:05')['label']);
-        // WP4-Q3: the spec lists needs_review at 18:05; "longer than" 60 days starts after it.
-        $this->assertNotContains('needs_review', $at('2027-01-16 18:05')['flags']);
-        $this->assertContains('needs_review', $at('2027-01-16 18:06')['flags']);
+        // WP4-Q3: E14's interval ends at 18:05 on 17 Nov; 60 days later is 18:05 on 16 Jan.
+        $this->assertNotContains('needs_review', $at('2027-01-16T18:04:59+00:00')['flags'], 'before');
+        $this->assertNotContains('needs_review', $at('2027-01-16T18:05:00+00:00')['flags'], 'exactly at');
+        $this->assertContains('needs_review', $at('2027-01-16T18:05:01+00:00')['flags'], 'immediately after');
         $this->assertSame(['developing', ['regressed']], [$at('2027-02-03 19:42')['label'], $at('2027-02-03 19:42')['flags']]);
         // The belief view never showed "working": it jumped from CP8 to CP9.
         $this->assertSame('developing', $s->project('2026-10-22 19:41', 72)['topics']['T-LFILTER']['label']);

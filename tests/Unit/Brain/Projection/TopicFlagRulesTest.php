@@ -100,4 +100,72 @@ class TopicFlagRulesTest extends TestCase
         $s->judges('J2', 'A2', ['cause' => 'slip'], '2026-10-05 11:00');
         $this->assertTopic($s->project('2026-10-06 10:00'), 'T', 'working', []);
     }
+
+    public function test_underconfident_counts_topic_successes_even_when_the_overall_outcome_is_incorrect(): void
+    {
+        // PM ruling WP4-Q1: as with E6 and E7 in the golden replay.
+        $judgeLeft = fn (string $id, string $attempt, string $at) => [$id, $attempt, [
+            'topics' => [['topic' => 'topic:LEFT', 'outcome' => 'correct'], ['topic' => 'topic:FILTER', 'outcome' => 'incorrect']],
+        ], $at];
+        $s = Scenario::make()->topic('LEFT')->topic('FILTER')->partOf('FILTER', 'LEFT')
+            ->task('TK-1')->task('TK-2')->exercises('TK-1', 'LEFT', 'FILTER')->exercises('TK-2', 'LEFT', 'FILTER')
+            ->selfReport('LOST', '2026-10-01 09:00', 'confused', ['topic:LEFT'])
+            ->attempt('A1', '2026-10-01 10:00', 'TK-1', 'incorrect', 'auto', ['session' => 'S1'])
+            ->attempt('A2', '2026-10-01 10:10', 'TK-2', 'incorrect', 'auto', ['session' => 'S1'])
+            ->judges(...$judgeLeft('J1', 'A1', '2026-10-01 10:30'))
+            ->judges(...$judgeLeft('J2', 'A2', '2026-10-01 10:30'));
+
+        $p = $s->project('2026-10-02 10:00');
+        $this->assertSame('incorrect', $p['attempts']['A1']['overall']);
+        $this->assertHasFlag($p, 'LEFT', 'underconfident');
+    }
+
+    public function test_practised_is_recomputed_after_a_regression(): void
+    {
+        // PM ruling WP4-Q2: practised uses the window, so a regression resets it.
+        $s = Scenario::make()->topic('T')->task('TK-1')->task('TK-2')->exercises('TK-1', 'T')->exercises('TK-2', 'T');
+        foreach (['2026-10-01', '2026-10-11', '2026-10-25'] as $i => $day) {
+            $s->attempt("A{$i}", "{$day} 10:00", $i % 2 === 0 ? 'TK-1' : 'TK-2', 'correct', 'auto', ['session' => "S{$i}"]);
+        }
+        $this->assertHasFlag($s->project('2026-10-26 10:00'), 'T', 'practised');
+
+        $s->attempt('FAIL', '2026-10-27 10:00', 'TK-1', 'incorrect', 'auto', ['session' => 'S9']);
+        $p = $s->project('2026-10-28 10:00');
+        $this->assertTopic($p, 'T', 'developing', ['regressed']);
+    }
+
+    public function test_practised_never_holds_off_needs_review(): void
+    {
+        // PM clarification of "being practised holds off needs_review":
+        // practice sessions are contacts, so recent practice moves the latest
+        // contact; the flag itself suppresses nothing.
+        $s = Scenario::make()->topic('T')->task('TK-1')->task('TK-2')->task('TK-EX')->exercises('TK-1', 'T')->exercises('TK-2', 'T')->exercises('TK-EX', 'T')
+            ->attempt('A1', '2026-10-01 10:00', 'TK-1', 'correct', 'auto', ['session' => 'S1'])
+            ->attempt('A2', '2026-10-12 10:00', 'TK-2', 'correct', 'auto', ['session' => 'S2'])
+            ->attempt('A3', '2026-10-25 10:00', 'TK-EX', 'correct', 'auto', ['session' => 'S3', 'form' => 'explain'])
+            ->judges('J3', 'A3', ['own_words' => true], '2026-10-25 10:30');
+
+        $p = $s->project('2026-11-20 10:00');
+        $this->assertTopic($p, 'T', 'secure', ['practised']);
+
+        $p = $s->project('2027-01-10 10:00');
+        $this->assertTopic($p, 'T', 'secure', ['needs_review', 'practised']);
+    }
+
+    public function test_part_of_cycles_terminate_and_never_hide_a_failure(): void
+    {
+        // PM ruling WP4-Q5: nested parts, and cycles must be safe.
+        $p = Scenario::make()->topic('A')->topic('B')->topic('C')
+            ->partOf('A', 'B')->partOf('B', 'C')->partOf('C', 'A')
+            ->task('TK-1')->exercises('TK-1', 'A', 'B')
+            ->task('TK-C')->exercises('TK-C', 'C')
+            ->attempt('A1', '2026-10-01 10:00', 'TK-1', 'incorrect', 'auto', ['session' => 'S1'])
+            ->attempt('A2', '2026-10-01 11:00', 'TK-C', 'correct', 'auto', ['session' => 'S1'])
+            ->project('2026-10-02 10:00');
+
+        // A and B are each other's sub-topics, so neither is "most specific":
+        // the failure falls on both rather than on neither.
+        $this->assertSame(['A' => 'incorrect', 'B' => 'incorrect'], $p['attempts']['A1']['topics']);
+        $this->assertTopic($p, 'C', 'working', ['weak_part']);
+    }
 }
