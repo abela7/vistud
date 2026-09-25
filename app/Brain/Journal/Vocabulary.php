@@ -33,7 +33,26 @@ final class Vocabulary
 
     public const DECISIONS = ['accept', 'reject', 'dispute', 'withdraw'];
 
-    public const RECORD_TYPES = ['source', 'extraction', 'activity', 'task', 'session', 'profile', 'consent'];
+    public const RECORD_TYPES = ['source', 'extraction', 'activity', 'task', 'session', 'profile', 'consent', 'course', 'module'];
+
+    public const ACTIVITY_KINDS = ['lecture', 'lab', 'assignment', 'quiz', 'exam', 'problem_set'];
+
+    public const TASK_STATUSES = ['active', 'retired'];
+
+    /**
+     * Where a checker's answer key came from (ADR 0003 §9.4). Only the first
+     * three can back `judged_by: auto`; a key the learner wrote cannot.
+     */
+    public const KEY_SOURCES = ['course_material', 'instructor', 'derived_from_material', 'learner'];
+
+    public const TRUSTED_KEY_SOURCES = ['course_material', 'instructor', 'derived_from_material'];
+
+    /** Reference types (ADR 0002 §5), plus the course and module records. */
+    public const REF_TYPES = ['event', 'claim', 'topic', 'question', 'misconception', 'task', 'activity', 'source', 'mention', 'course', 'module'];
+
+    public const LINK_RELS = ['about', 'cites', 'responds_to', 'triggered_by'];
+
+    public const LINK_ROLES = ['primary', 'secondary'];
 
     public const AMENDMENT_ACTIONS = ['retract', 'amend', 'redact'];
 

@@ -28,6 +28,14 @@ final class Ref
         return self::parse($ref)[1];
     }
 
+    /** The part after '#', such as "v12/blk-7f3" in "source:NOTE#v12/blk-7f3". */
+    public static function locator(string $ref): ?string
+    {
+        $parts = explode('#', $ref, 2);
+
+        return isset($parts[1]) && $parts[1] !== '' ? $parts[1] : null;
+    }
+
     public static function make(string $type, string $id): string
     {
         return $type.':'.$id;

@@ -21,8 +21,8 @@ app/
   Brain/               The learning memory engine (ADR 0001, ADR 0002)
     Journal/           Entry value objects, vocabulary, validation, review policy (pure PHP)
     Projection/        rules@1: topic labels, misconceptions, questions, profile  (pure PHP)
-    Store/             Journal persistence and learner-scoped reads               (increment 3)
-    Writer/            The append service                                         (increment 3)
+    Store/             Journal persistence and learner-scoped reads
+    Writer/            The append service
     Redaction/         Redaction, clean-up, reconciliation                        (work package WP5)
   Http/Controllers/    HTTP adapters: JSON API (Api/V1/...) and form endpoints
   Http/Middleware/     Route checks: account status, role, 2FA, admin workspace

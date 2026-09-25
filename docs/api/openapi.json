@@ -14,10 +14,58 @@
         "responses": {
           "200": {
             "description": "The current account",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
           },
-          "401": { "$ref": "#/components/responses/Error" },
-          "403": { "$ref": "#/components/responses/Error" }
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/journal/entries/{id}": {
+      "get": {
+        "operationId": "getJournalEntry",
+        "summary": "One of the current learner's own journal entries, with its content unless a redaction blocks it",
+        "x-stability": "provisional",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JournalEntry"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     }
@@ -26,53 +74,328 @@
     "responses": {
       "Error": {
         "description": "The error envelope",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       }
     },
     "schemas": {
       "Me": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["account", "learner", "workspace"],
+        "required": [
+          "account",
+          "learner",
+          "workspace"
+        ],
         "properties": {
           "account": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["id", "name", "email", "roles", "two_factor_confirmed"],
+            "required": [
+              "id",
+              "name",
+              "email",
+              "roles",
+              "two_factor_confirmed"
+            ],
             "properties": {
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "email": { "type": "string" },
-              "roles": { "type": "array", "items": { "type": "string", "enum": ["student", "admin"] } },
-              "two_factor_confirmed": { "type": "boolean" }
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": "string"
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "student",
+                    "admin"
+                  ]
+                }
+              },
+              "two_factor_confirmed": {
+                "type": "boolean"
+              }
             }
           },
           "learner": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "additionalProperties": false,
-            "required": ["id", "timezone"],
+            "required": [
+              "id",
+              "timezone"
+            ],
             "properties": {
-              "id": { "type": "string" },
-              "timezone": { "type": "string" }
+              "id": {
+                "type": "string"
+              },
+              "timezone": {
+                "type": "string"
+              }
             }
           },
-          "workspace": { "type": ["string", "null"], "enum": ["student", "admin", null] }
+          "workspace": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "student",
+              "admin",
+              null
+            ]
+          }
+        }
+      },
+      "JournalEntry": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "position",
+          "kind",
+          "type",
+          "type_version",
+          "actor",
+          "origin",
+          "occurred_at",
+          "occurred_until",
+          "precision",
+          "tz",
+          "interval",
+          "recorded_at",
+          "received_at",
+          "capture_key",
+          "session",
+          "activity",
+          "links",
+          "mentions",
+          "body",
+          "content",
+          "blocked"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "exposure",
+              "attempt",
+              "question",
+              "self_report",
+              "claim",
+              "record",
+              "amendment"
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "type_version": {
+            "type": "integer"
+          },
+          "actor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "id",
+              "channel"
+            ],
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "channel": {
+                "type": "string"
+              }
+            }
+          },
+          "origin": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occurred_at": {
+            "type": "string"
+          },
+          "occurred_until": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "precision": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "minute",
+              "day",
+              "week"
+            ]
+          },
+          "tz": {
+            "type": "string"
+          },
+          "interval": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "lo",
+              "hi"
+            ],
+            "properties": {
+              "lo": {
+                "type": "string"
+              },
+              "hi": {
+                "type": "string"
+              }
+            }
+          },
+          "recorded_at": {
+            "type": "string"
+          },
+          "received_at": {
+            "type": "string"
+          },
+          "capture_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "activity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "rel",
+                "target",
+                "role"
+              ],
+              "properties": {
+                "rel": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "n",
+                "field",
+                "start",
+                "end"
+              ],
+              "properties": {
+                "n": {
+                  "type": "integer"
+                },
+                "field": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": "integer"
+                },
+                "end": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "body": {
+            "type": "object",
+            "description": "Kind-specific fields, ADR 0002 \u00a74-5"
+          },
+          "content": {
+            "type": "object",
+            "description": "Named text fields. Empty when blocked"
+          },
+          "blocked": {
+            "type": "boolean"
+          }
         }
       },
       "Error": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["error"],
+        "required": [
+          "error"
+        ],
         "properties": {
           "error": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["code", "message", "request_id"],
+            "required": [
+              "code",
+              "message",
+              "request_id"
+            ],
             "properties": {
-              "code": { "type": "string" },
-              "message": { "type": "string" },
-              "request_id": { "type": ["string", "null"] },
-              "details": { "type": "object" }
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "request_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "details": {
+                "type": "object"
+              }
             }
           }
         }

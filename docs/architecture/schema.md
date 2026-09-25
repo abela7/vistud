@@ -123,7 +123,18 @@ Primary key `(learner_id, id)`. Unique `(learner_id, position)` and `(learner_id
 `(learner_id, entry_id, n)` → `field`, `start`, `end`. Character ranges inside a content field. Deleted together with that field.
 
 ### `journal_refs`
-A **derived** index of every reference an entry makes, written in the same transaction and rebuildable from `journal_entries`. Columns: `learner_id`, `entry_id`, `role` (`link:about`, `link:cites`, `link:responds_to`, `link:triggered_by`, `target`, `derived_from`, `supersedes`, `value`), `ref_type`, `ref_id`, `locator`. Indexed by `(learner_id, ref_type, ref_id)`. It answers "which entries point at X" without scanning JSON.
+A **derived** index of every reference an entry makes, written in the same transaction and rebuildable from `journal_entries`. Columns: `learner_id`, `entry_id`, `role`, `ref_type`, `ref_id`, `locator`. Indexed by `(learner_id, ref_type, ref_id)`. It answers "which entries point at X" without scanning JSON.
+
+| Role | Meaning |
+|---|---|
+| `link:about`, `link:cites`, `link:responds_to`, `link:triggered_by` | The entry's links |
+| `target`, `derived_from`, `supersedes` | A claim's or amendment's references |
+| `value` | References inside a claim's value, such as `refers_to`'s entity or a verdict's topics |
+| `task` | The task an attempt answers |
+| `defines` | The entity a `defines` claim introduces |
+| `record` | The entity a task, activity, source, course or module record introduces |
+
+The writer uses the `defines` and `record` rows to check that an entity exists in the learner's own journal before anything references it.
 
 ## Derived state (Provisional)
 

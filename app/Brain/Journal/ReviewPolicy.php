@@ -8,6 +8,8 @@ namespace App\Brain\Journal;
  */
 final class ReviewPolicy
 {
+    private const USE_DISPUTE = 'The learner cannot accept or reject evaluations of their own performance.';
+
     /**
      * Performance evaluations: an attempt's recorded outcome, judges claims on
      * attempts, and misconception definitions.
@@ -27,8 +29,23 @@ final class ReviewPolicy
         };
     }
 
-    /** @return string|null why the review is not allowed, or null when it is */
-    public static function violation(JournalEntry $review, ?JournalEntry $target, ?JournalEntry $judgedEvent): ?string
+    /**
+     * Why the review is not allowed, or null when it is. `use` names the
+     * decision the reviewer should use instead, when there is one.
+     *
+     * @return array{message: string, use: ?string}|null
+     */
+    public static function violation(JournalEntry $review, ?JournalEntry $target, ?JournalEntry $judgedEvent): ?array
+    {
+        $message = self::check($review, $target, $judgedEvent);
+        if ($message === null) {
+            return null;
+        }
+
+        return ['message' => $message, 'use' => str_starts_with($message, self::USE_DISPUTE) ? 'dispute' : null];
+    }
+
+    private static function check(JournalEntry $review, ?JournalEntry $target, ?JournalEntry $judgedEvent): ?string
     {
         if ($target === null) {
             return 'The reviewed claim or event does not exist.';
@@ -60,7 +77,7 @@ final class ReviewPolicy
 
         if ($isLearner) {
             return $performance
-                ? 'The learner cannot accept or reject evaluations of their own performance. Dispute it instead.'
+                ? self::USE_DISPUTE.' Dispute it instead.'
                 : null;
         }
 

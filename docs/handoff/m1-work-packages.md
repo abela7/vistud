@@ -21,7 +21,7 @@ M1 is complete when the PM confirms all of these ([ADR 0003 §14](../adr/0003-we
 |---|---|---|---|---|
 | **WP1** | Foundations and contracts | Architect | — | Done in increment 1 |
 | **WP2** | Identity and access services | Architect | WP1 | Done in increment 2 |
-| **WP3** | Journal writer and store | Architect | WP1 | Medium |
+| **WP3** | Journal writer and store | Architect | WP1 | Done in increment 3 |
 | **WP4** | Projection engine to `rules@1` | Architect | WP1 (entry format) | Medium |
 | **WP5** | Redaction, clean-up and canonical files | A second backend developer | WP1, WP3's writer | Medium |
 | **WP6** | M1 web adapters: auth screens and security test surfaces (unstyled) | A Livewire/Blade developer | WP2's service contracts | Small–medium |
@@ -99,7 +99,7 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 
 ## WP3 · Journal writer and store
 
-**Owner:** architect (proposed). **Needs:** WP1.
+**Owner:** architect (proposed). **Needs:** WP1. **Status:** delivered in increment 3, awaiting PM review. Developer tests: `tests/Feature/Brain/**`, `tests/Unit/Brain/Journal/**`, `tests/Feature/Api/JournalEntryApiTest.php`.
 
 **Scope** (ADR 0002 §3–6, §9):
 - Bring `Vocabulary` and `EntryValidator` up to the latest ADR 0002 revision: `course` and `module` records; `task_revision` on attempts; `checker {id, version, key_source}` required with `judged_by: auto`, and a learner-written key refused as `auto`.
@@ -113,7 +113,7 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 - Replaying stored entries through `ProjectionRunner` gives the same output as projecting the same specifications in memory.
 - No code outside `Brain/Store` and `Platform/Database` touches journal tables (the architecture test).
 
-**Owns:** `app/Brain/Journal/**`, `app/Brain/Store/**`, `app/Brain/Writer/**`, `app/Http/Controllers/Api/V1/JournalEntryController.php`, `tests/Feature/Brain/Writer/**`, `tests/Feature/Brain/Store/**`, `tests/Unit/Brain/Journal/**`.
+**Owns:** `app/Brain/Journal/**`, `app/Brain/Store/**`, `app/Brain/Writer/**`, `app/Brain/Projection/ProjectionRunner.php`, `app/Http/Controllers/Api/V1/JournalEntryController.php`, `tests/Concerns/BuildsJournalEntries.php`, `tests/Feature/Brain/Writer/**`, `tests/Feature/Brain/Store/**`, `tests/Unit/Brain/Journal/**`, `tests/Feature/Api/JournalEntryApiTest.php`.
 
 ---
 
@@ -192,6 +192,7 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 
 **How:**
 - Fixture entries use the [entry specification format](../architecture/contracts.md#journal-entry-specification-stable). Pure tests call `Projector::project()` directly; the redaction tests go through the writer and the redaction service.
+- The spec's fixture settings now say how "auto" outcomes record their checker, and that times carry offsets with `tz: Europe/London`, because the entry format requires both.
 - Assertions use the [projection output keys](../architecture/contracts.md#projection-output-stable-keys-provisional-facts), and check only what the spec states.
 - Ambiguities and apparent contradictions go to the PM as issues. The validator doesn't guess, and doesn't change the spec.
 

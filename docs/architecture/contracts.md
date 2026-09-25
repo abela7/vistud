@@ -66,11 +66,17 @@ content:       { <field>: text }         # free text, stored separately
 ```
 
 - **Positions** are never part of the specification. The writer assigns them; pure tests assign them in fixture order.
+- **Times** must carry an offset (`2026-10-13T10:00:00+01:00` or `...Z`). The writer stores them in UTC.
+- **`tz`** defaults to the learner's time zone in the writer, and to `UTC` in `EntryFactory` (pure tests should set it).
+- **`received_at`** is ignored by the writer, which always uses the server's time. Tests that need a particular time use `travelTo()`.
+- **Unknown top-level fields are refused.** Content fields are named with lower-case words (up to 32 characters) and hold at most 1 MiB of text each.
+- **Attempts** may carry `task_revision` (a positive integer). `judged_by: auto` requires `checker: {id, version, key_source}`, and `key_source` must be `course_material`, `instructor` or `derived_from_material`. A key the learner wrote (`key_source: learner`) is refused for `auto`; record the attempt as `judged_by: self` (ADR 0003 §9.4).
+- **Records** of type `task` need a `key` (and may carry `revision`, `content_hash`, `status`); `activity` needs `kind`; `course` needs `title`; `module` needs `course` and `title`.
 - **Records** carry `body.record_type` and `body.record_id`. A revision appends a new record entry with the same `record_id`.
 - **Claims** carry `body.type`, `targets`, `value`, `confidence`, `method {kind, id, version, prompt?}`, `derived_from`, `supersedes` and `review {state, by?}`.
 - **References** are `type:id`, optionally `#locator`, for example `source:NOTE#v12/blk-7f3` ([ADR 0002 §5](../adr/0002-learning-event-schema.md#5-claim-contracts)).
 
-Increment 3 brings the vocabulary in `Journal\Vocabulary` and `EntryValidator` up to the latest ADR 0002 revision (`course` and `module` records, `task_revision`, and `checker` for `judged_by: auto`). Those are additions, so the format stays Stable.
+Increment 3 brought `Journal\Vocabulary` and `EntryValidator` up to the latest ADR 0002 revision. The additions above (course and module records, `task_revision`, the checker rule, and the stricter checks on times, fields and content) are part of the Stable format.
 
 ## Projection output (Stable keys, Provisional facts)
 
@@ -137,15 +143,25 @@ Provisional until the PM approves increment 2, then Stable.
 | Fortify endpoints | `POST /login`, `POST /logout`, `POST /two-factor-challenge`, `POST /forgot-password`, `POST /reset-password`, `PUT /user/password`, `POST /user/confirm-password`, `GET /user/confirmed-password-status`, and the `/user/two-factor-*` endpoints. Success formats are Fortify's own; errors use the envelope. `GET /user/two-factor-recovery-codes` answers once after codes are generated in the session, then `403 recovery_codes_already_shown` |
 | `EnsureAccountActive` (every web and API request) | Logs out a suspended or deleted account on its next request |
 
-### Journal (increment 3)
+### Journal (increment 3: implemented)
+
+Provisional until the PM approves increment 3, then Stable.
 
 | Service | Methods |
 |---|---|
-| `Brain\Writer\JournalWriter` | `append(LearnerScope, array $spec): AppendResult` · `appendBatch(LearnerScope, list $specs): list<AppendResult>` (atomic). `AppendResult` has `status` (`recorded` · `duplicate`), the stored `JournalEntry` and its `position` |
-| `Brain\Store\JournalReader` | `find(LearnerScope, id): ?StoredEntry` · `entries(LearnerScope, ?upToPosition): list<JournalEntry>` · `content(LearnerScope, entryId): array` (respects block entries) |
-| `Brain\Projection\ProjectionRunner` | `project(LearnerScope, ProjectionOptions): array`, with the snapshot cache |
+| `Brain\Writer\JournalWriter` | `append(LearnerScope, array $spec): AppendResult` · `appendBatch(LearnerScope, list $specs): list<AppendResult>` (all or nothing). `AppendResult` has `status` (`recorded` · `duplicate`), the stored `entry` and `position()` |
+| `Brain\Store\JournalReader` | `find(LearnerScope, id): ?StoredEntry` (the entry, its content, and whether a redaction blocks it) · `entries(LearnerScope, ?upToPosition): list<JournalEntry>` · `content(LearnerScope, entryId): array` (empty when blocked) |
+| `Brain\Projection\ProjectionRunner` | `project(LearnerScope, ProjectionOptions): array` · `refresh(LearnerScope, ProjectionOptions): array` (also stores the snapshot) · `latest(LearnerScope): ?array` |
 
-The writer trusts nothing about the actor or learner from outside: adapters set the actor from the `Principal`. It refuses entries that break ADR 0002 contracts (`invalid_entry`), references that don't resolve within the learner's own stream (`unknown_reference`, identical for missing and other learners' IDs), and reviews that ADR 0002 §6 forbids (`review_not_allowed`).
+**What the writer guarantees:**
+- Positions per learner are strictly increasing and gap-free, even with concurrent writers (it locks the learner row; tested with two processes).
+- The same ID with the same content is a `duplicate`; with different content, `409 id_conflict`. The same `capture_key` with the same content (whatever the ID) is a `duplicate`; with different content, `409 capture_key_conflict`.
+- Every reference resolves inside the learner's own journal: entries through `event:` and `claim:` (each with the right prefix), entities through a `defines` claim or a record earlier in the journal or the same batch. Otherwise `422 unknown_reference`, which is the same answer for a missing ID and another learner's ID.
+- An entry with a `learner` actor must be in that learner's own journal.
+- Reviews ADR 0002 §6 forbids are refused with `422 review_not_allowed`. When the learner tries to accept or reject a verdict on their own work, `details.use` is `dispute`.
+- Contract violations are `422 invalid_entry` with `details.field`. Messages never repeat submitted values.
+
+**Not in M1:** the writer does not yet check that `review.state: accepted` matches `policy@1` (ADR 0002 §8). The capture services that create claims (M6) will apply the policy.
 
 ## HTTP API
 
@@ -154,7 +170,7 @@ Conventions are in [conventions.md](conventions.md#json-api). The OpenAPI defini
 | Endpoint | Status | Arrives | Purpose |
 |---|---|---|---|
 | `GET /api/v1/me` | Provisional | Increment 2 (implemented) | The account, its roles, its learner ID and the active workspace |
-| `GET /api/v1/journal/entries/{id}` | Provisional | Increment 3 | One of the learner's own entries, with content unless blocked. Another learner's ID gets 404 |
+| `GET /api/v1/journal/entries/{id}` | Provisional | Increment 3 (implemented) | One of the learner's own entries, with content unless blocked. Another learner's ID gets the same 404 as a missing one; an account without a learner stream gets `403 student_role_required` |
 | `POST /api/v1/notes`, `PUT /api/v1/notes/{id}`, `GET /api/v1/sync/tombstones` | Draft | M2 | Note sync and deletion records ([ADR 0003 §5.3–5.4](../adr/0003-web-workspaces-and-study-content.md#53-autosave-drafts-ordering-and-conflicts)). Not built in M1 |
 
 There is no admin JSON API in M1. Admin actions run through Livewire and the console, and both go through the same services.

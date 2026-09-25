@@ -7,7 +7,7 @@ This is the reference scenario for [ADR 0002](../adr/0002-learning-event-schema.
 | Setting | Value |
 |---|---|
 | Learner | `L1` |
-| Time zone | Europe/London. Clocks go back on Sun 25 Oct 2026. All times below are local |
+| Time zone | Europe/London. Clocks go back on Sun 25 Oct 2026. All times below are local. In the entry format, every time carries its offset (`+01:00` before the change, `+00:00` after) and every entry sets `tz: Europe/London` |
 | Rules and policy | `rules@1`, `policy@1` |
 | Precision | Every observation has precision `exact` unless stated otherwise |
 | Learner's own claims | Method `person` (id `L1`), accepted |
@@ -19,7 +19,7 @@ This is the reference scenario for [ADR 0002](../adr/0002-learning-event-schema.
 | `rule` | `question-resolver@1`, `task-resolver@1` |
 | `interpreter` | `local-interpreter@1`, with the prompts `transcript-emphasis@1`, `judge-exposure@1`, `diagnose@1` and `judge-attempt@1` |
 
-Capture outcomes marked "auto" come from the lab checker. Claims marked accepted without a named reviewer were accepted by `policy@1`.
+Capture outcomes marked "auto" come from the lab checker, recorded as `checker: {id: lab-checker, version: 1, key_source: course_material}` (ADR 0002 §4 requires a trusted checker for `judged_by: auto`). Claims marked accepted without a named reviewer were accepted by `policy@1`.
 
 ## Setup: positions 1–34, Mon 12 Oct 2026, 20:00, by the learner
 
