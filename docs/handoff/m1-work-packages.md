@@ -1,6 +1,6 @@
 # M1 work packages (proposal)
 
-- **Status:** Proposal for the PM. The PM assigns owners and approves milestone completion.
+- **Status:** Proposal for the PM. The PM assigns owners and approves milestone completion. The live state of each package is in [STATUS.md](../coordination/STATUS.md).
 - **Author:** the architect (backend lead).
 - **Scope:** Milestone M1, "Minimum foundations" ([ADR 0003 §13](../adr/0003-web-workspaces-and-study-content.md#13-milestones-d8-revised)). Nothing here reaches into M2 or later.
 - **Related:** [modules.md](../architecture/modules.md), [contracts.md](../architecture/contracts.md), [conventions.md](../architecture/conventions.md), [setup.md](../development/setup.md).
@@ -19,9 +19,9 @@ M1 is complete when the PM confirms all of these ([ADR 0003 §14](../adr/0003-we
 
 | ID | Package | Proposed owner | Needs first | Size |
 |---|---|---|---|---|
-| **WP1** | Foundations and contracts | Architect | — | Done in increment 1 |
-| **WP2** | Identity and access services | Architect | WP1 | Done in increment 2 |
-| **WP3** | Journal writer and store | Architect | WP1 | Done in increment 3 |
+| **WP1** | Foundations and contracts | Architect | — | Delivered in increment 1, awaiting review |
+| **WP2** | Identity and access services | Architect | WP1 | Delivered in increment 2, awaiting review |
+| **WP3** | Journal writer and store | Architect | WP1 | Delivered in increment 3, awaiting review |
 | **WP4** | Projection engine to `rules@1` | Architect | WP1 (entry format) | Medium |
 | **WP5** | Redaction, clean-up and canonical files | A second backend developer | WP1, WP3's writer | Medium |
 | **WP6** | M1 web adapters: auth screens and security test surfaces (unstyled) | A Livewire/Blade developer | WP2's service contracts | Small–medium |
@@ -54,7 +54,7 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 
 ## WP1 · Foundations and contracts
 
-**Owner:** architect. **Status:** delivered in increment 1.
+**Owner:** architect. **Status:** delivered in increment 1, awaiting PM review.
 
 **Delivered:**
 - Project structure and module boundaries ([modules.md](../architecture/modules.md)).
@@ -77,7 +77,7 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 
 **Scope** (ADR 0003 §10.2–10.3):
 - Install and configure **Fortify 1.40**: login, logout, two-factor with confirmation, recovery codes, password confirmation, password reset. Registration off. Views are left to WP6.
-- **Services:** `PrincipalFactory`, `Accounts`, `Roles`, `Invitations`, `TwoFactorReset`, `Workspaces`, `AuditLog` ([contracts.md](../architecture/contracts.md#identity-and-audit-increment-2)).
+- **Services:** `PrincipalFactory`, `Accounts`, `Roles`, `Invitations`, `TwoFactorReset`, `Workspaces`, `AuditLog` ([contracts.md](../architecture/contracts.md#identity-and-audit-increment-2-implemented)).
 - **The last-admin safeguard** across revoking, suspending, deleting and self-deletion, with the admin rows locked so two concurrent requests can't both succeed.
 - **Middleware:** `account.active`, `role`, `two_factor`, `admin.workspace`, and the `/admin` route group that combines them.
 - **Console commands:** `vistud:account:create {email}`, `vistud:admin:grant {email}`, `vistud:admin:reset-2fa {email}`, all audited as system actions.

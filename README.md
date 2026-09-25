@@ -4,10 +4,19 @@ A persistent study brain and study platform. Students keep notes, courses and a
 calendar; the brain records what they learn in an append-only journal and
 derives where each topic stands, independent of any AI model.
 
-## Where to start
+## Before you start
+
+**New developers must read [PROJECT.md](PROJECT.md) and [docs/coordination/STATUS.md](docs/coordination/STATUS.md) before starting any work.**
+
+- [PROJECT.md](PROJECT.md) explains what ViStud is, how it is built, how we collaborate, and the order to read everything else in.
+- [STATUS.md](docs/coordination/STATUS.md) shows every work package's owner and state, open decisions and blockers. Update only your own package's entry; scope and ownership changes go through the PM.
+
+## Where to find things
 
 | You want to… | Read |
 |---|---|
+| Understand the project | [PROJECT.md](PROJECT.md) |
+| See who is doing what | [docs/coordination/STATUS.md](docs/coordination/STATUS.md) |
 | Understand the decisions | [ADR 0001](docs/adr/0001-permanent-store-and-retrieval-index.md) (storage and retrieval), [ADR 0002](docs/adr/0002-learning-event-schema.md) (learning events), [ADR 0003](docs/adr/0003-web-workspaces-and-study-content.md) (web workspaces and study content) |
 | Set up and run the tests | [docs/development/setup.md](docs/development/setup.md) |
 | Find where code belongs | [docs/architecture/modules.md](docs/architecture/modules.md) |
