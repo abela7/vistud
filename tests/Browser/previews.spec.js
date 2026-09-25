@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { useTheme } from './support.js';
+import { loginToChallenge, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -23,6 +23,34 @@ for (const theme of ['vistud-light', 'vistud-dark', 'ember']) {
         });
     }
 }
+
+for (const theme of ['vistud-light', 'vistud-dark']) {
+    for (const [size, viewport] of Object.entries(sizes)) {
+        test(`two-factor challenge ${size} ${theme}`, async ({ page }) => {
+            await page.setViewportSize(viewport);
+            await loginToChallenge(page);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`two-factor-${size}-${theme}`), fullPage: size === 'mobile' });
+        });
+    }
+}
+
+test('two-factor challenge states: wrong code and recovery code', async ({ page }) => {
+    await page.setViewportSize(sizes.desktop);
+    await loginToChallenge(page);
+    await page.getByLabel('Authentication code').fill('000000');
+    await page.getByRole('button', { name: 'Verify' }).click();
+    await page.waitForURL('**/two-factor-challenge');
+    await page.screenshot({ path: out('two-factor-desktop-vistud-light-wrong-code') });
+
+    await page.setViewportSize(sizes.mobile);
+    await loginToChallenge(page);
+    await useTheme(page, 'vistud-dark');
+    await page.getByRole('button', { name: 'Use a recovery code instead' }).click();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('two-factor-mobile-vistud-dark-recovery'), fullPage: true });
+});
 
 test('login states: refused login and field errors', async ({ page }) => {
     await page.setViewportSize(sizes.desktop);

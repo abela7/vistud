@@ -10,4 +10,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
     Route::view('/login', 'auth.login')->name('login');
+
+    // Fortify handles POST /two-factor-challenge. This GET exists only while
+    // a password login is waiting for a second factor (session "login.id").
+    Route::get('/two-factor-challenge', function () {
+        if (! session()->has('login.id')) {
+            return redirect()->route('login');
+        }
+
+        return view('auth.two-factor-challenge');
+    })->name('two-factor.login');
 });
