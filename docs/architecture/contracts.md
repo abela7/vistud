@@ -163,6 +163,20 @@ Provisional until the PM approves increment 3, then Stable.
 
 **Not in M1:** the writer does not yet check that `review.state: accepted` matches `policy@1` (ADR 0002 §8). The capture services that create claims (M6) will apply the policy.
 
+## Appearance (Provisional)
+
+The visual foundation for every screen (WP6), under [ADR 0003 §6](../adr/0003-web-workspaces-and-study-content.md#6-themes-and-colour) and [DESIGN.md](../../DESIGN.md). Provisional until the PM's visual review of WP6.
+
+| Contract | Summary |
+|---|---|
+| Theme data (`resources/themes/*.json`) | `id`, `name`, `scheme` (`light` · `dark`), `colors` (every token in `Appearance\Theme::COLORS`, `#rrggbb` or `#rrggbbaa`) and `gradients` (every token in `Theme::GRADIENTS`: `{angle, stops}` with 2–6 opaque stops at ascending positions 0–100, or `{solid}`). Unknown or missing tokens are rejected |
+| CSS variables | `--{token}` for colours, `--grad-{token}` for gradients, under `[data-theme="{id}"]`; the default light theme also on `:root`. Components use only these, through the Tailwind token utilities and the `surface-*` gradient utilities |
+| `Appearance\ThemeValidator` | `failures(Theme): list<{pair, minimum, actual, at, suggestion}>`. Empty means the theme passes. M2's custom themes and admin presets use the same check |
+| `php artisan vistud:themes:build [--check]` | Validates the built-in themes and writes `resources/css/themes/themes.css` and the sentinel fixture. `--check` fails if either is out of date |
+| `<html>` attributes | `data-theme` (the active theme), `data-theme-light`, `data-theme-dark` (the pair) and `data-appearance` (`system` · `light` · `dark`) |
+| `vistud:theme-changed` | A window event, `detail: {mode, theme}`, fired when the active theme changes. Script-drawn components (charts) rebuild on it |
+| Shared Blade components | `x-layouts.auth`, `x-logo`, `x-icon`, `x-button`, `x-field`, `x-checkbox`, `x-alert`, `x-appearance-switcher` ([DESIGN.md §5](../../DESIGN.md#5-components-and-their-states)) |
+
 ## HTTP API
 
 Conventions are in [conventions.md](conventions.md#json-api). The OpenAPI definition is [`docs/api/openapi.json`](../api/openapi.json). `tests/Feature/Api/OpenApiContractTest.php` fails if a `/api/v1` route is missing from it, or a response doesn't match its schema (ADR 0003 §8).

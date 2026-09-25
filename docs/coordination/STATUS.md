@@ -102,15 +102,17 @@ The live state of milestone M1: who owns each work package, where it stands, and
 | Depends on | WP1 (done); WP3's writer (delivered, awaiting review) for the redaction amendment |
 | Next handoff | PM assigns an owner. The tables it uses are Draft in [schema.md](../architecture/schema.md#redaction-clean-up-and-files-draft), and the owner may revise them through the contract-change process |
 
-### WP6 · M1 web adapters (unstyled)
+### WP6 · M1 web adapters
 
 | | |
 |---|---|
-| Owner | A Livewire/Blade developer (proposed) |
-| State | **Proposed, awaiting dispatch** |
-| Branch / PR | None. Proposed branch: `m1/wp6-web-adapters` |
+| Owner | Architect (backend lead), assigned by the PM |
+| State | **In progress.** The visual foundation and the login screen are ready for the PM's visual review; the other WP6 screens are not styled until that review |
+| Branch / PR | `m1/wp6-web-adapters`, from `a154850`. Pull request to follow |
 | Depends on | WP2's service contracts (delivered, awaiting review) |
-| Next handoff | PM assigns an owner. Its routes go in `routes/web/auth.php`, `routes/web/student.php` and `routes/web/admin-screens.php`; turning on Fortify's views is a one-line change the architect makes on request |
+| Next handoff | PM visual review of [DESIGN.md](../../DESIGN.md) and the login previews in [docs/design/previews/](../design/previews/): desktop and mobile, light and dark, and the alternate Ember palette. After it: the two-factor challenge and setup, password confirmation and reset, invitation acceptance, the workspace switch and admin landing page, and the Livewire surfaces for V2 |
+
+**Delivered for review:** DESIGN.md; the brand colours measured from the owner's logo (the original is preserved; its checkerboard is painted in, not transparency, and is removed from the UI assets); themes as data with gradients (ViStud Light, ViStud Dark, Ember); contrast checks across whole gradients; the three enforcement layers extended to gradients; the login screen; previews and a recording of live theme switching. Scope changes recorded in the work packages: WP6 is styled with the shared foundation instead of unstyled markup.
 
 ### V1 · Golden replay and edge-case acceptance tests (independent)
 
@@ -134,7 +136,7 @@ The live state of milestone M1: who owns each work package, where it stands, and
 
 ## Decisions
 
-Recorded by the PM before WP4 started.
+Recorded by the PM before WP4 started, and for WP6 (Design).
 
 | # | Decision | Effect |
 |---|---|---|
@@ -142,6 +144,7 @@ Recorded by the PM before WP4 started.
 | Q1 | Mandatory admin 2FA restricts admin access and admin operations. The account's own student workspace stays available | Matches the current code; [conventions.md](../architecture/conventions.md#authentication) updated |
 | Q2 | Keep Fortify's required dependencies (`laravel/passkeys` and WebAuthn libraries), with passkeys disabled | No change |
 | Q3 | Manually shared, expiring, single-use invitation links are enough for the owner and synthetic pilot. Tokens stay out of logs | Matches the current code: only a SHA-256 hash is stored, the token is returned once, and it never goes into logs, audit records or error messages |
+| Design | [DESIGN.md](../../DESIGN.md) is the shared UI and UX guide, under ADR 0003. The owner's logo sets the brand colours (deep blue to ocean to teal), replacing the earlier indigo proposal. Gradients are part of the identity and fully theme-controlled. WP6 uses the shared visual foundation instead of unstyled markup; M2 is not started | [ADR 0003 §6 and §16](../adr/0003-web-workspaces-and-study-content.md#16-decisions) updated; PM visual review before the remaining WP6 screens are styled |
 | D9 | Staged retrieval measurement is approved. G1a covers in-app queries; G1b later checks chat queries. The agreed evidence thresholds apply, and insufficient evidence is reported as **inconclusive**, not decided just because 4–6 weeks have passed | [ADR 0003 §16](../adr/0003-web-workspaces-and-study-content.md#16-decisions) and [ADR 0001 G1](../adr/0001-permanent-store-and-retrieval-index.md#g1-retrieval-value) updated |
 
 ## Unresolved decisions
@@ -154,7 +157,8 @@ Recorded by the PM before WP4 started.
 
 | Package | Blocked on |
 |---|---|
-| WP5, WP6, V1, V2 | Dispatch: no owners assigned yet |
+| WP5, V1, V2 | Dispatch: no owners assigned yet |
+| WP6 screens after login | The PM's visual review of DESIGN.md and the login previews |
 | V2 (Livewire cases) | WP6 |
 | V1 (redaction cases) | WP5 |
 | Contracts from WP2 and WP3 becoming Stable | PM review of increments 2 and 3 |
