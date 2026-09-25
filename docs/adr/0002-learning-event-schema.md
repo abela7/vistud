@@ -10,6 +10,12 @@
   - Times are treated as intervals.
   - A question can be reopened by a self-report.
   - Redaction blocks content immediately, and file clean-up retries until it succeeds.
+- **Revised:** 2026-09-25. Cross-references to [ADR 0003](0003-web-workspaces-and-study-content.md):
+  - task content revisions, and trusted checkers for `judged_by: auto`;
+  - citations of note versions;
+  - `course` and `module` records;
+  - purging browser drafts when content is redacted;
+  - batched attempts, now scheduled with flashcards.
 - **Decision owner:** project owner (project manager and system architect)
 - **Depends on:** [ADR 0001](0001-permanent-store-and-retrieval-index.md)
 
@@ -62,7 +68,7 @@ Each of the following fields has a fixed list of values owned by the core. Plugi
 | claim `type` | defines · refers_to · same_as · splits_into · relates · judges · reviews |
 | `relates` relation | prerequisite_of · part_of · contrasts_with · example_of · related_to · covers · emphasizes · stems_from · addresses · exercises |
 | `reviews` decision | accept · reject · dispute · withdraw |
-| record `type` | source · extraction · activity · task · session · profile · consent |
+| record `type` | source · extraction · activity · task · session · profile · consent · course · module |
 | amendment `action` | retract · amend · redact |
 | observation `origin` | first_hand · reported · material |
 | `precision` | exact · minute · day · week |
@@ -122,8 +128,15 @@ Each of the following fields has a fixed list of values owned by the core. Plugi
 ### attempt
 - **`body`:**
   - `task`: the ID of a **task record** (required)
+  - `task_revision`: the content revision of the task that was actually attempted (required when the task has revisions)
   - `form`, `support`, `setting`, `outcome`, `judged_by`
+  - `checker?`: `{id, version, key_source}`. Required when `judged_by` is `auto`
   - `score?`: `{raw, max}`
+- **`judged_by: auto` requires a trusted checker** (see ADR 0003 §9.4).
+  - The answer key or test suite must come from course or instructor material, or be computed deterministically from such material.
+  - The checker must be deterministic and versioned.
+  - A key the learner wrote themselves, such as the back of their own flashcard, is never trusted. A match against it is recorded as `judged_by: self`.
+- **Checked answers are still ordinary evidence.** They count only through the rules in §6–7, and never promote a topic by themselves: task diversity, retention, authority, disputes and immediate repeats all still apply.
 - **`content`:**
   - `answer`: the learner's words or code, verbatim after filtering
   - `output?`: what a checker returned, or an error message
@@ -139,6 +152,13 @@ A **task** is the problem that was posed. An **attempt** is one try at it.
 - **The topics a task exercises** are recorded as claims: `relates` *task exercises topic*. They can therefore be corrected like any other claim.
 - **Tasks from activities** (labs, quizzes, past papers) come from the activity. **Tasks set in chat** are created by the capture service from the prompt (§9). Trying the same chat task again must reuse that task, never create a new one.
 - **Task identity is itself a judgement.** If two task records turn out to be the same problem, a `same_as` claim merges them.
+- **Identity vs content revision.** A task keeps its identity when its wording changes.
+  - **A meaningful change creates a revision, not a new task.** A meaningful change is a change to the normalised prompt or answer, such as a flashcard's front or back. The new revision is a record revision with `revision` and `content_hash`, citing the note version it came from.
+  - **Earlier attempts are untouched.** They keep the revision they answered, so history still shows exactly what was asked.
+  - **Diversity counts task IDs, never revisions.** Editing a question can't inflate task diversity.
+  - **A new identity needs a new task.** Only an explicit "make this a new card" action, or a new block, creates one.
+  - **Copies are caught.** A copy with the same normalised content is proposed as `same_as`.
+  - Flashcard identity is covered in ADR 0003 §9.4.
 
 ### question
 - `links`: `about` (topic hints), `responds_to?`
@@ -156,8 +176,10 @@ A **task** is the problem that was posed. An **attempt** is one try at it.
 | `source` | kind, title, storage key, hash |
 | `extraction` | source, extractor and its version, version number, segments with their locations |
 | `activity` | kind (lecture · lab · assignment · quiz · exam · problem_set), title, `starts_at`, `ends_at?` |
-| `task` | key, activity, title, prompt as content |
+| `task` | key, activity, title, `revision`, `content_hash`, `checker?`, `status` (active or retired), prompt as content |
 | `session` | channel, client, `started_at`, `ended_at` |
+| `course` | title, code, term, dates, colour category (ADR 0003 §9.2) |
+| `module` | course, title, position, optional dates |
 | `profile` | — |
 | `consent` | — |
 
@@ -191,7 +213,7 @@ content (optional): rationale | phrasing | statement | definition
 **References** take these forms:
 - `event:<id>` and `claim:<id>`
 - `topic:<id>`, `question:<id>`, `misconception:<id>`, `task:<id>` and `activity:<id>`
-- `source:<id>#<locator>`
+- `source:<id>#<locator>`. For a note, the locator is `v<version>/<block-id>`, for example `source:NOTE#v12/blk-7f3`. A citation always pins the note **version** as well as the block, so later edits can never change what an old claim cites (ADR 0003 §9.1).
 - `mention:<event>/<n>`
 
 **Method kinds:**
@@ -473,7 +495,7 @@ The active states are detected, recurring, resurfaced and addressed.
 
 ### Learning profile
 
-- **Grouping:** in the pilot there are no course records, so the profile groups by teaching approach only.
+- **Grouping:** by teaching approach. Once `course` records exist (ADR 0003 milestone M4), it also groups by course.
 - **What it counts:** effective `effect` verdicts, as helped, no_effect or confused.
 - **What it keeps:** the targets, as examples.
 
@@ -559,6 +581,7 @@ reason:   not_learning | sensitive | invalid | not_allowed
 5. Increase the learner's **cache version**, so every cached brief and summary for that learner becomes unreachable.
 6. Mark every summary built from a blocked event as stale.
 7. Queue the clean-up tasks in the outbox.
+8. **When a note is redacted or deleted,** write a durable **deletion record** (ADR 0003 §5.4). Each browser must check these records before it replays any local draft, and purges drafts for affected notes without sending them. A save to a deleted note returns `410` and never recreates it. A notification to connected clients is only a courtesy.
 
 **From the moment this commits:**
 - the text is gone from MySQL;
@@ -628,14 +651,16 @@ The pilot has no encryption, so these copies are readable plaintext. After the e
 - sub-topics, through `part_of`;
 - AI-judged verdicts counted and flagged;
 - transcripts off by default;
-- automatic question matches that can be reversed.
+- automatic question matches that can be reversed;
+- **batched attempts**, scheduled with the flashcards milestone (ADR 0003 M5). The core `results` structure is used for review sessions.
+
+**Self-graded flashcard reviews** are recorded with `judged_by: self`. They drive the review schedule only, and are shown as practice (ADR 0003, decision D2).
 
 **Deferred:**
 - shared streams and shared contributions;
 - health-related preferences;
 - plugins;
-- batched attempts;
-- offline Flutter capture;
+- offline Flutter capture (a later decision);
 - importing transcripts;
 - human reviewers other than the learner.
 

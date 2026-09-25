@@ -3,6 +3,7 @@
 - **Status:** PROVISIONAL. It becomes ACCEPTED only when validation gates G1–G4 have passed. If a gate fails, this ADR is revised or replaced.
 - **Date:** 2026-09-25
 - **Revised:** 2026-09-25. Added phasing, canonical file storage and the processor boundary. Removed the encrypted rebuild cache. Changed the status wording.
+- **Revised:** 2026-09-25. Cross-references to [ADR 0003](0003-web-workspaces-and-study-content.md): note drafts kept privately in the learner's browser (I4, G3 and what remains after erasure), and when retrieval is built (milestone M3) and G1 is measured.
 - **Decision owner:** Project owner (project manager and system architect)
 
 ## Context
@@ -82,7 +83,8 @@ Machine-produced text that evidence cites, such as transcripts, OCR output and s
 **I4. No readable copy of personal text exists outside canonical storage.** The only exceptions are:
 - text held in process memory while it is being processed;
 - the learner's own export;
-- briefs sent to the LLM the learner chose to use.
+- briefs sent to the LLM the learner chose to use;
+- **unsaved note drafts in the learner's own browser storage** (ADR 0003 §5.3). These are plaintext on that device, kept per account, and removed once the server confirms the save. They are also removed when the device next loads the app and finds a deletion record for that note, when the learner logs out and chooses to discard them, or when they expire locally. While a device stays disconnected, we cannot remove them (see [What remains after erasure](#what-remains-after-erasure-the-g3-hypothesis)).
 
 **I5. Private data does not leave our infrastructure without explicit configuration and the learner's consent.** See [Processor boundary](#processor-boundary).
 
@@ -121,6 +123,11 @@ These cost almost nothing now, and they are what make the deferred work a migrat
 | Per-learner rotation of embedding vectors | | | Only if G3 shows the leftover data warrants it |
 
 The work in the "before any other real learner" column is days of effort using Laravel's built-in encryption. It is not an enterprise key-management system.
+
+**When the day-one column is built** (see ADR 0003 §13):
+- **Owner pilot.** The owner pilot begins with real study data at milestone M4.
+- **Retrieval.** Qdrant, embeddings, keyed keyword tokens, the retrieval gateway and the minimal canary test are built in **milestone M3**, before any real study data exists. Real notes are therefore indexed from the first day they are written.
+- **Retrieval traces and labelling.** These arrive in M3 as well, so that G1 can start collecting test cases as soon as the pilot begins.
 
 ## Retrieval privacy design
 
@@ -403,7 +410,10 @@ The pass thresholds below are proposals. The owner confirms them before any data
 - no category more than 3 percentage points worse;
 - no increase in must-not-retrieve items.
 
-**When:** after about 4–6 weeks of pilot use.
+**When:** after about 4–6 weeks of pilot use, counted from the start of milestone M4 (ADR 0003).
+- **Where the cases come from.** Cases come from queries made inside the app (search and the brief preview) and from the owner's study activity.
+- **Chat queries.** These join the test set once MCP capture exists (milestone M6).
+- **Two stages.** ADR 0003 proposes a first decision on the in-app cases (G1a), confirmed later against chat cases (G1b). This is decision D9 in ADR 0003.
 
 **If it fails:** embeddings are removed from V1 retrieval, and we reassess whether Qdrant is still worth running for keyword search alone. The choice of permanent store is unaffected.
 
@@ -462,11 +472,19 @@ The pass thresholds below are proposals. The owner confirms them before any data
 3. Confirm that Qdrant returns no points for the pseudonym, and measure how long deleted data physically survives in Qdrant's storage.
 4. Restore the latest data backup into a scratch environment. Confirm that the erasure log is re-applied, and that the learner's content cannot be decrypted once the key backups have expired.
 5. Rebuild Qdrant and confirm the learner does not reappear.
+6. **Browser drafts** (ADR 0003 §5.3):
+   - Use a browser profile that holds unsaved drafts for the erased learner, and reconnect it.
+   - Confirm that the app finds the deletion records, and the account-deleted response, before it replays any draft.
+   - Confirm that it purges every draft for that account without sending any of them.
+   - Record that a profile which never reconnects keeps its drafts.
 
 **Output:** the table in [What remains after erasure](#what-remains-after-erasure-the-g3-hypothesis), confirmed or corrected with measured values.
 
 **Proposed pass:**
-- once the job completes, no plaintext content remains anywhere except the learner's own export and briefs already sent to external LLMs;
+- once the job completes, no plaintext content remains anywhere except:
+  - the learner's own export;
+  - briefs already sent to external LLMs;
+  - browser drafts on devices that haven't reconnected;
 - everything that remains matches the documented policy and time limits.
 
 **When:** before any other real learner joins, after any change to storage, backups, caching or processors, and at least every quarter.
@@ -539,6 +557,7 @@ The retention periods are proposals for the owner to confirm. Erasure is the doc
 | Graph copy, if one exists | Rebuilt without the learner | Nothing | — | Never backed up |
 | Erasure log | The learner's ID is added | The ID itself | Indefinitely | Needed to re-apply the erasure after any restore |
 | External processors (only with consent) | Outside our control | Whatever was sent, as recorded in the disclosure log | The provider's policy | The learner consented to this explicitly |
+| Unsaved note drafts in the learner's browsers (ADR 0003 §5.3) | Purged the next time each device loads the app and receives the deletion records, or the account-deleted response | Plaintext drafts on any device that hasn't reconnected since | Until that device loads the app again, the learner clears browser data, or the drafts expire locally (30 days after the last change) | We cannot reach a disconnected device. The learner is told this when choosing "keep drafts on this device" at logout |
 | External chat LLMs | Outside our control | Briefs already sent during chats | The provider's policy | The learner started these disclosures, and we tell them so |
 | The learner's own export | Outside our control | The learner's copy | The learner's choice | The learner owns it |
 

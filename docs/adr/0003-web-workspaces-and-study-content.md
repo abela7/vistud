@@ -1,643 +1,782 @@
 # ADR 0003: Web workspaces, front-end stack and study content
 
-- **Status:** PROVISIONAL. This ADR becomes ACCEPTED only when all three of these hold:
-  1. the PM has reviewed it;
-  2. the workspace prototype passes the acceptance criteria in §14;
-  3. the open decisions in §16 have been settled.
+- **Status:** PROVISIONAL. The direction has been provisionally approved by the PM. This ADR becomes ACCEPTED only when the workspace prototype passes every criterion in §14. The remaining open decision is listed in §16.
 - **Date:** 2026-09-25
-- **Decision owner:** the project owner. The PM reviews and coordinates. The developer owns implementation.
-- **Depends on:** [ADR 0001](0001-permanent-store-and-retrieval-index.md) and [ADR 0002](0002-learning-event-schema.md).
+- **Revised:** 2026-09-25. Recorded the PM's decisions D1–D8 and four corrections:
+  - drafts are separated per account, and retries are made safe;
+  - deletion records prevent deleted notes from coming back;
+  - flashcards keep one identity while their content is revised;
+  - an explicit policy for undo history.
+
+  Also: basic custom themes moved into the prototype; retrieval timing reconciled with ADR 0001; milestones and the acceptance checklist revised.
+- **Decision owner:** the project owner. The PM reviews and coordinates; the developer owns implementation.
+- **Depends on:** [ADR 0001](0001-permanent-store-and-retrieval-index.md) and [ADR 0002](0002-learning-event-schema.md). Both now carry cross-references back to this ADR.
 
 ## 1. Context
 
 ViStud is a full study platform, comparable in ambition to RemNote. Students work inside it through:
-- notes, folders, and courses with modules
-- a dashboard and a calendar
-- flashcards with spaced repetition
-- plugins, eventually
+- notes and folders;
+- courses and modules;
+- a dashboard and a calendar;
+- flashcards with spaced repetition;
+- plugins, eventually.
 
 MCP is one way for external AI assistants to connect. It is not the product.
 
-The app must feel like polished software rather than a set of web pages. That means:
-- a persistent shell, with no full-page reloads during normal use;
-- the user's working context is preserved;
+**Experience requirements (unchanged):**
+- no full-page reloads during normal in-app navigation or actions;
+- the user's working state is preserved;
 - browser back and forward work, and every screen and note has a direct link;
-- loading, saving, error and retry states are clear, and they never block the whole workspace;
-- the layout is modern and uncluttered, with a real mobile layout;
-- themes are fully token-driven, with no hardcoded colours anywhere.
+- local interactions respond immediately;
+- saving, loading, error and retry states are clear and never block the whole workspace;
+- the layout is modern and uncluttered, designed for mobile, tablet and desktop;
+- colours come only from semantic tokens.
 
-There are two workspaces, **Student** and **Admin**, on one platform with one account system.
+There are two workspaces, **Student** and **Admin**. They run in one application with one account system, and share components and theme tokens. Each has its own navigation, and permissions are enforced on the server. Being an admin never grants access to private study content.
 
-The PM has chosen **Blade and Livewire**. This ADR records that choice and fills in everything around it. It proves nothing yet: the prototype in §14 is what establishes the experience.
+The PM chose **Blade and Livewire**. This ADR records that choice and everything around it. The prototype (§14) is what proves the experience.
 
 ## 2. Decision summary
 
 | Area | Decision |
 |---|---|
-| Application | Laravel 13 as one application. Student and Admin are workspaces inside it, not separate apps or deployments |
-| Web UI | Livewire 4 with Blade for screens. Alpine (bundled with Livewire) for anything local to the browser |
-| Navigation | `wire:navigate` for in-app navigation, and `@persist` for the shell. Every screen has a real URL |
-| Note editor | Tiptap 3 (MIT, built on ProseMirror), plus ViStud's own block and outline schema. Runs in the browser, isolated from Livewire |
-| Note saving | Through the versioned JSON API, using optimistic concurrency. Newer work is never silently overwritten |
-| Styling | Tailwind CSS 4 with Tailwind's default palette removed. Only semantic colour tokens exist |
-| Theme enforcement | Three layers: a source scan, a scan of the compiled CSS, and a runtime "sentinel theme" browser test |
-| Calendar | FullCalendar 7 (MIT), using its structural stylesheet only and mapped to our tokens |
-| Charts | ECharts 6 (Apache-2.0), using the SVG renderer with its theme built from our tokens |
+| Application | Laravel 13, as one application. Student and Admin are workspaces within it, not separate apps or deployments |
+| Web UI | Livewire 4 with Blade for screens. Alpine (bundled with Livewire) handles everything that stays in the browser |
+| Navigation | `wire:navigate` for moving around, and `@persist` for the shell. Every screen has a real URL |
+| Note editor | Tiptap 3 (MIT, built on ProseMirror), plus ViStud's own block and outline schema. It runs in the browser, isolated from Livewire |
+| Saving notes | Through the versioned JSON API, with optimistic concurrency. Drafts are kept per account, and deletion records are checked before any draft is replayed |
+| Offline (**D1 = A**) | **Draft-safe web.** Notes already open stay editable while disconnected, and their drafts are durable. The app shell is not cached, so the app can't be opened while offline (§7). Flutter's offline scope is a later decision |
+| Styling | Tailwind CSS 4 with its built-in palette removed. Only semantic tokens exist, and a three-layer check enforces this |
+| Themes (**D7 = A**) | A **basic custom theme** (seed colours) ships in the prototype and the first usable study workspace. **Advanced** editing of every individual token comes later |
+| Calendar | FullCalendar 7 (MIT), using its structural stylesheet only, mapped to our tokens |
+| Charts | ECharts 6 (Apache-2.0), using the SVG renderer with a theme built from our tokens |
 | Browser tests | Playwright Test |
-| Web authentication | Laravel sessions, via Fortify: login, two-factor authentication and password confirmation |
-| External clients (Flutter, MCP, plugins) | Passport OAuth, in phase 4. Sanctum isn't needed |
-| Real-time updates | Reverb, not before phase 4 |
-| Business rules | One application service layer. Livewire, the REST API and MCP are thin adapters over it |
+| Web authentication | Laravel sessions through Fortify, with mandatory two-factor authentication for admins (**D5 = A**) |
+| Accounts (**D4 = A**) | Invite-only. The pilot starts with the owner's account plus synthetic test accounts. ADR 0001's gates (encryption, isolation and erasure) still apply before another real learner joins |
+| Admin denial (**D6 = A**) | A student who opens an admin route gets 403. Another learner's private records return 404, the same as a record that doesn't exist |
+| External clients (Flutter, MCP, plugins) | Passport, in milestone M6. Sanctum isn't used |
+| Live updates | Reverb, in M6 |
+| Business rules | One application service layer, with thin adapters for Livewire, REST and MCP |
 | Paid components | None required |
 
 ## 3. Local interactions vs server interactions
 
-I said earlier that "every interaction is a round trip". That was wrong. Most interactions that should feel instant are **local**: they need no server at all.
+Most interactions that should feel instant need no server at all.
 
 | Kind | Interactions | Mechanism | Server? |
 |---|---|---|---|
-| **Local** | Menus, popovers and dialogs · expanding and collapsing folders already loaded · resizing and collapsing panels · switching theme · typing, formatting, selecting and undoing in the editor · slash menu and keyboard shortcuts · switching between notes already open · filtering lists already loaded · previewing drag-to-reorder | Alpine and the editor, in the browser | **None.** A preference, such as theme or panel width, is saved in the background afterwards |
-| **Server read** | Opening a note that isn't in memory · first expansion of a folder that isn't loaded · search · topic suggestions after `[[` · dashboard data · calendar date ranges · the flashcard queue | Livewire requests or API calls, with skeleton placeholders scoped to the area being loaded | Yes. The rest of the workspace stays usable |
-| **Server write** | Saving notes · creating, renaming, moving or deleting items · calendar changes · review answers · settings | Notes: a background autosave queue (§5). Other items: an optimistic update, rolled back with a message if it fails. IDs are UUIDv7 generated by the client, so creating something is instant | Yes, but it never blocks the UI unless the user genuinely has to wait for a result |
+| **Local** | Menus, popovers and dialogs · expanding and collapsing folders that are already loaded · resizing and collapsing panels · switching theme · editor typing, formatting, selection and undo · the slash menu and shortcuts · switching between notes that are already open · filtering lists that are already loaded · previewing a drag reorder | Alpine and the editor | **None.** Preferences are saved in the background afterwards |
+| **Server read** | Opening a note that isn't in memory · the first expansion of a folder that isn't loaded · search · topic suggestions · dashboard data · calendar ranges · the flashcard queue | Livewire or API requests, with a skeleton only in the area being loaded | Yes. The rest of the workspace stays usable |
+| **Server write** | Saving notes · creating, renaming, moving or deleting items · calendar changes · review answers · settings | Notes use a background autosave queue (§5.3). Other items update optimistically and roll back with a message on failure. IDs are UUIDv7s created by the client, so creating something is instant | Yes, but it never blocks the workspace unless the user truly needs the result |
 
 **Feedback rules:**
-- **No blocking spinners.** There is never a full-page blocking spinner. Navigation shows a thin progress bar (Livewire's navigate progress bar), and the main area shows a skeleton after 150 ms.
-- **Loading indicators are targeted.** They sit on the element that is working. A button disables only for its own action.
-- **Save status is always visible:** *Saved* · *Saving…* · *Saved on this device (offline)* · *Not saved, retrying in N s* · *Conflict, needs your choice*.
-- **Timeouts and retries.** A request that takes longer than 15 s is treated as failed. Every write carries an idempotency key, so retrying never duplicates anything.
-- **Offline notice.** A banner appears when the connection drops. It uses `wire:offline` plus the browser's online and offline events.
-- **Unsubmitted forms.** Leaving a form with unsubmitted input asks for confirmation. This uses `wire:dirty` plus a navigation guard.
+- **No blocking spinner.** Navigation shows a thin progress bar. A skeleton appears in the main area after 150 ms. Loading indicators sit on the element that is loading.
+- **Save status is always visible.** The note save indicator is defined in §5.3.
+- **Failed requests.** Anything slower than 15 s counts as failed. Every write carries an idempotency key.
+- **Offline.** An offline banner uses `wire:offline` plus the browser's online and offline events.
+- **Unsubmitted input.** Leaving a form with unsubmitted input asks for confirmation, using `wire:dirty` and a navigation guard.
 
 ## 4. Workspace shell, navigation and preserved state
 
-**Shell.**
-- The persistent parts are wrapped in `@persist` so they survive navigation:
-  - the sidebar and its tree state;
-  - the top bar;
-  - the **editor host** (see §5).
-- The main workspace is swapped by `wire:navigate`, which in Livewire 4.4 also offers `.hover` prefetch and `.preserve-scroll`.
+**Shell and URLs**
+- The persistent parts are wrapped in `@persist`: the sidebar and its tree state, the top bar, and the **editor host** (§5.2).
+- The main workspace is swapped by `wire:navigate`. Livewire 4.4 provides `.hover` prefetch and `.preserve-scroll`.
 - The theme lives on `<html>`, which navigation never replaces.
+- URLs:
 
-**URLs.**
-
-| Screen | URL |
-|---|---|
-| Dashboard | `/` |
-| A note | `/notes/{id}`, plus an optional `#block` anchor |
-| A course | `/courses/{id}` |
-| A module | `/courses/{id}/modules/{id}` |
-| A folder | `/folders/{id}` |
-| Calendar | `/calendar?view=week&date=…` |
-| Flashcard review | `/review` |
-| Settings | `/settings/...` |
-| Admin | `/admin/...` |
+  | Screen | URL |
+  |---|---|
+  | Dashboard | `/` |
+  | Note | `/notes/{id}`, optionally with `#block` |
+  | Course | `/courses/{id}` |
+  | Module | `/courses/{id}/modules/{id}` |
+  | Folder | `/folders/{id}` |
+  | Calendar | `/calendar?view=…&date=…` |
+  | Flashcard review | `/review` |
+  | Settings | `/settings/...` |
+  | Admin | `/admin/...` |
 
 - Back and forward restore the previous screen. A direct link loads the full shell with that screen open.
-- An unknown or forbidden ID shows a "not found" state inside the shell.
+- An unknown ID, or another learner's private ID, shows the same "not found" state inside the shell (§10.4).
 
-**Where state is kept:**
+**Where state is kept.** This is the promise the tests check (§14):
 
 | State | Where | Survives navigation | Survives reload | Survives closing the browser |
 |---|---|---|---|---|
-| Open editors: document, selection, undo history | In memory, in the editor host, which keeps the 5 most recently used | Yes | Document and selection only, restored from IndexedDB | Document and selection only |
-| Unsaved note drafts | IndexedDB, keyed by note | Yes | Yes | Yes |
-| Selected item | The URL | Yes | Yes | Yes, as a bookmark |
-| Sidebar width, expanded tree nodes, right panel open and width | localStorage, per device | Yes | Yes | Yes |
-| Scroll position | History state (`preserve-scroll`) and sessionStorage | Yes, on back and forward | Yes | No |
-| Theme | Account preference, cached in localStorage | Yes | Yes | Yes |
-| Unsubmitted small forms, such as the event dialog | Alpine state | Within that screen | No | No |
+| Open editors: document, selection, **undo history** | Memory, in the editor host. Up to **5** most recently used notes per tab | Yes, for those 5 notes. Opening a 6th note removes the oldest editor (policy below) | Document and selection only | Document and selection only, once the app is opened online again |
+| Unsaved note drafts | IndexedDB, in a separate store for each account (§5.3) | Yes | Yes | Yes. The app shell isn't cached, so drafts reappear when the app is next opened online (§7) |
+| Selected item | The URL | Yes | Yes | Yes (bookmark) |
+| Sidebar width, expanded tree nodes, right panel state | localStorage, per account and device | Yes | Yes | Yes |
+| Scroll position | History state and sessionStorage | Yes, on back and forward | Yes | No |
+| Theme | Account preference, cached per account in localStorage | Yes | Yes | Yes |
+| Unsubmitted small forms | Alpine state | Within that screen | No | No |
 
-**Honest limit:** undo history lasts only while the tab is open. It can't be restored after a reload or after the browser is closed.
+**Undo history policy**
+- Undo history belongs to an open editor. It lasts while that editor stays in memory in the tab.
+- Visiting other screens (dashboard, calendar, settings, admin) **never** removes an editor.
+- Opening a **6th** note removes the editor for the least recently used note. That note's document and selection are kept, through its draft or the server, and it reopens instantly with its content and selection intact. Its **undo history starts empty**.
+- Undo history never survives a reload or closing the tab.
+- The sixth-note case is tested explicitly (§14, criterion 4).
 
 ## 5. The note editor
-
-Tiptap is a foundation, not a finished RemNote-style editor. ViStud builds its own outline schema and behaviour on top of it.
 
 ### 5.1 First editing features
 
 | Feature | How it works |
 |---|---|
-| **Blocks** | The document is a list of `block` nodes. Each block has a stable ID (from the Unique ID extension, which is MIT-licensed in Tiptap 3). The block types are paragraph, heading 1–3, bulleted list item, numbered list item, to-do, quote/callout, code (with lowlight syntax highlighting coloured by tokens), divider, image and file |
-| **Nesting** | Every block can have child blocks. This is our own schema: a block contains content plus an optional `children` group. Tab indents, Shift+Tab outdents, and each block can be collapsed. Collapse state is saved per device and doesn't create new note versions. Blocks can be moved with a drag handle (MIT extension) or with Alt+↑/↓ |
-| **Topic links** | Typing `[[` opens a suggestion list of the learner's topics, using Tiptap's Suggestion utility and the topic search endpoint. The list also offers "Create topic …". Choosing one inserts an inline `topicLink` chip, which is an atom node holding the topic ID and label. Clicking it opens the topic panel. Backlinks are worked out on the server when a note is saved (§9) |
-| **Keyboard** | Enter: new block · Shift+Enter: line break · Tab / Shift+Tab: indent / outdent · Ctrl/Cmd+B, I, U, E: bold, italic, underline, code · Ctrl/Cmd+Z / Shift+Z: undo / redo · Alt+↑/↓: move block · Ctrl/Cmd+.: collapse · `/`: block menu · Ctrl/Cmd+K: app command palette (reserved app-wide). The full map lives in one registry with an in-app help sheet. Shortcuts must never override browser essentials |
-| **Paste** | Clipboard HTML is parsed through our schema, so unknown formatting is dropped while structure (headings, lists, code) is kept. Plain text becomes paragraphs. Markdown is converted with the MIT `@tiptap/markdown` extension, to be evaluated in the prototype. Links accept only `http`, `https` and `mailto`. Pasted images become attachments (below) |
-| **Attachments** | Images and files are dropped, pasted or picked, using the MIT File Handler extension. They upload to canonical storage as private files for that learner only (ADR 0001). A placeholder with a progress bar shows until the file record exists, and the document stores only the file's ID. Files are served through the file service, which honours redaction blocks. Type and size limits apply |
-| **Flashcards** | Typing `front >> back` in a block makes a basic card, and `front <> back` makes a two-way card. Cloze deletions come in a later phase. The card is stored as attributes on the block, and saving extracts it (§9). A marker in the margin shows which blocks are cards |
+| **Blocks** | The document is a list of `block` nodes, each with a stable ID (Tiptap's Unique ID extension, MIT). Block types: paragraph, heading 1–3, bulleted, numbered, to-do, quote/callout, code (syntax highlighting coloured by tokens), divider, image, file |
+| **Nesting** | Our own schema: each block holds its content plus an optional group of `children`. Tab indents and Shift+Tab outdents. Blocks can be collapsed, and collapse state is stored per device, not as a new version. Blocks move with a drag handle (MIT) or Alt+↑/↓ |
+| **Topic links** | Typing `[[` opens suggestions for the learner's topics, with a "Create topic …" option. Choosing one inserts a `topicLink` chip. Backlinks are worked out on the server when the note is saved (§9.3) |
+| **Keyboard** | Enter: new block · Shift+Enter: line break · Tab / Shift+Tab: indent / outdent · Ctrl/Cmd+B, I, U, E: bold, italic, underline, code · Ctrl/Cmd+Z / Shift+Z: undo / redo · Alt+↑/↓: move block · Ctrl/Cmd+.: collapse · `/`: block menu · Ctrl/Cmd+K: command palette (applies across the whole app). All shortcuts live in one registry with a help sheet, and none overrides browser essentials |
+| **Paste** | Pasted HTML is parsed through our schema: unknown formatting is dropped, while headings, lists and code are kept. Plain text becomes paragraphs. Markdown is converted using `@tiptap/markdown` (MIT), which the prototype evaluates. Links accept only `http`, `https` and `mailto`. Pasted images become attachments |
+| **Attachments** | Files are dropped, pasted or picked (File Handler extension, MIT). They are uploaded as private, per-learner canonical files (ADR 0001). A placeholder stays until the file record exists, and the document stores only the file's ID. Files are served through the file service, which respects redaction blocks. Type and size limits apply |
+| **Flashcards** | `front >> back` makes a basic card, and `front <> back` makes a two-way card. The card is stored in block attributes and extracted when the note is saved (§9.4). A margin marker shows which blocks are cards |
 
-**Later phases:** tables, maths (KaTeX), cloze deletions, embedded PDFs, and block references.
+**Later:** tables, maths, cloze deletions, embedded PDFs and block references.
 
-### 5.2 Isolation from Livewire and cleanup
+### 5.2 Isolation from Livewire, and cleanup
 
-- **The editor host.** It is an Alpine component inside a `@persist` element and outside every Livewire component's DOM (`wire:ignore` as a safeguard). Livewire never re-renders or changes it.
-- **Talking to the rest of the page.** Livewire screens and the editor communicate only through browser events, such as `note:open`, `note:saved` and `note:conflict`. They never share DOM.
-- **Up to five editors in memory.** The host keeps up to 5 editor instances, least recently used first. Opening a note shows its instance and hides the others, which keeps undo history and selection intact.
-- **Removing an editor.** When a sixth note is opened, or on logout, the oldest editor is removed like this:
-  1. Its pending changes are written to the save queue and to IndexedDB.
-  2. `editor.destroy()` is called.
-  3. Its listeners are removed.
-  4. Its reads that are still running are aborted with `AbortController`.
+- **The editor host.** This is an Alpine component inside a `@persist` element, placed outside every Livewire component's DOM, with `wire:ignore` as a safeguard. Livewire never re-renders it.
+- **Communication.** The editor and Livewire screens talk only through browser events, such as `note:open`, `note:saved` and `note:conflict`.
+- **Up to 5 editors.** The host keeps up to 5 editor instances per tab, ordered by most recent use.
+- **Removing an editor** (on a 6th note, logout, or account change):
+  1. flush its changes into the draft store and the save queue;
+  2. call `editor.destroy()`;
+  3. remove its listeners;
+  4. abort any reads it has in flight.
 
-  Saves are never aborted: they either finish or retry from IndexedDB.
-- **Leak test.** The prototype navigates 50 times, then checks that at most 5 editors exist and that memory hasn't kept growing (§14).
+  Saves are never aborted. They finish, or are retried from the draft.
+- **Leak test.** After 50 navigations there are at most 5 editors, and memory has not kept growing (§14).
 
-### 5.3 Autosave, ordering, versions and conflicts
+### 5.3 Autosave, drafts, ordering and conflicts
 
-- **Every note has a version number on the server.** A save sends:
+**Drafts are kept per account.**
+- **Where drafts live.** Each account has its own IndexedDB database, `vistud-drafts-{accountId}`. Each record is keyed by **note and tab**, so two tabs never overwrite each other's draft.
+- **What a record holds:** `note_id`, `client_id` (the tab), `base_version`, `draft_rev` (increases with every local change), `doc`, `selection`, `updated_at`, `state`.
+- **Messages between tabs.** Tabs signal each other on a `BroadcastChannel` named `vistud-{accountId}`. Tabs signed in to a different account never receive them.
+- **Checking the account.** Every API response carries the current account ID in a header. If a tab sees an account it doesn't expect, it stops its save queue immediately and returns to the login screen.
 
-  ```
-  PUT /api/v1/notes/{id}
-  { base_version, doc, save_id, client_id }
-  ```
+**Saving:**
 
-  The server responds with one of:
-  - `200 { version }`: saved.
-  - `409 { current_version }`: someone else saved a newer version first. The client fetches that version.
-  - `422`: the document breaks the schema. The server checks it against the schema, the size limit, link protocols, and attachment ownership.
+```
+PUT /api/v1/notes/{id}   { base_version, doc, draft_rev, save_id, client_id }
+```
 
-- **Ordering.**
-  - There is one save queue per note, and only one save in flight at a time.
-  - A save fires 1.5 s after typing stops, and at least every 10 s during continuous typing.
-  - Edits made while a save is in flight are combined into the next save.
-  - The draft is written to IndexedDB before every save, and deleted only after the server confirms the version.
-  - `save_id` makes retries safe: the same `save_id` returns the same result.
-- **Two tabs in the same browser.**
-  - A `BroadcastChannel` tells the other tabs "note X is now version N".
-  - A tab with no unsaved edits reloads to version N without asking. No work is lost, because it had none.
-  - A tab with unsaved edits shows a conflict warning before it tries to save.
-- **Two devices, or a missed broadcast.** Conflicts are caught at save time by the `409` response.
-- **Resolving a conflict. Newer work is never silently overwritten.** Both versions stay on the server, and the user chooses:
-  - *see both side by side*
-  - *keep mine*: saved as a new version on top of theirs, so both are in history
-  - *keep theirs*: the local draft is kept for 24 hours as a recoverable copy
-  - *save mine as a new note*
+- **Order.** Each note has one save queue, with only one save in flight at a time. A save starts 1.5 s after typing stops, or at least every 10 s during continuous typing. Edits made while a save is in flight go into the next save.
+- **Draft first.** The draft is written to IndexedDB before every save.
+- **Safe retries.** Reusing the same `save_id` returns the same result.
+- **`PUT` only updates.** It never creates or recreates a note. New notes are created with `POST`, using an ID generated by the client.
 
-  Version 1 doesn't merge automatically. Automatic merging where two edits touch different blocks is a candidate for a later phase.
-- **History.** Any retained version can be restored. Restoring creates a new version. The retention policy is in §9 and decision D3.
-- **Recovery after a reload or restart.** On load, the local draft is compared with the server's version:
-  - if the draft is based on the current version, it is restored with a "Recovered unsaved changes" notice;
-  - if the draft is based on an older version, the conflict flow runs.
+**Server responses:**
+
+| Response | What the client does |
+|---|---|
+| `200 {version: V}` | **It clears only the revision it saved.** If the stored `draft_rev` still matches the one sent, the draft is deleted. If the user typed more while the save was in flight, the draft is kept and its `base_version` becomes V, so the newer edits sit safely on top of what was saved |
+| `409 {current_version}` | Conflict. The draft is kept and autosave for this note pauses. The conflict screen appears |
+| `410 {reason}` | The note was trashed, deleted or redacted (§5.4) |
+| `401` / `419` | The session has expired. The queue **pauses**, drafts stay, and the user is asked to log in. The queue resumes **only if the same account** logs back in |
+| `401 account_deleted` | The account no longer exists. Every draft for that account on this device is purged |
+| `403` | The account is suspended or access has been revoked. Retries **stop for good** for this account, and the draft shows "can't be saved: access removed" |
+| Network error, 5xx or timeout | Retried at 2, 5, 15, 30 and 60 s, then every 60 s while online. Retries pause while offline and resume on reconnect |
+
+**Logging out** stops the queue at once. If unsynced drafts exist, the user is asked to choose:
+- *Sync now*;
+- *Log out and keep drafts on this device*. They sync the next time the same account logs in. A warning explains that anyone using this device's browser profile could read them;
+- *Log out and discard*.
+
+**The save indicator is honest about local storage:**
+
+| State | Label |
+|---|---|
+| Server has it | *Saved* |
+| Pending, stored locally | *Saved on this device* |
+| Saving | *Saving…* |
+| Failed, retrying | *Not saved, retrying in N s* |
+| Conflict | *Conflict, needs your choice* |
+| **Local storage writes failing** (private mode, full disk, blocked or evicted storage) | *Not stored on this device, keep this tab open* |
+
+- If a change exists only in memory, the browser warns before the tab is closed.
+- The app asks the browser for persistent storage (`navigator.storage.persist()`). If the browser refuses, the settings page says that it may clear drafts when storage runs low.
+
+**Conflicts: newer work is never silently overwritten**
+- **Tabs in the same browser.** A tab broadcasts "note X is now version N". Another tab that has no unsaved edits reloads to version N. A tab that has unsaved edits shows a conflict warning before it tries to save.
+- **Across devices,** conflicts are caught when saving (`409`).
+- **Resolving a conflict.** Both versions stay on the server, and the user chooses one of:
+  - *see both side by side*;
+  - *keep mine*: a new version is saved on top of theirs;
+  - *keep theirs*: my draft stays recoverable for 24 hours;
+  - *save mine as a new note*.
+
+  Version 1 doesn't merge automatically.
+- **After a reload or restart:**
+  - If a draft is based on the current version, it is restored with a notice.
+  - If it is based on an older version, the conflict screen appears.
+  - Several drafts of one note (from different tabs) are listed so the user can choose.
+
+### 5.4 Deletion, trash and redaction reaching browsers
+
+**Notifying connected tabs isn't enough.** The server keeps **durable deletion records** in a `content_tombstones` table, one for each note that is trashed, restored, deleted or redacted:
+
+| Field | Meaning |
+|---|---|
+| `learner_id` | The learner |
+| `entity_type`, `entity_id` | Which note |
+| `kind` | trashed, restored, deleted or redacted |
+| `at` | When |
+
+**Before any draft is replayed,** on app load and on every reconnect, the client:
+
+1. Fetches `GET /api/v1/sync/tombstones?since=<cursor>` for its account.
+2. **Purges** the drafts of deleted or redacted notes without sending them, with a notice.
+3. **Holds** the drafts of trashed notes. The user can choose "Restore the note and apply my changes" or "Discard my changes".
+4. Only then replays the remaining drafts in order.
+
+**The server rejects saves to deleted, redacted or trashed notes with `410`,** as a last line of defence. Because `PUT` never creates notes, offline edits can't bring deleted content back.
+
+**Limits that must be stated honestly.** Drafts are plaintext in the browser's storage. A device that never reconnects keeps them until one of these happens:
+- the app is opened on it again;
+- the learner clears the browser's data;
+- local expiry, 30 days after the last change. Expiry runs when the app next loads.
+
+If an account's session has expired, a returning device can't prove who it is and can't fetch deletion records. If the account itself was erased, the server answers `401 account_deleted`, and the device purges every draft for that account. ADR 0001 now lists browser drafts in invariant I4, in gate G3, and in its table of what remains after erasure.
 
 ## 6. Themes and colour
 
 ### 6.1 Tokens
 
-All real colour values live **only** in theme definitions. Everything else uses semantic tokens:
+Actual colour values live **only** in theme definitions. Everything else uses semantic tokens:
 
 | Group | Tokens |
 |---|---|
-| Surfaces | `--bg`, `--surface`, `--surface-raised`, `--surface-sunken`, `--overlay` (scrim) |
+| Surfaces | `--bg`, `--surface`, `--surface-raised`, `--surface-sunken`, `--overlay` |
 | Text | `--text`, `--text-muted`, `--text-subtle`, `--text-disabled`, `--text-on-accent` |
 | Borders | `--border`, `--border-strong`, `--divider` |
 | Accent | `--accent`, `--accent-hover`, `--accent-active`, `--accent-subtle`, `--accent-contrast` |
 | Interaction | `--hover`, `--pressed`, `--selected`, `--selection`, `--drag-target`, `--drop-indicator` |
 | Focus | `--focus-ring`, `--focus-ring-offset` |
-| Status | `--danger`, `--warning`, `--success`, `--info`, each with `-subtle` and `-on` |
-| Categories | `--category-1` to `--category-8`, each with `-subtle`. Used for course colours, calendar event types and chart series. A course's colour is **chosen from these categories, never typed as a hex value** |
+| Status | `--danger`, `--warning`, `--success`, `--info`, each with `-subtle` and `-on` variants |
+| Categories | `--category-1…8`, each with `-subtle`. Used for course colours, calendar event types and chart series. A course's colour is chosen from these, **never typed as a hex value** |
 | Editor | `--topic-link`, `--topic-link-bg`, `--code-bg`, `--syntax-keyword`, `--syntax-string`, `--syntax-number`, `--syntax-comment`, `--syntax-function`, `--card-marker`, `--block-hover` |
 | Charts | `--chart-grid`, `--chart-axis`. Series colours come from the categories |
-| Other | `--shadow-color`, `--role-admin` (the marker for the admin workspace) |
+| Other | `--shadow-color`, `--role-admin` |
 
-Tailwind 4 maps these tokens to utility classes through `@theme inline`, and removes its own palette with `--color-*: initial`. Classes such as `bg-surface` and `text-muted` exist; `bg-blue-500` does not.
+Tailwind 4 exposes the tokens through `@theme inline` and removes its own palette with `--color-*: initial`.
 
 ### 6.2 Everything the tokens must cover
 
-| Area | How it is themed |
+| Area | How |
 |---|---|
-| Blade components | Token-based Tailwind utilities |
-| Editor | Tiptap is headless: we write all of its CSS, using tokens |
-| Calendar | FullCalendar 7: we import only `fullcalendar/skeleton.css` (structure) plus our own CSS that maps its styles to tokens. **None of its palette files are imported** |
-| Charts | Our ECharts wrapper builds a theme at runtime from the computed tokens, sets every colour option itself, and rebuilds when a `vistud:theme-changed` event fires |
-| Dialogs | Native `<dialog>`, with `::backdrop` using `--overlay` |
+| Blade components | Token utilities |
+| Editor | Our own CSS. Tiptap ships no styles of its own |
+| Calendar | FullCalendar's `skeleton.css`, plus our own mapping to tokens. We never import its palette files |
+| Charts | Our ECharts wrapper builds the chart theme from the computed tokens, sets every colour option, and rebuilds when a `vistud:theme-changed` event fires |
+| Dialogs | Native `<dialog>`. Its backdrop uses `--overlay` |
 | Interaction states | Hover, pressed, selected, disabled and dragging states all use their tokens |
-| Text selection | `::selection` uses `--selection` |
-| Scrollbars | `scrollbar-color` uses tokens |
+| Text selection, scrollbars, shadows | Their tokens |
 | Icons | `currentColor` |
-| Shadows | `--shadow-color` |
 
 ### 6.3 Enforcement
 
-Disabling Tailwind's palette isn't enough on its own. Three checks run in CI, and all must pass.
+Three checks run in CI, and all three must pass:
 
-1. **Source scan.** It covers `resources/css`, `resources/js`, `resources/views` and `app/**/*.php` (for inline `style` attributes and generated style strings).
-   - **Forbidden:**
-     - hex colours
-     - `rgb()`/`rgba()`, `hsl()`/`hsla()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()`
-     - CSS named colours in colour positions
-     - `color-mix()`
-     - Tailwind arbitrary colour values such as `bg-[#fff]`
-     - colour literals in JavaScript strings
+1. **Source scan.** Scans `resources/css`, `resources/js`, `resources/views` and PHP files that output styles.
+   - **Forbidden:** hex colours, colour functions (`rgb`, `hsl`, `hwb`, `lab`, `lch`, `oklab`, `oklch`, `color`), named colours in colour positions, `color-mix()`, Tailwind arbitrary colour classes, and colour strings in JavaScript.
    - **Allowed:** `currentColor`, `transparent`, `inherit`, `initial`, `unset`, `none` and `var(--…)`.
-   - **Exempt files:** only `resources/css/themes/*.css` and the theme-preset seed data.
-2. **Compiled CSS scan.** After `vite build`, every colour literal in the built CSS must sit inside a theme block (`:root[data-theme=…]`). This catches library styles that slip in.
-3. **Sentinel theme test** (Playwright). Every token is given a unique, unlikely colour. The test then visits every screen and state:
-   - hover, focus, and open dialogs and menus;
-   - dragging;
-   - the editor, including code blocks and topic chips;
-   - the calendar and charts;
-   - toasts and error states.
+   - **Exempt:** only `resources/css/themes/*.css` and the preset seed data.
+2. **Compiled CSS scan.** Every colour value in the built CSS must sit inside a theme block.
+3. **Sentinel theme test (Playwright).**
+   - Every token gets a unique colour that would never appear by chance.
+   - The test visits every screen and state: hover, focus, dialogs, dragging, the editor (including code blocks and topic chips), the calendar, charts, notifications and errors. This happens **in both workspaces**.
+   - Every colour computed on the page, chart SVG included, must match a sentinel value.
 
-   On every element it reads the computed colour properties: text, background, borders, outline, fill, stroke, caret, text decoration, and shadow colours. Chart SVG is included. Every colour that isn't transparent must match a sentinel value (any alpha). This catches colours set by JavaScript and defaults from third-party libraries, which a source scan can't see.
+**Focus.** Removing outlines is forbidden unless the shared focus-visible style replaces them. That style is a 2 px `--focus-ring` with an offset.
 
-**Focus rule.** A lint rule forbids `outline: none` and `outline-none` unless the shared focus-visible style replaces them. Every interactive component uses a 2 px `--focus-ring` with an offset.
+### 6.4 Custom themes (D7 = A), contrast and preferences
 
-### 6.4 Custom themes, contrast and preferences
+**Basic custom themes** arrive with the prototype and the first usable study workspace, not later:
+- **What the student sets.** The student picks **seed colours**: background, surface, text and accent, plus optional categories. The server derives every other token from these, stepping lightness in OKLCH.
+- **Live preview.** A preview updates live and shows contrast using culori.
+- **Scope.** The saved theme belongs to the account and applies across **both workspaces**.
 
-**What a theme is.** A theme is **data**:
+**Advanced editing of every individual token comes later,** under the same rules.
 
-```
-{ name, base: light|dark, tokens: { token: "#rrggbb" } }
-```
+**Themes are data, never CSS:**
+- only allowlisted token names are accepted, with `#rrggbb` values validated and normalised on the server;
+- the server writes the CSS variables itself;
+- user-supplied CSS, `url()`, expressions or any other strings are never accepted.
 
-- **Editing.** Users edit a small set of seed tokens (background, surface, text, accent, and optionally the categories). The server works out the other tokens using OKLCH lightness steps. An *Advanced* mode allows editing any individual token.
-- **Validation.** Only token names from the allowlist are accepted, and only `#rrggbb` values. They are validated and normalised on the server.
-- **No CSS injection.** The server writes the CSS variables itself from the validated values, so no user-supplied CSS, `url()`, expressions or other strings ever reach the page.
-
-**Contrast, checked when a theme is saved** (WCAG 2.x contrast ratios):
+**Contrast rules, checked when a theme is saved:**
 
 | Pair | Minimum |
 |---|---|
-| Text on background and on surface, muted text on surface | 4.5:1 |
-| Text on accent, and the `-on` colours on status colours | 4.5:1 |
-| Focus ring against background and against surface | 3:1 |
+| Text on background and on surface, including muted text on surface | 4.5:1 |
+| Text on accent, and the `-on` colours on their status colours | 4.5:1 |
+| Focus ring against background and surface | 3:1 |
 | Strong border against surface | 3:1 |
 
-- **Failures and presets.** A failing theme is rejected, with an explanation and a suggested fix. The editor also shows contrast live, using culori. The built-in themes and the admin presets must pass the same checks, enforced by a unit test.
-- **Saving preferences.** The theme is saved on the account as a theme ID, or as *system* with a light/dark pair. It syncs across devices and is cached in localStorage.
+- **Failures and presets.** A theme that fails is rejected, with the reason and a suggested fix. Built-in themes and admin presets must pass the same check, enforced by a unit test.
+- **Saved preferences.** The preference is stored on the account as a theme ID, or as *system* with a light/dark pair. It syncs across devices and is cached per account.
 - **No flash of the wrong theme.**
-  - The server renders `<html data-theme="…">` from the account preference in the first response, and puts any custom theme's CSS variables inline in `<head>`.
-  - For *system* mode, a tiny script in `<head>` picks light or dark before the first paint.
-  - Switching theme changes the `<html>` attribute instantly and saves in the background.
-- **Who owns which themes.** Admins manage the **platform presets**. Students choose their **personal** theme, or create their own.
+  - The server renders `<html data-theme="…">` and writes custom-theme variables inline in `<head>`.
+  - In *system* mode, a tiny script in `<head>` picks light or dark before the first paint.
+  - Switching theme is instant, and the choice is saved in the background.
+- **Who manages what.** Admins manage the **platform presets**. Students choose their **personal** appearance.
 
-## 7. Offline scope: this is a decision to make, not a default
+## 7. Offline scope (D1 = A: draft-safe web)
 
-Draft recovery is **not** full offline editing. Precisely:
+**While disconnected with the tab still open:**
+- **Works:**
+  - reading and editing notes that are already open, or are among the notes kept in the editor host;
+  - moving around the shell locally;
+  - switching theme;
+  - expanding folders that are already loaded.
 
-- **While disconnected, with the tab still open:**
-  - **Works:**
-    - reading and editing notes already open, or already held in the editor host;
-    - moving around the shell locally;
-    - switching theme;
-    - expanding folders that are already loaded.
+  Every edit is written to durable drafts, and the indicator shows *Saved on this device*, or the storage-failure label.
+- **Doesn't work, with a clear message:** opening other notes, search, dashboard refresh, calendar changes, creating, renaming, moving or deleting items, flashcard review, and MCP. In version 1, only note drafts are queued.
 
-    Every edit is saved to IndexedDB, and the status reads *Saved on this device*.
-  - **Doesn't work**, with a clear message:
-    - opening a note that isn't loaded;
-    - search, dashboard refresh and calendar changes;
-    - creating, renaming, moving or deleting items;
-    - flashcard review;
-    - MCP.
+**After closing the browser:**
+- **What survives:** drafts, and the selection at the time. Layout and theme preferences survive too.
+- **What doesn't:** undo history, and any unsent action that isn't a note draft.
+- **The app can't reopen offline.** There is no service worker, so the shell isn't cached. Reopening the app while offline shows the browser's own offline page. The drafts are safe in storage and reappear the next time the app is opened online.
 
-    In version 1, nothing except note drafts is queued for later.
-- **After the browser is closed:** unsaved note drafts survive, including where the selection was. Layout preferences and the theme survive too. Undo history does not, and neither do any other unsent actions.
-- **When the connection returns:** the save queue replays drafts in order, each with its `base_version`. Conflicts go through the `409` flow in §5.3. A draft is deleted only after the server confirms it.
+**When the connection returns:**
+1. The account is checked.
+2. Deletion records are fetched and applied (§5.4).
+3. Drafts are replayed in order with their `base_version`.
+4. Conflicts go through the `409` flow.
+5. A draft is deleted only after the server confirms the exact revision it saved.
 
-**What full offline for the web would cost:**
-- a service worker that caches the app shell;
-- an IndexedDB mirror of notes, folders, calendar and flashcards;
-- a queue of operations, and synchronisation for every type of entity;
-- conflict handling for every type of entity, not just notes;
-- a way to render the shell without the server.
+**Cost of fuller offline support (not chosen).** It would need:
+- a service worker to cache the shell;
+- a local mirror of every entity;
+- a queue of operations;
+- synchronisation and conflict handling for every entity type;
+- screens that render without the server.
 
-Livewire screens are rendered by the server, so they can't work offline. Full offline would effectively mean building a **second, client-rendered application**. That is a large piece of work, measured in weeks rather than days, and it would reopen the choice of Livewire.
+That is effectively a second application rendered in the browser, and it would reopen the choice of Livewire.
 
-**Decision D1 (for the PM):**
-- **Option A:** the web version is *draft-safe*, as described above. Whether Flutter gets full offline is decided separately and later.
-- **Option B:** the web version must be *fully offline-capable*. In that case the front-end stack needs to be reconsidered before the prototype starts.
+**Flutter's offline scope** is a separate decision, to be taken later.
 
 ## 8. One set of business rules
 
-- **One place for the rules.** All validation, permissions, learner isolation (ADR 0001 §5) and business rules live in **one application service layer**. Laravel policies are enforced inside the services, and every call for learning data must carry the learner context.
-- **Three thin adapters over it:**
-  1. **Livewire**, for the web screens. It calls the services in the same process.
-  2. **The JSON API** (`/api/v1`). It is used by:
-     - the web note editor, from day one;
-     - Flutter;
-     - plugins.
-  3. **MCP tools** (ADR 0002 §9).
-- **Precisely:** *the web app does not use the JSON API for everything.* Server-rendered screens call the services directly. That is a deliberate trade-off: it is quicker to build, and it avoids a public contract for every screen.
-- **Keeping the API complete enough for Flutter and plugins:**
-  - **A parity test.** Every student-facing service capability must either have an API endpoint or be listed as web-only with a reason. A new capability without either fails CI.
-  - **Notes use the API from day one.** The most demanding path, note sync, goes through the API from the start, so Flutter inherits a sync contract that is already proven.
-  - **API conventions:**
-    - UUIDv7 IDs created by the client;
-    - idempotency keys on writes;
-    - version-based concurrency (`409`);
-    - cursor pagination;
-    - a change feed, `/changes?since=`, when Flutter arrives.
-  - **A documented contract.** The API is described in OpenAPI, and contract tests run against that description.
-- **Livewire safeguards:**
-  - IDs held in a component's public properties are marked `#[Locked]`, so the browser can't change them.
-  - Every action authorises again through the service.
-  - Tests send tampered Livewire requests (§10.5).
+- **One service layer.** All validation, permissions, learner isolation (ADR 0001 §5) and business rules live in **one application service layer**. Policies are enforced inside the services.
+- **Three thin adapters sit on top:**
+  1. **Livewire** for web screens, calling the services in the same process;
+  2. **the JSON API** (`/api/v1`), used by the web note editor from day one, Flutter and plugins;
+  3. **MCP tools**.
+- **Precisely: the web app does not use the JSON API for everything.** Only note sync, attachments, deletion records and topic suggestions go through it.
+- **How the API stays fit for Flutter and plugins:**
+  - **A parity test.** Every student-facing capability must either have an API endpoint or appear on a web-only list with a reason.
+  - **Offline-friendly conventions:** UUIDv7 IDs created by the client, idempotency keys, version checks (`409`), `410` for deleted items, cursor pagination, the deletion-record feed, and a general change feed when Flutter arrives.
+  - **A documented contract.** An OpenAPI definition, with contract tests against it.
+- **Livewire hardening:**
+  - IDs are locked with `#[Locked]`.
+  - Every action re-authorises through the service.
+  - Tests forge requests to prove it (§10.5).
 
 ## 9. Study content model
 
-### 9.1 Notes and versions
+### 9.1 Notes, versions and citations (D3 = A, with the evidence exception)
 
 | Table | Contents |
 |---|---|
-| `notes` | `id` (UUIDv7, may be created by the client), `learner_id`, `container` (a course, module or folder, or none for top level), `title`, `current_version`, `position`, `trashed_at` |
-| `note_versions` | `note_id`, `version`, `doc` (ProseMirror JSON, stored as content so it can be encrypted later), `base_version`, `save_id`, `client_id`, `kind` (autosave · checkpoint · conflict_resolution · restore), `created_at` |
-| `note_blocks` | Derived and rebuildable: block ID → note, text fingerprint, topic links, card attributes. Used for backlinks, search indexing and flashcard extraction |
+| `notes` | `id` (UUIDv7), `learner_id`, container (course, module, folder, or top level), `title`, `current_version`, `position`, `trashed_at` |
+| `note_versions` | `note_id`, `version`, `doc` (ProseMirror JSON, stored as content), `base_version`, `save_id`, `client_id`, `kind` (autosave, checkpoint, conflict_resolution or restore), `created_at` |
+| `note_blocks` | Derived and rebuildable: block, note, version, text fingerprint, topic links, card attributes |
+| `content_tombstones` | Deletion records (§5.4) |
 
-- **Notes are canonical content** (ADR 0001 I1). They are editable documents with a full version history. They are **not** a journal event stream: the journal stays the record of *learning*, not of every keystroke.
-- **Trash.** Moving a note to the trash is a soft delete for 30 days. Deleting permanently, or redacting a note, follows ADR 0002 §10. That includes a server instruction telling every client to purge its local drafts of that note.
-- **Version retention (decision D3).** The proposal:
-  - keep every version for 30 days;
-  - after that, keep the last version of each editing session, plus every checkpoint, conflict-resolution and restore version;
-  - never delete the current version.
+**Editing sessions.** An editing session is a run of accepted saves to one note from one tab, each less than 30 minutes after the one before. A session ends when any of these happens:
+- 30 minutes pass without a save from that tab;
+- the tab closes;
+- another tab or device saves the same note.
+
+The **session-final version** is the last save accepted in that session.
+
+**Retention:**
+- Every version is kept for 30 days.
+- After that, these are kept:
+  - session-final versions;
+  - checkpoints (versions the learner named explicitly);
+  - conflict-resolution and restore versions;
+  - the current version;
+  - **every version cited by learning evidence**, whether by a claim, a task revision or another journal entry.
+
+  A cited version is removed only if the note is **explicitly redacted** or the learner is **erased**.
+
+**Citations pin the version.** Evidence cites `source:<note-id>#v<version>/<block-id>`, not just a block. Versions never change once saved, so editing a note can never change what an old learning claim cites. ADR 0002 §5 has the matching reference format.
+
+**Trash and deletion:**
+- Moving a note to the trash is soft for 30 days, and creates a deletion record.
+- Permanent deletion or redaction follows ADR 0002 §10, including deletion records for browsers.
 
 ### 9.2 Courses, modules and folders
 
-| Entity | Meaning | Journal? |
+| Entity | Meaning | In the journal? |
 |---|---|---|
-| **Course** | An academic container: title, code, term, dates, and a colour **category** (§6.1). It is private to the learner in the pilot | Yes, as a `course` **record**. This lets the memory engine group by course |
-| **Module** | An ordered unit of a course, such as a week or a unit, with optional dates | Yes, as a `module` record |
-| **Folder** | Purely for organisation. Folders nest (up to 8 levels deep in practice) and can sit under a course, under a module, or at the top level ("Personal") | No, folders don't affect learning evidence |
-| **Note** | Lives in exactly one container, or at the top level | The note becomes a `source` record (§9.3) |
-| **Activity** | A lecture, lab, exam or deadline (ADR 0002). It belongs to a course or module and appears in the calendar | Already a record |
+| **Course** | Title, code, term, dates, and a colour **category**. Private to the learner in the pilot | Yes, as a `course` record (ADR 0002) |
+| **Module** | An ordered unit of a course, with optional dates | Yes, as a `module` record |
+| **Folder** | Organisation only. Nests up to 8 levels, and can sit under a course, a module, or the top level ("Personal") | No |
+| **Note** | Lives in one container | Its source record (§9.3) |
+| **Activity** | A lecture, lab, exam or deadline, attached to a course or module, and shown on the calendar | An existing record type |
 
-- **Moving a note between folders** only updates the notes store.
-- **Moving it to another course** also appends a revision of its source record.
+- **Moving a note between folders** changes only the notes store.
+- **Moving it to another course** also appends a new revision of its source record.
 
 ### 9.3 How study content feeds the memory engine
 
-This section carries forward ADR 0002. Every time a note version is saved, a background **extractor** runs. It is deterministic (no LLM) and idempotent for each note and version, and it diffs against the previous version:
+When a note version is saved, a background **extractor** runs:
+- **How it runs.** It is deterministic (no LLM), idempotent per (note, version), and compares each version with the previous one.
+- **Note as a source.** The note gets a `source` record, so evidence can cite `source:NOTE#v<version>/<block>`.
+- **Topic links.** Topic links go into the **derived** `note_blocks` index, which powers backlinks and retrieval. They are organisation, not learning evidence, so they don't become journal claims.
+- **Flashcards.** Cards become `task` records plus `exercises` claims (§9.4).
+- **Reviews.** Card reviews become **batched attempts**, one event per review session, in milestone M5 (ADR 0002 §12).
 
-1. **Note as a source.** The note gets a `source` record the first time it is saved, so evidence can cite a block as `source:NOTE#block`.
-2. **Topic links.** `topicLink` chips become `refers_to` claims from block mentions to topics, made by the learner with person authority, so they are accepted. Removing a link ends its claim.
-3. **Flashcards.** Each card becomes a `task` record (key `note:NOTE#block`, with the front as its prompt content) plus `exercises` claims for the topics linked in the block or its parents.
-4. **Reviews.** Card reviews become **batched `attempt`s**, one event per review session. Batched attempts were deferred in ADR 0002, and they are now needed in phase 3.
+### 9.4 Flashcards: identity, revisions and trusted checkers (D2 = A)
 
-**Findings to carry forward (these affect ADR 0002):**
-- **F1: self-graded flashcards don't count.** Grading your own card is `judged_by: self`, and under `rules@1` that never counts towards topic labels. The proposal:
-  - (a) self-graded reviews drive only the spaced-repetition schedule, and appear as *practice*;
-  - (b) cards where the student types the answer and it is checked automatically count as evidence.
+**Identity follows the card, not its wording.**
+- **Creating a card.** Creating a card creates a `task` record with a new ID and the key `card:<note-id>#<block-id>`. Block IDs stay stable through edits and drag moves.
+- **Revising a card.** A **meaningful change** creates a new **revision** of the same task, not a new task. A meaningful change is a change to the normalised front, back or card type (Unicode NFKC, whitespace collapsed, formatting marks removed).
+  - Each revision appends a task record revision with `revision`, `content_hash` and a citation of the note version it came from.
+  - A change to formatting or whitespace alone creates no revision.
+- **Attempts.** Attempts record `task` plus `task_revision`. Earlier attempts keep the revision they answered and are never rewritten.
+- **Diversity.** Task diversity counts **task IDs**, so revising a card never increases diversity.
+- **A new task.** Only an explicit "Make this a new card" action, or a new block, creates a new task.
+- **Copies.** A copied card gets a new block and a new task. The extractor proposes `same_as` when the normalised content matches another active card, and `policy@1` accepts matches at confidence 0.90 or above. Copies therefore can't inflate diversity.
+- **Deleting a card.** This retires the task. Its attempts remain.
 
-  **Decision D2.**
-- **F2: batched attempts move into scope** for phase 3, with the core `results` structure.
-- **F3: the learning profile can group by course,** because courses are now records. ADR 0002 §7 grouped by approach only.
-- **F4: redacting note content must reach local drafts.** The server tells clients to purge the IndexedDB drafts of any note that has been redacted.
-- **F5: the projection code must pass its tests first.** The golden replay and edge-case tests are the gate for phase 1. The draft projection code in `95904c2` has not been tested, and it must pass them before any screen depends on it.
+**Self-grading only schedules practice.** A review graded by the learner ("again / hard / good / easy") is recorded with `judged_by: self`. It drives the spaced-repetition schedule and appears as *practice*. Under ADR 0002 it never counts towards a topic's label.
+
+**Automatically checked answers are *eligible evidence*, not automatic mastery.** A checked answer is recorded with `judged_by: auto` only when a **trusted checker** produced it. A checker is trusted only if all four of these hold:
+
+1. **The key is independent.** The expected answer or test comes from something other than the learner being assessed. That means course or instructor material with recorded provenance (for example, a lab's test suite or an official answer key), or a deterministic computation from such material (for example, running the course's reference SQL against the sample database).
+2. **It is deterministic and versioned.** The same answer always gets the same verdict. Every attempt records `checker: {id, version, key_source}`.
+3. **The answer can be checked automatically.** That means exact or normalised matching of short answers (numbers, identifiers, terms), running tests for code, or comparing result sets for SQL. Free-text explanations are never auto-checked.
+4. **The learner can't make it trivial.** A test suite or key the learner has edited is not trusted.
+
+**A key the learner wrote is not trusted.** Matching the back of a card the learner wrote themselves only shows the answer is consistent with their own note, not that it is correct. It is recorded as `judged_by: self`, which means practice.
+
+**Every ADR 0002 rule still applies to trusted checks:**
+- task diversity counts task IDs;
+- sessions;
+- retention;
+- authority;
+- disputes, which are settled by re-running the checker;
+- immediate repeats don't count.
+
+Flashcards use the `recall` and `recognise` forms. On their own they can lift a topic to **working** at most, because `secure` needs *apply* tasks.
+
+**Pilot note.** The owner uploads their own course material, so its provenance is whatever the owner says it is. That is acceptable for a personal pilot. Recording where material came from is required before shared or institutional material exists.
 
 ## 10. Student and admin workspaces
 
-One account system and one deployment, with **two workspaces that have separate navigation and permissions checked on the server**.
+One application and one account system, with **two workspaces**. Navigation is separate, permissions are checked on the server, components and theme tokens are shared, and the user's personal theme applies in both.
 
 ### 10.1 Screens
 
 | Student workspace | Admin workspace |
 |---|---|
-| Home: dashboard, what's due, recent notes | Overview: system health, queue depth, failed jobs, overdue redaction clean-up, storage use |
-| Notes (the editor) · Courses and modules · Folders | Accounts: list, invite or create, suspend or reactivate, request account deletion |
+| Home: dashboard, what's due, recent notes | Overview: system health, queue depth, failed jobs, overdue redaction clean-up, storage |
+| Notes, courses and modules, folders | Accounts: invite or create, suspend or reactivate, request deletion |
 | Calendar | Roles: grant or revoke admin |
-| Review: flashcards and spaced repetition (phase 3) | Theme presets |
-| Learning history: topic states, questions, misconceptions, with the evidence behind each | Background jobs: retry or inspect failed jobs |
-| Inbox: pending claims to review, and disputes (ADR 0002) | Audit log, read-only |
-| Search and command palette | Platform settings: registration mode, limits |
-| Connections: ChatGPT and Claude via MCP (phase 4) | Approved plugins (phase 5) |
-| Settings: profile, appearance and personal themes, privacy (redact, export, delete account), devices and sessions | — |
+| Review: flashcards (M5) | Theme presets |
+| Learning history: topic states, questions, misconceptions, with the evidence for each | Background jobs |
+| Inbox: pending claims and disputes | Audit log (read-only) |
+| Search and command palette | Platform settings: invite-only mode, limits |
+| Connections: ChatGPT and Claude (M6) | Approved plugins (later) |
+| Settings: profile, **appearance and basic custom theme**, privacy (redact, export, delete account), devices and sessions | — |
 
-**Shared across both workspaces:** the same theme system, reusable components, responsive layouts and navigation without reloads.
-
-**Telling them apart:** the admin workspace has its own sidebar and a persistent **Admin** marker in the header, using `--role-admin`.
+The admin workspace has its own sidebar, plus a permanent **Admin** marker (`--role-admin`) showing which role is active.
 
 ### 10.2 Permissions
 
 | Action | Student (own account) | Admin | Anyone else |
 |---|---|---|---|
-| Read or write own notes, folders, courses, calendar, flashcards, learning history | ✓ | Only as a student, on their own data | ✗ |
-| Read **another** person's learning content (notes, journal, AI conversations) | ✗ | **✗**. A future support-access feature needs an explicit, time-limited grant from the student, plus an audit trail | ✗ |
+| Read or write own notes, folders, courses, calendar, flashcards and learning history | ✓ | Only as a student, on their own data | ✗ |
+| Read **another** person's learning content (notes, journal, AI conversations) | ✗ (returns 404) | **✗**. Any future support access needs an explicit, time-limited grant from the student, and is audited | ✗ |
 | Choose or create a personal theme | ✓ | ✓, as a student | ✗ |
-| Create or edit platform theme presets | ✗ | ✓ | ✗ |
-| Create or invite accounts | ✗ | ✓ | Self-registration only if the platform setting allows it |
-| Suspend or reactivate an account | ✗ | ✓, with password confirmation. Audited | ✗ |
-| Delete an account (erasure, ADR 0001) | ✓ (own account, re-confirmed) | ✓ (on request). Audited | ✗ |
-| Grant or revoke admin | ✗ | ✓, with password confirmation and 2FA. Audited. The last admin can't be removed | ✗ |
-| View account details (email, created date, last active, storage used, counts) | Own only | ✓. **Details only, never content** | ✗ |
-| View system health and jobs, retry jobs | ✗ | ✓ | ✗ |
-| View the audit log | ✗ | ✓, read-only. Nobody can edit or delete entries through the app | ✗ |
-| Connect an external AI (MCP OAuth consent) | ✓ (own account) | Only as a student, on their own data | ✗ |
-| Redact own content | ✓ | ✗ (not someone else's content) | ✗ |
+| Create or edit platform theme presets | ✗ | ✓ (2FA required) | ✗ |
+| Create or invite accounts | ✗ | ✓ (2FA and a recent password confirmation) | ✗ (invite-only, D4) |
+| Suspend or reactivate an account | ✗ | ✓ (2FA and recent password confirmation). Audited. Refused if it would leave no active admin | ✗ |
+| Delete an account (erasure, ADR 0001) | ✓, own account, re-confirmed. Refused if it would leave no active admin | ✓ on request (2FA and recent password confirmation). Audited. Refused if it would leave no active admin | ✗ |
+| Grant or revoke admin | ✗ | ✓ (2FA and recent password confirmation). Audited. Refused if it would leave no active admin | ✗ |
+| Reset another admin's 2FA | ✗ | ✓ (2FA and recent password confirmation). Audited | ✗ |
+| View account details (email, dates, last active, storage, counts) | Own only | ✓. **Details only, never content** | ✗ |
+| View system health and jobs, retry jobs | ✗ | ✓ (2FA required) | ✗ |
+| View the audit log | ✗ | ✓, read-only. No path in the app can edit or delete entries | ✗ |
+| Connect an external AI | ✓ (own) | Only as a student, on their own data | ✗ |
+| Redact own content | ✓ | ✗ | ✗ |
 
-### 10.3 Accounts, roles and switching workspaces
+"Recent password confirmation" means within the last **10 minutes**. The services check it, not only the screens.
 
-- **Users, roles and learners.**
-  - A user is the login identity.
-  - Roles are stored in `user_roles`, holding `student` or `admin`. A user can hold both.
-  - The `student` role comes with a **learner** record (ADR 0002 keeps learner and user separate). An admin-only account has no learning data at all.
-- **The first admin** is created **only** from the server command line: `php artisan vistud:admin:grant {email}`. This is audited as a system action. There is no web route that can create the first admin.
-- **Further admins** are granted by an existing admin under Admin → Roles. This requires:
-  - password confirmation;
-  - two-factor authentication on the granting admin's account.
+### 10.3 Accounts, roles, 2FA and recovery (D4, D5)
 
-  Each grant is audited, and the person receiving it is notified. Revoking works the same way, and **the last admin can't be revoked**.
-- **Protection against self-promotion.** Roles can't be set through any mass assignment, registration or profile field. No student-facing endpoint touches roles.
-- **Switching to Admin.**
-  - The switch appears only for users who hold the admin role.
-  - It requires a password confirmation from the last 15 minutes, and 2FA on the account (decision D5).
-  - The active workspace is stored in the session.
-  - All `/admin` routes are protected by `auth`, `role:admin` and, for sensitive actions, `password.confirm`.
-  - **Every admin service method also checks the Gate**, as a second line of defence.
+**Accounts, roles and learners**
+- A **user** is a login identity.
+- Roles are stored in `user_roles` as `student` and/or `admin`.
+- The `student` role comes with a **learner** record (ADR 0002). An account that is only an admin has no learning data.
+
+**Invite-only (D4)**
+- The pilot starts with the owner's account plus **synthetic test accounts**. Self-registration is off.
+- Invite-only is **not** a substitute for ADR 0001's safeguards. Before another real learner joins, three things must be in place:
+  - encryption with a separate key per learner;
+  - the full G2 isolation suite;
+  - the G3 erasure drill.
+
+**Setting up the first admin**
+1. On the server, run `php artisan vistud:account:create {email}`, followed by `php artisan vistud:admin:grant {email}`. There is no web route for creating or granting the first admin. Both steps are audited as system actions.
+2. The first time the new admin enters the admin workspace, they must enrol in 2FA before anything else. Fortify then shows their recovery codes once.
+
+**Mandatory 2FA, enforced everywhere**
+- Every `/admin` route is protected by `auth`, `role:admin` and `two_factor_enrolled`. That covers **direct entry by URL**, not just the workspace switch.
+- An admin without 2FA is sent to enrol and can reach nothing else.
+- Protected actions also require a recent password confirmation.
+- The same checks run **inside the services**, so a Livewire action, an API call or a console path can't skip them.
+
+**Recovering admin access**
+- **Lost device:** use a recovery code.
+- **Lost codes as well:** another admin resets their 2FA. This is a protected, audited action, and the user must enrol again before entering the admin workspace.
+- **No other admin available:** run `php artisan vistud:admin:reset-2fa {email}` on the server, which needs shell access and is audited as a system action.
+
+**The last-admin safeguard**
+- An *active admin* is an account with the admin role that is neither suspended nor deleted.
+- The service layer refuses **any** operation that would leave zero active admins: revoking the role, suspending, deleting or erasing, **including an admin deleting their own account**. The same service backs every path: the admin screens, student self-service and the console commands.
+
+**Switching workspace**
+- The switch is shown only to users with the admin role.
+- Entering the admin workspace requires 2FA and a recent password confirmation.
+- The active workspace is stored in the session.
+- Ordinary accounts can never grant themselves admin. Roles can't be set through mass assignment, registration or profile fields.
 
 ### 10.4 Isolating student data, and audit records
 
-- **Isolation everywhere.** The learner-scoped data layer (ADR 0001 §5) applies equally to Livewire, the API and MCP.
-- **Admins can't read learner content.**
-  - Admin services have **no** methods that return learning content.
-  - Admin account screens show only details: email, dates, usage and counts.
-- **Audit log (`audit_log`).**
-  - **Contents:** `occurred_at`, actor (user and role, or system), `action` (for example `role.granted` or `account.suspended`), target type and ID, metadata (never content), IP, user agent, request ID.
-  - **Append-only.** The application's database user can only insert and read.
-  - **Retention:** kept for as long as the platform exists. No email addresses or learning content are ever copied into it.
+- **Isolation everywhere.** The learner-scoped data layer (ADR 0001 §5) applies in the same way to Livewire, the API and MCP.
+- **Two kinds of denial (D6):**
+  - a student who opens an admin route gets **403**;
+  - a private record belonging to another learner returns **404**, exactly the same response as a record that doesn't exist. This holds for guessed URLs, forged Livewire requests, API calls and MCP tools.
 
-### 10.5 Tests (in the phase 1 gate)
+  IDs are UUIDv7s. Nothing depends on them being hard to guess.
+- **No admin path to learning content.** Admin services have **no** methods that return learning content.
+- **Audit log (`audit_log`).**
+  - **Contents:** actor (user and role, or system), action, target, metadata (never content), IP, user agent, request ID, time.
+  - **Append-only.** The application's database user can only insert and read.
+  - **Retention:** kept for as long as the platform runs. No email addresses or learning content are stored in it.
+
+### 10.5 Security tests (part of the M1 gate)
 
 | Test | What it proves |
 |---|---|
-| T1 | A student requesting any `/admin` route gets 403 |
+| T1 | A student opening any `/admin` route gets 403 |
 | T2 | A student sending a forged request to an admin Livewire component gets 403 |
-| T3 | Student A can't reach student B's notes, whether through URL, API, a tampered locked Livewire property, or an MCP tool. It returns not found, and B's canary markers never appear (ADR 0001 G2) |
-| T4 | An admin can't fetch any student's note or journal content through admin screens, the API or Livewire. Admin pages contain no canary markers |
-| T5 | A registration or profile request carrying `role` doesn't change any role |
-| T6 | Granting a role requires password confirmation and 2FA. The last admin can't be revoked. Every grant and revocation writes an audit record |
-| T7 | Switching to Admin without the admin role gets 403. The workspace marker matches the active role |
-| T8 | Audit records can't be updated or deleted through the application |
+| T3 | Student A trying to reach B's records by URL, API, a tampered locked Livewire property or an MCP tool gets 404, identical to a record that doesn't exist. B's canary markers never appear (ADR 0001 G2) |
+| T4 | An admin can't get student content through admin screens, the API or Livewire. Admin pages contain no canary markers |
+| T5 | A `role` field in a registration, invite-acceptance or profile request changes nothing |
+| T6 | Granting a role requires 2FA and a recent password confirmation, and every grant or revocation writes an audit record |
+| T7 | Switching into the admin workspace without the admin role gets 403. The workspace marker matches the active role |
+| T8 | Audit records can't be updated or deleted through the app |
+| T9 | An admin without 2FA who opens `/admin/...` directly is sent to enrol. A protected action without a recent password confirmation is refused, whether it arrives through Livewire, the API or a console path that goes through the services |
+| T10 | Revoking, suspending, deleting or self-erasing the last active admin is refused. The first-admin and 2FA-reset console commands work and are audited |
 
 ## 11. Responsive workspace layout
 
-**Desktop, 1280 px wide and up**
-- **Left sidebar.** Resizable from 220 to 360 px, and collapsible. From top to bottom it contains:
-  - the workspace switcher (for users who hold both roles);
+**Desktop (1280 px wide and above)**
+- **Left sidebar.** Resizable from 220 to 360 px, and collapsible. It contains:
+  - the workspace switcher;
   - search;
-  - Home, Calendar, Review (with the number due), Inbox;
-  - **Courses**, each opening into modules, then folders, then notes;
+  - Home, Calendar, Review (with a count of cards due) and Inbox;
+  - **Courses**, which open into modules, folders and notes;
   - **Personal** folders;
   - Trash;
-  - Settings, at the bottom.
-- **Main workspace.** A breadcrumb and the save status, with the note, dashboard or calendar below.
-- **Right panel.** Optional, and closed by default wherever it isn't useful. It is resizable and remembered per screen. For a note it shows the outline, backlinks and linked topics with their state, the note's flashcards, and versions. For the calendar it shows event details.
+  - Settings.
+- **Main area.** A breadcrumb and the save status, with the content below.
+- **Right panel.** Optional and resizable, closed by default where it wouldn't help.
+  - For a note: its outline, backlinks, linked topics with their state, its flashcards, and its versions.
+  - For the calendar: event details.
 
-**Tablet, 768 to 1279 px**
+**Tablet (768–1279 px)**
 - The sidebar becomes an overlay drawer.
-- The right panel slides over the workspace rather than splitting the width.
-- There is no panel resizing.
+- The right panel slides over the content.
+- Panels can't be resized.
 
-**Mobile, under 768 px.** This is a **deliberately different layout**, not a shrunken desktop:
-- a bottom navigation bar with Home, Notes, Review, Calendar and More;
-- the course and folder tree becomes drill-down lists;
-- a note opens full screen, with a formatting bar above the keyboard;
-- the right panel's content opens as bottom sheets;
-- there are no split panels.
+**Mobile (under 768 px).** A **deliberately different layout**, not a shrunken desktop:
+- bottom navigation: Home, Notes, Review, Calendar, More;
+- drill-down lists instead of a tree;
+- the editor goes full screen, with a toolbar above the keyboard;
+- bottom sheets instead of the right panel;
+- no split panels.
 
-**Admin** uses the same breakpoints with its own sidebar. On mobile it has a reduced "More" menu, and dense data tables become cards.
+**Admin** uses the same breakpoints with its own sidebar. On mobile, its data tables turn into cards.
 
 ## 12. Dependencies
 
-These versions were checked on 2026-09-25 and will be pinned exactly in the lock files.
+Checked on 2026-09-25. Exact versions will be pinned in the lock files.
 
-| Package | Version | Licence | Used for | Phase |
+| Package | Version | Licence | Use | Milestone |
 |---|---|---|---|---|
-| laravel/framework | 13.33.0 | MIT | Application | 1 |
-| livewire/livewire | 4.4.6 | MIT | Screens, `wire:navigate`, `@persist`, `wire:offline`, `wire:dirty`, `wire:loading`, `wire:ignore` | 1–2 |
-| laravel/fortify | 1.40.0 | MIT | Login, 2FA, password confirmation and reset, with our own views | 1 |
-| phpunit/phpunit | 12.5.x | BSD-3-Clause | Server tests (already in the skeleton) | 1 |
-| vite / laravel-vite-plugin | 8.3.1 / 3.2.0 | MIT | Build | 2 |
-| tailwindcss / @tailwindcss/vite | 4.3.3 | MIT | Token-based utilities | 2 |
-| Alpine.js (bundled with Livewire) and @alpinejs/focus, anchor, collapse | 3.17.4 | MIT | Local interactions: focus traps, popovers, collapsing sections | 2 |
-| @tiptap/core, pm, starter-kit, extension-unique-id, extension-drag-handle, suggestion, extension-link, extension-image, extension-file-handler, extension-code-block-lowlight, markdown | 3.31.3 | MIT | Editor foundation | 2 |
-| lowlight | 3.3.0 | MIT | Code highlighting, coloured by tokens | 2 |
-| fullcalendar | 7.1.0 | MIT | Calendar. The day, week, multi-month and list views and drag interaction are in the MIT package | 2 |
-| echarts | 6.1.0 | Apache-2.0 | Dashboard charts | 2 |
-| idb | 8.0.3 | ISC | IndexedDB drafts | 2 |
-| culori | 4.0.2 | MIT | Live contrast preview in the theme editor | 5 |
-| Lucide icons | 1.48.0 | ISC | The SVGs we use, copied into Blade components and drawn with `currentColor` | 2 |
-| @playwright/test | 1.63.0 | Apache-2.0 | Browser and acceptance tests | 2 |
-| @axe-core/playwright | 4.13.0 | MPL-2.0 | Accessibility checks | 2 |
-| laravel/passport | 13.8.0 | MIT | OAuth for Flutter, MCP and plugins | 4 |
-| laravel/mcp | 1.0.1 | MIT | MCP server | 4 |
-| laravel/reverb | 1.12.0 | MIT | Live updates | 4 |
+| laravel/framework | 13.33.0 | MIT | Application | M1 |
+| livewire/livewire | 4.4.6 | MIT | Screens, `wire:navigate`, `@persist`, `wire:offline`, `wire:dirty`, `wire:loading`, `wire:ignore` | M1–M2 |
+| laravel/fortify | 1.40.0 | MIT | Login, 2FA and recovery codes, password confirmation and reset, with our own views | M1 |
+| phpunit/phpunit | 12.5.x | BSD-3-Clause | Server tests | M1 |
+| vite / laravel-vite-plugin | 8.3.1 / 3.2.0 | MIT | Build | M2 |
+| tailwindcss / @tailwindcss/vite | 4.3.3 | MIT | Token utilities | M2 |
+| Alpine (bundled) with @alpinejs/focus, @alpinejs/anchor, @alpinejs/collapse | 3.17.4 | MIT | Local interactions | M2 |
+| @tiptap/core, pm, starter-kit, extension-unique-id, extension-drag-handle, suggestion, extension-link, extension-image, extension-file-handler, extension-code-block-lowlight, markdown | 3.31.3 | MIT | Editor foundation | M2 |
+| lowlight | 3.3.0 | MIT | Code highlighting | M2 |
+| fullcalendar | 7.1.0 | MIT | Calendar: day, week, multi-month and list views, plus interaction | M2 |
+| echarts | 6.1.0 | Apache-2.0 | Charts | M2 |
+| idb | 8.0.3 | ISC | IndexedDB drafts | M2 |
+| culori | 4.0.2 | MIT | Contrast preview in the basic theme editor | M2 |
+| Lucide icon SVGs | 1.48.0 | ISC | Blade icon components drawn with `currentColor` | M2 |
+| @playwright/test | 1.63.0 | Apache-2.0 | Browser and acceptance tests | M2 |
+| @axe-core/playwright | 4.13.0 | MPL-2.0 | Accessibility checks | M2 |
+| laravel/passport | 13.8.0 | MIT | OAuth for Flutter, MCP and plugins | M6 |
+| laravel/mcp | 1.0.1 | MIT | MCP server | M6 |
+| laravel/reverb | 1.12.0 | MIT | Live updates | M6 |
 
-**Not used, and not approved:**
-- **Flux** (`livewire/flux`): even the free tier is proprietary-licensed, and its styling depends on its own palette, which conflicts with §6.
-- **Flux Pro:** paid.
-- **Tiptap Pro and Cloud features:** hosted collaboration, AI, comments.
-- **FullCalendar Premium:** for example, resource timelines.
-- **Laravel Sanctum.**
-- **Laravel Dusk.**
-- **Pest's browser plugin.**
+Qdrant (Apache-2.0) and the local embedding runtime arrive in **M3**, per ADR 0001. The exact runtime will be chosen and version-pinned in M3.
 
-**No paid features are needed.** The free components cover:
-- blocks, nesting, topic links, paste, attachments and flashcard syntax (Tiptap MIT, plus our code);
-- the calendar views and drag interaction (FullCalendar MIT);
-- every chart type needed (ECharts);
-- offline drafts (IndexedDB).
+**Not used and not approved:**
+- Flux, whose free tier is proprietary-licensed, and whose palette conflicts with §6;
+- Flux Pro;
+- Tiptap's paid Pro and Cloud features;
+- FullCalendar Premium;
+- Sanctum;
+- Dusk;
+- Pest's browser plugin.
 
-The recommendations:
-- **Charts: ECharts.** It has a built-in calendar heatmap for study activity, and graphs and treemaps for topic maps later. It offers ARIA descriptions and decal patterns for accessibility, and an SVG renderer, so the sentinel test can inspect its colours. It also tree-shakes. Chart.js would need plugins for heatmaps, and it draws on a canvas that tests can't inspect.
-- **Browser tests: Playwright Test.** The criteria need it. It can throttle the network or cut it off, intercept requests to inject failures, drive several tabs and browser contexts (for conflicts), keep a persistent context (to simulate a browser restart), run at different viewports, and run axe. Dusk can't control the network. Pest's browser plugin would add Pest 5 alongside PHPUnit, and it isn't confirmed to expose network control.
-- **Reverb: not needed for the first milestone.** Conflicts between tabs use `BroadcastChannel`, and conflicts between devices are caught at save time. Reverb arrives in phase 4, when captures from AI chats should appear live, or earlier if the PM wants live updates across devices.
-- **Passport alone, no Sanctum.**
-  - The web app uses Laravel's normal sessions. In phase 2, the editor's `/api/v1` sync routes run under the web middleware group (session and CSRF protection).
-  - Passport is added in phase 4 for everything external: Authorization Code + PKCE for Flutter, and OAuth for MCP and plugins.
-  - Both use the same controllers and services. One token system is enough.
+**No paid features are needed.**
 
-## 13. Phases
+**Recommendations:**
+- **Charts: ECharts.** It has a calendar heatmap, ARIA support, and an SVG renderer whose colours the sentinel test can inspect.
+- **Browser tests: Playwright Test.** It supports throttling, offline mode, request interception, multiple tabs and contexts, persistent contexts and viewports.
+- **Reverb** is not needed until M6.
+- **Passport alone.** The web app uses sessions, and its `/api/v1` sync runs under the web middleware group with CSRF protection. Passport arrives in M6 for external clients, using the same controllers.
 
-| Phase | Scope | Gate to pass |
+## 13. Milestones (D8, revised)
+
+| Milestone | Scope | Gate |
 |---|---|---|
-| **0** | This decision package | PM review, and decisions D1–D8 |
-| **1: Foundations** | Schema for the journal and projections (ADR 0002). The golden replay and edge-case tests made executable, with the draft projection code fixed until they pass. Fortify authentication. Roles and the workspace switch. The learner-isolation layer. The audit log. The first-admin command | All ADR 0002 tests pass, and T1–T8 pass |
-| **2a: Workspace prototype** | A small vertical slice, detailed in §14 | Every criterion in §14 passes |
-| **2b: Study workspace** | Editor version 1 with all the features in §5.1. Courses, modules and folders. The calendar (activities). The dashboard, built from projections. The admin shell (accounts, roles, audit, jobs, preset viewer) | Acceptance tests for each feature |
-| **3: Flashcards** | Extracting cards, review screens, batched attempts, scheduling, the review forecast | D2 decided, and review tests pass |
-| **4: AI connections** | Passport, MCP capture (ADR 0002 §9), Qdrant retrieval (ADR 0001), Reverb | ADR 0001 gates G1–G3 |
-| **5** | Custom theme editor, plugins framework, Flutter | To be decided |
+| **M1: Minimum foundations** | Schema for the journal, content and projections (ADR 0002). The golden replay and its edge cases made **executable**, with the draft projection code fixed until they pass. Fortify: login, invite acceptance, 2FA, password confirmation. Roles, the workspace switch, the admin middleware. The first-admin and 2FA-reset commands. The learner-isolation layer. The audit log | All ADR 0002 replay and edge-case tests pass, and T1–T10 pass |
+| **M2: Workspace prototype** | The thin slice described in §14. This includes the **basic custom theme in both workspaces**, the draft-safe editor, deletion records, and a minimal admin shell | Every item in §14 passes. After that, ADR 0003 can be marked ACCEPTED |
+| **M3: Retrieval pilot** (ADR 0001 G1) | Qdrant, the local embedding runtime (behind the processor boundary), keyed keyword tokens with one installation key, the indexing outbox and consistency check, and the retrieval gateway with learner filter and re-fetch. In-app search across notes and course material. A **brief preview**, showing what an AI would be sent. Retrieval traces and the labelling screen. A minimal canary test | Retrieval works on seeded data, and the canary test passes. **G1 data collection starts when M4 begins** |
+| **M4: Study workspace v1** | The full editor feature set from §5.1. Courses, modules and folders. The calendar with activities. A dashboard built from projections. Learning history and the inbox. Settings: appearance with basic custom themes, privacy with redaction and export. The admin workspace: accounts, roles, audit, jobs, theme presets, platform settings | Acceptance tests for each feature. The owner's real pilot begins. **Before another real learner joins:** ADR 0001 encryption, full G2, and G3 |
+| **M5: Flashcards** | Extracting cards, with identity and revisions (§9.4). The review screen. Self-graded scheduling. Trusted checkers for typed answers. Batched attempts. The review forecast | Review and evidence tests, including "revising a card doesn't increase diversity" and "a key the learner wrote counts as `self`" |
+| **M6: AI connections** | Passport, the MCP server (capture and `get_context`), the connection screens, Reverb live updates | ADR 0002 §9 capture tests. **G1b** with chat queries (D9) |
+| **Later** | Advanced per-token theme editing, plugins, Flutter (including its offline scope), shared streams | Separate decisions |
 
-## 14. Prototype acceptance criteria (phase 2a)
+Nothing beyond M1 and M2 starts until the gates before it have passed. Deferred features stay deferred.
 
-**Scope.**
-- **Seeded data:** 1 account holding both roles, with 2 courses, 6 modules, 10 folders, 30 notes (one of 5,000 words) and 20 activities.
-- **Screens:**
-  - the shell with its sidebar tree;
-  - a note in the editor, with blocks, nesting, topic-link chips from fixture topics, and autosave;
-  - a dashboard with 3 widgets, one of them an ECharts chart;
-  - the calendar in month and week views;
-  - a minimal admin shell (accounts list and audit log);
-  - three built-in themes, one of them dark.
+## 14. Acceptance checklist
 
-Every criterion below is an automated Playwright test:
+### M1 (foundations)
 
-1. **No reloads.**
-   - The test goes Note → Dashboard → Calendar → Note. A marker set on `window` survives the whole journey, and no new document navigation is recorded in the browser.
-   - Switching views takes at most 300 ms (95th percentile) on the local server with seeded data.
-2. **Back, forward and direct links.**
-   - Back and forward restore the previous view, the selected item and the scroll position.
-   - Opening `/notes/{id}#block` in a fresh browser shows the shell with that note and block.
-   - An unknown ID shows the "not found" state inside the shell.
-3. **Editor state is kept.**
-   - The test types, moves the selection, goes to the dashboard and comes back. The text and selection are unchanged, and **undo** still undoes the earlier typing.
-   - After a reload, the draft and selection are restored. Undo history is documented as not kept.
-   - After closing the browser (a new persistent context with the same storage), the draft is restored.
-4. **Workspace state is kept.** Sidebar width, expanded tree nodes and the right panel's state survive navigation and a reload.
-5. **Local interactions are local.** Opening menus, expanding loaded folders, resizing panels, switching themes and typing make **no** network requests, going by the request log. The only exception is the deferred autosave, and the preference save after a theme change.
-6. **Responsive.**
-   - At 390×844, 834×1194 and 1440×900 the layouts match §11. There is no horizontal scrolling.
+- [ ] Golden replay: all 13 checkpoints, the reconstruction assertions A1–A6, and variants V1–V5 pass.
+- [ ] Edge cases pass: task identity (X1–X5), disputes (D1–D6), redaction and restore (R1–R3).
+- [ ] T1–T10 pass.
+- [ ] The first admin can only be created from the console. 2FA enrolment is forced for admins, and recovery codes are shown once.
+- [ ] The audit log is append-only at the database-permission level.
+
+### M2 (workspace prototype)
+
+**Seeded data:**
+- 1 owner account holding both roles;
+- 1 synthetic student account;
+- 2 courses, 6 modules, 10 folders;
+- 30 notes, one of 5,000 words;
+- 20 activities;
+- 3 built-in themes, one of them dark.
+
+Every item below is an automated Playwright test unless marked *review*.
+
+1. [ ] **No reloads.**
+   - Going Note → Dashboard → Calendar → Note keeps a marker set on `window` alive, and the browser records no new document navigation.
+   - Switching views takes at most 300 ms (95th percentile) locally.
+2. [ ] **Back, forward and direct links.**
+   - Back and forward restore the view, the selection and the scroll position.
+   - `/notes/{id}#block` opens directly.
+   - An unknown ID, and another learner's ID, show the same "not found" state inside the shell.
+3. [ ] **Editor state within the retained editors.**
+   - Type, move the selection, go to the dashboard and come back: the text and selection are unchanged, and **undo still undoes** the typing.
+   - A reload restores the draft and the selection.
+   - Closing the browser and reopening it online restores the draft.
+4. [ ] **The sixth note.**
+   - Open notes 1–6 in turn, then go back to note 1: its content and selection are restored, and **undo does nothing** (its history was cleared by policy). No error appears.
+   - Notes 2–6 still have their undo history.
+5. [ ] **Workspace state.** Sidebar width, expanded tree nodes and the right panel state survive navigation and a reload.
+6. [ ] **Local stays local.** Opening menus, expanding loaded folders, resizing panels, switching themes and typing send no requests. The only exceptions are the deferred autosave and preference saves.
+7. [ ] **Responsive.**
+   - At 390×844, 834×1194 and 1440×900 the layout matches §11, with no horizontal scrolling.
    - Mobile uses the bottom navigation and drill-down lists.
-   - Visual snapshots are reviewed by the PM.
-7. **Themes.**
-   - Switching between the 3 themes updates the shell, editor, calendar, chart, dialogs and focus ring without a reload.
-   - The **sentinel theme test** and the source and compiled-CSS scans pass.
-   - Loading with a dark preference shows the dark theme from the first paint, with the correct `data-theme` in the server's HTML.
-8. **Slow connection** (throttled to 1.5 s latency).
-   - The workspace stays usable.
-   - The save status shows *Saving…*.
-   - View changes show a skeleton within 150 ms.
-   - No full-page spinner appears.
-9. **Failed saves.**
-   - The API returns 500 errors and timeouts: the status shows *Not saved, retrying*, retries back off, and the draft stays in IndexedDB.
-   - When the server recovers, the save completes. Nothing is lost.
-10. **Offline.** The browser goes offline: the banner appears, typing continues, and the status shows *Saved on this device*. When it comes back online, the queued saves go through in order.
-11. **Conflicts.**
-    - Two tabs edit the same note. The second tab is warned through `BroadcastChannel`.
-    - A second browser context saving against an older version gets a `409` and the conflict screen.
-    - Both versions are kept. Nothing is silently overwritten.
-12. **Editor lifecycle.** After 50 navigations there are at most 5 editor instances, and the JavaScript heap has grown by less than 20 MB.
-13. **Accessibility baseline.**
-    - The whole shell can be used with the keyboard.
-    - Focus is always visible.
-    - axe reports no serious or critical violations on the prototype screens.
-14. **Separate workspaces.**
-    - The switch appears only for admins.
-    - A student account gets 403 on the admin shell.
+   - *Review:* snapshots checked by the PM.
+8. [ ] **Themes.**
+   - Switching between the 3 built-in themes updates the shell, editor, calendar, chart, dialogs and focus ring without a reload.
+   - The source scan, compiled-CSS scan and sentinel test all pass **in both workspaces**.
+   - With a dark preference, the correct theme shows from the first paint.
+9. [ ] **User-created theme.**
+   - The user builds a basic custom theme from seed colours, and a contrast failure is rejected with the reason.
+   - The saved theme applies across **both workspaces**: editor, calendar, chart, dialogs, hover, focus, selected, disabled and dragging states.
+   - The sentinel test runs with a user-created theme.
+   - The theme is still active after logging out and back in.
+10. [ ] **Slow connection** (1.5 s latency). The workspace stays usable, *Saving…* is shown, a skeleton appears within 150 ms, and there is no full-page spinner.
+11. [ ] **Failed saves.** 500 errors and timeouts show *Not saved, retrying*, retries back off, the draft is kept, and saving recovers with nothing lost.
+12. [ ] **Only the saved revision is cleared.** Hold a save in flight, type more, then let the save succeed: the newer text is still in the draft, and the next save sends it.
+13. [ ] **Storage failure.** With IndexedDB writes failing, the indicator shows *Not stored on this device, keep this tab open*, and the browser warns before the tab closes.
+14. [ ] **Offline.** The banner appears, typing continues, and *Saved on this device* is shown. Going online flushes the saves in order. Reopening the browser while offline shows the browser's own offline page (the shell is not cached), and the drafts reappear once online.
+15. [ ] **Drafts are per account.**
+    - Account A leaves a draft. B logs in on the same browser: B never sees A's draft, and nothing of A's is sent under B's session.
+    - Tabs of A and B don't exchange messages.
+    - A tab whose account changes stops its queue immediately.
+16. [ ] **Logout and revoked access.**
+    - Logging out with unsynced drafts offers Sync, Keep and Discard. After logout, no retries are sent.
+    - A `403` stops retries for good.
+    - A `401 account_deleted` purges that account's drafts.
+17. [ ] **Deletion records.**
+    - A note deleted on another device, while this device is offline with a draft for it: on reconnect, the draft is purged **before** any replay, and nothing recreates the note.
+    - A trashed note offers "Restore and apply" or "Discard".
+    - A direct `PUT` to a deleted note returns `410`.
+18. [ ] **Conflicts.**
+    - A second tab is warned through `BroadcastChannel`.
+    - A save against an older version gets `409` and the conflict screen.
+    - Both versions are kept.
+19. [ ] **Editor lifecycle.** After 50 navigations there are at most 5 editors, and the JavaScript heap has grown by less than 20 MB.
+20. [ ] **Accessibility.** Everything can be done from the keyboard, focus is always visible, and axe finds no serious or critical issues.
+21. [ ] **Workspaces.**
+    - The switch appears only for admins, and entering the admin workspace needs 2FA and a recent password confirmation.
+    - A student gets 403 on `/admin`.
     - The admin marker is visible.
+    - The minimal admin shell (accounts list, audit log) uses the same components and the user's theme.
 
 ## 15. Consequences
 
-**Positive:**
-- Laravel and Livewire remain the single stack, and Blade screens are fast to build.
-- The editor, where the experience matters most, runs fully in the browser.
-- Theming is enforced by checks, not by convention.
-- The API is exercised from day one through note sync.
-- The admin role can't read learning content.
+**Positive**
+- One Laravel and Livewire stack.
+- The editor, where the experience matters most, runs entirely in the browser.
+- Theming is enforced by tests, including a theme the user builds.
+- Drafts are account-safe and can't bring deleted content back.
+- Citations are pinned to versions.
+- Flashcard evidence can't be gamed by rewording cards or by keys the learner wrote.
+- Admin status never exposes study content.
 
-**Costs and risks:**
-- **The editor schema is ours.** Nesting, card extraction and topic links are custom code on Tiptap. That is the largest front-end effort.
-- **Web and API can drift.** Because Livewire screens don't use the JSON API, their capabilities can drift apart. The parity test is what prevents it.
-- **Offline on the web is limited to drafts** unless D1 chooses otherwise, and that would reopen the stack choice.
-- **Screens driven by the server need care** over targeted loading states and optimistic updates to feel like software. The prototype exists to prove that before the stack is treated as final.
+**Costs and risks**
+- The editor schema is custom code on Tiptap, which makes it the largest front-end effort.
+- Parity between the web app and the API relies on the parity test.
+- Offline is limited to drafts, and the app can't open while offline.
+- Plaintext drafts in the browser are a documented exception in ADR 0001, with limits on how far we can purge them.
+- Screens rendered by the server need careful, targeted loading states. The prototype has to prove they feel right.
 
-## 16. Decisions for the PM
+## 16. Decisions
 
-| # | Decision | Recommendation |
+**Decided by the PM (2026-09-25):**
+- **D1 A:** draft-safe web.
+- **D2 A:** self-grading schedules practice; answers checked by a trusted checker are eligible evidence.
+- **D3 A:** version retention, keeping cited versions.
+- **D4 A:** invite-only.
+- **D5 A:** mandatory 2FA for admins.
+- **D6 A:** 403 for admin routes, and 404 for other learners' records.
+- **D7 A:** seed-colour themes in the prototype, with Advanced editing later.
+- **D8 A (revised):** the order in §13.
+
+**Open:**
+
+| # | Decision | Proposal |
 |---|---|---|
-| D1 | Offline scope for the web (§7) | A: draft-safe web. Decide Flutter offline separately |
-| D2 | Self-graded flashcards as evidence (F1) | Self-grading drives scheduling only. Automatically checked typed answers count as evidence |
-| D3 | Note version retention (§9.1) | 30 days in full, then one version per session plus checkpoint, conflict and restore versions |
-| D4 | Pilot registration | Invite-only, with self-registration off |
-| D5 | 2FA for admins | Required before entering the admin workspace |
-| D6 | Response when a student is denied an admin route | 403 (clear), rather than 404 (hides that the route exists) |
-| D7 | How much users can customise themes | Seed tokens, plus an Advanced mode with every token, all subject to the same validation |
-| D8 | Phase order (§13) | As listed: foundations and memory-engine tests before the UI prototype |
+| D9 | **Staging G1 against the chat features** | G1 starts collecting data at M4, using in-app queries (G1a). The decision on whether to keep embeddings is taken on G1a after 4–6 weeks. Chat queries join at M6 (G1b) and must confirm it. **Alternative:** bring a minimal MCP capture forward into M3, so chat queries are in G1 from the start. That would mean pulling Passport or a personal-token variant of MCP forward too |
