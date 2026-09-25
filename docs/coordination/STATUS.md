@@ -108,9 +108,11 @@ The live state of milestone M1: who owns each work package, where it stands, and
 |---|---|
 | Owner | Architect (backend lead), assigned by the PM |
 | State | **In progress.** The visual foundation and the login screen are ready for the PM's visual review; the other WP6 screens are not styled until that review |
-| Branch / PR | `m1/wp6-web-adapters`, from `a154850`. Pull request to follow |
+| Branch / PR | `m1/wp6-web-adapters`, from `a154850`: [PR #3](https://github.com/abela7/vistud/pull/3) |
 | Depends on | WP2's service contracts (delivered, awaiting review) |
 | Next handoff | PM visual review of [DESIGN.md](../../DESIGN.md) and the login previews in [docs/design/previews/](../design/previews/): desktop and mobile, light and dark, and the alternate Ember palette. After it: the two-factor challenge and setup, password confirmation and reset, invitation acceptance, the workspace switch and admin landing page, and the Livewire surfaces for V2 |
+
+**Evidence:** commits `7ffab31`, `a4eeb4f`, `9e629da`. Tests: PHP 145 passing (`tests/Unit/Appearance/*`, `tests/Architecture/ThemeEnforcementTest.php`, `tests/Feature/Web/LoginScreenTest.php`); browser 14 passing (`tests/Browser/theme-sentinel.spec.js`, `theme-switch.spec.js`, `login-accessibility.spec.js`).
 
 **Delivered for review:** DESIGN.md; the brand colours measured from the owner's logo (the original is preserved; its checkerboard is painted in, not transparency, and is removed from the UI assets); themes as data with gradients (ViStud Light, ViStud Dark, Ember); contrast checks across whole gradients; the three enforcement layers extended to gradients; the login screen; previews and a recording of live theme switching. Scope changes recorded in the work packages: WP6 is styled with the shared foundation instead of unstyled markup.
 
