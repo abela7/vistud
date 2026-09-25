@@ -10,6 +10,7 @@ derives where each topic stands, independent of any AI model.
 
 - [PROJECT.md](PROJECT.md) explains what ViStud is, how it is built, how we collaborate, and the order to read everything else in.
 - [STATUS.md](docs/coordination/STATUS.md) shows every work package's owner and state, open decisions and blockers. Update only your own package's entry; scope and ownership changes go through the PM.
+- **Taking over locally?** [docs/handoff/LOCAL-TAKEOVER.md](docs/handoff/LOCAL-TAKEOVER.md) lists the branches, what works, what is left, and which setup steps have been verified where.
 
 ## Where to find things
 

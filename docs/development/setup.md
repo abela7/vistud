@@ -3,7 +3,7 @@
 - **Status:** M1, increment 1.
 - **Owner:** the architect.
 
-M1 is backend only, so Node isn't needed yet. Front-end tooling (Vite, Tailwind, Playwright) arrives with the M2 work packages.
+On this branch M1 is backend only, so Node isn't needed. Front-end tooling (Vite, Tailwind, Playwright) arrives with WP6, on the `m1/wp6-web-adapters` branch ([PR #3](https://github.com/abela7/vistud/pull/3)); that branch's copy of this page covers Node and the asset build. The local handover is described in [LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md).
 
 The supported and tested environment is **PHP 8.4** and **MySQL 8.4 LTS**. CI runs those versions on Ubuntu. `composer.json` requires `"php": "^8.3"`. That constraint is the range Composer will accept when installing dependencies. It does not establish the supported or tested environment. Develop and test on PHP 8.4.
 
@@ -54,7 +54,7 @@ To run the app locally, with PHP 8.4 available as `php`:
 php artisan serve        # http://localhost:8000
 ```
 
-There are no screens yet. Work package WP6 adds minimal authentication and admin screens: plain, unstyled login, two-factor authentication, invitation acceptance, and the admin pages the security tests need. The persistent workspace shell (the sidebar, top bar and editor host that stay in place while the main area changes) belongs to M2. Until WP6 lands, M1 is exercised through tests, the console and the JSON endpoints.
+This branch has no screens. Work package WP6 adds minimal authentication and admin screens: login, two-factor authentication, invitation acceptance, and the admin pages the security tests need. By the PM's decision they use the shared visual foundation in DESIGN.md instead of unstyled markup. The login screen and that foundation are on the `m1/wp6-web-adapters` branch; the other screens are not built yet. The persistent workspace shell (the sidebar, top bar and editor host that stay in place while the main area changes) belongs to M2. Until WP6 lands, M1 is exercised through tests, the console and the JSON endpoints.
 
 ## Local accounts
 

@@ -80,7 +80,7 @@ XAMPP's existing PHP 8.0 and MariaDB installation does not meet this baseline. U
 | PHP | 8.4, with `pdo_mysql`, `mbstring`, `intl` and `sodium` |
 | Composer | 2.x |
 | MySQL | 8.4 LTS, the supported and tested database |
-| Node | Not needed in M1. Front-end tooling arrives with M2 |
+| Node | Not needed on this branch. WP6 (`m1/wp6-web-adapters`, [PR #3](https://github.com/abela7/vistud/pull/3)) adds Node 22 for the front-end build and the browser tests |
 | Unix, for one test | `pcntl` and `posix`, so the process-forking concurrency test can run. Windows PHP does not provide them |
 
 The database-user command below is a **Unix shell** command. It uses shell input redirection and is not a PowerShell command. A Windows procedure has not been verified. Details: [docs/development/setup.md](docs/development/setup.md).

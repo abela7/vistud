@@ -2,13 +2,15 @@
 
 The live state of milestone M1: who owns each work package, where it stands, and what is blocking it. Scope, acceptance criteria and owned files are defined in [m1-work-packages.md](../handoff/m1-work-packages.md); this page tracks progress only.
 
+**Handover (2026-09-25).** Cloud development by the architect is paused and handing over to the local team. Read [LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md) first: branches, what works, what is left, and setup that has been verified in the cloud but not yet on Windows. The PM assigns packages; this page assigns no new work.
+
 ## People
 
 | Who | Current activity |
 |---|---|
 | PM | Reviews, coordinates, assigns packages, approves gates |
-| Architect (backend lead) | WP4, in progress |
-| Grok | DOC1 delivered, awaiting review |
+| Architect (backend lead) | Paused: cloud development handed over to the local team ([LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md)). WP4 delivered, awaiting review; WP6 in progress, visual direction approved |
+| Grok | DOC1 accepted. No package assigned |
 | Gemini | Not started. No package assigned |
 
 ## How this page is kept
@@ -34,9 +36,9 @@ The live state of milestone M1: who owns each work package, where it stands, and
 | | |
 |---|---|
 | Integration branch | `claude/persistent-study-context-zsilo6` (PM decision: no separate `main` for now). Package branches start from it and return to it by pull request |
-| Baseline commit | `242317c`, the onboarding baseline (documentation only, on top of `27ce003`, the last implementation commit) |
+| Baseline commit | `f70abd0`: DOC1 merged (documentation only), then this handover (documentation only). The last implementation commit on this branch is still `27ce003`; WP4 and WP6 are on their own branches, not merged |
 | CI | [.github/workflows/ci.yml](../../.github/workflows/ci.yml): Pint, then the Unit, Feature and Architecture suites on MySQL 8.4. The Acceptance suite runs as a separate step that doesn't fail the build until the PM declares the M1 gate |
-| Tests at the baseline | 117 passing: Unit 22, Feature 91, Architecture 4. The Acceptance suite has no tests yet |
+| Tests at the baseline | 117 passing: Unit 22, Feature 91, Architecture 4. The Acceptance suite has no tests yet, so CI skips its step |
 
 ## Work packages
 
@@ -85,12 +87,20 @@ The live state of milestone M1: who owns each work package, where it stands, and
 | | |
 |---|---|
 | Owner | Architect (backend lead), as proposed |
-| State | **In progress** (started on the PM's instruction) |
-| Branch / PR | `m1/wp4-projection`, from `242317c`. Pull request to follow |
-| Depends on | WP1 (done). Independent acceptance tests (V1) will be assigned separately; WP4 starts with its own rule-level developer tests and does not take ownership of V1's files |
-| Next handoff | A focused pull request with implemented rules, test coverage, actual results, remaining gaps, specification questions and any proposed contract changes |
+| State | **Delivered, awaiting review** (revised with the PM's rulings on WP4-Q1 to WP4-Q6) |
+| Branch / PR | `m1/wp4-projection`, from `a154850`. Pull request: [abela7/vistud#2](https://github.com/abela7/vistud/pull/2) |
+| Depends on | WP1 (done). Independent acceptance tests (V1) will be assigned separately; WP4 used its own developer tests and does not own V1's files |
+| Next handoff | The PM has approved WP4's additive contract changes. Independent acceptance (V1) is outstanding, so WP4 is not accepted and the pull request stays open. M1 is not complete until the independent acceptance tests exist and pass |
 
-**Starting point:** the untested draft from commit `95904c2` in `app/Brain/Projection/`. It had never been run against the golden replay. The pull request records what changed and what the tests show.
+**Starting point:** the untested draft from commit `95904c2` in `app/Brain/Projection/`.
+
+**Delivered:**
+- `rules@1` fixes in `Replay` and `Derivation`: supersession only among verdicts of equal authority; `same_as` honours the named survivor; split assignments applied to every kind of evidence; self-report flags scoped as ADR 0002 words them; `weak_part` through nested parts, safe with cycles; retired questions and misconceptions dropped; the `merged` question flag; overridden verdicts listed per attempt.
+- The PM's rulings (review of #2): `underconfident` and `practised` as ADR 0002 states them, with `practised` recomputed after a regression; a strict `needs_review` boundary from the contact's upper bound; `merged` on the survivor and undoable; never-asked questions open with nothing invented; the approved `overridden` and `merged` clarifications documented and tested.
+- Split completeness: an incomplete split never takes effect. The projection reports it in `invalid_splits` and keeps the previous interpretation; the writer refuses it with `422 split_incomplete` (an explicit contract change, awaiting approval).
+- ADR 0002, the golden replay spec and `contracts.md` updated together, marked as PM-approved clarifications.
+
+**Evidence:** 106 projection developer tests in `tests/Unit/Brain/Projection/` (plain PHPUnit, no framework or database), `tests/Architecture/ProjectionPurityTest.php`, and a writer test for split refusal. The developer run of the golden replay reproduces every checkpoint, A4–A6, V1, V2, V4 and V5 as the spec now states them. Full suite: 225 tests pass (Unit 128, Feature 92, Architecture 5). V1's acceptance files (`tests/Acceptance/**`) are untouched. Delivered at `dc55126`, where CI [run 36188952981](https://github.com/abela7/vistud/actions/runs/36188952981) (push) and [run 36188958390](https://github.com/abela7/vistud/actions/runs/36188958390) (pull request) passed.
 
 ### WP5 · Redaction, clean-up and canonical files
 
@@ -102,15 +112,17 @@ The live state of milestone M1: who owns each work package, where it stands, and
 | Depends on | WP1 (done); WP3's writer (delivered, awaiting review) for the redaction amendment |
 | Next handoff | PM assigns an owner. The tables it uses are Draft in [schema.md](../architecture/schema.md#redaction-clean-up-and-files-draft), and the owner may revise them through the contract-change process |
 
-### WP6 · M1 web adapters (unstyled)
+### WP6 · M1 web adapters
 
 | | |
 |---|---|
-| Owner | A Livewire/Blade developer (proposed) |
-| State | **Proposed, awaiting dispatch** |
-| Branch / PR | None. Proposed branch: `m1/wp6-web-adapters` |
+| Owner | Architect (backend lead), assigned by the PM. Paused with the handover; who continues it is the PM's decision |
+| State | **In progress.** The PM approved the visual direction for continuation after reviewing PR #3 at `8ac9f03`; that does not accept WP6. Built: the visual foundation (DESIGN.md, themes with gradients, enforcement, shared components) and the login screen. Not built: the other WP6 screens |
+| Branch / PR | `m1/wp6-web-adapters`, from `a154850`, with this integration branch merged in for the handover: [PR #3](https://github.com/abela7/vistud/pull/3), open for further review |
 | Depends on | WP2's service contracts (delivered, awaiting review) |
-| Next handoff | PM assigns an owner. Its routes go in `routes/web/auth.php`, `routes/web/student.php` and `routes/web/admin-screens.php`; turning on Fortify's views is a one-line change the architect makes on request |
+| Next handoff | The PM's logo decision, then the remaining screens in the order in [LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md#4-what-is-left-in-wp6), each with the DESIGN.md §10 checks and a PM visual review |
+
+**Evidence:** commits `7ffab31`, `a4eeb4f`, `9e629da`, `8ac9f03`; CI [run 36193910486](https://github.com/abela7/vistud/actions/runs/36193910486) (push) and [run 36193914240](https://github.com/abela7/vistud/actions/runs/36193914240) (pull request) passed, both the `test` and `browser` jobs. PHP 145 passing (Unit 43, Feature 95, Architecture 7); browser 14 passing (`tests/Browser/theme-sentinel.spec.js`, `theme-switch.spec.js`, `login-accessibility.spec.js`), with the 11 preview generators skipped unless `PREVIEWS=1`.
 
 ### V1 · Golden replay and edge-case acceptance tests (independent)
 
@@ -137,10 +149,10 @@ The live state of milestone M1: who owns each work package, where it stands, and
 | | |
 |---|---|
 | Owner | Grok |
-| State | **Delivered, awaiting review** |
-| Branch / PR | `doc1/setup-docs`, pull request [#1](https://github.com/abela7/vistud/pull/1) |
+| State | **Accepted** by the PM at `362b090` |
+| Branch / PR | `doc1/setup-docs`, pull request [#1](https://github.com/abela7/vistud/pull/1), merged into the integration branch as `f70abd0` |
 | Depends on | Onboarding baseline `242317c` |
-| Next handoff | PM review |
+| Next handoff | None |
 
 **Baselines:** The implementation baseline is `27ce003` (M1 increment 3, the last implementation commit). The onboarding baseline is `242317c` (documentation only, added on top of `27ce003`). DOC1 is branched from `242317c`.
 
@@ -150,7 +162,7 @@ The live state of milestone M1: who owns each work package, where it stands, and
 
 ## Decisions
 
-Recorded by the PM before WP4 started.
+Recorded by the PM before WP4 started, and since.
 
 | # | Decision | Effect |
 |---|---|---|
@@ -158,6 +170,10 @@ Recorded by the PM before WP4 started.
 | Q1 | Mandatory admin 2FA restricts admin access and admin operations. The account's own student workspace stays available | Matches the current code; [conventions.md](../architecture/conventions.md#authentication) updated |
 | Q2 | Keep Fortify's required dependencies (`laravel/passkeys` and WebAuthn libraries), with passkeys disabled | No change |
 | Q3 | Manually shared, expiring, single-use invitation links are enough for the owner and synthetic pilot. Tokens stay out of logs | Matches the current code: only a SHA-256 hash is stored, the token is returned once, and it never goes into logs, audit records or error messages |
+| Design | DESIGN.md is the shared UI and UX guide, under ADR 0003. The owner's logo sets the brand colours (deep blue to ocean to teal), replacing the earlier indigo proposal. Gradients are part of the identity and fully theme-controlled. WP6 uses the shared visual foundation instead of unstyled markup; M2 is not started | Recorded in ADR 0003 §6 and §16 on the WP6 branch |
+| Design review | After reviewing PR #3 at `8ac9f03`, the visual direction is approved for continuation. Keep "Your study brain, kept for you." for now. Keep Ember as the third built-in theme. Prefer the white logo directly on dark or gradient surfaces, and keep the full-colour logo on light surfaces | WP6 is not accepted. The logo preference is **not implemented yet**: the code still shows the full-colour logo on a light plate on dark surfaces. It is the first next task in [LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md) |
+| WP4 contracts | WP4's additive contract changes are approved | WP4 stays delivered, awaiting review, until independent acceptance (V1) |
+| DOC1 | DOC1 is accepted | Merged as `f70abd0` |
 | D9 | Staged retrieval measurement is approved. G1a covers in-app queries; G1b later checks chat queries. The agreed evidence thresholds apply, and insufficient evidence is reported as **inconclusive**, not decided just because 4–6 weeks have passed | [ADR 0003 §16](../adr/0003-web-workspaces-and-study-content.md#16-decisions) and [ADR 0001 G1](../adr/0001-permanent-store-and-retrieval-index.md#g1-retrieval-value) updated |
 
 ## Unresolved decisions
@@ -170,8 +186,11 @@ Recorded by the PM before WP4 started.
 
 | Package | Blocked on |
 |---|---|
-| WP5, WP6, V1, V2 | Dispatch: no owners assigned yet |
+| WP5, V1, V2 | Dispatch: no owners assigned yet |
+| WP6's remaining screens | The PM deciding who continues WP6 locally |
+| WP4 acceptance | V1's independent acceptance tests |
 | V2 (Livewire cases) | WP6 |
 | V1 (redaction cases) | WP5 |
 | Contracts from WP2 and WP3 becoming Stable | PM review of increments 2 and 3 |
-| The M1 gate | V1 and V2 tests existing and passing, WP4 and WP5 delivered, and the PM's approval |
+| Local development on Windows | Not verified: PHP 8.4 and MySQL 8.4 there, the database-user step (documented for Unix shells only), and the Unix-only concurrency test ([LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md#9-what-was-verified-where)) |
+| The M1 gate | V1 and V2 tests existing and passing (the concurrency test executing on Unix), WP4, WP5 and WP6 delivered, and the PM's approval |
