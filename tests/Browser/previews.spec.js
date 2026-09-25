@@ -1,0 +1,113 @@
+import { test } from '@playwright/test';
+import { useTheme } from './support.js';
+
+/*
+| Screenshots for UI handoff and PM visual review (DESIGN.md §10).
+| Run with PREVIEWS=1; they are written to docs/design/previews/.
+*/
+
+test.skip(!process.env.PREVIEWS, 'Set PREVIEWS=1 to regenerate the review screenshots.');
+test.use({ reducedMotion: 'reduce' });
+
+const out = (name) => `docs/design/previews/${name}.png`;
+const sizes = { desktop: { width: 1440, height: 900 }, mobile: { width: 390, height: 844 } };
+
+for (const theme of ['vistud-light', 'vistud-dark', 'ember']) {
+    for (const [size, viewport] of Object.entries(sizes)) {
+        test(`login ${size} ${theme}`, async ({ page }) => {
+            await page.setViewportSize(viewport);
+            await page.goto('/login');
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`login-${size}-${theme}`), fullPage: size === 'mobile' });
+        });
+    }
+}
+
+test('login states: refused login and field errors', async ({ page }) => {
+    await page.setViewportSize(sizes.desktop);
+    await page.goto('/login');
+    await page.getByLabel('Email').fill('ada@example.test');
+    await page.getByLabel('Password', { exact: true }).fill('not-the-password');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.waitForURL('**/login');
+    await page.screenshot({ path: out('login-desktop-vistud-light-refused') });
+
+    await page.setViewportSize(sizes.mobile);
+    await page.goto('/login');
+    await useTheme(page, 'vistud-dark');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.waitForURL('**/login');
+    await useTheme(page, 'vistud-dark');
+    await page.screenshot({ path: out('login-mobile-vistud-dark-field-errors'), fullPage: true });
+});
+
+test('login states: focus, hover and loading', async ({ page }) => {
+    await page.setViewportSize(sizes.desktop);
+    await page.goto('/login');
+    await page.getByLabel('Email').fill('ada@example.test');
+    await page.keyboard.press('Tab');
+    await page.getByLabel('Password', { exact: true }).fill('a-password');
+    await page.getByLabel('Keep me logged in on this device').check();
+    await page.keyboard.press('Tab'); // from the checkbox to the button, by keyboard, so the focus ring shows
+    await page.screenshot({ path: out('login-desktop-vistud-light-focus'), clip: { x: 520, y: 80, width: 920, height: 740 } });
+
+    await page.evaluate(() => document.querySelector('button[type="submit"]').setAttribute('aria-busy', 'true'));
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('login-desktop-vistud-light-loading'), clip: { x: 520, y: 80, width: 920, height: 740 } });
+});
+
+test('logo treatments on every theme', async ({ page }) => {
+    await page.setViewportSize({ width: 1200, height: 900 });
+    await page.goto('/login');
+    // The same components under three theme scopes: [data-theme] works on any element.
+    await page.evaluate(() => {
+        const row = (theme) => `
+            <section data-theme="${theme}" class="grid grid-cols-3 gap-4 bg-canvas p-6 text-fg">
+                <p class="col-span-3 text-sm font-semibold">${theme}</p>
+                <div class="grid h-40 place-items-center rounded-xl border border-border bg-surface">
+                    <span data-logo-surface></span><span class="text-xs text-fg-muted">On a surface</span>
+                </div>
+                <div class="surface-brand grid h-40 place-items-center rounded-xl">
+                    <span data-logo-knockout></span><span class="text-xs text-fg-muted">On the brand gradient</span>
+                </div>
+                <div class="surface-header grid h-40 place-items-center rounded-xl">
+                    <span data-mark-knockout></span><span class="text-xs text-fg-muted">Mark, on a header</span>
+                </div>
+            </section>`;
+        document.body.innerHTML = ['vistud-light', 'vistud-dark', 'ember'].map(row).join('');
+        const logo = (file, plate) => `${plate ? '<span class="logo-plate">' : ''}<img src="/brand/${file}" alt="" style="height:44px;width:auto">${plate ? '</span>' : ''}`;
+        document.querySelectorAll('[data-logo-surface]').forEach((el) => (el.outerHTML = logo('vistud-logo.png', true)));
+        document.querySelectorAll('[data-logo-knockout]').forEach((el) => (el.outerHTML = logo('vistud-logo-white.png', false)));
+        document.querySelectorAll('[data-mark-knockout]').forEach((el) => (el.outerHTML = logo('vistud-mark-white.png', false)));
+    });
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: out('logo-treatments'), fullPage: true });
+});
+
+test('login tablet vistud-light', async ({ page }) => {
+    await page.setViewportSize({ width: 834, height: 1194 });
+    await page.goto('/login');
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('login-tablet-vistud-light') });
+});
+
+test('live theme switch recording', async ({ browser }) => {
+    const size = { width: 1280, height: 800 };
+    const context = await browser.newContext({ viewport: size, reducedMotion: 'reduce', colorScheme: 'light', recordVideo: { dir: 'test-results/video', size } });
+    const page = await context.newPage();
+    await page.goto('/login');
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.waitForTimeout(800);
+    for (const mode of ['Dark', 'Light', 'Dark', 'System']) {
+        await page.getByText(mode, { exact: true }).click();
+        await page.waitForTimeout(900);
+    }
+    await useTheme(page, 'ember');
+    await page.waitForTimeout(1200);
+    await useTheme(page, 'vistud-light');
+    await page.waitForTimeout(600);
+    const video = page.video();
+    await context.close();
+    await video.saveAs('docs/design/previews/theme-switch.webm');
+});

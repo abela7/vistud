@@ -44,7 +44,7 @@ class AdminWorkspaceTest extends TestCase
     public function test_guests_are_sent_away(): void
     {
         $this->getJson('/admin/_test/screen')->assertUnauthorized();
-        $this->get('/admin/_test/screen')->assertRedirect('/');
+        $this->get('/admin/_test/screen')->assertRedirect(route('login'));
     }
 
     public function test_an_admin_without_2fa_is_sent_to_enrol(): void

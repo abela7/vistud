@@ -45,8 +45,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin.workspace' => EnterAdminWorkspace::class,
             'password.confirm' => RequirePasswordConfirmation::class,
         ]);
-        // Login pages arrive with work package WP6. Until then, guests go home.
-        $middleware->redirectGuestsTo(fn () => Route::has('login') ? route('login') : '/');
+        // Guests go to the login screen (routes/web/auth.php).
+        $middleware->redirectGuestsTo(fn () => route('login'));
     })
     ->withExceptions(function (Exceptions $exceptions) use ($wantsJson): void {
         // Expected failures reported to callers are not application errors.
