@@ -71,19 +71,29 @@ Authoritative: [ADR 0003 §13–14](docs/adr/0003-web-workspaces-and-study-conte
 
 ## 6. Getting the repository running
 
+The supported and tested environment is **PHP 8.4** and **MySQL 8.4 LTS**. CI runs those versions. `composer.json` allows a broader PHP constraint (`^8.3`). That constraint is only the range Composer will accept at install time. It does not establish the supported or tested environment.
+
+XAMPP's existing PHP 8.0 and MariaDB installation does not meet this baseline. Use PHP 8.4 and MySQL 8.4 for the application and the tests.
+
 | Requirement | Version |
 |---|---|
-| PHP | 8.4 (CI runs 8.4), with `pdo_mysql`, `mbstring`, `intl`, `sodium`; `pcntl` and `posix` for the concurrency tests |
+| PHP | 8.4, with `pdo_mysql`, `mbstring`, `intl` and `sodium` |
 | Composer | 2.x |
-| MySQL | 8.4 LTS (CI runs 8.4; 8.0.30 or later works locally for now) |
+| MySQL | 8.4 LTS, the supported and tested database |
 | Node | Not needed in M1. Front-end tooling arrives with M2 |
+| Unix, for one test | `pcntl` and `posix`, so the process-forking concurrency test can run. Windows PHP does not provide them |
+
+The database-user command below is a **Unix shell** command. It uses shell input redirection and is not a PowerShell command. A Windows procedure has not been verified. Details: [docs/development/setup.md](docs/development/setup.md).
 
 ```bash
+# Unix shell only (bash). Not PowerShell.
 sudo mysql < database/scripts/local-mysql-users.sql   # once per machine: two MySQL users
 composer setup                                        # install, .env, key, migrations
 composer test                                         # every suite
 composer lint                                         # code style
 ```
+
+`tests/Feature/Brain/Store/ConcurrentAppendTest.php` forks two processes with `pcntl` and `posix`. Where those functions are missing, PHPUnit skips the test. A skipped concurrency test does not satisfy the M1 gate. The gate needs a Unix run in which the test executes, which is what CI does.
 
 Migrations always run as the schema owner (`composer migrate`), and the application runs as a restricted database user. Tests use MySQL, never SQLite. Full instructions, database users, local accounts and troubleshooting: [docs/development/setup.md](docs/development/setup.md).
 

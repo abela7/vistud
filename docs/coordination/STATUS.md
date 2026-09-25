@@ -127,6 +127,22 @@ The live state of milestone M1: who owns each work package, where it stands, and
 | Depends on | WP2 and WP3 (delivered, awaiting review), and WP6 (not dispatched) for the Livewire cases |
 | Next handoff | PM assigns a validator. The HTTP, API and service-level cases can start before WP6 lands |
 
+### DOC1 · Setup documentation
+
+| | |
+|---|---|
+| Owner | Grok |
+| State | **Delivered, awaiting review** |
+| Branch / PR | `doc1/setup-docs` |
+| Depends on | Onboarding baseline `242317c` |
+| Next handoff | PM review |
+
+**Baselines:** The implementation baseline is `27ce003` (M1 increment 3, the last implementation commit). The onboarding baseline is `242317c` (documentation only, added on top of `27ce003`). DOC1 is branched from `242317c`.
+
+**Scope:** `PROJECT.md` section 6, `docs/development/setup.md`, the setup wording in `README.md`, and this entry. No application code, dependencies, database changes, or migrations.
+
+**Evidence:** documentation commit on `doc1/setup-docs`. The pull-request link is added in the follow-up commit on this branch.
+
 ## Unresolved decisions
 
 | # | Decision | Where | Current behaviour |
