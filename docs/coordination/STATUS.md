@@ -133,7 +133,7 @@ The live state of milestone M1: who owns each work package, where it stands, and
 |---|---|
 | Owner | Grok |
 | State | **Delivered, awaiting review** |
-| Branch / PR | `doc1/setup-docs` |
+| Branch / PR | `doc1/setup-docs`, pull request [#1](https://github.com/abela7/vistud/pull/1) |
 | Depends on | Onboarding baseline `242317c` |
 | Next handoff | PM review |
 
@@ -141,7 +141,7 @@ The live state of milestone M1: who owns each work package, where it stands, and
 
 **Scope:** `PROJECT.md` section 6, `docs/development/setup.md`, the setup wording in `README.md`, and this entry. No application code, dependencies, database changes, or migrations.
 
-**Evidence:** documentation commit on `doc1/setup-docs`. The pull-request link is added in the follow-up commit on this branch.
+**Evidence:** commit `f25d7d6`; CI [run 36186221486](https://github.com/abela7/vistud/actions/runs/36186221486) passed; pull request [#1](https://github.com/abela7/vistud/pull/1).
 
 ## Unresolved decisions
 
