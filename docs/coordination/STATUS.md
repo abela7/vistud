@@ -2,6 +2,15 @@
 
 The live state of milestone M1: who owns each work package, where it stands, and what is blocking it. Scope, acceptance criteria and owned files are defined in [m1-work-packages.md](../handoff/m1-work-packages.md); this page tracks progress only.
 
+## People
+
+| Who | Current activity |
+|---|---|
+| PM | Reviews, coordinates, assigns packages, approves gates |
+| Architect (backend lead) | WP4, in progress |
+| Grok | DOC1 delivered, awaiting review |
+| Gemini | Not started. No package assigned |
+
 ## How this page is kept
 
 - **Each developer updates only their own package's entry**, at each handoff and whenever its state changes, in the same pull request as the work where possible.
@@ -24,8 +33,8 @@ The live state of milestone M1: who owns each work package, where it stands, and
 
 | | |
 |---|---|
-| Integration branch | `claude/persistent-study-context-zsilo6`, currently the repository's only and default branch. The PM decides whether to create `main` before dispatch |
-| Baseline commit | `27ce003` (M1 increment 3), the last implementation commit. The onboarding commit that adds this page changes documentation only |
+| Integration branch | `claude/persistent-study-context-zsilo6` (PM decision: no separate `main` for now). Package branches start from it and return to it by pull request |
+| Baseline commit | `242317c`, the onboarding baseline (documentation only, on top of `27ce003`, the last implementation commit) |
 | CI | [.github/workflows/ci.yml](../../.github/workflows/ci.yml): Pint, then the Unit, Feature and Architecture suites on MySQL 8.4. The Acceptance suite runs as a separate step that doesn't fail the build until the PM declares the M1 gate |
 | Tests at the baseline | 117 passing: Unit 22, Feature 91, Architecture 4. The Acceptance suite has no tests yet |
 
@@ -76,16 +85,12 @@ The live state of milestone M1: who owns each work package, where it stands, and
 | | |
 |---|---|
 | Owner | Architect (backend lead), as proposed |
-| State | **Not started** (proposed, awaiting the PM's go-ahead) |
-| Branch / PR | None yet |
-| Depends on | WP1 (done). Works against V1's acceptance tests |
-| Next handoff | Start when the PM confirms it, ideally once V1 is dispatched |
+| State | **In progress** (started on the PM's instruction) |
+| Branch / PR | `m1/wp4-projection`, from `242317c`. Pull request to follow |
+| Depends on | WP1 (done). Independent acceptance tests (V1) will be assigned separately; WP4 starts with its own rule-level developer tests and does not take ownership of V1's files |
+| Next handoff | A focused pull request with implemented rules, test coverage, actual results, remaining gaps, specification questions and any proposed contract changes |
 
-**Current progress, exactly:**
-- The projection classes in `app/Brain/Projection/` (`Replay`, `Derivation`, `Projector`, `Rules`, `ProjectionOptions`) are the **untested, unreviewed draft** from commit `95904c2`. They are byte-for-byte unchanged since then.
-- They have **not** been run against the golden replay, its variants or its edge cases. Whether they pass is unknown.
-- Their only exercise so far is WP3's `StoredProjectionTest`, one small scenario that checks stored and in-memory projections are identical and that the topic reaches `working`. That is not evidence that `rules@1` is implemented correctly.
-- Two WP3 changes touch what the projection uses, without changing its behaviour: `ReviewPolicy::violation()` now returns a structured result (the projection only checks it against `null`), and `ProjectionRunner` was added to read stored entries.
+**Starting point:** the untested draft from commit `95904c2` in `app/Brain/Projection/`. It had never been run against the golden replay. The pull request records what changed and what the tests show.
 
 ### WP5 · Redaction, clean-up and canonical files
 
@@ -143,22 +148,28 @@ The live state of milestone M1: who owns each work package, where it stands, and
 
 **Evidence:** commit `f25d7d6`; CI [run 36186221486](https://github.com/abela7/vistud/actions/runs/36186221486) passed; pull request [#1](https://github.com/abela7/vistud/pull/1).
 
+## Decisions
+
+Recorded by the PM before WP4 started.
+
+| # | Decision | Effect |
+|---|---|---|
+| Branch | The integration branch is `claude/persistent-study-context-zsilo6`. No new `main` is needed now | Package branches start from it |
+| Q1 | Mandatory admin 2FA restricts admin access and admin operations. The account's own student workspace stays available | Matches the current code; [conventions.md](../architecture/conventions.md#authentication) updated |
+| Q2 | Keep Fortify's required dependencies (`laravel/passkeys` and WebAuthn libraries), with passkeys disabled | No change |
+| Q3 | Manually shared, expiring, single-use invitation links are enough for the owner and synthetic pilot. Tokens stay out of logs | Matches the current code: only a SHA-256 hash is stored, the token is returned once, and it never goes into logs, audit records or error messages |
+| D9 | Staged retrieval measurement is approved. G1a covers in-app queries; G1b later checks chat queries. The agreed evidence thresholds apply, and insufficient evidence is reported as **inconclusive**, not decided just because 4–6 weeks have passed | [ADR 0003 §16](../adr/0003-web-workspaces-and-study-content.md#16-decisions) and [ADR 0001 G1](../adr/0001-permanent-store-and-retrieval-index.md#g1-retrieval-value) updated |
+
 ## Unresolved decisions
 
 | # | Decision | Where | Current behaviour |
 |---|---|---|---|
-| Q1 | Does an admin without 2FA lose access to everything, or only to the admin workspace? | [m1-work-packages.md](../handoff/m1-work-packages.md#questions-for-the-pm) | Admin workspace and admin services only |
-| Q2 | Is it acceptable that Fortify 1.40 requires `laravel/passkeys` and its WebAuthn libraries? | same | Installed; the passkeys feature is off |
-| Q3 | Is showing the invitation link once to the admin enough, without email, for the pilot? | same | No email |
-| D9 | Staging retrieval gate G1 against the chat features | [ADR 0003 §16](../adr/0003-web-workspaces-and-study-content.md#16-decisions) | Not needed until M3–M4 |
 | — | Validation-gate thresholds, retention periods, G4 hardware, pilot size before G4, and whether private text may ever go to an external processor | [ADR 0001, open parameters](../adr/0001-permanent-store-and-retrieval-index.md#open-parameters-for-the-owner) | To be confirmed before any data is collected |
-| — | The integration branch for other developers (`main`, or the current branch) | This page | Everything is on `claude/persistent-study-context-zsilo6` |
 
 ## Blockers
 
 | Package | Blocked on |
 |---|---|
-| WP4 | The PM's go-ahead; ideally V1 dispatched first, so the projection is fixed against independent tests |
 | WP5, WP6, V1, V2 | Dispatch: no owners assigned yet |
 | V2 (Livewire cases) | WP6 |
 | V1 (redaction cases) | WP5 |

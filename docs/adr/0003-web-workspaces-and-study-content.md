@@ -1,6 +1,6 @@
 # ADR 0003: Web workspaces, front-end stack and study content
 
-- **Status:** PROVISIONAL. The direction has been provisionally approved by the PM. This ADR becomes ACCEPTED only when the workspace prototype passes every criterion in §14. The remaining open decision is listed in §16.
+- **Status:** PROVISIONAL. The direction has been provisionally approved by the PM. This ADR becomes ACCEPTED only when the workspace prototype passes every criterion in §14. Decisions D1–D9 are recorded in §16; none is open.
 - **Date:** 2026-09-25
 - **Revised:** 2026-09-25. Recorded the PM's decisions D1–D8 and four corrections:
   - drafts are separated per account, and retries are made safe;
@@ -775,8 +775,5 @@ Every item below is an automated Playwright test unless marked *review*.
 - **D7 A:** seed-colour themes in the prototype, with Advanced editing later.
 - **D8 A (revised):** the order in §13.
 
-**Open:**
-
-| # | Decision | Proposal |
-|---|---|---|
-| D9 | **Staging G1 against the chat features** | G1 starts collecting data at M4, using in-app queries (G1a). The decision on whether to keep embeddings is taken on G1a after 4–6 weeks. Chat queries join at M6 (G1b) and must confirm it. **Alternative:** bring a minimal MCP capture forward into M3, so chat queries are in G1 from the start. That would mean pulling Passport or a personal-token variant of MCP forward too |
+**Decided by the PM before WP4 (M1):**
+- **D9 A (staged):** G1a measures in-app queries, starting at M4; G1b later checks chat queries, once MCP capture exists (M6). The agreed evidence thresholds apply to each stage. If the evidence is insufficient, the result is reported as **inconclusive**; nothing is decided just because 4–6 weeks have passed. See ADR 0001, G1.

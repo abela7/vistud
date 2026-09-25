@@ -109,7 +109,7 @@ Migrations always run as the schema owner (`composer migrate`), and the applicat
 
 **Independent validation.** Acceptance tests are written by validators from the ADRs and specs alone, and implementers never edit them. When a test and an ADR disagree, the validator raises it with the PM instead of changing either. Acceptance tests may land before the code passes them: CI reports them without failing the build until the PM declares the gate.
 
-**Branches and pull requests.** One branch per package, small pull requests, green CI before review, and every contract change listed in the pull request description. The PM decides the integration branch; STATUS.md records the current one.
+**Branches and pull requests.** One branch per package, small pull requests, green CI before review, and every contract change listed in the pull request description. The integration branch is `claude/persistent-study-context-zsilo6` (recorded in STATUS.md).
 
 **Status updates.** Each developer updates only their own package's entry in STATUS.md, at each handoff or status change. Changes to shared scope or ownership go through the PM.
 
