@@ -101,7 +101,12 @@ Chat observations are `first_hand`.
 
 ## Checkpoints
 
-Each checkpoint takes the belief view: every entry up to that position, with "now" set to the time shown. Anything not listed is unchanged since the previous checkpoint.
+Each checkpoint takes the belief view: every entry up to that position, with "now" set to the time shown. Anything not listed is unchanged since the previous checkpoint. T-LEFT carries `exam_relevant` from checkpoint 2 onwards, including where a row doesn't repeat it.
+
+**PM-approved clarifications (WP4 review).** These follow ADR 0002 §7 as clarified at the same time, and are reflected in the rows below:
+- **`underconfident` on T-LEFT from checkpoint 6.** E2 (confused, about T-LEFT) is followed by E6 and E7, which are qualifying successes on T-LEFT: C8 and C9 judge T-LEFT correct, even though the overall outcomes are incorrect. Qualifying topic-specific successes count whatever the overall outcome.
+- **`practised` where it is satisfied, within the current window.** From checkpoint 10, T-LEFT and T-LFILTER have qualifying successes in S4, S5 and S6, spanning 15 Oct to 17 Nov. After T-LFILTER's regression at E16 (checkpoint 12), its window restarts and it is no longer practised; T-LEFT has no regression and stays practised.
+- **`needs_review` needs a gap strictly longer than the review interval**, measured from the upper bound of the latest contact's interval (A5).
 
 | CP | Pos | Now | Topics | M1 | Q1 | Q2 |
 |---|---|---|---|---|---|---|
@@ -110,14 +115,14 @@ Each checkpoint takes the belief view: every entry up to that position, with "no
 | 3 | 44 | 19:41 | — | — | **open** | — |
 | 4 | 47 | 20:14 | LEFT: introduced, claimed_only, exam_relevant | — | **resolved · learner-confirmed** | — |
 | 5 | 49 | Thu 15 Oct 14:21 | LFILTER: **developing**. LEFT: **developing** (attempted, not yet judged, because failures are blamed on the most specific topic first) | — | — | — |
-| 6 | 52 | 14:50 | LEFT: **working**, weak_part, includes_ai_judged, exam_relevant. LFILTER: **developing** | **recurring** | — | — |
-| 7 | 61 | 15:52 | LFILTER: **developing**. E10 is a qualifying success, but M1 is still active. LEFT: **working**, weak_part; includes_ai_judged is cleared because E10 was checked by auto | **addressed** | — | **answered** |
-| 8 | 64 | 16:15 | LFILTER: **developing**. LEFT: **working**, weak_part | **addressed**, 1 counter. E11 is an immediate repeat, so it doesn't count | — | **answered**. E10 overlaps Q2's topics but isn't specific to the question |
-| 9 | 74 | Thu 22 Oct 19:42 | LFILTER: **secure**, includes_ai_judged. LEFT: **secure**, includes_ai_judged | **apparently_resolved**, from counters on TK-Q5, TK-C1 and TK-C2 | **resolved · demonstrated** | **resolved · demonstrated** |
-| 10 | 76 | Tue 17 Nov 18:35 | LFILTER: **durable**. LEFT: **durable**. includes_ai_judged is cleared on both, because TK-Q5 and TK-QZ2 were checked by auto | **resolved_retained** | — | — |
-| 11 | 76 | Wed 20 Jan 2027 12:00 | LFILTER and LEFT: **durable**, needs_review | — | — | — |
-| 12 | 79 | Wed 3 Feb 19:43 | LFILTER: **developing**, regressed. The regression starts at E16, whose cause isn't judged yet. LEFT: **durable**, weak_part | resolved_retained (no exhibit judged yet) | — | — |
-| 13 | 86 | Wed 3 Feb 20:47 | LFILTER: **developing**, regressed. LEFT: **durable**, weak_part, exam_relevant | **addressed**, resurfaced 1 | **resolved · demonstrated** | **answered**, resurfaced 1 |
+| 6 | 52 | 14:50 | LEFT: **working**, weak_part, includes_ai_judged, exam_relevant, underconfident. LFILTER: **developing** | **recurring** | — | — |
+| 7 | 61 | 15:52 | LFILTER: **developing**. E10 is a qualifying success, but M1 is still active. LEFT: **working**, weak_part, underconfident; includes_ai_judged is cleared because E10 was checked by auto | **addressed** | — | **answered** |
+| 8 | 64 | 16:15 | LFILTER: **developing**. LEFT: **working**, weak_part, underconfident | **addressed**, 1 counter. E11 is an immediate repeat, so it doesn't count | — | **answered**. E10 overlaps Q2's topics but isn't specific to the question |
+| 9 | 74 | Thu 22 Oct 19:42 | LFILTER: **secure**, includes_ai_judged. LEFT: **secure**, includes_ai_judged, underconfident | **apparently_resolved**, from counters on TK-Q5, TK-C1 and TK-C2 | **resolved · demonstrated** | **resolved · demonstrated** |
+| 10 | 76 | Tue 17 Nov 18:35 | LFILTER: **durable**, practised. LEFT: **durable**, practised, underconfident. includes_ai_judged is cleared on both, because TK-Q5 and TK-QZ2 were checked by auto. Both are now practised: qualifying successes in S4, S5 and S6, 15 Oct to 17 Nov | **resolved_retained** | — | — |
+| 11 | 76 | Wed 20 Jan 2027 12:00 | LFILTER: **durable**, needs_review, practised. LEFT: **durable**, needs_review, practised, underconfident | — | — | — |
+| 12 | 79 | Wed 3 Feb 19:43 | LFILTER: **developing**, regressed. The regression starts at E16, whose cause isn't judged yet; the window restarts there, so LFILTER is no longer practised. LEFT: **durable**, weak_part, practised, underconfident | resolved_retained (no exhibit judged yet) | — | — |
+| 13 | 86 | Wed 3 Feb 20:47 | LFILTER: **developing**, regressed. LEFT: **durable**, weak_part, exam_relevant, practised, underconfident | **addressed**, resurfaced 1 | **resolved · demonstrated** | **answered**, resurfaced 1 |
 
 ## Reconstruction assertions
 
@@ -142,8 +147,10 @@ Each checkpoint takes the belief view: every entry up to that position, with "no
 | Thu 22 Oct 19:05 | **working** |
 | 19:12 | secure |
 | Tue 17 Nov 18:05 | durable |
-| Sat 16 Jan 2027 18:05 | durable, needs_review |
+| Sat 16 Jan 2027, just after 18:05 | durable, needs_review |
 | Wed 3 Feb 19:42 | developing, regressed |
+
+The table shows the label, with `needs_review` and `regressed` where they apply; other flags are omitted. **needs_review boundary (PM-approved clarification):** E14's interval ends at 18:05 on 17 Nov, and the review interval for `durable` is 60 days. At exactly 18:05 on 16 Jan the gap equals the interval, so `needs_review` is false; at any later moment, even one second later, it is true. The rule has no rounding to minutes.
 
 The belief view in the checkpoints never shows "working" for LFILTER. The verdicts on E12 and E13 were both recorded at 19:42, so it jumped straight from checkpoint 8 to checkpoint 9. The current view places each piece of evidence at the time it occurred: E12 alone (together with E10) resolves M1 at 19:05, and E13 makes the topic secure.
 

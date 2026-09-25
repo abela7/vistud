@@ -46,9 +46,11 @@ final class Derivation
         }
 
         foreach ($out as $id => $topic) {
+            // weak_part: a topic that is part of T, directly or through
+            // sub-topics, is developing while T is working or better.
             if (self::LABELS[$topic['label']] >= self::LABELS['working']) {
-                foreach ($this->r->children($id) as $child) {
-                    if (($out[$child]['label'] ?? null) === 'developing') {
+                foreach ($this->r->descendants($id) as $part) {
+                    if (($out[$part]['label'] ?? null) === 'developing') {
                         $out[$id]['flags'][] = 'weak_part';
                         break;
                     }
@@ -160,12 +162,15 @@ final class Derivation
     }
 
     /** @return list<string> */
+    /**
+     * ADR 0002 §7 topic flags from self-reports. Only claimed_only also counts
+     * reports about a question whose topics include T; overconfident and
+     * underconfident look at reports about T itself, as the ADR words them.
+     */
     private function selfReportFlags(string $t): array
     {
-        $reports = array_values(array_filter($this->r->selfReports, function (array $report) use ($t) {
-            if (in_array($t, $report['topics'], true)) {
-                return true;
-            }
+        $aboutT = fn (array $report) => in_array($t, $report['topics'], true);
+        $viaQuestion = function (array $report) use ($t) {
             foreach ($report['questions'] as $question) {
                 if (in_array($t, $this->r->questionTopics($question), true)) {
                     return true;
@@ -173,15 +178,17 @@ final class Derivation
             }
 
             return false;
-        }));
+        };
+        $isConfident = fn (array $r) => in_array($r['stance'], Vocabulary::CONFIDENT_STANCES, true);
 
-        $confident = array_values(array_filter($reports, fn ($r) => in_array($r['stance'], Vocabulary::CONFIDENT_STANCES, true)));
-        $uncertain = array_values(array_filter($reports, fn ($r) => in_array($r['stance'], Vocabulary::UNCERTAIN_STANCES, true)));
+        $claims = array_filter($this->r->selfReports, fn ($r) => $isConfident($r) && ($aboutT($r) || $viaQuestion($r)));
+        $confident = array_values(array_filter($this->r->selfReports, fn ($r) => $isConfident($r) && $aboutT($r)));
+        $uncertain = array_values(array_filter($this->r->selfReports, fn ($r) => in_array($r['stance'], Vocabulary::UNCERTAIN_STANCES, true) && $aboutT($r)));
         $attempts = $this->attemptsOn($t);
         $successes = array_values(array_filter($attempts, fn ($a) => $this->isQualifyingSuccess($a, $t)));
         $flags = [];
 
-        if ($confident !== [] && $attempts === []) {
+        if ($claims !== [] && $attempts === []) {
             $flags[] = 'claimed_only';
         }
         if ($confident !== []) {
@@ -306,6 +313,9 @@ final class Derivation
     /** @return array{state: ?string, resurfaced_count: int} */
     private function misconceptionStatus(string $m, ?array $cutoff): array
     {
+        if (($this->r->definitions['misconception'][$m]['value']['status'] ?? 'active') !== 'active') {
+            return ['state' => null, 'resurfaced_count' => 0];
+        }
         if (! isset($this->r->definitions['misconception'][$m])) {
             $rejected = array_filter($this->r->misconceptionDefiners[$m] ?? [], fn ($id) => ($this->r->status[$id] ?? null) === 'rejected');
 
@@ -430,9 +440,9 @@ final class Derivation
     public function questions(): array
     {
         $out = [];
-        foreach (array_keys($this->r->definitions['question'] ?? []) as $q) {
-            if (! $this->r->isMergedAway('question', $q) && ($state = $this->question($q)) !== null) {
-                $out[$q] = $state;
+        foreach ($this->r->definitions['question'] ?? [] as $q => $definition) {
+            if (($definition['value']['status'] ?? 'active') === 'active' && ! $this->r->isMergedAway('question', $q)) {
+                $out[$q] = $this->question($q);
             }
         }
         ksort($out);
@@ -440,7 +450,7 @@ final class Derivation
         return $out;
     }
 
-    private function question(string $q): ?array
+    private function question(string $q): array
     {
         $events = [];
         $asks = [];
@@ -452,7 +462,8 @@ final class Derivation
             }
         }
         if ($asks === []) {
-            return null;
+            // Defined, but nothing has asked it yet: open, with no evidence.
+            return ['state' => 'open', 'flags' => $this->identityFlags($q), 'resurfaced_count' => 0];
         }
         foreach ($this->r->selfReports as $report) {
             if (in_array($q, $report['questions'], true)) {
@@ -505,12 +516,19 @@ final class Derivation
             && $this->now - $lastEvidence >= $this->rules->dormantAfter) {
             $flags[] = 'dormant';
         }
-        if (isset($this->r->splitParents['question'][$q])) {
-            $flags[] = 'split';
-        }
+        array_push($flags, ...$this->identityFlags($q));
         sort($flags);
 
         return ['state' => $result['state'], 'flags' => $flags, 'resurfaced_count' => $resurfaced];
+    }
+
+    /** @return list<string> merged (others were merged into it) and split (it was split) */
+    private function identityFlags(string $q): array
+    {
+        return array_values(array_filter([
+            isset($this->r->mergedInto['question'][$q]) ? 'merged' : null,
+            isset($this->r->splitParents['question'][$q]) ? 'split' : null,
+        ]));
     }
 
     /** ADR 0002 §7 question rules, over the evidence after the latest opening event. */
@@ -578,6 +596,7 @@ final class Derivation
             'misconceptions' => $a['misc'],
             'repeat' => $a['repeat'],
             'checker_suspect' => $a['checker_suspect'],
+            'overridden' => $a['overridden'],
         ], $this->r->attempts);
     }
 
