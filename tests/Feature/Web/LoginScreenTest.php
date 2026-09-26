@@ -66,4 +66,12 @@ class LoginScreenTest extends TestCase
         $this->get('/')->assertOk()->assertSee('ada@example.test');
         $this->get('/login')->assertRedirect('/');
     }
+
+    public function test_logging_out_goes_straight_to_the_login_screen(): void
+    {
+        $this->actingAs($this->student());
+
+        $this->post('/logout')->assertRedirect('/login');
+        $this->assertGuest();
+    }
 }

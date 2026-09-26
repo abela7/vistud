@@ -239,7 +239,7 @@ The handover commits trigger new runs; see each pull request's checks.
 
 **Logo:**
 - `resources/brand/vistud-logo-original.png` is the owner's original, kept byte for byte. Never edit it. Its checkerboard is painted into the pixels.
-- `php resources/brand/clean-logo.php` regenerates the four transparent assets in `public/brand/` from it: full colour, white, mark, and white mark.
+- `php resources/brand/clean-logo.php` regenerates the four transparent assets in `public/brand/` from it (full colour, white, mark, and white mark), plus the 96 px display copies, the favicon and the Apple touch icon that pages actually load.
 - The measured colours are in `resources/brand/logo-colours.json` and DESIGN.md §2.2.
 
 **Themes:**

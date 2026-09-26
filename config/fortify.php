@@ -41,7 +41,11 @@ return [
 
     'paths' => [],
 
-    'redirects' => [],
+    // After logout, go straight to the login screen instead of bouncing
+    // through "/" (which sends guests there anyway).
+    'redirects' => [
+        'logout' => '/login',
+    ],
 
     'features' => [
         Features::resetPasswords(),

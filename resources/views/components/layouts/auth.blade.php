@@ -15,7 +15,8 @@
     <meta name="color-scheme" content="light dark">
     <title>{{ $title }} · ViStud</title>
     @include('partials.theme-script')
-    <link rel="icon" type="image/png" href="{{ asset('brand/vistud-mark.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('brand/favicon-32.png') }}">
+    <link rel="apple-touch-icon" href="{{ asset('brand/apple-touch-icon-180.png') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-dvh bg-canvas text-fg antialiased">

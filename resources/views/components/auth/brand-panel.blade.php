@@ -12,5 +12,5 @@
         </p>
     </div>
 
-    <x-logo variant="knockout" mark class="pointer-events-none absolute -right-16 -bottom-20 -z-10 hidden h-96 opacity-10 lg:block" alt="" aria-hidden="true" />
+    <x-logo variant="knockout" mark large class="pointer-events-none absolute -right-16 -bottom-20 -z-10 hidden h-96 opacity-10 lg:block" alt="" aria-hidden="true" />
 </aside>

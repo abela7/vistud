@@ -29,6 +29,8 @@ The owner's logo is the colour reference. The original file is kept byte for byt
 | `vistud-mark.png` | The V and leaves alone, full colour: favicon and small spaces |
 | `vistud-mark-white.png` | The mark alone, white, on brand gradients |
 
+The same script writes display-size copies, which is what pages load: `vistud-logo-96.png`, `vistud-logo-white-96.png`, `vistud-mark-96.png` and `vistud-mark-white-96.png` (96 px tall, enough for a 32 px logo on a 3× screen), plus `favicon-32.png` and `apple-touch-icon-180.png`. The full-size files stay the source, and the large white mark is still used for the watermark. `<x-logo>` picks the small copy unless given `large`.
+
 ### 2.2 Brand colours
 
 Measured from the interior pixels of the original, never guessed. They are recorded as data in [resources/brand/logo-colours.json](resources/brand/logo-colours.json).

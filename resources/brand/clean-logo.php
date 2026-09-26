@@ -13,6 +13,15 @@
 |   vistud-mark.png          the V-and-leaves mark alone, full colour
 |   vistud-mark-white.png    the mark alone, white
 |
+| and display-size copies of them, so pages never download the full-size
+| artwork to show it 32–40 px tall (DESIGN.md §2.1). The large white mark
+| stays the watermark's source: at 16 KB it is already small.
+|
+|   vistud-logo-96.png, vistud-logo-white-96.png     96 px tall (3× a 32 px logo)
+|   vistud-mark-96.png, vistud-mark-white-96.png     96 px tall
+|   favicon-32.png                                   32 × 32, the mark
+|   apple-touch-icon-180.png                         180 × 180, the mark on white
+|
 | Method: the checkerboard is a regular 12 px grid of #222221 and #131212,
 | so the background behind every pixel is known exactly. Interior logo
 | pixels keep their colour at full opacity. Each edge pixel takes the colour
@@ -149,5 +158,40 @@ imagepng($crop($colour, $x1, $y1, $x2, $y2), "{$out}/vistud-logo.png", 9);
 imagepng($crop($white, $x1, $y1, $x2, $y2), "{$out}/vistud-logo-white.png", 9);
 imagepng($crop($colour, $x1, $y1, $markRight, $y2), "{$out}/vistud-mark.png", 9);
 imagepng($crop($white, $x1, $y1, $markRight, $y2), "{$out}/vistud-mark-white.png", 9);
+
+// Display sizes, resampled from the full-size files just written.
+$scaled = function (string $file, int $height, string $to) use ($out) {
+    $source = imagecreatefrompng("{$out}/{$file}");
+    $width = (int) round(imagesx($source) * $height / imagesy($source));
+    $target = imagecreatetruecolor($width, $height);
+    imagealphablending($target, false);
+    imagesavealpha($target, true);
+    imagefill($target, 0, 0, imagecolorallocatealpha($target, 0, 0, 0, 127));
+    imagecopyresampled($target, $source, 0, 0, 0, 0, $width, $height, imagesx($source), imagesy($source));
+    imagepng($target, "{$out}/{$to}", 9);
+};
+$scaled('vistud-logo.png', 96, 'vistud-logo-96.png');
+$scaled('vistud-logo-white.png', 96, 'vistud-logo-white-96.png');
+$scaled('vistud-mark.png', 96, 'vistud-mark-96.png');
+$scaled('vistud-mark-white.png', 96, 'vistud-mark-white-96.png');
+
+// Square icons: the full-colour mark centred, transparent for the favicon and
+// on white for Apple's home-screen icon (iOS fills transparency with black).
+$icon = function (int $size, float $fill, ?array $background, string $to) use ($out) {
+    $mark = imagecreatefrompng("{$out}/vistud-mark.png");
+    $target = imagecreatetruecolor($size, $size);
+    imagealphablending($target, false);
+    imagesavealpha($target, true);
+    imagefill($target, 0, 0, $background === null
+        ? imagecolorallocatealpha($target, 0, 0, 0, 127)
+        : imagecolorallocate($target, ...$background));
+    imagealphablending($target, $background !== null);
+    $scale = $size * $fill / max(imagesx($mark), imagesy($mark));
+    [$w, $h] = [(int) round(imagesx($mark) * $scale), (int) round(imagesy($mark) * $scale)];
+    imagecopyresampled($target, $mark, intdiv($size - $w, 2), intdiv($size - $h, 2), 0, 0, $w, $h, imagesx($mark), imagesy($mark));
+    imagepng($target, "{$out}/{$to}", 9);
+};
+$icon(32, 1.0, null, 'favicon-32.png');
+$icon(180, 0.72, [255, 255, 255], 'apple-touch-icon-180.png');
 
 echo "Wrote public/brand/ (logo {$x1},{$y1} to {$x2},{$y2}; mark to x {$markRight}).\n";
