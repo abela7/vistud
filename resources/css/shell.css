@@ -70,6 +70,74 @@
         background-color: var(--pressed);
     }
 
+    /* The open study session in the top bar (App\Livewire\Study\SessionBar), on the header's colours. */
+    .session-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.125rem;
+        border: 1px solid var(--text-muted);
+        border-radius: 9999px;
+        padding-left: 0.25rem;
+    }
+
+    .session-pill-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 2.25rem;
+        padding: 0 0.5rem;
+        border-radius: 9999px;
+        color: var(--text);
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    @media (width < 40rem) {
+        .session-pill {
+            padding-left: 0;
+        }
+
+        .session-pill-link {
+            padding: 0 0.25rem 0 0.625rem;
+        }
+    }
+
+    .session-pill-link:hover,
+    .session-pill .topbar-button:hover {
+        background-color: var(--hover);
+    }
+
+    .session-pill .topbar-button {
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 9999px;
+    }
+
+    .session-pill-link:focus-visible,
+    .session-pill .topbar-button:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 1px;
+    }
+
+    /* Filled and gently pulsing while the clock runs, hollow while it waits. */
+    .session-dot {
+        width: 0.625rem;
+        height: 0.625rem;
+        border-radius: 9999px;
+        border: 2px solid currentColor;
+    }
+
+    .session-pill.is-running .session-dot {
+        background-color: currentColor;
+        animation: session-pulse 2s ease-in-out infinite;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .session-pill.is-running .session-dot {
+            animation: none;
+        }
+    }
+
     .account-button {
         display: inline-flex;
         align-items: center;
@@ -454,5 +522,11 @@
         .nav-item {
             min-height: 2.75rem;
         }
+    }
+}
+
+@keyframes session-pulse {
+    50% {
+        opacity: 0.4;
     }
 }

@@ -177,7 +177,7 @@ A **task** is the problem that was posed. An **attempt** is one try at it.
 | `extraction` | source, extractor and its version, version number, segments with their locations |
 | `activity` | kind (lecture · lab · assignment · quiz · exam · problem_set · other), title, `starts_at?`, `ends_at?`; the tracker also records `workspace`, `module?`, `due_on?`, `progress` (todo · doing · done), `revision` and `status` (active · deleted) (docs/specs/study-memory.md) |
 | `task` | key, activity, title, `revision`, `content_hash`, `checker?`, `status` (active or retired), prompt as content |
-| `session` | channel, client, `started_at`, `ended_at` |
+| `session` | channel, client (`vistud`, or `logged` for time logged afterwards), `started_at`, `ended_at`; the tracker also records `workspace`, `module?`, `topic?`, `revision`, `study_seconds` and `break_seconds` when it ends, and `status` (open · ended · deleted) (docs/specs/study-memory.md §4.1) |
 | `workspace` | title, code, term, dates, colour category (a student's space for one subject; docs/specs/workspaces.md) |
 | `module` | workspace, title, position, optional dates |
 | `profile` | — |

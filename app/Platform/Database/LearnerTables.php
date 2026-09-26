@@ -42,6 +42,8 @@ final class LearnerTables
         'links',
         'activities',
         'instructions',
+        'study_sessions',
+        'session_segments',
     ];
 
     public static function query(LearnerScope $scope, string $table): Builder

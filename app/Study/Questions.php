@@ -63,7 +63,7 @@ final class Questions
                 Memory::claim($scope, $by, 'defines', ["question:{$id}"], ['entity_type' => 'question', 'status' => 'active'], ['phrasing' => $text]),
                 $ask,
                 Memory::claim($scope, $by, 'refers_to', ["event:{$askId}"], ['entity' => "question:{$id}"]),
-            ]);
+            ], $workspaceId);
             LearnerTables::insert($scope, 'questions', [
                 'id' => $id, 'workspace_id' => $workspaceId, 'topic_id' => $topicId, 'text' => $text, 'ask_event_id' => $askId,
                 'created_at' => now(), 'updated_at' => now(),
@@ -83,7 +83,7 @@ final class Questions
         $this->memory->append($scope, [
             Memory::observation($scope, $by, 'exposure', ['format' => 'explanation'], [['rel' => 'responds_to', 'target' => "event:{$row->ask_event_id}"], ...$about]),
             Memory::observation($scope, $by, 'self_report', ['stance' => 'clicked'], [['rel' => 'about', 'target' => "question:{$id}"]]),
-        ]);
+        ], $row->workspace_id);
         LearnerTables::query($scope, 'questions')->where('id', $id)->update(['updated_at' => now()]);
     }
 
@@ -91,11 +91,11 @@ final class Questions
     public function reopen(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
-        $this->row($scope, $id);
+        $row = $this->row($scope, $id);
 
         $this->memory->append($scope, [
             Memory::observation($scope, $by, 'self_report', ['stance' => 'confused'], [['rel' => 'about', 'target' => "question:{$id}"]]),
-        ]);
+        ], $row->workspace_id);
         LearnerTables::query($scope, 'questions')->where('id', $id)->update(['updated_at' => now()]);
     }
 
@@ -114,7 +114,7 @@ final class Questions
 
         $this->memory->append($scope, [
             Memory::claim($scope, $by, 'defines', ["question:{$id}"], ['entity_type' => 'question', 'status' => 'retired'], ['phrasing' => $row->text]),
-        ]);
+        ], $row->workspace_id);
         LearnerTables::query($scope, 'questions')->where('id', $id)->update(['retired_at' => now(), 'updated_at' => now()]);
     }
 

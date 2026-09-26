@@ -207,6 +207,29 @@ export function makeStudentWithTopics() {
     return { email, ...JSON.parse(out) };
 }
 
+/**
+ * makeStudentWithTopics(), plus study time: 1 h 30 min logged yesterday,
+ * and a session on Joins that started 40 minutes ago (25 min of study, a
+ * 5-minute break, and the clock running again for the last 10 minutes).
+ */
+export function makeStudentWithSession() {
+    const student = makeStudentWithTopics();
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `$s = app(\\App\\Study\\Sessions::class); $w = '${student.workspace}';`,
+        `$joins = collect(app(\\App\\Study\\Topics::class)->list($p, $w))->firstWhere('name', 'Joins');`,
+        `$s->log($p, $w, ['date' => now()->subDay()->format('Y-m-d'), 'time' => '14:00', 'minutes' => 90, 'topic_id' => $joins->id], 'UTC');`,
+        `$start = now(); \\Illuminate\\Support\\Carbon::setTestNow($start->copy()->subMinutes(40));`,
+        `$session = $s->start($p, $w, $joins->id);`,
+        `\\Illuminate\\Support\\Carbon::setTestNow($start->copy()->subMinutes(15)); $s->takeBreak($p, $session->id);`,
+        `\\Illuminate\\Support\\Carbon::setTestNow($start->copy()->subMinutes(10)); $s->resume($p, $session->id);`,
+        `\\Illuminate\\Support\\Carbon::setTestNow();`,
+        `echo json_encode(['session' => $session->id]);`,
+    ].join(' ');
+    const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
+    return { ...student, ...JSON.parse(out) };
+}
+
 /** A student with no second factor, so login finishes on the home page. */
 export function makeStudentAccount() {
     return makeAccount(false);

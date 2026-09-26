@@ -2,7 +2,9 @@
 
 **Status:** decided by the owner on 2026-09-26. Built: step 1, the tracker:
 topics, statuses and questions (1a); findings, web links, assignments and
-tasks, instructions and the Overview (1b). Next: step 2, the session engine.
+tasks, instructions and the Overview (1b). Step 2 has begun: the study
+session and its clock (§4.1) are built; the start options, the briefing, the
+write-back and the MCP server are next (§5).
 
 **The idea in one line.** ViStud is the body; the language model is the engine.
 The body keeps a living copy of what the student understands about each
@@ -53,11 +55,57 @@ it goes. At the end (and at checkpoints) the note and findings are saved, the
 questions asked are registered, the quiz answers become `attempt` evidence in
 the journal, and the AI proposes topic status changes the student confirms.
 
+### 4.1 The session and its clock (built)
+
+A session belongs to a workspace, and optionally to a topic and a module. A
+student has **one open session at a time**; starting another asks to end it
+first. Time is kept in **segments**, each a stretch of study or of a break,
+so pauses are exact and nothing is guessed from one start and one end.
+
+| State | The clock counts | From here |
+|---|---|---|
+| **Studying** | study time | pause, take a break, end |
+| **Paused** | nothing | resume, take a break, end |
+| **On a break** | break time, apart from study | back to studying, pause, end |
+| **Ended** | — | delete (a session started by mistake) |
+
+The clock is honest by itself, and the student's word wins (S3):
+
+- **Away.** Studying with no activity for **30 minutes** pauses the session
+  *at the last activity*. Activity is the page being in use: visible, and
+  focused or touched in the last minute (a heartbeat every minute, on every
+  ViStud page). The session page then asks: *I was studying: count it* puts
+  the time back and runs on; *Resume from now* doesn't.
+- **Long break.** A break longer than **an hour** ends there, and the session
+  pauses.
+- **Forgotten.** A session with no activity for **12 hours** ends at its last
+  activity.
+- **Logged time.** Time studied without the clock (a library afternoon) is
+  logged afterwards: date, start time and minutes, in the student's time
+  zone, up to 12 hours.
+
+The rules run whenever a session is read or changed, and every 10 minutes
+from the scheduler (`vistud:sessions:settle`). Durations show as "1 h 25 min";
+the running clock ticks as 0:25:13 on the session page and in the top bar on
+every page, and other open tabs follow a change straight away. A week starts
+on Monday in the student's time zone. The Overview shows study time this week
+and in all, and the latest sessions.
+
+In the journal, a session is a `session` record (a revision when it opens,
+ends or is deleted, with its study and break seconds), and every event
+written in the workspace while it is open carries its id. The rules count
+distinct sessions for *secure* and *practised* (ADR 0002 §7), so real
+sessions are what makes *mastered* reachable.
+
 ## 5. Build order
 
 1. **Tracker:** topics, statuses, questions (1a); findings, links, assignments,
    instructions, Overview (1b). Useful before any engine is connected.
-2. **Session engine:** box summary → prompt, the built-in chat, pages to the
-   engine in chunks, the end-of-session write-back, Office → PDF conversion.
+2. **Session engine:** the session and its clock (built); start options
+   (how to teach, check-ins, quiz level) and the tutoring prompt; the briefing
+   builder; the write-back (session note, findings, questions, flashcards,
+   attempts, proposed statuses); the MCP server, so any AI client works with
+   the same box; engine settings and the built-in chat; flashcard review;
+   Office → PDF conversion.
 3. **Progress** over time from the journal.
 4. ChatGPT and Gemini engines; the connector (M6).

@@ -4,6 +4,7 @@ use App\Brain\Store\JournalReader;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
 use App\Http\Controllers\NotePageController;
+use App\Http\Controllers\SessionPageController;
 use App\Http\Controllers\WorkspacePageController;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Guard;
@@ -35,6 +36,11 @@ Route::middleware('auth')->group(function () {
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'file' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.files.show');
     Route::get('/files/{file}/content', FileContentController::class)->where('file', '[A-Za-z0-9-]{1,64}')->name('files.content');
+
+    // A study session and its clock (docs/specs/study-memory.md §4).
+    Route::get('/workspaces/{workspace}/sessions/{session}', SessionPageController::class)
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'session' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.sessions.show');
 
     // A workspace and its sections (docs/specs/workspaces.md).
     Route::get('/workspaces/{workspace}/{section?}', WorkspacePageController::class)

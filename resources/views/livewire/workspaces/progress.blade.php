@@ -78,6 +78,7 @@
                                         @endforeach
                                     </div>
                                     @include('livewire.workspaces.partials.row-menu', ['id' => $topic->id, 'label' => $topic->name, 'items' => [
+                                        ['Study this now', 'play', "study('{$topic->id}')", false],
                                         ['Add a finding', 'lightbulb', "newFinding('{$topic->id}')", false],
                                         ['New question about it', 'circle-help', "newQuestion('{$topic->id}')", false],
                                         ['Rename', 'pencil', "renameTopic('{$topic->id}')", false],

@@ -4,11 +4,13 @@ namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Principal;
+use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Findings;
 use App\Study\Modules;
 use App\Study\Questions;
+use App\Study\Sessions;
 use App\Study\TopicDetails;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
@@ -69,10 +71,13 @@ final class Progress extends Component
 
     private Modules $modules;
 
+    private Sessions $sessions;
+
     private PrincipalFactory $principals;
 
-    public function boot(Topics $topics, Questions $questions, Findings $findings, Modules $modules, PrincipalFactory $principals): void
+    public function boot(Topics $topics, Questions $questions, Findings $findings, Modules $modules, Sessions $sessions, PrincipalFactory $principals): void
     {
+        $this->sessions = $sessions;
         $this->topics = $topics;
         $this->questions = $questions;
         $this->findings = $findings;
@@ -129,6 +134,20 @@ final class Progress extends Component
         $name = $this->topics->find($by, $id)->name;
         $this->topics->retire($by, $id);
         $this->notice = "{$name} is removed. What you did on it stays in your journal.";
+    }
+
+    /** Starts a study session on the topic and opens it; another open session says so. */
+    public function study(string $topicId): void
+    {
+        try {
+            $session = $this->sessions->start($this->principal(), $this->workspaceId, $topicId);
+        } catch (Conflict $e) {
+            $this->notice = 'Another study session is still open. End it first: its clock is at the top of the page.';
+
+            return;
+        }
+        $this->dispatch('session-changed');
+        $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id]);
     }
 
     // ---------- Findings ----------

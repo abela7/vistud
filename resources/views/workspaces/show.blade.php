@@ -45,7 +45,14 @@
                 </div>
             </div>
             @if ($section === 'overview')
-                <x-button icon="pencil" x-data x-on:click="$dispatch('workspace-form-open')">Edit</x-button>
+                <div class="flex flex-wrap gap-2">
+                    <x-button icon="pencil" x-data x-on:click="$dispatch('workspace-form-open')">Edit</x-button>
+                    @if ($openSession === null)
+                        <x-button variant="primary" icon="play" x-data x-on:click="Livewire.dispatch('study-start')">Start studying</x-button>
+                    @elseif ($openSession->workspaceId === $workspace->id)
+                        <a href="{{ route('workspaces.sessions.show', [$workspace->id, $openSession->id]) }}" class="btn btn-primary"><x-icon name="timer" class="size-4" />Back to your session</a>
+                    @endif
+                </div>
             @endif
         </div>
 
@@ -111,6 +118,8 @@
                 </div>
 
                 <div class="min-w-0 space-y-4">
+                    <livewire:workspaces.study-time :workspace-id="$workspace->id" />
+
                     @if ($recent !== [])
                         <section aria-labelledby="continue-heading" class="overview-card space-y-2">
                             <h2 id="continue-heading" class="font-semibold">Pick up where you left off</h2>

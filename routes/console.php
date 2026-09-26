@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('vistud:trash:purge')->daily();
+Schedule::command('vistud:sessions:settle')->everyTenMinutes();

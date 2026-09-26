@@ -198,4 +198,10 @@ A learner table: assignments, quizzes, exams, labs, problem sets and other tasks
 ### `instructions`
 A learner table: what the assistant should know when a study session starts. `id`, `learner_id`, `scope` (`me` for every course, `workspace:{id}` or `module:{id}`; unique per learner), `text` (≤ 2000), `created_at`, `updated_at`. Empty text deletes the row; deleting a module deletes its instructions.
 
+### `study_sessions`
+A learner table (docs/specs/study-memory.md §4.1). `id` (also the journal `session` record's id), `learner_id`, `workspace_id`, `module_id` and `topic_id` (nullable), `state` (`running`, `paused`, `break`, `ended`; at most one not ended per learner), `paused_by` (`student`, `away` or `long_break`), `manual` (logged afterwards), `started_at`, `ended_at`, `last_activity_at` (the heartbeat), `study_seconds` and `break_seconds` (totals of the closed segments; the open one is added when read), `revision`, `created_at`, `updated_at`.
+
+### `session_segments`
+A learner table: the stretches a session is made of. `id`, `learner_id`, `session_id`, `kind` (`study` or `break`), `started_at`, `ended_at` (null while open; at most one open per session), `ended_by` (`pause`, `break`, `resume`, `end`, `away`, `long_break` or `log`). A gap between segments is a pause.
+
 Note blocks arrive with the next M2 steps ([docs/specs/workspaces.md §8](../specs/workspaces.md#8-for-developers), [ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).

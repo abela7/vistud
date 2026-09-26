@@ -1,0 +1,135 @@
+import { test, expect } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import { foreignColours, makeStudentWithSession, makeStudentWithTopics, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+
+/* Study sessions and their clock (docs/specs/study-memory.md §4). */
+
+const desktop = { width: 1440, height: 900 };
+const phone = { width: 390, height: 844 };
+const analyse = async (page) => (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
+    .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
+const clock = (page) => page.locator('.session-time [data-clock]');
+const pill = (page) => page.locator('.session-pill');
+
+test.use({ reducedMotion: 'reduce' });
+test.describe.configure({ timeout: 60_000 });
+
+async function openSession(page) {
+    const student = makeStudentWithSession();
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
+    await page.waitForLoadState('load');
+    return student;
+}
+
+test('a session is started from the Overview, and its clock runs, pauses, breaks and ends', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const student = makeStudentWithTopics();
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}`);
+    await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
+    await page.waitForLoadState('load');
+    await expect(pill(page)).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Start studying' }).first().click();
+    const dialog = page.locator('#study-dialog');
+    await dialog.getByLabel('What are you studying? (optional)').selectOption({ label: 'Normalisation' });
+    await dialog.getByRole('button', { name: 'Start' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Normalisation' }).waitFor();
+
+    // The clock ticks here and in the top bar.
+    await expect(clock(page)).not.toHaveText('0:00:00', { timeout: 5000 });
+    await expect(pill(page)).toContainText('Databases');
+
+    await page.getByRole('button', { name: 'Pause', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+    await expect(pill(page).getByRole('button', { name: 'Resume the session' })).toBeVisible();
+    const paused = await clock(page).textContent();
+    await page.waitForTimeout(1500);
+    await expect(clock(page)).toHaveText(paused);
+
+    await page.getByRole('button', { name: 'Take a break' }).click();
+    await expect(page.locator('.session-clock')).toContainText('On a break');
+    await page.getByRole('button', { name: 'Back to studying' }).click();
+    await expect(page.locator('.session-clock')).toContainText('Studying');
+
+    await page.getByRole('button', { name: 'End session' }).click();
+    const end = page.locator('#session-dialog');
+    await end.getByLabel('Understood').check();
+    await end.getByRole('button', { name: 'End session' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Session ended.' })).toBeVisible();
+    await expect(pill(page)).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'Status of Normalisation' }).getByRole('button', { name: 'Understood' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('the session page shows what happened, and the top bar follows it on every page', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const student = await openSession(page);
+    const timeline = page.getByRole('region', { name: 'What happened' });
+    await expect(timeline.getByRole('listitem')).toHaveCount(3);
+    await expect(timeline.getByRole('listitem').nth(0)).toContainText('25 min');
+    await expect(timeline.getByRole('listitem').nth(1)).toContainText('Break');
+    await expect(timeline.getByRole('listitem').nth(2)).toContainText('now');
+    await expect(page.getByRole('region', { name: 'Material · Week 1: Relational model' })).toContainText('Lecture 3: joins');
+
+    await page.goto(`/workspaces/${student.workspace}/progress`);
+    await expect(pill(page)).toBeVisible();
+    await pill(page).getByRole('button', { name: 'Pause the session' }).click();
+    await expect(pill(page).getByRole('button', { name: 'Resume the session' })).toBeVisible();
+    await pill(page).getByRole('link').click();
+    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
+    await expect(page.locator('.session-clock')).toContainText('Paused');
+});
+
+test('another tab follows a pause straight away', async ({ page, context }) => {
+    await page.setViewportSize(desktop);
+    const student = await openSession(page);
+    const other = await context.newPage();
+    await other.goto(`/workspaces/${student.workspace}`);
+    await other.waitForLoadState('load');
+    await expect(pill(other).getByRole('button', { name: 'Pause the session' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Pause', exact: true }).click();
+    await expect(pill(other).getByRole('button', { name: 'Resume the session' })).toBeVisible({ timeout: 5000 });
+});
+
+for (const [name, viewport] of Object.entries({ desktop, phone })) {
+    test(`every colour of a session comes from a token: ${name}`, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        const student = await openSession(page);
+        await useSentinelTheme(page);
+        const states = { 'session page': await foreignColours(page) };
+        await page.getByRole('button', { name: 'End session' }).click();
+        await page.locator('#session-dialog').getByRole('heading').waitFor();
+        states['end dialog'] = await foreignColours(page);
+        await page.goto(`/workspaces/${student.workspace}`);
+        await useSentinelTheme(page);
+        states['overview with study time'] = await foreignColours(page);
+        for (const [state, colours] of Object.entries(states)) {
+            expect(colours, `${state}: colours not from a token`).toEqual([]);
+        }
+    });
+}
+
+for (const theme of THEMES) {
+    test(`axe finds no violations on a session: ${theme}`, async ({ page }) => {
+        await page.setViewportSize(desktop);
+        const student = await openSession(page);
+        await useTheme(page, theme);
+        expect(await analyse(page)).toEqual([]);
+        await page.getByRole('button', { name: 'End session' }).click();
+        await page.locator('#session-dialog').getByRole('heading').waitFor();
+        expect(await analyse(page)).toEqual([]);
+        await page.goto(`/workspaces/${student.workspace}`);
+        await useTheme(page, theme);
+        expect(await analyse(page)).toEqual([]);
+    });
+}
+
+test('a session page never scrolls sideways at 320 px, even with 200% text', async ({ page }) => {
+    await openSession(page);
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});

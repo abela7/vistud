@@ -60,7 +60,7 @@ final class Topics
             $moduleId = $this->moduleIn($scope, $workspaceId, $moduleId);
             $this->memory->append($scope, [
                 Memory::claim($scope, $by, 'defines', ["topic:{$id}"], ['entity_type' => 'topic', 'status' => 'active', 'kind' => 'concept', 'aliases' => []], ['label' => $name]),
-            ]);
+            ], $workspaceId);
             LearnerTables::insert($scope, 'topics', [
                 'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'name' => $name,
                 'position' => (int) LearnerTables::query($scope, 'topics')->where('workspace_id', $workspaceId)->max('position') + 1,
@@ -114,14 +114,14 @@ final class Topics
     {
         $scope = Guard::learner($by);
         Input::refuse(in_array($status, self::STATUSES, true) ? [] : ['status' => 'Unknown status.']);
-        $this->row($scope, $id);
+        $row = $this->row($scope, $id);
 
         $about = [['rel' => 'about', 'target' => "topic:{$id}"]];
         $this->memory->append($scope, [match ($status) {
             'covered' => Memory::observation($scope, $by, 'exposure', ['format' => 'lecture'], $about),
             'understood' => Memory::observation($scope, $by, 'self_report', ['stance' => 'confident'], $about),
             'confused' => Memory::observation($scope, $by, 'self_report', ['stance' => 'confused'], $about),
-        }]);
+        }], $row->workspace_id);
         LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $status, 'updated_at' => now()]);
     }
 
@@ -134,7 +134,7 @@ final class Topics
             $row = $this->row($scope, $id, lock: true);
             $this->memory->append($scope, [
                 Memory::claim($scope, $by, 'defines', ["topic:{$id}"], ['entity_type' => 'topic', 'status' => 'retired', 'kind' => 'concept', 'aliases' => []], ['label' => $row->name]),
-            ]);
+            ], $row->workspace_id);
             LearnerTables::query($scope, 'topics')->where('id', $id)->update(['retired_at' => now(), 'updated_at' => now()]);
             LearnerTables::query($scope, 'questions')->where('topic_id', $id)->update(['topic_id' => null]);
         });

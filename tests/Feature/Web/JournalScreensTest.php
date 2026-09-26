@@ -66,8 +66,9 @@ class JournalScreensTest extends TestCase
     public function test_tampering_with_the_pages_livewire_request_is_also_not_found(): void
     {
         $page = $this->actingAs($this->ada)->get('/journal/E-ADA')->getContent();
-        preg_match('/wire:snapshot="([^"]+)"/', $page, $match);
-        $snapshot = html_entity_decode($match[1]);
+        // The entry's component, not the top bar's study clock.
+        preg_match_all('/wire:snapshot="([^"]+)"/', $page, $matches);
+        $snapshot = collect($matches[1])->map(fn ($s) => html_entity_decode($s))->first(fn ($s) => str_contains($s, '"entryId"'));
         $uri = app(HandleRequests::class)->getUpdateUri();
         $send = fn (string $snapshot, array $updates) => $this->actingAs($this->ada)->postJson($uri, [
             'components' => [['snapshot' => $snapshot, 'updates' => $updates, 'calls' => []]],

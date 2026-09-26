@@ -1,0 +1,257 @@
+<?php
+
+namespace App\Livewire\Workspaces;
+
+use App\Identity\PrincipalFactory;
+use App\Platform\Access\Principal;
+use App\Platform\Errors\Conflict;
+use App\Platform\Errors\NotFound;
+use App\Study\Files;
+use App\Study\Modules;
+use App\Study\Notes;
+use App\Study\SessionDetails;
+use App\Study\Sessions;
+use App\Study\Topics;
+use Illuminate\Contracts\View\View;
+use Illuminate\Support\Carbon;
+use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
+use Livewire\Component;
+
+/**
+ * A study session's page (docs/specs/study-memory.md §4): the clock and its
+ * controls, what happened (study, pauses, breaks), the topic's status and
+ * the module's material. The service applies the clock's rules; the IDs are
+ * locked.
+ */
+final class StudySession extends Component
+{
+    #[Locked]
+    public string $workspaceId;
+
+    #[Locked]
+    public string $sessionId;
+
+    /** end or delete: the dialog that's open, or null. */
+    #[Locked]
+    public ?string $mode = null;
+
+    #[Locked]
+    public ?string $notice = null;
+
+    #[Locked]
+    public ?string $error = null;
+
+    /** The topic's status to record when the session ends; empty leaves it. */
+    public string $topicStatus = '';
+
+    private Sessions $sessions;
+
+    private Topics $topics;
+
+    private Modules $modules;
+
+    private Notes $notes;
+
+    private Files $files;
+
+    private PrincipalFactory $principals;
+
+    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, PrincipalFactory $principals): void
+    {
+        $this->sessions = $sessions;
+        $this->topics = $topics;
+        $this->modules = $modules;
+        $this->notes = $notes;
+        $this->files = $files;
+        $this->principals = $principals;
+    }
+
+    public function mount(string $workspaceId, string $sessionId): void
+    {
+        [$this->workspaceId, $this->sessionId] = [$workspaceId, $sessionId];
+    }
+
+    public function pause(): void
+    {
+        $this->act(fn () => $this->sessions->pause($this->principal(), $this->sessionId));
+    }
+
+    public function takeBreak(): void
+    {
+        $this->act(fn () => $this->sessions->takeBreak($this->principal(), $this->sessionId));
+    }
+
+    public function resume(): void
+    {
+        $this->act(fn () => $this->sessions->resume($this->principal(), $this->sessionId));
+    }
+
+    /** The automatic pause was wrong: the student was studying. */
+    public function countAway(): void
+    {
+        $this->act(fn () => $this->sessions->countAway($this->principal(), $this->sessionId), 'The time away is counted as study.');
+    }
+
+    /** The topic's status, right from the session. */
+    public function report(string $status): void
+    {
+        $session = $this->sessions->find($this->principal(), $this->sessionId);
+        if ($session->topicId !== null) {
+            $this->topics->report($this->principal(), $session->topicId, $status);
+        }
+    }
+
+    public function confirmEnd(): void
+    {
+        $this->open('end');
+    }
+
+    public function confirmDelete(): void
+    {
+        $this->open('delete');
+    }
+
+    public function save(): void
+    {
+        $by = $this->principal();
+        if ($this->mode === 'delete') {
+            $this->sessions->delete($by, $this->sessionId);
+            $this->dispatch('session-changed');
+            session()->flash('workspace-notice', 'The session is deleted.');
+            $this->redirectRoute('workspaces.show', $this->workspaceId);
+
+            return;
+        }
+        if ($this->mode === 'end') {
+            $status = in_array($this->topicStatus, Topics::STATUSES, true) ? $this->topicStatus : null;
+            $this->act(function () use ($by, $status) {
+                $ended = $this->sessions->end($by, $this->sessionId);
+                if ($status !== null && $ended->topicId !== null) {
+                    try {
+                        $this->topics->report($by, $ended->topicId, $status);
+                    } catch (NotFound) {
+                        // The topic was removed meanwhile; the session still ends.
+                    }
+                }
+            });
+            if ($this->error === null) {
+                $this->notice = 'Session ended. You studied '.SessionDetails::duration($this->sessions->find($by, $this->sessionId)->studySeconds).'.';
+            }
+        }
+        $this->close();
+        $this->dispatch('session-dialog-close');
+    }
+
+    public function close(): void
+    {
+        $this->reset('mode', 'topicStatus');
+    }
+
+    #[On('session-changed')]
+    public function refresh(): void {}
+
+    public function render(): View
+    {
+        $by = $this->principal();
+        $session = $this->sessions->find($by, $this->sessionId);
+        $zone = $this->sessions->timezone($by);
+        $time = fn (string $at) => Carbon::parse($at)->setTimezone($zone)->format('H:i');
+
+        $topic = null;
+        if ($session->topicId !== null) {
+            try {
+                $topic = $this->topics->find($by, $session->topicId);
+            } catch (NotFound) {
+                // Removed since: the session keeps its time.
+            }
+        }
+        $moduleId = $session->moduleId ?? $topic?->moduleId;
+        $module = null;
+        $material = [];
+        if ($moduleId !== null) {
+            try {
+                $module = $this->modules->find($by, $moduleId);
+                foreach ($this->notes->list($by, $this->workspaceId) as $note) {
+                    if ($note->moduleId === $moduleId) {
+                        $material[] = ['file-text', $note->displayTitle(), route('workspaces.notes.show', [$this->workspaceId, $note->id]), 'Note'];
+                    }
+                }
+                foreach ($this->files->list($by, $this->workspaceId) as $file) {
+                    if ($file->moduleId === $moduleId) {
+                        $material[] = [$file->icon(), $file->fileName(), route('workspaces.files.show', [$this->workspaceId, $file->id]), $file->typeLabel()];
+                    }
+                }
+            } catch (NotFound) {
+                $module = null;
+            }
+        }
+
+        return view('livewire.workspaces.study-session', [
+            'session' => $session,
+            'topic' => $topic,
+            'module' => $module,
+            'material' => $material,
+            'timeline' => $this->timeline($session, $time),
+            'started' => Carbon::parse($session->startedAt)->setTimezone($zone),
+            'ended' => $session->endedAt === null ? null : Carbon::parse($session->endedAt)->setTimezone($zone),
+            'awaySince' => $session->pausedBy === 'away' ? $time($session->lastActivityAt) : null,
+        ]);
+    }
+
+    /**
+     * What happened, in order: study, breaks, and the pauses between them.
+     *
+     * @return list<array{kind: string, words: string, from: string, to: ?string, seconds: ?int}>
+     */
+    private function timeline(SessionDetails $session, callable $time): array
+    {
+        $rows = [];
+        $previous = null;
+        foreach ($session->segments as $segment) {
+            if ($previous?->endedAt !== null && $previous->endedAt < $segment->startedAt) {
+                $rows[] = ['kind' => 'pause', 'words' => $previous->endedBy === 'away' ? 'Paused: no activity' : ($previous->endedBy === 'long_break' ? 'Paused after a long break' : 'Paused'),
+                    'from' => $time($previous->endedAt), 'to' => $time($segment->startedAt), 'seconds' => null];
+            }
+            $end = $segment->endedAt ?? now()->toIso8601ZuluString('microsecond');
+            $rows[] = [
+                'kind' => $segment->kind,
+                'words' => $segment->kind === 'break' ? 'Break' : 'Studied',
+                'from' => $time($segment->startedAt),
+                'to' => $segment->endedAt === null ? null : $time($segment->endedAt),
+                'seconds' => max(0, (int) Carbon::parse($segment->startedAt)->diffInSeconds(Carbon::parse($end))),
+            ];
+            $previous = $segment;
+        }
+        if ($session->state === 'paused' && $previous?->endedAt !== null) {
+            $rows[] = ['kind' => 'pause', 'words' => $previous->endedBy === 'away' ? 'Paused: no activity' : ($previous->endedBy === 'long_break' ? 'Paused after a long break' : 'Paused'),
+                'from' => $time($previous->endedAt), 'to' => null, 'seconds' => null];
+        }
+
+        return $rows;
+    }
+
+    private function act(callable $action, ?string $notice = null): void
+    {
+        $this->error = null;
+        try {
+            $action();
+            $this->notice = $notice;
+        } catch (Conflict $e) {
+            $this->error = $e->getMessage();
+        }
+        $this->dispatch('session-changed');
+    }
+
+    private function open(string $mode): void
+    {
+        $this->close();
+        $this->mode = $mode;
+        $this->dispatch('session-dialog-open');
+    }
+
+    private function principal(): Principal
+    {
+        return $this->principals->fromRequest(request());
+    }
+}

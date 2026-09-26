@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { makeNamedStudent, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithTopics, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { makeNamedStudent, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -565,7 +565,7 @@ test('progress: topics with statuses and evidence, questions, the topic dialog',
 });
 
 test('overview: where you are, assignments and tasks, instructions', async ({ page }) => {
-    const student = makeStudentWithTopics();
+    const student = makeStudentWithSession();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}`);
@@ -581,6 +581,10 @@ test('overview: where you are, assignments and tasks, instructions', async ({ pa
     }
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'Log time' }).click();
+    await page.locator('#study-dialog').getByLabel('Minutes').fill('45');
+    await page.screenshot({ path: out('overview-desktop-vistud-light-log') });
+    await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'New', exact: true }).click();
     await page.locator('#tasks-dialog').getByLabel('What').fill('Normalisation problem sheet');
     await page.locator('#tasks-dialog').getByLabel('Kind').selectOption({ label: 'Problem set' });
@@ -589,4 +593,35 @@ test('overview: where you are, assignments and tasks, instructions', async ({ pa
     await page.getByRole('button', { name: 'Edit: About you' }).click();
     await page.locator('#instructions-dialog').getByRole('textbox').fill("I'm in my second year. Explain with everyday examples, one step at a time, and check I follow before moving on.");
     await page.screenshot({ path: out('overview-desktop-vistud-light-instructions') });
+});
+
+test('session: the clock, what happened, the end dialog, and starting one', async ({ page }) => {
+    const student = makeStudentWithSession();
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
+    await page.waitForLoadState('load');
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`session-${size}-${theme}`), fullPage: size === 'mobile' });
+        }
+    }
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'End session' }).click();
+    await page.locator('#session-dialog').getByLabel('Understood').check();
+    await page.screenshot({ path: out('session-desktop-vistud-light-end') });
+    await page.locator('#session-dialog').getByRole('button', { name: 'End session' }).click();
+    await page.getByRole('status').filter({ hasText: 'Session ended.' }).waitFor();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('session-desktop-vistud-light-ended') });
+
+    await page.goto(`/workspaces/${student.workspace}`);
+    await page.getByRole('button', { name: 'Start studying' }).first().click();
+    await page.locator('#study-dialog').getByLabel('What are you studying? (optional)').selectOption({ label: 'Normalisation' });
+    await page.screenshot({ path: out('session-desktop-vistud-light-start') });
 });

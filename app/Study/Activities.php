@@ -145,7 +145,7 @@ final class Activities
                 'progress' => $row->status,
                 'status' => $deleted ? 'deleted' : 'active',
             ], fn ($value) => $value !== null),
-        ]]);
+        ]], $row->workspace_id);
     }
 
     private function moduleIn(LearnerScope $scope, string $workspaceId, ?string $moduleId): ?string

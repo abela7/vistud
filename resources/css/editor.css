@@ -666,6 +666,36 @@
         outline-offset: 2px;
     }
 
+    /* ---------- A study session's page (docs/specs/study-memory.md §4) ---------- */
+
+    .session-clock {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        padding-block: 2rem;
+        text-align: center;
+    }
+
+    /* The topic's status in a narrow card: one option per line. */
+    .segmented-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+
+    .segmented-stack .segmented-option {
+        justify-content: flex-start;
+    }
+
+    .session-time {
+        font-size: clamp(2.75rem, 10vw, 4.5rem);
+        font-weight: 600;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+    }
+
     /* ---------- Progress: topics and their statuses (docs/specs/study-memory.md) ---------- */
 
     .topic-row {

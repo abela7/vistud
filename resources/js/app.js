@@ -2,6 +2,7 @@ import './appearance.js';
 import './forms.js';
 import './shell.js';
 import './invitation.js';
+import './session.js';
 
 // The note editor is only loaded on a note's page.
 const noteEditor = document.querySelector('[data-note-editor]');

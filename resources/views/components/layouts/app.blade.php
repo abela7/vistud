@@ -51,7 +51,12 @@
                 <x-admin.marker />
             @endif
 
-            <button type="button" class="account-button ml-auto" data-menu-button aria-controls="account-menu" aria-expanded="false">
+            @if ($area === 'student' && $isStudent)
+                <div class="ml-auto">
+                    <livewire:study.session-bar />
+                </div>
+            @endif
+            <button type="button" @class(['account-button', 'ml-auto' => ! ($area === 'student' && $isStudent)]) data-menu-button aria-controls="account-menu" aria-expanded="false">
                 <x-avatar :name="$user->name" />
                 <span class="max-md:sr-only">{{ $user->name }}</span>
                 <x-icon name="chevron-down" class="size-4" />

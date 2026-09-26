@@ -20,9 +20,17 @@ final class Memory
 {
     public function __construct(private JournalWriter $journal, private ProjectionRunner $projections) {}
 
-    /** Appends the events in order, as one batch. */
-    public function append(LearnerScope $scope, array $specs): void
+    /**
+     * Appends the events in order, as one batch. Given the workspace they
+     * belong to, they carry the id of the study session open in it, so the
+     * rules can tell sessions apart (ADR 0002 §7).
+     */
+    public function append(LearnerScope $scope, array $specs, ?string $workspaceId = null): void
     {
+        $session = $workspaceId === null ? null : Sessions::openIn($scope, $workspaceId);
+        if ($session !== null) {
+            $specs = array_map(fn (array $spec) => $spec + ['session' => $session], $specs);
+        }
         $this->journal->appendBatch($scope, $specs);
     }
 
