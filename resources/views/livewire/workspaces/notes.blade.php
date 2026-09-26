@@ -25,8 +25,10 @@
         @endif
     </div>
 
+    {{-- On wide screens, the recent notes sit beside everything else. --}}
+    <div @class(['grid gap-6', 'xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start' => $recent !== []])>
     @if ($recent !== [])
-        <section aria-labelledby="recent-heading" class="space-y-2">
+        <section aria-labelledby="recent-heading" class="space-y-2 xl:col-start-2 xl:row-start-1">
             <h2 id="recent-heading" class="text-lg font-semibold">Recently edited</h2>
             <ul class="module-card divide-y divide-divider" role="list">
                 @foreach ($recent as $note)
@@ -42,6 +44,7 @@
         </section>
     @endif
 
+    <div class="space-y-6 xl:col-start-1 xl:row-start-1">
     <section aria-labelledby="loose-heading" class="space-y-2">
         <h2 id="loose-heading" class="text-lg font-semibold">Not in a module</h2>
         <div class="module-card px-3 py-2">
@@ -82,6 +85,8 @@
             </div>
         @endif
     </section>
+    </div>
+    </div>
 
     @include('livewire.workspaces.partials.dialog')
 </div>

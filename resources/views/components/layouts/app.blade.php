@@ -31,6 +31,10 @@
     data-appearance="system">
 <head>
     @include('partials.head', ['title' => $area === 'admin' ? "{$title} · Admin" : $title])
+    @if ($isStudent)
+        {{-- Whose drafts this browser may hold and sync (resources/js/note/). --}}
+        <meta name="vistud-account" content="{{ $user->id }}">
+    @endif
 </head>
 <body class="bg-canvas text-fg antialiased">
     <a href="#main" class="skip-link">Skip to content</a>
@@ -76,7 +80,7 @@
                 <x-appearance-switcher />
             </div>
             <div class="border-t border-divider pt-1.5">
-                <form method="POST" action="{{ route('logout') }}" data-busy-on-submit>
+                <form method="POST" action="{{ route('logout') }}" data-busy-on-submit @if ($isStudent) data-logout-form @endif>
                     @csrf
                     <button type="submit" class="menu-item"><x-icon name="log-out" class="size-4" />Log out</button>
                 </form>
@@ -138,5 +142,39 @@
             </nav>
         </div>
     </dialog>
+
+    @if ($isStudent)
+        {{-- Logging out with unsaved note drafts on this device (resources/js/note/logout.js). --}}
+        <dialog class="modal" aria-labelledby="logout-dialog-title" data-logout-dialog>
+            <div class="modal-panel">
+                <div class="modal-head">
+                    <h2 id="logout-dialog-title" class="min-w-0 flex-1 text-lg font-semibold">Unsaved changes on this device</h2>
+                    <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-data x-on:click="$el.closest('dialog').close()">
+                        <x-icon name="x" />
+                    </button>
+                </div>
+                <div class="space-y-3 px-5 pt-2">
+                    <p data-logout-summary></p>
+                    <p class="text-sm text-fg-muted">If you keep them here, they're saved the next time you log in on this device. Anyone using this browser could read them until then.</p>
+                    <div data-logout-problem hidden>
+                        <x-alert tone="warning" :live="false"><span data-logout-problem-text></span></x-alert>
+                    </div>
+                </div>
+                <div class="modal-actions sm:flex-col">
+                    <x-button variant="danger" data-logout-choice="discard">Discard them and log out</x-button>
+                    <x-button data-logout-choice="keep">Keep them here and log out</x-button>
+                    <x-button variant="primary" data-logout-choice="sync">Save them and log out</x-button>
+                </div>
+            </div>
+        </dialog>
+
+        {{-- A short message from the page's own scripts, like a draft removed because its note was deleted. --}}
+        <div class="app-notice" data-app-notice hidden>
+            <x-icon name="info" class="size-5 shrink-0" />
+            <p class="min-w-0 flex-1" data-app-notice-text></p>
+            <button type="button" class="topbar-button -my-1 shrink-0" aria-label="Dismiss" data-app-notice-close><x-icon name="x" class="size-4" /></button>
+        </div>
+        <p class="sr-only" role="status" data-app-notice-live></p>
+    @endif
 </body>
 </html>

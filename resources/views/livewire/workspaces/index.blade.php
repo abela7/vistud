@@ -22,7 +22,7 @@
             <x-button variant="primary" icon="plus" x-data x-on:click="$dispatch('workspace-form-open')">New workspace</x-button>
         </section>
     @else
-        <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" role="list">
+        <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" role="list">
             @foreach ($active as $workspace)
                 <li wire:key="ws-{{ $workspace->id }}" class="relative flex flex-col gap-3 rounded-xl border border-border bg-surface-raised p-5 elevation-sm hover:border-border-strong">
                     <div class="flex items-start gap-3">

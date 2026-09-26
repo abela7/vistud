@@ -13,7 +13,7 @@
 @endphp
 @if ($isStudent)
 <x-layouts.app title="My workspaces">
-    <div class="mx-auto max-w-5xl space-y-6">
+    <div class="mx-auto max-w-7xl space-y-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <div class="space-y-1">
                 <p class="text-fg-muted">{{ $isNew ? 'Welcome' : 'Welcome back' }}, {{ $firstName }}</p>

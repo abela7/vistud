@@ -82,6 +82,31 @@ test('formatting from the toolbar and the keyboard', async ({ page }) => {
     await expect(status(page)).toHaveText('Saved');
 });
 
+test('read mode and full screen, for reading and for writing', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openNote(page);
+    const toolbar = page.getByRole('toolbar', { name: 'Formatting' });
+
+    await page.getByRole('button', { name: 'Read', exact: true }).click();
+    await expect(toolbar).toBeHidden();
+    await expect(body(page)).toHaveAttribute('contenteditable', 'false');
+    await expect(page.getByLabel('Title')).toHaveJSProperty('readOnly', true);
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(body(page)).toBeFocused();
+    await expect(toolbar).toBeVisible();
+
+    await page.getByRole('button', { name: 'Full screen' }).click();
+    const box = await page.locator('[data-note-page]').boundingBox();
+    expect([box.x, box.y, box.width]).toEqual([0, 0, desktop.width]);
+    // The note covers the top bar.
+    expect(await page.evaluate(() => document.elementFromPoint(20, 20).closest('[data-note-page]') !== null)).toBe(true);
+    await typeAtEnd(page, ' Written in full screen.');
+    await expect(status(page)).toHaveText('Saved');
+    await page.getByRole('button', { name: 'Exit full screen' }).click();
+    await expect(page.locator('[data-note-page]')).not.toHaveAttribute('data-focus');
+    await expect(page.getByRole('button', { name: 'Full screen' })).toBeFocused();
+});
+
 test('with the server unreachable the draft survives a reload, and saves once it is back', async ({ page }) => {
     await page.setViewportSize(desktop);
     const note = await openNote(page);
@@ -127,7 +152,7 @@ test('a failed save is retried with the same save ID, and only the saved revisio
     expect(await serverText(page, note)).toContain(' First. Second.');
 });
 
-test('a note saved in another tab meanwhile is a conflict, and nothing is overwritten silently', async ({ page, context }) => {
+test('another tab of the same account: an idle tab updates itself, a busy one is warned at once', async ({ page, context }) => {
     await page.setViewportSize(desktop);
     const note = await openNote(page);
     const other = await context.newPage();
@@ -137,19 +162,49 @@ test('a note saved in another tab meanwhile is a conflict, and nothing is overwr
 
     await typeAtEnd(page, ' From the first tab.');
     await expect(status(page)).toHaveText('Saved');
-
-    await typeAtEnd(other, ' From the second tab.');
-    await expect(status(other)).toHaveText('Conflict, needs your choice');
-    await expect(alert(other, 'conflict')).toBeVisible();
-    await other.getByRole('button', { name: 'Keep my version' }).click();
+    await expect(body(other)).toContainText('From the first tab.');
     await expect(status(other)).toHaveText('Saved');
-    expect(await serverText(page, note)).toContain('From the second tab.');
 
-    await typeAtEnd(page, ' Again.');
+    // The first tab is saving when the second one saves.
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    await page.route('**/api/v1/notes/*', async (route) => {
+        if (route.request().method() === 'PUT') await held;
+        return route.continue();
+    });
+    await typeAtEnd(page, ' Mine.');
+    await expect.poll(() => page.locator('[data-save-status]').getAttribute('data-state')).toBe('saving');
+    await typeAtEnd(other, ' Theirs.');
+    await expect(status(other)).toHaveText('Saved');
     await expect(alert(page, 'conflict')).toBeVisible();
+
+    release();
+    await page.getByRole('button', { name: 'Keep my version' }).click();
+    await expect(status(page)).toHaveText('Saved');
+    const saved = await serverText(page, note);
+    expect(saved).toContain('Mine.');
+    expect(saved).not.toContain('Theirs.');
+    // The second tab had nothing unsaved, so it shows the version that was kept.
+    await expect(body(other)).toContainText('Mine.');
+});
+
+test('a newer version from another device is a conflict, and the newer one can be used', async ({ page, context }) => {
+    await page.setViewportSize(desktop);
+    const note = await openNote(page);
+
+    // Another device saves: straight through the API, so no tab of this browser hears of it.
+    const current = await (await page.request.get(apiUrl(note))).json();
+    const token = decodeURIComponent((await context.cookies()).find((c) => c.name === 'XSRF-TOKEN').value);
+    const put = await page.request.put(apiUrl(note), {
+        headers: { 'X-XSRF-TOKEN': token, Accept: 'application/json' },
+        data: { base_version: current.version, save_id: 'phone-00001', client_id: 'phone-00001', title: current.title, doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'From my phone.' }] }] } },
+    });
+    expect(put.status()).toBe(200);
+
+    await typeAtEnd(page, ' From the laptop.');
+    await expect(status(page)).toHaveText('Conflict, needs your choice');
     await page.getByRole('button', { name: 'Use the newer version' }).click();
-    await expect(body(page)).toContainText('From the second tab.');
-    await expect(body(page)).not.toContainText('Again.');
+    await expect(body(page)).toHaveText('From my phone.');
     await expect(status(page)).toHaveText('Saved');
 });
 
@@ -165,6 +220,101 @@ test('offline, typing carries on and is sent when the connection is back', async
     await context.setOffline(false);
     await expect(status(page)).toHaveText('Saved', { timeout: 10_000 });
     expect(await serverText(page, note)).toContain('Written on the train.');
+});
+
+async function logOut(page) {
+    await page.locator('.account-button').click();
+    await page.getByRole('button', { name: 'Log out' }).click();
+}
+
+async function withUnsentChange(page, note, text) {
+    await page.route('**/api/v1/notes/*', (route) => (route.request().method() === 'PUT' ? route.abort() : route.continue()));
+    await typeAtEnd(page, text);
+    await expect(status(page)).toHaveText(/Not saved, retrying in \d+ s/);
+}
+
+test('logging out with unsaved changes asks first, and saving them sends them', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = await openNote(page);
+    await withUnsentChange(page, note, ' Not sent yet.');
+
+    await logOut(page);
+    const dialog = page.getByRole('dialog', { name: 'Unsaved changes on this device' });
+    await expect(dialog).toContainText('1 note on this device has changes that aren\'t saved yet.');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page).toHaveURL(note.url);
+
+    await page.unroute('**/api/v1/notes/*');
+    await logOut(page);
+    await dialog.getByRole('button', { name: 'Save them and log out' }).click();
+    await page.waitForURL('**/login');
+    await openStudentHome(page, note.email);
+    expect(await serverText(page, note)).toContain('Not sent yet.');
+});
+
+test('drafts kept at logout come back for the same account; discarded ones do not', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = await openNote(page);
+    await withUnsentChange(page, note, ' Kept for later.');
+    await logOut(page);
+    await page.getByRole('button', { name: 'Keep them here and log out' }).click();
+    await page.waitForURL('**/login');
+
+    await page.unroute('**/api/v1/notes/*');
+    await openStudentHome(page, note.email);
+    await page.goto(note.url);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(alert(page, 'restored')).toBeVisible();
+    await expect(status(page)).toHaveText('Saved');
+    expect(await serverText(page, note)).toContain('Kept for later.');
+
+    await withUnsentChange(page, note, ' Thrown away.');
+    await logOut(page);
+    await page.getByRole('button', { name: 'Discard them and log out' }).click();
+    await page.waitForURL('**/login');
+    await page.unroute('**/api/v1/notes/*');
+    await openStudentHome(page, note.email);
+    await page.goto(note.url);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(alert(page, 'restored')).toBeHidden();
+    await expect(body(page)).not.toContainText('Thrown away.');
+});
+
+test('a draft of a note deleted elsewhere is removed before it could be sent', async ({ page, context }) => {
+    await page.setViewportSize(desktop);
+    const note = await openNote(page);
+    await withUnsentChange(page, note, ' Never to be sent.');
+
+    // Another tab deletes the note for good.
+    const other = await context.newPage();
+    await other.setViewportSize(desktop);
+    await other.goto(`/workspaces/${note.workspace}/modules`);
+    await other.getByRole('button', { name: 'Actions for Mitosis vs meiosis' }).click();
+    await other.getByRole('button', { name: 'Move to trash' }).click();
+    await other.goto(`/workspaces/${note.workspace}/notes`);
+    await other.getByRole('button', { name: 'Trash (1)' }).click();
+    await other.getByRole('button', { name: 'Delete for good: Mitosis vs meiosis' }).click();
+    await other.getByRole('dialog').getByRole('button', { name: 'Delete for good' }).click();
+    await expect(other.getByRole('status').filter({ hasText: 'is deleted.' })).toBeVisible();
+
+    await page.goto(`/workspaces/${note.workspace}/notes`);
+    await expect(page.locator('[data-app-notice]')).toContainText('deleted on another device were removed from this one');
+    const left = await page.evaluate(async (account) => {
+        const db = await new Promise((resolve) => { const r = indexedDB.open(`vistud-drafts-${account}`); r.onsuccess = () => resolve(r.result); });
+        const all = await new Promise((resolve) => { const r = db.transaction('drafts').objectStore('drafts').getAll(); r.onsuccess = () => resolve(r.result); });
+        return all.length;
+    }, await page.locator('meta[name="vistud-account"]').getAttribute('content'));
+    expect(left).toBe(0);
+});
+
+test('an account that no longer exists leaves nothing on the device', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openNote(page);
+    await page.route('**/api/v1/notes/*', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"code":"account_deleted","message":"x"}}' }));
+    await typeAtEnd(page, ' Gone with the account.');
+    await expect(alert(page, 'deleted')).toBeVisible();
+    await expect.poll(() => page.evaluate(async () => (await indexedDB.databases()).filter((db) => db.name.startsWith('vistud-drafts-')).length)).toBe(0);
 });
 
 test('an ended session and a browser that stores nothing are both said plainly', async ({ page, context }) => {

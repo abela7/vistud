@@ -10,7 +10,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Placeholder } from '@tiptap/extensions';
 import { UniqueID } from '@tiptap/extension-unique-id';
-import { openDrafts } from './drafts.js';
+import { deleteDrafts, openDrafts } from './drafts.js';
 import { createAutosave, randomId } from './autosave.js';
 
 const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'listItem', 'taskItem'];
@@ -26,6 +26,7 @@ const LABELS = {
     gone: 'Not saved',
     session: 'Not saved',
     blocked: 'Can\'t be saved: access removed',
+    deleted: 'Not saved',
     rejected: 'Not saved',
     account: 'Not saved',
 };
@@ -113,6 +114,9 @@ export async function mount(host) {
         onTransaction: () => updateToolbar(),
     });
 
+    // Tabs of this account tell each other what they saved (ADR 0003 §5.3). Other accounts' tabs never hear it.
+    const channel = 'BroadcastChannel' in window ? new BroadcastChannel(`vistud-${accountId}`) : null;
+
     autosave = createAutosave({
         url: host.dataset.saveUrl,
         noteId: note.id,
@@ -124,14 +128,18 @@ export async function mount(host) {
         onState: (state) => {
             status.dataset.state = state.status;
             status.querySelector('[data-save-label]').textContent = LABELS[state.status].replace('{s}', state.retryIn);
-            if (['conflict', 'gone', 'session', 'blocked', 'rejected', 'offline', 'nostorage'].includes(state.status)) {
+            if (['conflict', 'gone', 'session', 'blocked', 'deleted', 'rejected', 'offline', 'nostorage'].includes(state.status)) {
                 show(state.status);
                 if (state.status === 'rejected') alerts.querySelector('[data-rejected-message]').textContent = state.message;
             } else if (alerts.querySelector('[data-alert]:not([hidden])')?.dataset.alert !== 'restored') {
                 show(null);
             }
+            // A choice waits until no older save is still on its way.
+            alerts.querySelectorAll('[data-action="keep-mine"], [data-action="keep-theirs"]').forEach((b) => { b.disabled = state.busy; });
             if (state.status === 'account') window.location.assign('/login');
         },
+        onSaved: (saved) => channel?.postMessage({ type: 'note-saved', note: note.id, version: saved.version, client: clientId }),
+        onAccountDeleted: () => deleteDrafts(accountId).catch(() => {}),
     });
 
     // ---------- A draft left in this browser ----------
@@ -193,21 +201,80 @@ export async function mount(host) {
     });
     updateToolbar();
 
+    // ---------- Reading, and full screen ----------
+    const page = document.querySelector('[data-note-page]');
+    const focusButton = page.querySelector('[data-note-focus]');
+    function setReading(on) {
+        page.toggleAttribute('data-reading', on);
+        editor.setEditable(!on, false);
+        editor.view.dom.setAttribute('aria-readonly', String(on));
+        titleField.readOnly = on;
+        if (!on) editor.commands.focus();
+    }
+    function setFocus(on) {
+        page.toggleAttribute('data-focus', on);
+        // The whole screen where the browser allows it; the whole window everywhere.
+        const root = document.documentElement;
+        if (on && root.requestFullscreen && !document.fullscreenElement) root.requestFullscreen().catch(() => {});
+        if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+        focusButton.focus();
+    }
+    page.querySelector('[data-note-read]').addEventListener('click', () => setReading(!page.hasAttribute('data-reading')));
+    focusButton.addEventListener('click', () => setFocus(!page.hasAttribute('data-focus')));
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && page.hasAttribute('data-focus')) setFocus(false);
+    });
+    document.addEventListener('keydown', (event) => {
+        const busy = document.querySelector('dialog[open], [data-menu-panel]:not([hidden])');
+        if (event.key === 'Escape' && page.hasAttribute('data-focus') && !document.fullscreenElement && !busy) setFocus(false);
+    });
+
+    // ---------- Other tabs ----------
+    /** Shows a version from the server, without making it something undo would take back. */
+    function showVersion(current) {
+        loading = true;
+        const at = editor.state.selection.from;
+        editor.chain().setMeta('addToHistory', false).setContent(current.doc, { emitUpdate: false }).run();
+        if (editor.isFocused) editor.commands.setTextSelection(Math.min(at, editor.state.doc.content.size - 1));
+        titleField.value = current.title;
+        loading = false;
+        setTitle();
+        growTitle();
+    }
+    async function fetchCurrent() {
+        const response = await fetch(host.dataset.saveUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+        return response.ok ? response.json() : null;
+    }
+    channel?.addEventListener('message', async ({ data }) => {
+        if (data?.type === 'logout') {
+            autosave.stop('session');
+            return;
+        }
+        if (data?.type !== 'note-saved' || data.note !== note.id || data.client === clientId || data.version <= autosave.version()) return;
+        if (!autosave.isClean()) {
+            // Unsaved typing here: warn now, before this tab tries to save over it.
+            autosave.conflict(data.version);
+            return;
+        }
+        const current = await fetchCurrent();
+        if (current && current.version > autosave.version() && autosave.isClean()) {
+            showVersion(current);
+            autosave.synced(current.version);
+        }
+    });
+
+    // Logging out asks the open note to store what it holds first.
+    window.addEventListener('vistud:store-drafts', (event) => event.detail.waitFor(autosave.storeNow()));
+
     // ---------- Choices in the alerts ----------
     alerts.addEventListener('click', async (event) => {
         const action = event.target.closest('[data-action]')?.dataset.action;
         if (action === 'keep-mine') {
             autosave.keepMine();
         } else if (action === 'keep-theirs') {
-            const response = await fetch(host.dataset.saveUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
-            if (!response.ok) return;
-            const current = await response.json();
-            loading = true;
-            editor.commands.setContent(current.doc, { emitUpdate: false });
-            titleField.value = current.title;
-            loading = false;
-            setTitle();
-            growTitle();
+            const current = await fetchCurrent();
+            if (!current) return;
+            showVersion(current);
             autosave.keepTheirs(current.version);
             show(null);
         } else if (action === 'dismiss') {

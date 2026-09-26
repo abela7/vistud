@@ -6,10 +6,14 @@ create, open, switch, edit, archive and restore) and **step 2** (modules, and
 folders inside them up to 8 levels: add, rename, reorder by dragging or from a
 menu, move, delete when empty) and **step 3a** (notes: the editor with
 autosave, drafts kept in the browser, conflicts, trash and restore; folders
-and notes at a workspace's top level in Notes & files). Next: step 3b (warning
-other open tabs, the logout choice for unsaved drafts, deletion records
-reaching browsers, keeping editors alive across pages). Personal, dragging
-folders and notes, and version history come later in M2.
+and notes at a workspace's top level in Notes & files) and **step 3b** (other
+open tabs of the account update or are warned at once; logging out with
+unsaved drafts asks to save, keep or discard them; drafts of notes deleted
+elsewhere are removed before they could be sent; an erased account's drafts
+are purged; a note uses the full width and height, with Full screen and a Read
+mode). Keeping editors (and their undo) alive across pages comes with step 7,
+no page reloads. Personal, dragging folders and notes, and version history
+come later in M2. Next: step 4, files.
 
 **Mockups:** [docs/design/mockups/](../design/mockups/). They use the real
 theme, top bar and components, so what is approved is what gets built. On a

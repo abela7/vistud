@@ -16,7 +16,7 @@
     ];
 @endphp
 <x-layouts.app :title="$section === 'overview' ? $workspace->name : $label.' · '.$workspace->name" :workspace="$workspace" :section="$section">
-    <div class="mx-auto max-w-5xl space-y-6">
+    <div class="mx-auto max-w-7xl space-y-6">
         @if (session('workspace-notice'))
             <x-alert tone="success">{{ session('workspace-notice') }}</x-alert>
         @endif

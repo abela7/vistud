@@ -80,6 +80,30 @@ class NotesApiTest extends TestCase
         $this->putJson("/api/v1/notes/{$this->noteId}", $this->save(1, null, 'save-0002'))->assertUnauthorized();
     }
 
+    public function test_deletion_records_are_read_after_a_cursor(): void
+    {
+        $notes = app(Notes::class);
+        $by = $this->principal($this->ada);
+        $notes->trash($by, $this->noteId);
+        $notes->restore($by, $this->noteId);
+        $notes->trash($by, $this->noteId);
+        $notes->destroy($by, $this->noteId);
+        // Another learner's deletions never show.
+        $bob = $this->principal($this->student());
+        $theirs = app(Workspaces::class)->create($bob, ['name' => 'Private']);
+        $notes->trash($bob, $notes->create($bob, 'workspace', $theirs->id)->id);
+
+        $all = $this->actingAs($this->ada)->getJson('/api/v1/sync/tombstones')->assertOk();
+        $this->assertSame([], (new OpenApi)->validateResponse('GET', '/api/v1/sync/tombstones', 200, $all->json()));
+        $this->assertSame(['trashed', 'restored', 'trashed', 'deleted'], array_column($all->json('data'), 'kind'));
+        $this->assertSame([$this->noteId], array_values(array_unique(array_column($all->json('data'), 'entity_id'))));
+
+        $cursor = $all->json('data.1.cursor');
+        $this->getJson("/api/v1/sync/tombstones?since={$cursor}")->assertJsonCount(2, 'data')->assertJsonPath('next_since', $all->json('next_since'))->assertJsonPath('more', false);
+        $this->getJson('/api/v1/sync/tombstones?since=-1')->assertStatus(422);
+        $this->actingAs($this->admin(student: false))->getJson('/api/v1/sync/tombstones')->assertForbidden();
+    }
+
     private function save(int $base, ?array $doc, string $saveId): array
     {
         return [

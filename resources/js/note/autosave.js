@@ -64,6 +64,7 @@ export function createAutosave(o) {
         retryIn: retryAt ? Math.max(1, Math.ceil((retryAt - Date.now()) / 1000)) : null,
         conflictVersion,
         message,
+        busy,
     });
 
     async function storeDraft() {
@@ -181,6 +182,11 @@ export function createAutosave(o) {
             } else if (code === 410 || code === 404) {
                 pending = null;
                 halt('gone');
+            } else if (code === 401 && error?.code === 'account_deleted') {
+                // The account was erased: nothing of it stays on this device.
+                pending = null;
+                halt('deleted');
+                o.onAccountDeleted?.();
             } else if (code === 401 || code === 419) {
                 pending = null;
                 halt('session');
@@ -219,6 +225,22 @@ export function createAutosave(o) {
         flush() {
             storeDraft();
             save();
+        },
+        /** Store the draft now; resolves when it is stored. */
+        storeNow: () => storeDraft(),
+        /** Stop for good (the account logged out in another tab), keeping the draft. */
+        stop(reason) {
+            storeDraft().finally(() => halt(reason));
+        },
+        /** Nothing to save and nothing in flight: the editor can take a newer version as it is. */
+        isClean: () => rev === savedRev && !pending && !busy && !halted,
+        /** The version the next save is based on. */
+        version: () => base,
+        /** The editor now shows version `version`, saved by another tab. */
+        synced(version) {
+            base = version;
+            rev = storedRev = savedRev = 0;
+            emit();
         },
         /** Changes exist only in memory: closing the tab would lose them. */
         atRisk: () => rev > storedRev || (!storageOk && rev > savedRev),

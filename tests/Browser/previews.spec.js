@@ -440,6 +440,15 @@ test('notes: the editor, Notes & files, and notes in a module', async ({ page })
 
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'Full screen' }).click();
+    await page.getByRole('button', { name: 'Read', exact: true }).click();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('note-desktop-vistud-light-fullscreen-reading') });
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('note-desktop-vistud-light-fullscreen') });
+    await page.getByRole('button', { name: 'Exit full screen' }).click();
+
     await page.route('**/api/v1/notes/*', (route) => route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":{"code":"version_conflict","message":"x","details":{"current_version":9}}}' }));
     await page.locator('.note-prose').click();
     await page.keyboard.press('Control+End');
@@ -465,4 +474,19 @@ test('notes: the editor, Notes & files, and notes in a module', async ({ page })
     await page.goto(`/workspaces/${note.workspace}/modules`);
     await page.getByRole('heading', { level: 1, name: 'Modules' }).waitFor();
     await page.screenshot({ path: out('modules-desktop-vistud-light-notes') });
+
+    // Logging out with a change that couldn't be sent.
+    await page.goto(note.url);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await page.route('**/api/v1/notes/*', (route) => (route.request().method() === 'PUT' ? route.abort() : route.continue()));
+    await page.locator('.note-prose').click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.type(' Written on the bus.');
+    await page.locator('[data-save-status][data-state="retrying"]').waitFor();
+    await page.locator('.account-button').click();
+    await page.getByRole('button', { name: 'Log out' }).click();
+    await page.getByRole('dialog', { name: 'Unsaved changes on this device' }).waitFor();
+    await page.screenshot({ path: out('note-desktop-vistud-light-logout') });
+    await page.setViewportSize(sizes.mobile);
+    await page.screenshot({ path: out('note-mobile-vistud-light-logout') });
 });

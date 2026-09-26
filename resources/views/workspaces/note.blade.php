@@ -8,7 +8,7 @@
         'check' => 'saved',
         'loader-circle' => 'saving',
         'cloud-off' => 'local offline',
-        'triangle-alert' => 'retrying nostorage conflict gone session blocked rejected account',
+        'triangle-alert' => 'retrying nostorage conflict gone session blocked deleted rejected account',
     ];
     $tools = [
         ['bold', 'bold', 'Bold (Ctrl+B)', true],
@@ -26,7 +26,7 @@
     ];
 @endphp
 <x-layouts.app :title="$note->displayTitle().' · '.$workspace->name" :workspace="$workspace" section="notes">
-    <div class="mx-auto max-w-4xl space-y-4">
+    <div class="note-page" data-note-page>
         <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <nav aria-label="Where this note is" class="min-w-0">
                 <ol class="breadcrumbs">
@@ -43,7 +43,7 @@
                     @endforeach
                 </ol>
             </nav>
-            <div class="ml-auto flex items-center gap-2">
+            <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
                 @if ($note->trashedAt === null)
                     <p class="save-status" data-save-status data-state="saved" role="status">
                         @foreach ($statusIcons as $icon => $states)
@@ -51,6 +51,14 @@
                         @endforeach
                         <span data-save-label>Saved</span>
                     </p>
+                    <button type="button" class="btn btn-ghost note-mode" data-note-read>
+                        <span class="when-editing"><x-icon name="book-open-text" class="size-4" /><span class="max-sm:sr-only">Read</span></span>
+                        <span class="when-reading"><x-icon name="pencil" class="size-4" /><span class="max-sm:sr-only">Edit</span></span>
+                    </button>
+                    <button type="button" class="btn btn-ghost note-mode" data-note-focus>
+                        <span class="when-page"><x-icon name="maximize-2" class="size-4" /><span class="max-sm:sr-only">Full screen</span></span>
+                        <span class="when-focused"><x-icon name="minimize-2" class="size-4" /><span class="max-sm:sr-only">Exit full screen</span></span>
+                    </button>
                 @endif
                 <livewire:workspaces.note-actions :note-id="$note->id" />
             </div>
@@ -95,6 +103,9 @@
                 </x-alert>
                 <x-alert tone="danger" title="Access removed" data-alert="blocked" hidden>
                     This account can't save notes any more.
+                </x-alert>
+                <x-alert tone="danger" title="This account no longer exists" data-alert="deleted" hidden>
+                    Its unsaved changes were removed from this device.
                 </x-alert>
                 <x-alert tone="danger" title="This note can't be saved" data-alert="rejected" hidden>
                     <span data-rejected-message></span>

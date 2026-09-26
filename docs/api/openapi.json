@@ -168,6 +168,45 @@
           }
         }
       }
+    },
+    "/api/v1/sync/tombstones": {
+      "get": {
+        "operationId": "listTombstones",
+        "summary": "The learner's deletion records after a cursor, oldest first (ADR 0003 section 5.4). Browsers read them before replaying drafts",
+        "x-stability": "provisional",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The cursor of the last record already seen; 0 or none for all"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Up to 500 records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tombstones"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -600,6 +639,65 @@
           },
           "saved_at": {
             "type": "string"
+          }
+        }
+      },
+      "Tombstones": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "data",
+          "next_since",
+          "more"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "cursor",
+                "entity_type",
+                "entity_id",
+                "kind",
+                "at"
+              ],
+              "properties": {
+                "cursor": {
+                  "type": "integer"
+                },
+                "entity_type": {
+                  "type": "string",
+                  "enum": [
+                    "note"
+                  ]
+                },
+                "entity_id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "trashed",
+                    "restored",
+                    "deleted",
+                    "redacted"
+                  ]
+                },
+                "at": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "next_since": {
+            "type": "integer",
+            "description": "The cursor to send next time"
+          },
+          "more": {
+            "type": "boolean",
+            "description": "More records follow: ask again with next_since"
           }
         }
       }
