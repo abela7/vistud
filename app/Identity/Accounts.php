@@ -117,16 +117,20 @@ final class Accounts
     }
 
     /**
-     * Admin with 2FA. Oldest first, by ID.
+     * Admin with 2FA. Oldest first, by ID. $search matches part of a name or
+     * an email address.
      *
      * @return array{data: list<AccountDetails>, next_cursor: ?string}
      */
-    public function list(Principal $by, ?string $cursor = null, int $limit = 50): array
+    public function list(Principal $by, ?string $cursor = null, int $limit = 50, ?string $search = null): array
     {
         Guard::admin($by);
 
         $limit = max(1, min($limit, 200));
+        $search = trim((string) $search);
+        $pattern = '%'.addcslashes(mb_substr($search, 0, 100), '\\%_').'%';
         $users = User::query()
+            ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', $pattern)->orWhere('email', 'like', $pattern)))
             ->when($cursor !== null, fn ($q) => $q->where('id', '>', $cursor))
             ->orderBy('id')
             ->limit($limit + 1)

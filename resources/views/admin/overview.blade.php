@@ -14,16 +14,24 @@
 
         <div class="grid gap-4 sm:grid-cols-2">
             @foreach ([
-                ['users', 'Accounts', 'Invite people, suspend or reactivate accounts, and grant or remove admin.'],
-                ['scroll-text', 'Audit log', 'A read-only record of sign-ins to the admin area and every account change.'],
-            ] as [$icon, $name, $description])
-                <section class="rounded-xl border border-border bg-surface-raised p-5">
+                ['users', 'Accounts', 'See everyone who can log in, suspend or reactivate accounts, and grant or remove admin.', route('admin.accounts')],
+                ['scroll-text', 'Audit log', 'A read-only record of sign-ins to the admin area and every account change.', null],
+            ] as [$icon, $name, $description, $href])
+                <section class="relative rounded-xl border border-border bg-surface-raised p-5">
                     <div class="flex items-start gap-3">
                         <span class="rounded-lg bg-accent-subtle p-2 text-accent-contrast"><x-icon :name="$icon" /></span>
                         <div class="space-y-1">
-                            <h2 class="font-semibold">{{ $name }}</h2>
+                            <h2 class="font-semibold">
+                                @if ($href)
+                                    <a href="{{ $href }}" class="after:absolute after:inset-0 after:rounded-xl hover:underline">{{ $name }}</a>
+                                @else
+                                    {{ $name }}
+                                @endif
+                            </h2>
                             <p class="text-sm text-fg-muted">{{ $description }}</p>
-                            <p class="text-sm font-medium text-fg-subtle">Coming next</p>
+                            @unless ($href)
+                                <p class="text-sm font-medium text-fg-subtle">Coming next</p>
+                            @endunless
                         </div>
                     </div>
                 </section>

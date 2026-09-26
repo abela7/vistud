@@ -185,4 +185,20 @@ class AccountsTest extends TestCase
         $this->assertCount(1, $second['data']);
         $this->assertNull($second['next_cursor']);
     }
+
+    public function test_listing_accounts_can_search_names_and_emails(): void
+    {
+        $admin = $this->admin(attributes: ['name' => 'Grace Hopper']);
+        $this->student(['name' => 'Ada Lovelace', 'email' => 'countess@example.test']);
+        $this->student(['name' => 'Alan Turing', 'email' => 'alan@example.test']);
+        $this->student(['name' => '100%_sure', 'email' => 'percent@example.test']);
+        $by = $this->principal($admin);
+
+        $names = fn (?string $search) => array_map(fn ($account) => $account->name, $this->accounts->list($by, search: $search)['data']);
+
+        $this->assertSame(['Ada Lovelace'], $names('lovelace'));
+        $this->assertSame(['Ada Lovelace'], $names('COUNTESS@'));
+        $this->assertSame(['100%_sure'], $names('%_'));
+        $this->assertCount(4, $names('  '));
+    }
 }

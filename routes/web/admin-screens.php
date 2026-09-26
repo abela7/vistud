@@ -9,3 +9,4 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::view('/', 'admin.overview')->name('overview');
+Route::view('/accounts', 'admin.accounts')->name('accounts');

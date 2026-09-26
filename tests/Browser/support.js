@@ -95,11 +95,12 @@ export async function wasReloaded(page) {
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /** An account in the app database the browser server uses. */
-function makeAccount(twoFactor, admin = false) {
+function makeAccount(twoFactor, admin = false, name = null) {
     const email = `browser-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
     const php = process.env.PHP_BINARY || 'php';
     const factory = `\\App\\Models\\User::factory()->student()${admin ? '->admin()' : ''}${twoFactor ? '->twoFactor()' : ''}`;
-    const code = `if (!\\App\\Models\\User::query()->where('email', '${email}')->exists()) { ${factory}->create(['email' => '${email}']); }`;
+    const attributes = `['email' => '${email}'${name ? `, 'name' => '${name}'` : ''}]`;
+    const code = `if (!\\App\\Models\\User::query()->where('email', '${email}')->exists()) { ${factory}->create(${attributes}); }`;
     execFileSync(php, ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
 
     return email;
@@ -108,6 +109,11 @@ function makeAccount(twoFactor, admin = false) {
 /** A confirmed two-factor account in the app database the browser server uses. */
 export function makeTwoFactorAccount() {
     return makeAccount(true);
+}
+
+/** A student with a given name (letters and spaces only), for screens that show it. */
+export function makeNamedStudent(name) {
+    return makeAccount(false, false, name);
 }
 
 /** A student with no second factor, so login finishes on the home page. */
@@ -207,4 +213,18 @@ export async function openStudentHome(page, email = makeStudentAccount()) {
     await page.waitForLoadState('load');
 
     return email;
+}
+
+/** Log in as a new admin, open the Accounts page, and search for $email if given. Returns the admin's email. */
+export async function openAccounts(page, email = null) {
+    const admin = await openAdminOverview(page);
+    await page.goto('/admin/accounts');
+    await page.getByRole('heading', { name: 'Accounts', exact: true }).waitFor();
+    await page.waitForLoadState('load');
+    if (email) {
+        await page.getByLabel('Search accounts').fill(email);
+        await page.getByText('1 match', { exact: true }).waitFor();
+    }
+
+    return admin;
 }

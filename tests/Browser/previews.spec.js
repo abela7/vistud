@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { makeNamedStudent, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -247,4 +247,30 @@ test('app shell: top bar, sidebar, drawer and account menu', async ({ page }) =>
     await page.evaluate(() => document.activeElement?.blur());
     await page.screenshot({ path: out('shell-home-desktop-vistud-light-collapsed') });
     await page.getByRole('button', { name: 'Expand sidebar' }).click();
+});
+
+test('admin accounts: list, account dialog, confirmation', async ({ page }) => {
+    const email = makeNamedStudent('Mary Somerville');
+    await openAccounts(page);
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.getByLabel('Search accounts').fill('');
+            await page.locator('#accounts-heading', { hasNotText: 'match' }).waitFor();
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`admin-accounts-${size}-${theme}`) });
+
+            await page.getByLabel('Search accounts').fill(email);
+            await page.getByText('1 match', { exact: true }).waitFor();
+            await page.getByRole('button', { name: 'Manage Mary Somerville' }).click();
+            await page.locator('#account-dialog[open]').waitFor();
+            await page.screenshot({ path: out(`admin-accounts-${size}-${theme}-dialog`) });
+
+            await page.locator('#account-dialog').getByRole('button', { name: 'Suspend account' }).click();
+            await page.getByRole('heading', { name: 'Suspend Mary Somerville?' }).waitFor();
+            await page.screenshot({ path: out(`admin-accounts-${size}-${theme}-confirm`) });
+            await page.keyboard.press('Escape');
+        }
+    }
 });

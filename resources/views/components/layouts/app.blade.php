@@ -12,9 +12,8 @@
     $isAdmin = $principal->hasRole(\App\Platform\Access\Role::Admin);
     $isStudent = $principal->hasRole(\App\Platform\Access\Role::Student);
     $user = auth()->user();
-    $initials = collect(preg_split('/\s+/', trim($user->name)))->filter()->take(2)->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('');
     $items = $area === 'admin'
-        ? [['Overview', 'admin.overview', 'layout-dashboard']]
+        ? [['Overview', 'admin.overview', 'layout-dashboard'], ['Accounts', 'admin.accounts', 'users']]
         : [['Home', 'home', 'house'], ['Security', 'two-factor.setup', 'shield-check']];
     $homeRoute = $area === 'admin' ? 'admin.overview' : 'home';
 @endphp
@@ -43,7 +42,7 @@
             @endif
 
             <button type="button" class="account-button ml-auto" data-menu-button aria-controls="account-menu" aria-expanded="false">
-                <span class="avatar" aria-hidden="true">{{ $initials }}</span>
+                <x-avatar :name="$user->name" />
                 <span class="max-md:sr-only">{{ $user->name }}</span>
                 <x-icon name="chevron-down" class="size-4" />
             </button>

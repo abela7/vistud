@@ -274,7 +274,9 @@ Cards are `--surface-raised` with a 1 px `--border`, `xl` radius and `elevation-
 
 ### 5.5 Coming with M2
 
-Menus, popovers, native `<dialog>` with an `--overlay` backdrop, mobile bottom sheets, toasts, tabs, tables (cards on mobile), skeletons, the thin navigation progress bar, the save indicator (§8.3), the workspace switch and the admin marker. Each follows the state table above and joins the sentinel test when it lands.
+Popovers, toasts, tabs, tables (cards on mobile), skeletons and the save indicator (§8.3). Each follows the state table above and joins the sentinel test when it lands.
+
+Already built in M1: the account menu, the workspace switch and the admin marker (§7.2); **badges** (`.badge` with a neutral, accent, admin, warning or danger tone; the word always carries the meaning); and the **dialog** (`.modal`), a native modal `<dialog>` on the `--overlay` backdrop that is a bottom sheet on phones and a centred panel from 640 px. A dialog that confirms an action names the action on its button ("Suspend account", not "OK") and offers Back. Livewire's navigation progress bar takes `--accent`.
 
 ### 5.6 Third-party components
 
@@ -376,5 +378,6 @@ A pull request that adds or changes a screen includes:
 | The signed-in frame (top bar, sidebar, slide-in menu, account menu) | `resources/views/components/layouts/app.blade.php`, `components/app/nav.blade.php`, `resources/css/shell.css`, `resources/js/shell.js` |
 | Appearance switching, form behaviour | `resources/js/appearance.js`, `forms.js` |
 | Shared Blade components | `resources/views/components/` |
+| Livewire screens (admin Accounts) | `app/Livewire/`, `resources/views/livewire/` |
 | Enforcement | `tests/Architecture/ThemeEnforcementTest.php`, `tests/Browser/theme-sentinel.spec.js` |
 | Setup, build and browser tests | [docs/development/setup.md](docs/development/setup.md) |
