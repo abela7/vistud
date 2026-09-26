@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { foreignColours, useSentinelTheme } from './support.js';
+import { foreignColours, loginToChallenge, useSentinelTheme } from './support.js';
 
 /*
 | Layer 3 of theme enforcement (ADR 0003 §6.3, DESIGN.md §3.5): with the
@@ -67,6 +67,52 @@ for (const [name, viewport] of Object.entries(viewports)) {
             await page.waitForURL('**/login');
             await useSentinelTheme(page);
             states['refused login'] = await foreignColours(page);
+
+            for (const [state, colours] of Object.entries(states)) {
+                expect(colours, `${state}: colours not from a token`).toEqual([]);
+            }
+        });
+    });
+}
+
+for (const [name, viewport] of Object.entries(viewports)) {
+    test.describe(`two-factor challenge, ${name}`, () => {
+        test.use({ viewport, reducedMotion: 'reduce' });
+
+        test('every colour comes from a token, in every state', async ({ page }) => {
+            const states = {};
+
+            await loginToChallenge(page);
+            await useSentinelTheme(page);
+            states.idle = await foreignColours(page);
+
+            await page.getByRole('button', { name: 'Verify' }).hover();
+            states['primary hover'] = await foreignColours(page);
+
+            await page.mouse.move(0, 0);
+            await page.getByRole('button', { name: 'Verify' }).dispatchEvent('mousedown');
+            states['primary pressed'] = await foreignColours(page);
+
+            await page.getByLabel('Authentication code').focus();
+            states['field focus'] = await foreignColours(page);
+
+            await page.getByRole('button', { name: 'Use a recovery code instead' }).click();
+            states['recovery-code mode'] = await foreignColours(page);
+
+            await page.getByRole('button', { name: 'Use an authentication code instead' }).click();
+            await page.evaluate(() => {
+                document.querySelector('button[type="submit"]').setAttribute('aria-busy', 'true');
+            });
+            states['primary loading'] = await foreignColours(page);
+
+            await page.evaluate(() => {
+                document.querySelector('button[type="submit"]').removeAttribute('aria-busy');
+            });
+            await page.getByLabel('Authentication code').fill('000000');
+            await page.getByRole('button', { name: 'Verify' }).click();
+            await page.waitForURL('**/two-factor-challenge');
+            await useSentinelTheme(page);
+            states['wrong-code error'] = await foreignColours(page);
 
             for (const [state, colours] of Object.entries(states)) {
                 expect(colours, `${state}: colours not from a token`).toEqual([]);

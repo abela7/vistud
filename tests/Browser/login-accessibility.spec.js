@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { THEMES, useTheme } from './support.js';
+import { loginToChallenge, THEMES, useTheme } from './support.js';
 
 /* Accessibility of the login screen in every built-in theme (DESIGN.md §9). */
 
@@ -46,6 +46,30 @@ test('touch targets are at least 44 px on a phone', async ({ browser }) => {
         .map(({ el, rect }) => `${el}: ${Math.round(rect.height)} px`));
     expect(small).toEqual([]);
     await context.close();
+});
+
+for (const theme of THEMES) {
+    for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 900 }, mobile: { width: 390, height: 844 } })) {
+        test(`two-factor challenge axe finds no violations: ${theme}, ${name}`, async ({ page }) => {
+            await page.setViewportSize(viewport);
+            await loginToChallenge(page);
+            await useTheme(page, theme);
+            const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+            expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`)).toEqual([]);
+        });
+    }
+}
+
+test('the two-factor challenge never scrolls sideways at 320 px', async ({ page }) => {
+    await loginToChallenge(page);
+    await page.getByRole('button', { name: 'Use a recovery code instead' }).click();
+    await page.getByLabel('Recovery code').fill(`recovery.${'x'.repeat(80)}`);
+    for (const zoom of ['100%', '200%']) {
+        await page.setViewportSize({ width: 320, height: 800 });
+        await page.evaluate((size) => (document.documentElement.style.fontSize = size), zoom);
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        expect(overflow, `320 px at ${zoom} text`).toBeLessThanOrEqual(0);
+    }
 });
 
 test('long content and 200% text never scroll the page sideways', async ({ page }) => {

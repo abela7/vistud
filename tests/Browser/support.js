@@ -1,4 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const sentinel = JSON.parse(readFileSync(new URL('./fixtures/sentinel-theme.json', import.meta.url)));
 
@@ -83,4 +86,31 @@ export async function markPage(page) {
 
 export async function wasReloaded(page) {
     return page.evaluate(() => window.__vistudNoReload !== true);
+}
+
+const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+
+/** A confirmed two-factor account in the app database the browser server uses. */
+export function makeTwoFactorAccount() {
+    const email = `2fa-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+    const php = process.env.PHP_BINARY || 'php';
+    const code = [
+        `if (!\\App\\Models\\User::query()->where('email', '${email}')->exists()) {`,
+        `\\App\\Models\\User::factory()->student()->twoFactor()->create(['email' => '${email}']);`,
+        '}',
+    ].join(' ');
+    execFileSync(php, ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
+
+    return email;
+}
+
+/** Log in as a confirmed two-factor account and wait on the challenge screen. */
+export async function loginToChallenge(page, email = makeTwoFactorAccount()) {
+    await page.goto('/login');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.waitForURL('**/two-factor-challenge');
+
+    return email;
 }

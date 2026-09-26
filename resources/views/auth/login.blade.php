@@ -9,18 +9,7 @@
 @endphp
 <x-layouts.auth title="Log in">
     <div class="grid min-h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:grid-rows-none">
-        <aside class="surface-brand relative isolate flex flex-col overflow-hidden px-6 pt-6 pb-8 sm:px-10 lg:min-h-dvh lg:px-14 lg:py-12">
-            <x-logo variant="knockout" class="h-8 self-start sm:h-9 lg:h-10" />
-
-            <div class="mt-6 max-w-md lg:mt-auto lg:mb-auto">
-                <p class="text-2xl font-semibold tracking-tight text-balance sm:text-3xl lg:text-4xl">Your study brain, kept for you.</p>
-                <p class="mt-3 hidden text-base text-fg-muted sm:block lg:text-lg">
-                    ViStud remembers what you have studied, what is still open and what to revisit next, so every session picks up where the last one ended.
-                </p>
-            </div>
-
-            <x-logo variant="knockout" mark class="pointer-events-none absolute -right-16 -bottom-20 -z-10 hidden h-96 opacity-10 lg:block" alt="" aria-hidden="true" />
-        </aside>
+        <x-auth.brand-panel />
 
         <main class="surface-subtle flex flex-col items-center px-4 py-8 sm:px-8 sm:py-12 lg:justify-center">
             <div class="w-full max-w-[26rem] space-y-6 sm:card sm:p-8">
