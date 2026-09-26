@@ -47,8 +47,8 @@ Read [STATUS.md](../coordination/STATUS.md) with this page. STATUS.md is the liv
 | Item | Reality |
 |---|---|
 | `docs/design/previews/*` | Screenshots and a recording for review. They are generated, not a running feature |
-| Home after login | A placeholder that says you are logged in, with a logout button. No workspace (M2) |
-| Admin workspace in a browser | Works (WP6 branch): an admin with 2FA opens it from the home page (a fresh password is asked on entry) and lands on the admin overview, with the Admin marker and a switch back to the student area. Accounts and the audit log are the next pages; any other `/admin` URL answers 404 |
+| Home after login | The signed-in frame (top bar, sidebar, slide-in menu below 1280 px, account menu; DESIGN.md §6.1) around a welcome page with a two-factor card, and an admin card for admins. No study workspace yet (M2) |
+| Admin workspace in a browser | Works (WP6 branch): an admin with 2FA opens it from the home page (a fresh password is asked on entry) and lands on the admin overview in the same frame, with the Admin marker in the top bar and a switch back to the student area in the account menu. Accounts and the audit log are the next pages; any other `/admin` URL answers 404 |
 | Two-factor authentication | Works end to end (WP6 branch): turn it on from the home page (`/user/two-factor`, after a password check), scan the QR code, confirm a code, save the recovery codes (shown once), then log in with a code or a recovery code |
 | Invitations | Backend only. The service returns a single-use token; there is no admin screen or console command to issue one, and no acceptance page |
 | Password reset, password confirmation | Fortify's POST endpoints only. The "Forgot password?" link appears by itself once a `password.request` route exists |

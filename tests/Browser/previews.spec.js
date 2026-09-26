@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { openAdminOverview, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -216,4 +216,35 @@ test('admin overview', async ({ page }) => {
             await page.context().clearCookies();
         }
     }
+});
+
+test('app shell: top bar, sidebar, drawer and account menu', async ({ page }) => {
+    const shellSizes = { ...sizes, tablet: { width: 820, height: 1180 } };
+
+    await openStudentHome(page);
+    for (const theme of ['vistud-light', 'vistud-dark']) {
+        await useTheme(page, theme);
+        for (const [size, viewport] of Object.entries(shellSizes)) {
+            await page.setViewportSize(viewport);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`shell-home-${size}-${theme}`) });
+
+            if (size === 'desktop') {
+                await page.locator('[data-menu-button]').click();
+                await page.screenshot({ path: out(`shell-account-menu-${theme}`) });
+                await page.keyboard.press('Escape');
+            } else {
+                await page.getByRole('button', { name: 'Open menu' }).click();
+                await page.screenshot({ path: out(`shell-drawer-${size}-${theme}`) });
+                await page.keyboard.press('Escape');
+            }
+        }
+    }
+
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('shell-home-desktop-vistud-light-collapsed') });
+    await page.getByRole('button', { name: 'Expand sidebar' }).click();
 });

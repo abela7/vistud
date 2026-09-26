@@ -252,9 +252,14 @@ for (const [name, viewport] of Object.entries(viewports)) {
             await useSentinelTheme(page);
             states.idle = await foreignColours(page);
 
+            await page.locator('[data-menu-button]').click();
             await page.getByRole('button', { name: 'Log out' }).hover();
-            states['header button hover'] = await foreignColours(page);
+            states['account menu open, item hover'] = await foreignColours(page);
+            await page.keyboard.press('Escape');
 
+            // Below 1280 px the nav lives in the slide-in menu.
+            const openMenu = page.getByRole('button', { name: 'Open menu' });
+            if (await openMenu.isVisible()) await openMenu.click();
             await page.getByRole('link', { name: 'Overview', exact: true }).focus();
             states['nav focus'] = await foreignColours(page);
 

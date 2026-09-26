@@ -3,8 +3,8 @@
     health, jobs and storage figures come in a later milestone; for M1 it
     points to the admin tools as they arrive.
 --}}
-<x-layouts.admin title="Overview" current="overview">
-    <div class="space-y-8">
+<x-layouts.app area="admin" title="Overview">
+    <div class="mx-auto max-w-5xl space-y-8">
         <div class="space-y-2">
             <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Admin overview</h1>
             <p class="max-w-2xl text-fg-muted">
@@ -30,4 +30,4 @@
             @endforeach
         </div>
     </div>
-</x-layouts.admin>
+</x-layouts.app>

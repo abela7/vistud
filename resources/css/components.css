@@ -379,30 +379,7 @@
         outline-offset: 2px;
     }
 
-    /* ---------- Navigation links and the admin marker ---------- */
-
-    .nav-link {
-        display: inline-flex;
-        align-items: center;
-        min-height: 2.5rem;
-        padding: 0 0.75rem;
-        border-radius: var(--radius-md);
-        color: var(--text-muted);
-        font-size: 0.9375rem;
-        font-weight: 500;
-        text-decoration: none;
-    }
-
-    .nav-link:hover {
-        background-color: var(--hover);
-        color: var(--text);
-    }
-
-    .nav-link[aria-current='page'] {
-        background-color: var(--selected);
-        color: var(--text);
-        font-weight: 600;
-    }
+    /* ---------- The admin marker ---------- */
 
     .admin-marker {
         display: inline-flex;
@@ -451,7 +428,6 @@
     /* Touch: every control is at least 44 px tall (DESIGN.md §6.2). */
     @media (pointer: coarse) {
         .btn,
-        .nav-link,
         .segmented-option {
             min-height: 2.75rem;
         }

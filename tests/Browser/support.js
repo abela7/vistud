@@ -132,7 +132,7 @@ export async function openConfirmPassword(page, email = makeStudentAccount()) {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
-    await page.getByRole('heading', { name: "You're logged in" }).waitFor();
+    await page.getByRole('heading', { name: /^Welcome back/ }).waitFor();
     await page.goto('/user/confirm-password');
     await page.waitForURL('**/user/confirm-password');
 
@@ -162,7 +162,7 @@ export async function openTwoFactorSetup(page, email = makeStudentAccount()) {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
-    await page.getByRole('heading', { name: "You're logged in" }).waitFor();
+    await page.getByRole('heading', { name: /^Welcome back/ }).waitFor();
     await page.getByRole('link', { name: 'Set up' }).click();
     await page.waitForURL('**/user/confirm-password');
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
@@ -193,6 +193,18 @@ export async function openAdminOverview(page) {
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Confirm' }).click();
     await page.waitForURL('**/admin');
+
+    return email;
+}
+
+/** Log in as a new student and wait on the home page, inside the signed-in frame. */
+export async function openStudentHome(page, email = makeStudentAccount()) {
+    await page.goto('/login');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.getByRole('heading', { name: /^Welcome back/ }).waitFor();
+    await page.waitForLoadState('load');
 
     return email;
 }

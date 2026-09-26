@@ -286,6 +286,8 @@ Third-party UI takes its colours from tokens and never from its own palette: Ful
 
 ADR 0003 §11 defines the workspace layouts: desktop from 1280 px (resizable sidebar, main area, optional right panel), tablet 768–1279 px (drawer and sliding panels), and a deliberately different mobile layout below 768 px (bottom navigation, drill-down lists, a full-screen editor, bottom sheets). Admin uses the same breakpoints with its own sidebar; its tables become cards on mobile.
 
+**The signed-in frame today (owner's decision, M1):** a top bar on the header gradient (menu button below 1280 px, logo, the admin marker in the admin area, the account menu), a sidebar from 1280 px that can collapse to icons (remembered in the browser), and below 1280 px the same navigation in a slide-in menu from the left: a native modal `<dialog>` that traps focus, closes with Esc, a backdrop tap or a link, and returns focus to the menu button. The phone bottom navigation from ADR 0003 §11 is on hold until the workspace has enough destinations (Notes, Review, Calendar); revisit it then. The account menu holds the account's name, Security, the workspace switch (admins only), Appearance and Log out.
+
 Signed-out screens use a simpler split: the brand panel beside the form from 1024 px, and a gradient band above the form below that (§7.1).
 
 ### 6.2 Touch targets
@@ -315,8 +317,8 @@ Previews of the login screen: [docs/design/previews/](docs/design/previews/).
 ### 7.2 Student and admin workspaces
 
 - **Shared:** the same shell structure, components, scales, tokens and the account's theme in both workspaces (ADR 0003 §10).
-- **Distinct navigation:** each workspace has its own sidebar (and, on mobile, its own bottom navigation). Admin navigation: Overview, Accounts, Roles, Theme presets, Background jobs, Audit log, Platform settings.
-- **A clear admin marker:** a permanent "Admin" pill in `--role-admin` with `--role-admin-on` text and a shield icon, at the top of the admin sidebar and in the mobile header, whenever the admin workspace is active. The word and the icon carry the meaning, not the colour. The workspace switch is shown only to admins.
+- **Distinct navigation:** each workspace has its own sidebar and slide-in menu (§6.1). Admin navigation: Overview, Accounts, Roles, Theme presets, Background jobs, Audit log, Platform settings.
+- **A clear admin marker:** a permanent "Admin" pill in `--role-admin` with `--role-admin-on` text and a shield icon, in the top bar and at the top of the slide-in menu, whenever the admin workspace is active. The word and the icon carry the meaning, not the colour. The workspace switch is shown only to admins.
 
 ## 8. Navigation, state and feedback
 
@@ -371,6 +373,7 @@ A pull request that adds or changes a screen includes:
 | Theme model, validator, stylesheet writer | `app/Appearance/` |
 | Generated theme stylesheet | `resources/css/themes/themes.css` (`php artisan vistud:themes:build`) |
 | Token utilities, gradient surfaces, base styles, component states | `resources/css/app.css`, `base.css`, `components.css` |
+| The signed-in frame (top bar, sidebar, slide-in menu, account menu) | `resources/views/components/layouts/app.blade.php`, `components/app/nav.blade.php`, `resources/css/shell.css`, `resources/js/shell.js` |
 | Appearance switching, form behaviour | `resources/js/appearance.js`, `forms.js` |
 | Shared Blade components | `resources/views/components/` |
 | Enforcement | `tests/Architecture/ThemeEnforcementTest.php`, `tests/Browser/theme-sentinel.spec.js` |

@@ -14,6 +14,7 @@
 @import './themes/themes.css';
 @import './base.css';
 @import './components.css';
+@import './shell.css';
 
 @source '../views';
 @source '../js';

@@ -1,35 +1,45 @@
 {{--
-    Placeholder landing page after login, until the workspace screens
-    arrive (WP6 after the PM's visual review; the full workspace is M2).
+    The student home, inside the signed-in frame. Until the study workspace
+    arrives (M2) it shows the account's security and, for admins, the way
+    into the admin area.
 --}}
-<x-layouts.auth title="Home">
-    <main class="surface-subtle flex min-h-dvh flex-col items-center justify-center px-4 py-12">
-        <div class="w-full max-w-[26rem] space-y-6 sm:card sm:p-8">
-            <x-logo class="h-8" />
-            <div class="space-y-1.5">
-                <h1 class="text-2xl font-semibold tracking-tight">You're logged in</h1>
-                <p class="text-fg-muted">Signed in as {{ auth()->user()->email }}. Your workspace screens are on their way.</p>
-            </div>
-            <div class="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
-                <div>
-                    <p class="font-semibold">Two-factor authentication</p>
-                    <p class="text-sm text-fg-muted">{{ auth()->user()->two_factor_confirmed_at ? 'On' : 'Off' }}</p>
-                </div>
-                <a href="{{ route('two-factor.setup') }}" class="btn btn-secondary">{{ auth()->user()->two_factor_confirmed_at ? 'Manage' : 'Set up' }}</a>
-            </div>
-            @if (app(\App\Identity\PrincipalFactory::class)->fromRequest(request())->hasRole(\App\Platform\Access\Role::Admin))
-                <div class="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
-                    <div class="space-y-1">
-                        <x-admin.marker />
-                        <p class="text-sm text-fg-muted">Manage accounts and settings.</p>
-                    </div>
-                    <a href="{{ route('admin.overview') }}" class="btn btn-secondary">Admin area</a>
-                </div>
-            @endif
-            <form method="POST" action="{{ route('logout') }}" data-busy-on-submit>
-                @csrf
-                <x-button type="submit" variant="secondary" busy-label="Logging out…">Log out</x-button>
-            </form>
+@php
+    $user = auth()->user();
+    $firstName = strtok($user->name, ' ') ?: $user->name;
+    $twoFactorOn = $user->two_factor_confirmed_at !== null;
+    $isAdmin = app(\App\Identity\PrincipalFactory::class)->fromRequest(request())->hasRole(\App\Platform\Access\Role::Admin);
+@endphp
+<x-layouts.app title="Home">
+    <div class="mx-auto max-w-4xl space-y-8">
+        <div class="space-y-1.5">
+            <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {{ $firstName }}</h1>
+            <p class="text-fg-muted">Signed in as {{ $user->email }}. Your notes, courses and calendar arrive with the study workspace.</p>
         </div>
-    </main>
-</x-layouts.auth>
+
+        <div class="grid gap-4 md:grid-cols-2">
+            <section class="flex flex-col gap-4 rounded-xl border border-border bg-surface-raised p-5">
+                <div class="flex items-start gap-3">
+                    <span class="rounded-lg bg-accent-subtle p-2 text-accent-contrast"><x-icon name="shield-check" /></span>
+                    <div class="space-y-1">
+                        <h2 class="font-semibold">Two-factor authentication</h2>
+                        <p class="text-sm text-fg-muted">{{ $twoFactorOn ? 'On. Logging in asks for a code from your authenticator app.' : 'Off. Add a code from your phone to every login.' }}</p>
+                    </div>
+                </div>
+                <a href="{{ route('two-factor.setup') }}" class="btn btn-secondary self-start">{{ $twoFactorOn ? 'Manage' : 'Set up' }}</a>
+            </section>
+
+            @if ($isAdmin)
+                <section class="flex flex-col gap-4 rounded-xl border border-border bg-surface-raised p-5">
+                    <div class="flex items-start gap-3">
+                        <span class="rounded-lg bg-accent-subtle p-2 text-accent-contrast"><x-icon name="shield" /></span>
+                        <div class="space-y-1">
+                            <x-admin.marker />
+                            <p class="text-sm text-fg-muted">Manage accounts and see the audit log.</p>
+                        </div>
+                    </div>
+                    <a href="{{ route('admin.overview') }}" class="btn btn-secondary self-start">Admin area</a>
+                </section>
+            @endif
+        </div>
+    </div>
+</x-layouts.app>

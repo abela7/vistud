@@ -12,12 +12,9 @@
         default => 'Two-factor authentication',
     };
 @endphp
-<x-layouts.auth :title="$title">
-    <div class="grid min-h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:grid-rows-none">
-        <x-auth.brand-panel />
-
-        <main class="surface-subtle flex flex-col items-center px-4 py-8 sm:px-8 sm:py-12 lg:justify-center">
-            <div class="w-full max-w-[26rem] space-y-6 sm:card sm:p-8">
+<x-layouts.app :title="$title" :area="$area">
+    <div class="mx-auto max-w-xl">
+        <div class="space-y-6 sm:card sm:p-8">
                 <h1 class="text-2xl font-semibold tracking-tight">{{ $title }}</h1>
 
                 @if ($recoveryCodes !== null)
@@ -89,10 +86,6 @@
                             <x-button type="submit" variant="secondary" busy-label="Generating…">Generate new recovery codes</x-button>
                         </form>
                     </div>
-
-                    <p class="border-t border-divider pt-5 text-sm">
-                        <a href="{{ route('home') }}" class="font-medium">Back</a>
-                    </p>
                 @else
                     <p class="text-fg-muted">
                         Add a second step to logging in: after your password, you enter a 6-digit code from an authenticator app on your phone.
@@ -103,14 +96,7 @@
                         @csrf
                         <x-button type="submit" variant="primary" size="lg" class="w-full" busy-label="Turning on…">Turn on two-factor authentication</x-button>
                     </form>
-
-                    <p class="border-t border-divider pt-5 text-sm">
-                        <a href="{{ route('home') }}" class="font-medium">Back</a>
-                    </p>
                 @endif
             </div>
-
-            <x-appearance-switcher class="mt-8" />
-        </main>
     </div>
-</x-layouts.auth>
+</x-layouts.app>

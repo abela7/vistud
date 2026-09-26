@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Identity\PrincipalFactory;
+use App\Platform\Access\Workspace;
 use App\Providers\FortifyServiceProvider;
 use App\View\QrCode;
 use Illuminate\Http\Request;
@@ -33,6 +35,8 @@ final class TwoFactorSetupController
         $secret = $state === 'confirming' ? Fortify::currentEncrypter()->decrypt($user->two_factor_secret) : null;
 
         return view('auth.two-factor-setup', [
+            // Shown inside whichever workspace the account is in.
+            'area' => $request->session()->get(PrincipalFactory::WORKSPACE_KEY) === Workspace::Admin->value ? 'admin' : 'student',
             'state' => $state,
             'secret' => $secret,
             'qrCode' => $state === 'confirming' ? QrCode::svg($user->twoFactorQrCodeUrl(), 'QR code for your authenticator app') : null,
