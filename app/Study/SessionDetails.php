@@ -33,7 +33,15 @@ final readonly class SessionDetails
         public int $phaseElapsed = 0,
         public int $pomodoros = 0,
         public int $pomodorosSkipped = 0,
+        public array $tutoring = Tutoring::DEFAULTS,
+        public array $material = [],
     ) {}
+
+    /** Whether a note or file (`note:{id}`, `file:{id}`) is in the session's material. */
+    public function uses(string $item): bool
+    {
+        return in_array($item, $this->material, true);
+    }
 
     public function usesPomodoro(): bool
     {

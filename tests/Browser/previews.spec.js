@@ -648,8 +648,54 @@ test('pomodoro: the countdown ring, a break, and the clock choice', async ({ pag
     await page.evaluate(() => document.activeElement?.blur());
     await page.screenshot({ path: out('pomodoro-desktop-vistud-light-break') });
 
-    await page.getByRole('button', { name: 'Change' }).click();
+    await page.getByRole('button', { name: 'Change the Pomodoro settings' }).click();
     await page.locator('#session-dialog').getByLabel('Rhythm').selectOption('custom');
     await page.locator('#session-dialog').getByLabel('Focus (min)').waitFor();
     await page.screenshot({ path: out('pomodoro-desktop-vistud-light-settings') });
+});
+
+test('briefing: the dialog, how the AI teaches, and the start options', async ({ page }) => {
+    const student = makeStudentWithSession();
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
+    await page.waitForLoadState('load');
+    await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'Use Lecture 3: joins in the briefing' }).click();
+    await page.getByRole('button', { name: 'Use Lecture 3: joins in the briefing' }).and(page.locator('[aria-pressed="true"]')).waitFor();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('briefing-session-desktop-vistud-light'), fullPage: true });
+
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.getByRole('button', { name: 'Briefing', exact: true }).click();
+            await page.locator('#session-dialog').getByRole('heading', { name: 'Briefing for the AI' }).waitFor();
+            await page.screenshot({ path: out(`briefing-${size}-${theme}`) });
+            await page.keyboard.press('Escape');
+            await page.locator('#session-dialog').getByRole('heading', { name: 'Briefing for the AI' }).waitFor({ state: 'detached' });
+        }
+    }
+
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'Change how the AI teaches' }).click();
+    await page.locator('#session-dialog').getByLabel('How to teach').selectOption({ label: 'Socratic' });
+    await page.screenshot({ path: out('briefing-teaching-desktop-vistud-light') });
+    await page.keyboard.press('Escape');
+
+    await page.goto(`/workspaces/${student.workspace}`);
+    await page.waitForLoadState('load');
+    await page.getByRole('button', { name: 'Log time' }).waitFor();
+    await page.locator('.session-pill').getByRole('link').click();
+    await page.getByRole('button', { name: 'End session' }).click();
+    await page.locator('#session-dialog').getByRole('button', { name: 'End session' }).click();
+    await page.getByRole('status').filter({ hasText: 'Session ended.' }).waitFor();
+    await page.goto(`/workspaces/${student.workspace}`);
+    await page.getByRole('button', { name: 'Start studying' }).first().click();
+    await page.locator('#study-dialog').getByRole('button', { name: 'Change' }).click();
+    await page.locator('#study-dialog').getByLabel('How to teach').waitFor();
+    await page.screenshot({ path: out('briefing-start-desktop-vistud-light') });
 });

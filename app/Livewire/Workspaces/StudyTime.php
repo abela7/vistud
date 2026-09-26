@@ -4,6 +4,7 @@ namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\PomodoroForm;
+use App\Livewire\Concerns\TeachingForm;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
@@ -26,7 +27,7 @@ use Livewire\Component;
  */
 final class StudyTime extends Component
 {
-    use PomodoroForm;
+    use PomodoroForm, TeachingForm;
 
     #[Locked]
     public string $workspaceId;
@@ -77,9 +78,10 @@ final class StudyTime extends Component
     public function newSession(): void
     {
         $this->open('start');
-        // The clock the student used last, ready again.
-        $last = collect($this->sessions->list($this->principal(), $this->workspaceId, 10))->first(fn ($s) => ! $s->manual);
-        $this->fillPomodoro($last?->pomodoro);
+        // The clock and teaching the student chose last, ready again.
+        $last = $this->sessions->lastChoices($this->principal(), $this->workspaceId);
+        $this->fillPomodoro($last['pomodoro']);
+        $this->fillTeaching($last['tutoring']);
     }
 
     public function logTime(): void
@@ -96,7 +98,7 @@ final class StudyTime extends Component
 
         try {
             if ($this->mode === 'start') {
-                $session = $this->sessions->start($by, $this->workspaceId, $this->topicId ?: null, $this->moduleId ?: null, $this->pomodoroInput());
+                $session = $this->sessions->start($by, $this->workspaceId, $this->topicId ?: null, $this->moduleId ?: null, $this->pomodoroInput(), $this->teachingInput());
                 $this->dispatch('session-changed');
                 $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id]);
 
@@ -108,7 +110,7 @@ final class StudyTime extends Component
             }
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
-                $this->addError($this->pomodoroErrorField($field), $messages[0]);
+                $this->addError($this->teachingErrorField($this->pomodoroErrorField($field)), $messages[0]);
             }
 
             return;
@@ -128,7 +130,7 @@ final class StudyTime extends Component
 
     public function close(): void
     {
-        $this->reset('mode', 'topicId', 'moduleId', 'date', 'time', 'minutes', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto');
+        $this->reset('mode', 'topicId', 'moduleId', 'date', 'time', 'minutes', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto', 'method', 'checkIns', 'quiz', 'pace');
         $this->resetErrorBag();
     }
 

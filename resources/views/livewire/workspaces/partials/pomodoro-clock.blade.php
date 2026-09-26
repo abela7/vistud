@@ -67,7 +67,7 @@
 
     <div class="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-divider pt-3 text-sm text-fg-muted">
         <span>{{ $session->pomodoroWords() }}{{ $session->pomodoro['auto'] ? '' : '; you start each focus' }}</span>
-        <button type="button" class="item-link text-sm" wire:click="editPomodoro">Change</button>
+        <button type="button" class="item-link text-sm" wire:click="editPomodoro" aria-label="Change the Pomodoro settings">Change</button>
         <span aria-hidden="true">·</span>
         <button type="button" class="item-link text-sm" x-on:click="sound = ! sound" x-bind:aria-pressed="sound.toString()">Sound</button>
         <template x-if="notify === 'default'">

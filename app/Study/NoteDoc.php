@@ -86,6 +86,96 @@ final class NoteDoc
         return trim((string) preg_replace('/\s+/u', ' ', implode(' ', $words)));
     }
 
+    /**
+     * The note as Markdown-style text, for a study session's briefing:
+     * headings, paragraphs, lists (tasks ticked or not), quotes and code keep
+     * their shape; bold, italic and links become plain words.
+     */
+    public static function markdown(array $doc): string
+    {
+        $lines = self::blocks($doc['content'] ?? [], '');
+
+        return trim((string) preg_replace("/\n{3,}/", "\n\n", implode("\n", $lines)));
+    }
+
+    /** @return list<string> */
+    private static function blocks(array $nodes, string $indent): array
+    {
+        $lines = [];
+        foreach ($nodes as $node) {
+            $type = $node['type'] ?? null;
+            $inline = fn (array $n) => self::inline($n['content'] ?? []);
+            switch ($type) {
+                case 'heading':
+                    $lines[] = $indent.str_repeat('#', max(1, min(6, (int) ($node['attrs']['level'] ?? 2)))).' '.$inline($node);
+                    $lines[] = '';
+                    break;
+                case 'paragraph':
+                    $text = $inline($node);
+                    if ($text !== '') {
+                        $lines[] = $indent.$text;
+                        $lines[] = '';
+                    }
+                    break;
+                case 'blockquote':
+                    $inner = self::blocks($node['content'] ?? [], '');
+                    while ($inner !== [] && end($inner) === '') {
+                        array_pop($inner);
+                    }
+                    foreach ($inner as $line) {
+                        $lines[] = $indent.($line === '' ? '>' : '> '.$line);
+                    }
+                    $lines[] = '';
+                    break;
+                case 'bulletList':
+                case 'orderedList':
+                case 'taskList':
+                    foreach ($node['content'] ?? [] as $i => $item) {
+                        $marker = match ($type) {
+                            'orderedList' => ($i + 1).'.',
+                            'taskList' => ($item['attrs']['checked'] ?? false) ? '- [x]' : '- [ ]',
+                            default => '-',
+                        };
+                        $inner = array_values(array_filter(self::blocks($item['content'] ?? [], ''), fn ($line) => $line !== ''));
+                        $lines[] = $indent.$marker.' '.($inner[0] ?? '');
+                        foreach (array_slice($inner, 1) as $line) {
+                            $lines[] = $indent.'  '.$line;
+                        }
+                    }
+                    $lines[] = '';
+                    break;
+                case 'codeBlock':
+                    $lines[] = $indent.'```';
+                    foreach (explode("\n", $inline($node)) as $line) {
+                        $lines[] = $indent.$line;
+                    }
+                    $lines[] = $indent.'```';
+                    $lines[] = '';
+                    break;
+                case 'horizontalRule':
+                    $lines[] = $indent.'---';
+                    $lines[] = '';
+                    break;
+            }
+        }
+
+        return $lines;
+    }
+
+    private static function inline(array $nodes): string
+    {
+        $text = '';
+        foreach ($nodes as $node) {
+            $text .= match ($node['type'] ?? null) {
+                'text' => (string) ($node['text'] ?? ''),
+                'hardBreak' => "\n",
+                default => '',
+            };
+        }
+
+        return trim($text);
+    }
+
     /** One node, cleaned; null when it has to be dropped (an empty text). Refuses what can't be cleaned. */
     private static function node(mixed $node, string $expected, int $depth, int &$count): ?array
     {

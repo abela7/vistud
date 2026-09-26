@@ -140,7 +140,9 @@ final class Progress extends Component
     public function study(string $topicId): void
     {
         try {
-            $session = $this->sessions->start($this->principal(), $this->workspaceId, $topicId);
+            // The clock and teaching the student chose last.
+            $last = $this->sessions->lastChoices($this->principal(), $this->workspaceId);
+            $session = $this->sessions->start($this->principal(), $this->workspaceId, $topicId, null, $last['pomodoro'], $last['tutoring']);
         } catch (Conflict $e) {
             $this->notice = 'Another study session is still open. End it first: its clock is at the top of the page.';
 

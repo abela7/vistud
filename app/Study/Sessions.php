@@ -119,25 +119,27 @@ final class Sessions
      * Another open session is a conflict.
      *
      * @param  ?array{focus?: mixed, short?: mixed, long?: mixed, every?: mixed, auto?: mixed}  $pomodoro
+     * @param  ?array{method?: mixed, check_ins?: mixed, quiz?: mixed, pace?: mixed}  $tutoring  how the assistant should teach; defaults when null
      */
-    public function start(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $pomodoro = null): SessionDetails
+    public function start(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $pomodoro = null, ?array $tutoring = null): SessionDetails
     {
         $scope = Guard::learner($by);
         $pomodoro = $pomodoro === null ? null : self::pomodoroSettings($pomodoro);
+        $tutoring = Tutoring::validated($tutoring);
         $open = $this->openRow($scope);
         if ($open !== null && $this->settled($scope, $by, $open->id)->state !== 'ended') {
             throw new Conflict('session_open', 'Another session is still open. End it first.', ['session' => $open->id, 'workspace' => $open->workspace_id]);
         }
         $id = Ids::new();
 
-        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $pomodoro, $id) {
+        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $pomodoro, $tutoring, $id) {
             Input::workspace($scope, $workspaceId, lock: true);
             [$topicId, $moduleId] = $this->place($scope, $workspaceId, $topicId, $moduleId);
             $now = self::now();
             LearnerTables::insert($scope, 'study_sessions', [
                 'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'topic_id' => $topicId,
                 'pomodoro' => $pomodoro === null ? null : json_encode($pomodoro), 'phase' => $pomodoro === null ? null : 'focus',
-                'phase_started_at' => $pomodoro === null ? null : $now,
+                'phase_started_at' => $pomodoro === null ? null : $now, 'tutoring' => json_encode($tutoring),
                 'state' => 'running', 'started_at' => $now, 'last_activity_at' => $now, 'revision' => 1,
                 'created_at' => $now, 'updated_at' => $now,
             ]);
@@ -231,6 +233,52 @@ final class Sessions
 
             return ['pomodoro' => json_encode($settings)] + ($keep ? [] : ['phase' => 'focus', 'phase_started_at' => $now]);
         });
+    }
+
+    /**
+     * How the assistant should teach from now on (App\Study\Tutoring).
+     *
+     * @param  array{method?: mixed, check_ins?: mixed, quiz?: mixed, pace?: mixed}  $choices
+     */
+    public function setTutoring(Principal $by, string $id, array $choices): void
+    {
+        $choices = Tutoring::validated($choices);
+        $this->change($by, $id, ['running', 'paused', 'break'], fn () => ['tutoring' => json_encode($choices)]);
+    }
+
+    /** Puts a note or file of the workspace (`note:{id}`, `file:{id}`) in the session's material, or takes it out. */
+    public function toggleMaterial(Principal $by, string $id, string $item): void
+    {
+        $this->change($by, $id, ['running', 'paused', 'break'], function (LearnerScope $scope, object $row) use ($item) {
+            [$type, $itemId] = array_pad(explode(':', $item, 2), 2, '');
+            $exists = in_array($type, ['note', 'file'], true) && LearnerTables::query($scope, $type === 'note' ? 'notes' : 'files')
+                ->where('id', $itemId)->where('workspace_id', $row->workspace_id)->whereNull('trashed_at')->exists();
+            if (! $exists) {
+                throw new NotFound;
+            }
+            $material = json_decode((string) $row->material, true) ?: [];
+            $material = in_array($item, $material, true) ? array_values(array_diff($material, [$item])) : [...$material, $item];
+
+            return ['material' => $material === [] ? null : json_encode($material)];
+        });
+    }
+
+    /**
+     * The clock and teaching the student chose last (in this workspace, or
+     * any), to offer again: a new session starts the way the last one did.
+     *
+     * @return array{pomodoro: ?array, tutoring: array}
+     */
+    public function lastChoices(Principal $by, string $workspaceId): array
+    {
+        $scope = Guard::learner($by);
+        $row = LearnerTables::query($scope, 'study_sessions')->where('manual', false)->where('workspace_id', $workspaceId)->orderByDesc('started_at')->first()
+            ?? LearnerTables::query($scope, 'study_sessions')->where('manual', false)->orderByDesc('started_at')->first();
+
+        return [
+            'pomodoro' => $row?->pomodoro === null ? null : json_decode((string) $row->pomodoro, true),
+            'tutoring' => Tutoring::normalised($row?->tutoring === null ? null : json_decode((string) $row->tutoring, true)),
+        ];
     }
 
     /**
@@ -653,6 +701,7 @@ final class Sessions
                 'study_seconds' => $row->state === 'ended' ? (int) $row->study_seconds : null,
                 'break_seconds' => $row->state === 'ended' ? (int) $row->break_seconds : null,
                 'pomodoros' => $row->state === 'ended' && $row->pomodoro !== null ? (int) $row->pomodoros : null,
+                'tutoring' => $row->state === 'ended' && $row->tutoring !== null ? json_decode((string) $row->tutoring, true) : null,
                 'status' => $deleted ? 'deleted' : ($row->state === 'ended' ? 'ended' : 'open'),
             ], fn ($value) => $value !== null),
         ]]);
@@ -690,6 +739,8 @@ final class Sessions
             $study, $break, $openKind, $openSince, $segments,
             $pomodoro, $row->phase, $pomodoro === null || $row->phase === null ? 0 : self::phaseLength($row), $phaseElapsed,
             (int) $row->pomodoros, (int) $row->pomodoros_skipped,
+            Tutoring::normalised($row->tutoring === null ? null : json_decode((string) $row->tutoring, true)),
+            $row->material === null ? [] : array_values(json_decode((string) $row->material, true) ?: []),
         );
     }
 

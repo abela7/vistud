@@ -668,6 +668,62 @@
 
     /* ---------- A study session's page (docs/specs/study-memory.md §4) ---------- */
 
+    /* Use a note or file in the briefing: a small toggle, filled when on. */
+    .material-toggle {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.125rem 0.625rem 0.125rem 0.5rem;
+        border: 1px solid var(--border-strong);
+        border-radius: 9999px;
+        color: var(--text);
+        font-size: 0.8125rem;
+        font-weight: 600;
+    }
+
+    .material-toggle:hover {
+        background-color: var(--hover);
+    }
+
+    .material-toggle[aria-pressed='true'] {
+        border-color: var(--accent);
+        background-color: var(--accent-subtle);
+        color: var(--accent-contrast);
+    }
+
+    .material-toggle:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    /* The briefing: the text any AI receives, to read, copy or download. */
+    @media (min-width: 640px) {
+        .modal:has(.modal-panel-wide) {
+            width: min(56rem, calc(100vw - 3rem));
+        }
+    }
+
+    .briefing-text {
+        max-height: 55dvh;
+        overflow: auto;
+        padding: 0.875rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background-color: var(--surface-sunken);
+        color: var(--text);
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.8125rem;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .briefing-text:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
     .session-clock {
         display: flex;
         flex-direction: column;

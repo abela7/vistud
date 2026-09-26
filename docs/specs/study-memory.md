@@ -3,8 +3,9 @@
 **Status:** decided by the owner on 2026-09-26. Built: step 1, the tracker:
 topics, statuses and questions (1a); findings, web links, assignments and
 tasks, instructions and the Overview (1b). Step 2 has begun: the study
-session, its clock (§4.1) and the Pomodoro clock (§4.2) are built; the start options, the briefing, the
-write-back and the MCP server are next (§5).
+session, its clock (§4.1), the Pomodoro clock (§4.2), and the teaching
+options, tutoring prompt and briefing (§4.3) are built; the write-back and
+the MCP server are next (§5).
 
 **The idea in one line.** ViStud is the body; the language model is the engine.
 The body keeps a living copy of what the student understands about each
@@ -25,12 +26,13 @@ still open. At exam time nothing has accumulated.
 
 | # | Decision | Instead of |
 |---|---|---|
-| S1 | **No server-side reading of files.** The AI reads a file itself during a session (PDF and images directly; Word and PowerPoint converted to PDF once, at upload). What is kept is what the student learned, not the file's text | Extracting text from every upload, OCR, a vector index |
+| S1 | **No server-side reading of files.** The AI reads a file itself during a session (PDF and images directly; Word and PowerPoint through their own PDF export or their text, S7). What is kept is what the student learned, not the file's text | Extracting text from every upload, OCR, a vector index |
 | S2 | **The journal is the memory** (ADR 0001, ADR 0002). The tracker's clicks are journal events; the screens show the state the rules derive from them. Nothing keeps a second copy of learning state | A separate "memory" table the AI writes to |
 | S3 | **The student's word wins.** The AI proposes topic statuses and registers questions; the student confirms or fixes them | Auto-accepting the AI's judgement |
 | S4 | **Four statuses a student sets** — *not started, covered, understood, confused* — plus **mastered**, which is earned from evidence (rules label `secure` or `durable`), never claimed | A free-text status |
 | S5 | **Search runs over notes** (the student's and the AI's session notes) with MySQL full-text search. The meaning index of ADR 0001 (Qdrant) waits until the pilot shows keyword search isn't enough | Building the index first |
-| S6 | **The engine is a setting.** The built-in assistant calls the model through an API key the owner holds; Claude first, ChatGPT and Gemini behind the same interface after. The connector for a student's own subscription (M6) stays in the plan | One hard-wired provider |
+| S6 | **The engine is a setting.** The built-in assistant calls the model through an API key the owner holds; Claude first, ChatGPT and Gemini behind the same interface after. The connector for a student's own subscription is the MCP server: any AI client that speaks MCP works with the same box | One hard-wired provider |
+| S7 | **Office files aren't converted on the server.** ViStud suggests uploading a Word or PowerPoint file's own PDF export beside it; when there is none, a session sends the slides' and pages' text (read from the file's XML, only when a session needs it) | Converting every upload with LibreOffice |
 
 ## 3. The box (per workspace)
 
@@ -130,6 +132,57 @@ break.
 - **Counted:** pomodoros per session, this week and in all on the Overview, and
   in the session's journal record when it ends.
 
+### 4.3 Teaching options, the tutoring prompt and the briefing (built)
+
+**Teaching options.** Starting a session asks how the AI should teach; the
+last choices come back next time, and they can change during the session
+(the session page's *How the AI teaches* card).
+
+| Choice | Options (default first) |
+|---|---|
+| How to teach | Explain, then check · Socratic · Summary first · Step by step |
+| Check questions | After every section · At the end · None |
+| Quiz level | Normal · Easy · Exam level |
+| Pace | One slide at a time · A section at a time |
+
+**The tutoring prompt** is a plain text file, `resources/prompts/tutor.md`,
+anyone can read and edit. It is built from Mollick and Mollick's tutor prompt
+(2023), OpenAI's Study mode rules (2025) and the Learning Scientists' six
+strategies: one idea and one question at a time, start from what the student
+knows, guide rather than give answers (two tries on a quiz question), ask
+them to explain back, bring back earlier topics, be brief and honest, follow
+the course's material. The teaching options fill its four blanks
+(`App\Study\Tutoring`).
+
+**Marks** are the prompt's contract with the write-back: the AI adds them on
+their own line, and ViStud offers to save them. `<finding topic>`,
+`<question topic>`, `<flashcard topic><front/><back/></flashcard>`,
+`<attempt topic result="correct|partial|incorrect">`, and at the end
+`<summary>` and one `<status topic proposed="covered|understood|confused">`
+per topic covered.
+
+**The briefing** (`App\Study\Briefings`) is what any AI receives: the prompt,
+then, in Markdown: about the student; the course and its instructions; the
+module and its instructions; this session (topic with the student's status
+and the evidence, clock, teaching, time so far); what the student recorded
+about the topic; what's still confusing; open questions (the topic's first);
+what's due in the next two weeks; earlier sessions; the material; all topics
+with statuses; other findings; and the chosen notes' text. It stays within
+60,000 characters (about 15,000 tokens): the prompt, instructions and
+session are always whole, the rest fills in by relevance, and what doesn't
+fit is counted ("… and 12 more"). A note gives at most 8,000 characters.
+The student's name and email never go into it.
+
+**Material.** On the session page, *Use* puts a note or file of the course
+into the session's material: a note's text goes into the briefing, a file
+goes in by name for the student to share (the MCP server and the built-in
+chat will send its pages). With nothing chosen, the briefing lists what the
+session's module holds.
+
+**Seeing it.** *Briefing* on the session page shows exactly what the AI
+receives, with *Copy* and *Download* (a `.md` file to attach). Until the
+engine and the MCP server exist, pasting it into any AI starts the tutor warm.
+
 ## 5. Build order
 
 1. **Tracker:** topics, statuses, questions (1a); findings, links, assignments,
@@ -139,6 +192,6 @@ break.
    builder; the write-back (session note, findings, questions, flashcards,
    attempts, proposed statuses); the MCP server, so any AI client works with
    the same box; engine settings and the built-in chat; flashcard review;
-   Office → PDF conversion.
+   Office files (S7): the PDF-export suggestion and slide text.
 3. **Progress** over time from the journal.
 4. ChatGPT and Gemini engines; the connector (M6).

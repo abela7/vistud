@@ -4,6 +4,7 @@ use App\Brain\Store\JournalReader;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
 use App\Http\Controllers\NotePageController;
+use App\Http\Controllers\SessionBriefingController;
 use App\Http\Controllers\SessionPageController;
 use App\Http\Controllers\WorkspacePageController;
 use App\Identity\PrincipalFactory;
@@ -41,6 +42,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspaces/{workspace}/sessions/{session}', SessionPageController::class)
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'session' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.sessions.show');
+    Route::get('/workspaces/{workspace}/sessions/{session}/briefing', SessionBriefingController::class)
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'session' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.sessions.briefing');
 
     // A workspace and its sections (docs/specs/workspaces.md).
     Route::get('/workspaces/{workspace}/{section?}', WorkspacePageController::class)

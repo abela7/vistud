@@ -65,7 +65,9 @@ function countdown(seconds) {
     return s >= 3600 ? format(s) : `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
 }
 
-const baseTitle = document.title;
+// The page's own title while a countdown shows in front of it, and what the countdown last set.
+let ownTitle = null;
+let lastTitle = null;
 
 function tickCountdowns() {
     let title = null;
@@ -82,7 +84,7 @@ function tickCountdowns() {
         if (el.textContent !== text) el.textContent = text;
         const total = Number(el.dataset.total) || 1;
         el.closest('[data-ring]')?.style.setProperty('--progress', String(Math.min(1, Math.max(0, 1 - remaining / total))));
-        if (running && title === null) title = `${text} ${el.dataset.phaseWords ?? ''} · ${baseTitle}`;
+        if (running && title === null) title = `${text} ${el.dataset.phaseWords ?? ''}`;
         if (running && remaining <= 0 && !seen.ended) {
             seen.ended = true;
             announce(el.dataset.phaseKey, el.dataset.next);
@@ -90,8 +92,24 @@ function tickCountdowns() {
             setTimeout(() => el.dispatchEvent(new CustomEvent('vistud-phase-end')), 1200);
         }
     }
-    const next = title ?? baseTitle;
-    if (document.title !== next) document.title = next;
+    showInTitle(title);
+}
+
+/**
+ * Puts the running countdown in front of the page's title, and gives the
+ * page its title back when none runs. A title the page sets meanwhile (a
+ * note renamed, say) is kept.
+ */
+function showInTitle(countdownText) {
+    if (countdownText !== null) {
+        if (ownTitle === null || document.title !== lastTitle) ownTitle = document.title;
+        lastTitle = `${countdownText} · ${ownTitle}`;
+        if (document.title !== lastTitle) document.title = lastTitle;
+    } else if (ownTitle !== null) {
+        if (document.title === lastTitle) document.title = ownTitle;
+        ownTitle = null;
+        lastTitle = null;
+    }
 }
 
 /** The end of a phase, once across every tab: a chime, and a notification if allowed. */

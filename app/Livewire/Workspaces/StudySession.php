@@ -4,10 +4,12 @@ namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\PomodoroForm;
+use App\Livewire\Concerns\TeachingForm;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\Briefings;
 use App\Study\Files;
 use App\Study\Modules;
 use App\Study\Notes;
@@ -29,7 +31,7 @@ use Livewire\Component;
  */
 final class StudySession extends Component
 {
-    use PomodoroForm;
+    use PomodoroForm, TeachingForm;
 
     #[Locked]
     public string $workspaceId;
@@ -37,7 +39,7 @@ final class StudySession extends Component
     #[Locked]
     public string $sessionId;
 
-    /** end, delete or pomodoro: the dialog that's open, or null. */
+    /** end, delete, pomodoro, teaching or briefing: the dialog that's open, or null. */
     #[Locked]
     public ?string $mode = null;
 
@@ -60,10 +62,13 @@ final class StudySession extends Component
 
     private Files $files;
 
+    private Briefings $briefings;
+
     private PrincipalFactory $principals;
 
-    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, PrincipalFactory $principals): void
+    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, PrincipalFactory $principals): void
     {
+        $this->briefings = $briefings;
         $this->sessions = $sessions;
         $this->topics = $topics;
         $this->modules = $modules;
@@ -102,6 +107,30 @@ final class StudySession extends Component
     public function phaseEnded(): void
     {
         $this->dispatch('session-changed');
+    }
+
+    /** What the assistant would receive now: the tutoring prompt and the briefing. */
+    public function showBriefing(): void
+    {
+        $this->open('briefing');
+    }
+
+    public function editTeaching(): void
+    {
+        $this->open('teaching');
+        $this->fillTeaching($this->sessions->find($this->principal(), $this->sessionId)->tutoring);
+    }
+
+    /** A note or file (`note:{id}`, `file:{id}`) into the session's material, or out of it. */
+    public function toggleMaterial(string $item): void
+    {
+        $this->act(function () use ($item) {
+            try {
+                $this->sessions->toggleMaterial($this->principal(), $this->sessionId, $item);
+            } catch (NotFound) {
+                $this->error = 'That note or file no longer exists.';
+            }
+        });
     }
 
     public function editPomodoro(): void
@@ -162,6 +191,20 @@ final class StudySession extends Component
             $this->notice = $this->clock === 'pomodoro' ? 'The Pomodoro clock is on.' : 'The free clock is on.';
             $this->dispatch('session-changed');
         }
+        if ($this->mode === 'teaching') {
+            try {
+                $this->sessions->setTutoring($by, $this->sessionId, $this->teachingInput());
+            } catch (Unprocessable $e) {
+                foreach ($e->details['fields'] ?? [] as $field => $messages) {
+                    $this->addError($this->teachingErrorField($field), $messages[0]);
+                }
+
+                return;
+            } catch (Conflict $e) {
+                $this->error = $e->getMessage();
+            }
+            $this->notice = $this->error === null ? 'The briefing now asks for this way of teaching.' : null;
+        }
         if ($this->mode === 'end') {
             $status = in_array($this->topicStatus, Topics::STATUSES, true) ? $this->topicStatus : null;
             $this->act(function () use ($by, $status) {
@@ -184,7 +227,7 @@ final class StudySession extends Component
 
     public function close(): void
     {
-        $this->reset('mode', 'topicStatus', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto');
+        $this->reset('mode', 'topicStatus', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto', 'method', 'checkIns', 'quiz', 'pace');
         $this->resetErrorBag();
     }
 
@@ -208,22 +251,27 @@ final class StudySession extends Component
         }
         $moduleId = $session->moduleId ?? $topic?->moduleId;
         $module = null;
-        $material = [];
         if ($moduleId !== null) {
             try {
                 $module = $this->modules->find($by, $moduleId);
-                foreach ($this->notes->list($by, $this->workspaceId) as $note) {
-                    if ($note->moduleId === $moduleId) {
-                        $material[] = ['file-text', $note->displayTitle(), route('workspaces.notes.show', [$this->workspaceId, $note->id]), 'Note'];
-                    }
-                }
-                foreach ($this->files->list($by, $this->workspaceId) as $file) {
-                    if ($file->moduleId === $moduleId) {
-                        $material[] = [$file->icon(), $file->fileName(), route('workspaces.files.show', [$this->workspaceId, $file->id]), $file->typeLabel()];
-                    }
-                }
             } catch (NotFound) {
-                $module = null;
+                // Deleted since.
+            }
+        }
+        // The module's notes and files, and any chosen from elsewhere in the course; the rest behind "Other notes and files".
+        [$material, $other] = [[], []];
+        $items = [];
+        foreach ($this->notes->list($by, $this->workspaceId) as $note) {
+            $items[] = ['key' => "note:{$note->id}", 'icon' => 'file-text', 'name' => $note->displayTitle(), 'url' => route('workspaces.notes.show', [$this->workspaceId, $note->id]), 'type' => 'Note', 'module' => $note->moduleId];
+        }
+        foreach ($this->files->list($by, $this->workspaceId) as $file) {
+            $items[] = ['key' => "file:{$file->id}", 'icon' => $file->icon(), 'name' => $file->fileName(), 'url' => route('workspaces.files.show', [$this->workspaceId, $file->id]), 'type' => $file->typeLabel(), 'module' => $file->moduleId];
+        }
+        foreach ($items as $item) {
+            if (($module !== null && $item['module'] === $module->id) || $session->uses($item['key'])) {
+                $material[] = $item;
+            } else {
+                $other[] = $item;
             }
         }
 
@@ -232,6 +280,8 @@ final class StudySession extends Component
             'topic' => $topic,
             'module' => $module,
             'material' => $material,
+            'otherMaterial' => $other,
+            'briefing' => $this->mode === 'briefing' ? $this->briefings->forSession($by, $this->sessionId) : null,
             'timeline' => $this->timeline($session, $time),
             'started' => Carbon::parse($session->startedAt)->setTimezone($zone),
             'ended' => $session->endedAt === null ? null : Carbon::parse($session->endedAt)->setTimezone($zone),

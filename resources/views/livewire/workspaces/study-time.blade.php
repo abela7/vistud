@@ -115,6 +115,16 @@
                         </div>
                     @endif
                     @if ($mode === 'start')
+                        <div x-data="{ open: false }" class="space-y-3">
+                            <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                <p class="field-label">How the AI teaches</p>
+                                <button type="button" class="item-link text-sm" x-on:click="open = ! open" x-bind:aria-expanded="open.toString()" aria-controls="start-teaching">Change</button>
+                            </div>
+                            <p class="text-sm text-fg-muted" x-show="! open">{{ \App\Study\Tutoring::summary(['method' => $method, 'check_ins' => $checkIns, 'quiz' => $quiz, 'pace' => $pace]) }}</p>
+                            <div id="start-teaching" x-show="open" x-cloak>
+                                @include('livewire.workspaces.partials.teaching-fields')
+                            </div>
+                        </div>
                         @include('livewire.workspaces.partials.pomodoro-fields')
                         <p class="text-sm text-fg-muted">The clock starts now. Pause it whenever you stop.</p>
                     @endif
