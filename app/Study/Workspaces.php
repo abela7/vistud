@@ -9,7 +9,6 @@ use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
-use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
 use Illuminate\Support\Facades\DB;
 
@@ -176,28 +175,18 @@ final class Workspaces
      */
     private static function validated(array $input): array
     {
-        $text = fn (string $key) => is_string($input[$key] ?? null) && trim($input[$key]) !== '' ? trim(preg_replace('/\s+/u', ' ', $input[$key])) : null;
-        $date = function (string $key) use ($input): ?string {
-            $value = $input[$key] ?? null;
-            if ($value === null || $value === '') {
-                return null;
-            }
-            $parsed = is_string($value) ? \DateTimeImmutable::createFromFormat('!Y-m-d', $value) : false;
-
-            return $parsed !== false && $parsed->format('Y-m-d') === $value ? $value : 'invalid';
-        };
-
+        [$startsOn, $endsOn, $dateErrors] = Input::dates($input);
         $fields = [
-            'name' => $text('name'),
-            'code' => $text('code'),
-            'term' => $text('term'),
-            'starts_on' => $date('starts_on'),
-            'ends_on' => $date('ends_on'),
+            'name' => Input::text($input, 'name'),
+            'code' => Input::text($input, 'code'),
+            'term' => Input::text($input, 'term'),
+            'starts_on' => $startsOn,
+            'ends_on' => $endsOn,
             'colour' => $input['colour'] ?? 'blue',
             'icon' => $input['icon'] ?? 'book-open',
         ];
 
-        $errors = array_filter([
+        Input::refuse(array_filter([
             'name' => match (true) {
                 $fields['name'] === null => 'Give the workspace a name.',
                 mb_strlen($fields['name']) > self::MAX_NAME => 'Keep the name to '.self::MAX_NAME.' characters.',
@@ -205,19 +194,10 @@ final class Workspaces
             },
             'code' => $fields['code'] !== null && mb_strlen($fields['code']) > 20 ? 'Keep the code to 20 characters.' : null,
             'term' => $fields['term'] !== null && mb_strlen($fields['term']) > 40 ? 'Keep the term to 40 characters.' : null,
-            'starts_on' => $fields['starts_on'] === 'invalid' ? 'Enter a date.' : null,
-            'ends_on' => match (true) {
-                $fields['ends_on'] === 'invalid' => 'Enter a date.',
-                $fields['ends_on'] !== null && $fields['starts_on'] !== null && $fields['starts_on'] !== 'invalid' && $fields['ends_on'] < $fields['starts_on'] => 'The end date is before the start date.',
-                default => null,
-            },
+            ...$dateErrors,
             'colour' => in_array($fields['colour'], Theme::CATEGORIES, true) ? null : 'Pick one of the colours.',
             'icon' => in_array($fields['icon'], self::ICONS, true) ? null : 'Pick one of the icons.',
-        ]);
-
-        if ($errors !== []) {
-            throw new Unprocessable('validation_failed', 'Some fields need attention.', ['fields' => array_map(fn ($message) => [$message], $errors)]);
-        }
+        ]));
 
         return $fields;
     }

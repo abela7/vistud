@@ -14,7 +14,7 @@
                 Everyone who can log in. You see account details here, never anyone's notes or learning history.
             </p>
         </div>
-        <x-button variant="primary" icon="user-plus" class="max-w-full whitespace-normal" x-data x-on:click="document.getElementById('invite-dialog').showModal()">Invite someone</x-button>
+        <x-button variant="primary" icon="user-plus" x-data x-on:click="document.getElementById('invite-dialog').showModal()">Invite someone</x-button>
     </div>
 
     <div role="status" aria-live="polite">

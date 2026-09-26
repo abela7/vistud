@@ -19,7 +19,7 @@
                 <h2 class="text-lg font-semibold">Create your first workspace</h2>
                 <p class="max-w-md text-fg-muted">One workspace per subject, like Biology or Spanish. Its modules, notes, files, calendar and progress all live inside it.</p>
             </div>
-            <x-button variant="primary" icon="plus" class="max-w-full whitespace-normal" x-data x-on:click="$dispatch('workspace-form-open')">New workspace</x-button>
+            <x-button variant="primary" icon="plus" x-data x-on:click="$dispatch('workspace-form-open')">New workspace</x-button>
         </section>
     @else
         <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" role="list">

@@ -19,10 +19,13 @@
         padding: 0 1rem;
         border: 1px solid transparent;
         border-radius: var(--radius-md);
+        max-width: 100%;
         font-size: 0.9375rem;
         font-weight: 600;
         line-height: 1.25rem;
-        white-space: nowrap;
+        text-align: center;
+        /* One line whenever it fits; at very large text sizes the label wraps rather than pushing the page sideways. */
+        white-space: normal;
         cursor: pointer;
         user-select: none;
         text-decoration: none;
@@ -742,6 +745,113 @@
         background-color: var(--ws-subtle);
         color: var(--ws);
         box-shadow: inset 0 0 0 2px var(--ws);
+    }
+
+    /* ---------- Modules and folders (a workspace's Modules section) ---------- */
+
+    .module-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+    }
+
+    .drag-handle {
+        display: inline-grid;
+        flex: none;
+        place-items: center;
+        width: 2rem;
+        height: 2.5rem;
+        border-radius: var(--radius-md);
+        color: var(--text-muted);
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .drag-handle:hover {
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    /* While dragging: the gap where the item will land, and the item held. */
+    .sortable-ghost {
+        background-color: var(--drag-target);
+        box-shadow: inset 0 0 0 2px var(--drop-indicator);
+    }
+
+    .sortable-chosen {
+        box-shadow: var(--elevation-lg);
+    }
+
+    .folder-list .folder-list {
+        margin-left: 1.25rem;
+        padding-left: 0.5rem;
+        border-left: 1px solid var(--divider);
+    }
+
+    .folder-row {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        min-height: 2.75rem;
+        padding: 0.125rem 0 0.125rem 0.5rem;
+        border-radius: var(--radius-md);
+    }
+
+    .folder-row:hover {
+        background-color: var(--hover);
+    }
+
+    /* A row's actions, under its "…" button. Opened by shell.js like the account menu. */
+    .row-menu {
+        position: absolute;
+        top: calc(100% + 0.25rem);
+        right: 0;
+        z-index: 40;
+        width: 14rem;
+        padding: 0.375rem 0;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-raised);
+        color: var(--text);
+        box-shadow: var(--elevation-lg);
+    }
+
+    .menu-item:disabled {
+        color: var(--text-disabled);
+        cursor: not-allowed;
+    }
+
+    .menu-item:disabled:hover {
+        background-color: transparent;
+    }
+
+    /* The "Move to" list: modules, and their folders indented by depth. */
+    .move-option {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 2.5rem;
+        padding: 0 0.625rem 0 calc(0.625rem + var(--depth, 0) * 1.25rem);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+    }
+
+    .move-option:hover {
+        background-color: var(--hover);
+    }
+
+    .move-option:has(input:checked) {
+        background-color: var(--selected);
+        font-weight: 600;
+    }
+
+    .move-option.is-disabled {
+        color: var(--text-disabled);
+        cursor: not-allowed;
+    }
+
+    .move-option input {
+        accent-color: var(--accent);
     }
 
     /* ---------- QR codes ---------- */

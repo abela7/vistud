@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { makeNamedStudent, makeStudentWithJournal, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { makeNamedStudent, makeStudentWithJournal, makeStudentWithModules, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -390,4 +390,35 @@ test('workspaces: my workspaces, the form, a workspace and its switcher', async 
     await useTheme(page, 'vistud-light');
     await page.locator('.app-sidebar .ws-switcher').click();
     await page.screenshot({ path: out('workspaces-switcher-desktop-vistud-light') });
+});
+
+test('modules: the list, a row menu, the move and module dialogs', async ({ page }) => {
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, makeStudentWithModules());
+    await page.locator('main').getByRole('link', { name: 'Biology' }).click();
+    await page.locator('.app-sidebar').getByRole('link', { name: 'Modules' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Modules' }).waitFor();
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`modules-${size}-${theme}`), fullPage: size === 'mobile' });
+        }
+    }
+
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    const labs = page.locator('.folder-row').filter({ hasText: 'Labs' }).first();
+    await labs.getByRole('button', { name: 'Actions for Labs' }).click();
+    await page.screenshot({ path: out('modules-desktop-vistud-light-menu') });
+    await labs.getByRole('button', { name: 'Move to…' }).click();
+    await page.locator('#structure-dialog').getByLabel('Week 2: Cell division').check();
+    await page.screenshot({ path: out('modules-desktop-vistud-light-move') });
+    await page.keyboard.press('Escape');
+
+    await page.setViewportSize(sizes.mobile);
+    await page.getByRole('button', { name: 'New module' }).click();
+    await page.locator('#structure-dialog').getByLabel('Title').fill('Week 3: Genetics');
+    await page.screenshot({ path: out('modules-mobile-vistud-light-new') });
 });

@@ -1,9 +1,12 @@
 # Workspaces: the plan for milestone M2
 
 **Status:** approved by the owner (decisions W0–W6 as recommended). Built so
-far: **step 0** (renames and workspace colours) and **step 1** (workspaces:
-create, open, switch, edit, archive and restore). Next: step 2, modules and
-folders.
+far: **step 0** (renames and workspace colours), **step 1** (workspaces:
+create, open, switch, edit, archive and restore) and **step 2** (modules, and
+folders inside them up to 8 levels: add, rename, reorder by dragging or from a
+menu, move, delete when empty). Folders at a workspace's top level and in
+Personal, and dragging folders, come with step 3 (Notes & files). Next: step 3,
+notes and the editor.
 
 **Mockups:** [docs/design/mockups/](../design/mockups/). They use the real
 theme, top bar and components, so what is approved is what gets built. On a

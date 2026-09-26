@@ -162,4 +162,10 @@ A learner table (`LearnerTables`): a student's space for one subject ([docs/spec
 
 ## Not yet built
 
-Modules, folders, notes, note versions, note blocks, deletion records (`content_tombstones`), files and activities arrive with the next M2 steps ([docs/specs/workspaces.md §8](../specs/workspaces.md#8-for-developers), [ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).
+### `modules`
+A learner table: a unit of a workspace, like "Week 1: Cells". `id`, `learner_id`, `workspace_id`, `title` (≤ 120), `starts_on`, `ends_on`, `position` (1 is first), `revision`, `created_at`, `updated_at`. Each change, reordering included, appends a revision of the `module` journal record; deleting (only when empty) appends one with status `deleted`.
+
+### `folders`
+A learner table, for organisation only: never journalled (ADR 0003 §9.2). `id`, `learner_id`, `workspace_id`, `module_id`, `parent_id` (another folder, or null at the top of the module), `name` (≤ 120), `depth` (1 at the top, at most 8), `position` among its siblings, `created_at`, `updated_at`.
+
+Notes, note versions, note blocks, deletion records (`content_tombstones`), files and activities arrive with the next M2 steps ([docs/specs/workspaces.md §8](../specs/workspaces.md#8-for-developers), [ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).

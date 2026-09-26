@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Identity\PrincipalFactory;
+use App\Study\Modules;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -14,10 +15,15 @@ use Illuminate\Http\Request;
  */
 class WorkspacePageController
 {
-    public function __invoke(Request $request, PrincipalFactory $principals, Workspaces $workspaces, string $workspace, string $section = 'overview'): View
+    public function __invoke(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, string $workspace, string $section = 'overview'): View
     {
-        $details = $workspaces->find($principals->fromRequest($request), $workspace);
+        $by = $principals->fromRequest($request);
+        $details = $workspaces->find($by, $workspace);
 
-        return view('workspaces.show', ['workspace' => $details, 'section' => $section]);
+        return view('workspaces.show', [
+            'workspace' => $details,
+            'section' => $section,
+            'modules' => $section === 'overview' ? $modules->list($by, $details->id) : [],
+        ]);
     }
 }

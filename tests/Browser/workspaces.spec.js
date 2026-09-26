@@ -44,7 +44,7 @@ test('a student creates their first workspace, opens it, and creates a second fr
 
     await sidebar.getByRole('link', { name: 'Modules' }).click();
     await expect(heading(page, 'Modules')).toBeVisible();
-    await expect(page.getByText('Modules is coming next')).toBeVisible();
+    await expect(page.getByText('No modules yet')).toBeVisible();
 
     await sidebar.locator('.ws-switcher').click();
     await sidebar.locator('.ws-menu').getByRole('link', { name: 'New workspace' }).click();

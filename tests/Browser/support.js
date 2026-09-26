@@ -136,6 +136,22 @@ export function makeStudentWithWorkspaces(workspaces) {
     return email;
 }
 
+/** A student with a Biology workspace holding two modules and some folders, made through the real services. */
+export function makeStudentWithModules() {
+    const email = makeAccount(false);
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
+        `$w = app(\\App\\Study\\Workspaces::class)->create($p, ['name' => 'Biology', 'colour' => 'green', 'icon' => 'microscope']);`,
+        `$m = app(\\App\\Study\\Modules::class); $f = app(\\App\\Study\\Folders::class);`,
+        `$cells = $m->create($p, $w->id, ['title' => 'Week 1: Cells', 'starts_on' => '2026-09-08', 'ends_on' => '2026-09-14']);`,
+        `$m->create($p, $w->id, ['title' => 'Week 2: Cell division']);`,
+        `$labs = $f->create($p, 'module', $cells->id, 'Labs'); $f->create($p, 'folder', $labs->id, 'Lab 1: microscopes'); $f->create($p, 'module', $cells->id, 'Reading');`,
+    ].join(' ');
+    execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
+
+    return email;
+}
+
 /** A student with no second factor, so login finishes on the home page. */
 export function makeStudentAccount() {
     return makeAccount(false);

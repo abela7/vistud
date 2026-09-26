@@ -19,7 +19,7 @@
                 <p class="text-fg-muted">{{ $isNew ? 'Welcome' : 'Welcome back' }}, {{ $firstName }}</p>
                 <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">My workspaces</h1>
             </div>
-            <x-button variant="primary" icon="plus" class="max-w-full whitespace-normal" x-data x-on:click="$dispatch('workspace-form-open')">New workspace</x-button>
+            <x-button variant="primary" icon="plus" x-data x-on:click="$dispatch('workspace-form-open')">New workspace</x-button>
         </div>
 
         @if ($isNew)

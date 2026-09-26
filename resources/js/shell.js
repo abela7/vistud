@@ -100,7 +100,8 @@ document.addEventListener('click', (event) => {
         setMenu(button, button.getAttribute('aria-expanded') !== 'true');
         return;
     }
-    if (open && !event.target.closest('[data-menu-panel]')) {
+    // A click outside the open menu, or on one of its items, closes it.
+    if (open && (!event.target.closest('[data-menu-panel]') || event.target.closest('.menu-item'))) {
         setMenu(open, false);
     }
 });
