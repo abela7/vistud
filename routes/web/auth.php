@@ -21,6 +21,15 @@ Route::middleware('guest')->group(function () {
 
         return view('auth.two-factor-challenge');
     })->name('two-factor.login');
+
+    Route::view('/forgot-password', 'auth.forgot-password')->name('password.request');
+
+    Route::get('/reset-password/{token}', function (string $token) {
+        return view('auth.reset-password', [
+            'token' => $token,
+            'email' => request()->query('email', ''),
+        ]);
+    })->name('password.reset');
 });
 
 Route::middleware('auth')->group(function () {
