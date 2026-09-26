@@ -3,7 +3,7 @@
 **Status:** decided by the owner on 2026-09-26. Built: step 1, the tracker:
 topics, statuses and questions (1a); findings, web links, assignments and
 tasks, instructions and the Overview (1b). Step 2 has begun: the study
-session and its clock (§4.1) are built; the start options, the briefing, the
+session, its clock (§4.1) and the Pomodoro clock (§4.2) are built; the start options, the briefing, the
 write-back and the MCP server are next (§5).
 
 **The idea in one line.** ViStud is the body; the language model is the engine.
@@ -97,11 +97,44 @@ written in the workspace while it is open carries its id. The rules count
 distinct sessions for *secure* and *practised* (ADR 0002 §7), so real
 sessions are what makes *mastered* reachable.
 
+### 4.2 The Pomodoro clock (built)
+
+A session runs on the **free clock** or the **Pomodoro clock**, chosen when it
+starts (the last choice is offered again) and switchable during it. Pomodoro:
+a focus period, then a short break; after every few focus periods, a long
+break.
+
+| Rhythm | Focus | Short break | Long break | After |
+|---|---|---|---|---|
+| Classic | 25 min | 5 min | 15 min | 4 |
+| Deep work | 50 min | 10 min | 30 min | 2 |
+| Short bursts | 15 min | 3 min | 10 min | 4 |
+| Custom | 5–120 | 1–30 | 5–60 | 2–8 |
+
+- **The phases are counted from the segments**, like all session time: focus
+  counts study time since the phase began, so a pause stops the countdown; a
+  break counts break time. A focus period that runs out becomes a pomodoro
+  and its break starts at that exact moment, even when nobody is looking;
+  the next focus period starts by itself after the break, or waits for the
+  student (*Start the next focus by itself* is a setting).
+- **Honest with the idle rule:** once the student is away, a focus period only
+  finishes if it ran out before their last activity. *Count it* on an away
+  pause puts the time back, and the pomodoro with it.
+- **Skip** ends a focus period early (it isn't counted as a pomodoro) and
+  starts a short break, or ends a break and starts focus.
+- **On screen:** the countdown in a ring that fills, the rounds before the long
+  break as dots, the pomodoros done, and the study time; the countdown also
+  shows in the top bar and the tab's title. When a phase ends, a chime (in
+  the browser, no sound file; *Sound* turns it off on that device) and, if the
+  student allows it, a notification, once across all open tabs.
+- **Counted:** pomodoros per session, this week and in all on the Overview, and
+  in the session's journal record when it ends.
+
 ## 5. Build order
 
 1. **Tracker:** topics, statuses, questions (1a); findings, links, assignments,
    instructions, Overview (1b). Useful before any engine is connected.
-2. **Session engine:** the session and its clock (built); start options
+2. **Session engine:** the session, its clock and the Pomodoro clock (built); start options
    (how to teach, check-ins, quiz level) and the tutoring prompt; the briefing
    builder; the write-back (session note, findings, questions, flashcards,
    attempts, proposed statuses); the MCP server, so any AI client works with

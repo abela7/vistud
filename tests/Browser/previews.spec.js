@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { makeNamedStudent, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { makeNamedStudent, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithPomodoro, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -624,4 +624,32 @@ test('session: the clock, what happened, the end dialog, and starting one', asyn
     await page.getByRole('button', { name: 'Start studying' }).first().click();
     await page.locator('#study-dialog').getByLabel('What are you studying? (optional)').selectOption({ label: 'Normalisation' });
     await page.screenshot({ path: out('session-desktop-vistud-light-start') });
+});
+
+test('pomodoro: the countdown ring, a break, and the clock choice', async ({ page }) => {
+    const student = makeStudentWithPomodoro(118);
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
+    await page.waitForLoadState('load');
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`pomodoro-${size}-${theme}`), fullPage: size === 'mobile' });
+        }
+    }
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'Skip to break' }).click();
+    await page.getByRole('region', { name: 'Pomodoro clock' }).getByText('Short break').waitFor();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('pomodoro-desktop-vistud-light-break') });
+
+    await page.getByRole('button', { name: 'Change' }).click();
+    await page.locator('#session-dialog').getByLabel('Rhythm').selectOption('custom');
+    await page.locator('#session-dialog').getByLabel('Focus (min)').waitFor();
+    await page.screenshot({ path: out('pomodoro-desktop-vistud-light-settings') });
 });

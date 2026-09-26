@@ -139,6 +139,46 @@ class SessionScreensTest extends TestCase
         $this->livewire(Progress::class)->call('study', $joins->id)->assertSee('Another study session is still open.');
     }
 
+    public function test_a_pomodoro_session_is_started_counts_down_and_moves_through_its_phases(): void
+    {
+        $this->livewire(StudyTime::class)
+            ->call('newSession')->assertSet('clock', 'free')
+            ->set('clock', 'pomodoro')->assertSee('Rhythm')->assertSee('Classic: 25 min focus, 5 min break, 15 min after 4')
+            ->set('preset', 'custom')->set('focus', '200')->call('save')->assertHasErrors('focus')
+            ->set('preset', 'classic')->set('auto', false)->call('save');
+        $session = $this->current();
+        $this->assertEquals(['focus' => 25, 'short' => 5, 'long' => 15, 'every' => 4, 'auto' => false], $session->pomodoro);
+
+        $page = $this->page($session->id)
+            ->assertSeeInOrder(['Focus 1 of 4', '25:00', '0 pomodoros', 'Pause', 'Skip to break', 'End session', '25 min focus, 5 min breaks, 15 min after every 4; you start each focus', 'Sound'])
+            ->assertSee('data-countdown', false);
+
+        $this->travel(10)->minutes();
+        $page->call('skip')->assertSeeInOrder(['Short break', '05:00', 'Skip break']);
+        $this->travel(6)->minutes();
+        $page->call('phaseEnded')->assertSee('Ready for pomodoro 1')->assertSee('Start pomodoro 1')
+            ->call('resume')->assertSee('Focus 1 of 4');
+
+        // The next time, the dialog starts on the same clock.
+        $page->call('confirmEnd')->call('save');
+        $this->livewire(StudyTime::class)->call('newSession')->assertSet('clock', 'pomodoro')->assertSet('preset', 'classic')->assertSet('auto', false);
+
+        $this->actingAs($this->ada)->get(route('home'))->assertDontSee('data-countdown', false);
+    }
+
+    public function test_the_clock_is_switched_to_pomodoro_during_a_session_and_the_top_bar_counts_down(): void
+    {
+        $session = app(Sessions::class)->start($this->principal($this->ada), $this->databases->id);
+
+        $this->page($session->id)->assertSee('Use the Pomodoro clock')
+            ->call('editPomodoro')->assertSet('clock', 'pomodoro')->set('preset', 'deep')->call('save')
+            ->assertSee('The Pomodoro clock is on.')->assertSeeInOrder(['Focus 1 of 2', '50:00']);
+
+        $this->actingAs($this->ada)->get(route('home'))->assertSee('data-countdown', false)->assertSee('Focus 1 of 2, 50 min left');
+
+        $this->page($session->id)->call('editPomodoro')->set('clock', 'free')->call('save')->assertSee('The free clock is on.')->assertDontSee('Focus 1 of 2');
+    }
+
     public function test_a_session_started_by_mistake_is_deleted(): void
     {
         $session = app(Sessions::class)->start($this->principal($this->ada), $this->databases->id);

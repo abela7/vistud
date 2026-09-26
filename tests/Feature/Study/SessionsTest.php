@@ -172,11 +172,11 @@ class SessionsTest extends TestCase
         $this->minutes(20);
         $weekStart = CarbonImmutable::parse('2026-09-29 00:00', 'UTC');
 
-        $this->assertSame(['since' => 50 * 60, 'all' => 110 * 60, 'sessions' => 3], $this->sessions->totals($this->by, $this->databases->id, $weekStart));
+        $this->assertSame(['since' => 50 * 60, 'all' => 110 * 60, 'sessions' => 3, 'pomodoros_since' => 0, 'pomodoros' => 0], $this->sessions->totals($this->by, $this->databases->id, $weekStart));
         $this->assertCount(3, $this->sessions->list($this->by, $this->databases->id));
 
         $this->sessions->delete($this->by, $open->id);
-        $this->assertSame(['since' => 30 * 60, 'all' => 90 * 60, 'sessions' => 2], $this->sessions->totals($this->by, $this->databases->id, $weekStart));
+        $this->assertSame(['since' => 30 * 60, 'all' => 90 * 60, 'sessions' => 2, 'pomodoros_since' => 0, 'pomodoros' => 0], $this->sessions->totals($this->by, $this->databases->id, $weekStart));
         $records = $this->records($open->id);
         $this->assertSame([2, 'deleted'], [end($records)->body['revision'], end($records)->body['status']]);
         $this->assertNull($this->sessions->current($this->by));

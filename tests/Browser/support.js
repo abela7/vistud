@@ -230,6 +230,24 @@ export function makeStudentWithSession() {
     return { ...student, ...JSON.parse(out) };
 }
 
+/**
+ * makeStudentWithTopics(), plus a Pomodoro session on Joins (5-minute focus,
+ * 1-minute breaks) whose focus period ends in `secondsLeft` seconds.
+ */
+export function makeStudentWithPomodoro(secondsLeft = 4) {
+    const student = makeStudentWithTopics();
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `$w = '${student.workspace}'; $joins = collect(app(\\App\\Study\\Topics::class)->list($p, $w))->firstWhere('name', 'Joins');`,
+        `\\Illuminate\\Support\\Carbon::setTestNow(now()->subSeconds(${300 - secondsLeft}));`,
+        `$session = app(\\App\\Study\\Sessions::class)->start($p, $w, $joins->id, null, ['focus' => 5, 'short' => 1, 'long' => 5, 'every' => 4, 'auto' => true]);`,
+        `\\Illuminate\\Support\\Carbon::setTestNow();`,
+        `echo json_encode(['session' => $session->id]);`,
+    ].join(' ');
+    const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
+    return { ...student, ...JSON.parse(out) };
+}
+
 /** A student with no second factor, so login finishes on the home page. */
 export function makeStudentAccount() {
     return makeAccount(false);

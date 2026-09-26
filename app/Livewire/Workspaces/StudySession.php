@@ -3,14 +3,17 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\PomodoroForm;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
+use App\Platform\Errors\Unprocessable;
 use App\Study\Files;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
+use App\Study\SessionSegment;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Carbon;
@@ -26,13 +29,15 @@ use Livewire\Component;
  */
 final class StudySession extends Component
 {
+    use PomodoroForm;
+
     #[Locked]
     public string $workspaceId;
 
     #[Locked]
     public string $sessionId;
 
-    /** end or delete: the dialog that's open, or null. */
+    /** end, delete or pomodoro: the dialog that's open, or null. */
     #[Locked]
     public ?string $mode = null;
 
@@ -87,6 +92,25 @@ final class StudySession extends Component
         $this->act(fn () => $this->sessions->resume($this->principal(), $this->sessionId));
     }
 
+    /** The Pomodoro clock's next phase, now. */
+    public function skip(): void
+    {
+        $this->act(fn () => $this->sessions->skip($this->principal(), $this->sessionId));
+    }
+
+    /** The Pomodoro countdown reached zero in the browser: show the next phase. */
+    public function phaseEnded(): void
+    {
+        $this->dispatch('session-changed');
+    }
+
+    public function editPomodoro(): void
+    {
+        $this->open('pomodoro');
+        $this->fillPomodoro($this->sessions->find($this->principal(), $this->sessionId)->pomodoro ?? ['focus' => 25, 'short' => 5, 'long' => 15, 'every' => 4, 'auto' => true]);
+        $this->clock = 'pomodoro';
+    }
+
     /** The automatic pause was wrong: the student was studying. */
     public function countAway(): void
     {
@@ -123,6 +147,21 @@ final class StudySession extends Component
 
             return;
         }
+        if ($this->mode === 'pomodoro') {
+            try {
+                $this->sessions->setPomodoro($by, $this->sessionId, $this->pomodoroInput());
+            } catch (Unprocessable $e) {
+                foreach ($e->details['fields'] ?? [] as $field => $messages) {
+                    $this->addError($this->pomodoroErrorField($field), $messages[0]);
+                }
+
+                return;
+            } catch (Conflict $e) {
+                $this->error = $e->getMessage();
+            }
+            $this->notice = $this->clock === 'pomodoro' ? 'The Pomodoro clock is on.' : 'The free clock is on.';
+            $this->dispatch('session-changed');
+        }
         if ($this->mode === 'end') {
             $status = in_array($this->topicStatus, Topics::STATUSES, true) ? $this->topicStatus : null;
             $this->act(function () use ($by, $status) {
@@ -145,7 +184,8 @@ final class StudySession extends Component
 
     public function close(): void
     {
-        $this->reset('mode', 'topicStatus');
+        $this->reset('mode', 'topicStatus', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto');
+        $this->resetErrorBag();
     }
 
     #[On('session-changed')]
@@ -210,13 +250,18 @@ final class StudySession extends Component
         $previous = null;
         foreach ($session->segments as $segment) {
             if ($previous?->endedAt !== null && $previous->endedAt < $segment->startedAt) {
-                $rows[] = ['kind' => 'pause', 'words' => $previous->endedBy === 'away' ? 'Paused: no activity' : ($previous->endedBy === 'long_break' ? 'Paused after a long break' : 'Paused'),
+                $rows[] = ['kind' => 'pause', 'words' => self::pauseWords($previous),
                     'from' => $time($previous->endedAt), 'to' => $time($segment->startedAt), 'seconds' => null];
             }
             $end = $segment->endedAt ?? now()->toIso8601ZuluString('microsecond');
             $rows[] = [
                 'kind' => $segment->kind,
-                'words' => $segment->kind === 'break' ? 'Break' : 'Studied',
+                'words' => match (true) {
+                    $segment->kind === 'break' => 'Break',
+                    $segment->endedBy === 'pomodoro' => 'Pomodoro done',
+                    $segment->endedBy === 'skip' => 'Focus, ended early',
+                    default => 'Studied',
+                },
                 'from' => $time($segment->startedAt),
                 'to' => $segment->endedAt === null ? null : $time($segment->endedAt),
                 'seconds' => max(0, (int) Carbon::parse($segment->startedAt)->diffInSeconds(Carbon::parse($end))),
@@ -224,11 +269,22 @@ final class StudySession extends Component
             $previous = $segment;
         }
         if ($session->state === 'paused' && $previous?->endedAt !== null) {
-            $rows[] = ['kind' => 'pause', 'words' => $previous->endedBy === 'away' ? 'Paused: no activity' : ($previous->endedBy === 'long_break' ? 'Paused after a long break' : 'Paused'),
+            $rows[] = ['kind' => 'pause', 'words' => self::pauseWords($previous),
                 'from' => $time($previous->endedAt), 'to' => null, 'seconds' => null];
         }
 
         return $rows;
+    }
+
+    /** Why the clock stopped after $previous. */
+    private static function pauseWords(SessionSegment $previous): string
+    {
+        return match ($previous->endedBy) {
+            'away' => 'Paused: no activity',
+            'long_break' => 'Paused after a long break',
+            'pomodoro' => 'Waiting to start the next focus',
+            default => 'Paused',
+        };
     }
 
     private function act(callable $action, ?string $notice = null): void

@@ -27,7 +27,80 @@ final readonly class SessionDetails
         public ?string $openKind,
         public ?string $openSince,
         public array $segments = [],
+        public ?array $pomodoro = null,
+        public ?string $phase = null,
+        public int $phaseSeconds = 0,
+        public int $phaseElapsed = 0,
+        public int $pomodoros = 0,
+        public int $pomodorosSkipped = 0,
     ) {}
+
+    public function usesPomodoro(): bool
+    {
+        return $this->pomodoro !== null && $this->phase !== null;
+    }
+
+    /** Seconds left in the current Pomodoro phase. */
+    public function phaseRemaining(): int
+    {
+        return max(0, $this->phaseSeconds - $this->phaseElapsed);
+    }
+
+    /** Whether the Pomodoro countdown is running now. */
+    public function phaseRunning(): bool
+    {
+        return $this->usesPomodoro() && ($this->phase === 'focus' ? $this->state === 'running' : $this->state === 'break');
+    }
+
+    /** Waiting for the student to start the next focus period. */
+    public function waitingForFocus(): bool
+    {
+        return $this->pausedBy === 'pomodoro';
+    }
+
+    /** "Focus 2 of 4", "Short break", "Long break", "Ready for pomodoro 3" */
+    public function phaseWords(): string
+    {
+        if ($this->waitingForFocus()) {
+            return 'Ready for pomodoro '.($this->pomodoros + 1);
+        }
+
+        return match ($this->phase) {
+            'short_break' => 'Short break',
+            'long_break' => 'Long break',
+            default => 'Focus '.($this->pomodoros % (int) $this->pomodoro['every'] + 1).' of '.$this->pomodoro['every'],
+        };
+    }
+
+    /** Names the current phase, so each phase's end is announced once, in one tab. */
+    public function phaseKey(): string
+    {
+        return "{$this->id}:{$this->pomodoros}:{$this->pomodorosSkipped}:{$this->phase}";
+    }
+
+    /** What the end of the current phase means, for the chime's notification. */
+    public function phaseEndWords(): string
+    {
+        return match (true) {
+            $this->phase !== 'focus' => 'Break over: time to focus.',
+            ($this->pomodoros + 1) % (int) $this->pomodoro['every'] === 0 => 'Pomodoro done: time for a long break.',
+            default => 'Pomodoro done: time for a short break.',
+        };
+    }
+
+    /** "25 / 5 / 15 min, long break every 4" */
+    public function pomodoroWords(): string
+    {
+        $p = $this->pomodoro;
+
+        return "{$p['focus']} min focus, {$p['short']} min breaks, {$p['long']} min after every {$p['every']}";
+    }
+
+    /** mm:ss, or h:mm:ss for an hour or more. */
+    public static function countdown(int $seconds): string
+    {
+        return $seconds >= 3600 ? gmdate('G:i:s', $seconds) : gmdate('i:s', $seconds);
+    }
 
     public function isOpen(): bool
     {

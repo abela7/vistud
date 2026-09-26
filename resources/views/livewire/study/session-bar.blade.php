@@ -9,12 +9,22 @@
             $url = route('workspaces.sessions.show', [$session->workspaceId, $session->id]);
             $words = match ($session->state) { 'running' => 'studying', 'break' => 'on a break', default => 'paused' };
         @endphp
-        <div @class(['session-pill', "is-{$session->state}"]) @if ($running) data-session-heartbeat x-data x-on:vistud-heartbeat="$wire.heartbeat()" @endif>
+        @php $pomodoro = $session->usesPomodoro() && ! $session->waitingForFocus(); @endphp
+        <div @class(['session-pill', "is-{$session->state}"]) x-data x-on:vistud-heartbeat="$wire.heartbeat()" x-on:vistud-phase-end="$wire.$refresh()" @if ($running) data-session-heartbeat @endif>
             <a href="{{ $url }}" class="session-pill-link">
-                <span class="session-dot max-sm:hidden" aria-hidden="true"></span>
+                @if ($pomodoro)
+                    <x-icon :name="$session->phase === 'focus' ? 'timer' : 'coffee'" class="size-4" />
+                @else
+                    <span class="session-dot max-sm:hidden" aria-hidden="true"></span>
+                @endif
                 <span class="max-md:sr-only">{{ $workspace->name }}</span>
-                <span class="sr-only">: {{ $words }}, {{ \App\Study\SessionDetails::duration($session->studySeconds) }} studied. Open the session.</span>
-                <span class="tabular-nums" aria-hidden="true" data-clock data-base="{{ $session->studySeconds }}" data-running="{{ $running ? '1' : '0' }}" data-drawn="{{ microtime(true) }}">{{ gmdate('G:i:s', $session->studySeconds) }}</span>
+                @if ($pomodoro)
+                    <span class="sr-only">: {{ $session->phaseWords() }}, {{ \App\Study\SessionDetails::duration($session->phaseRemaining()) }} left. Open the session.</span>
+                    <span class="tabular-nums" aria-hidden="true" data-countdown data-remaining="{{ $session->phaseRemaining() }}" data-total="{{ max(1, $session->phaseSeconds) }}" data-running="{{ $session->phaseRunning() ? '1' : '0' }}" data-drawn="{{ microtime(true) }}" data-phase-key="{{ $session->phaseKey() }}" data-next="{{ $session->phaseEndWords() }}" data-phase-words="{{ $session->phase === 'focus' ? 'Focus' : 'Break' }}">{{ \App\Study\SessionDetails::countdown($session->phaseRemaining()) }}</span>
+                @else
+                    <span class="sr-only">: {{ $session->waitingForFocus() ? 'ready for the next pomodoro' : $words }}, {{ \App\Study\SessionDetails::duration($session->studySeconds) }} studied. Open the session.</span>
+                    <span class="tabular-nums" aria-hidden="true" data-clock data-base="{{ $session->studySeconds }}" data-running="{{ $running ? '1' : '0' }}" data-drawn="{{ microtime(true) }}">{{ gmdate('G:i:s', $session->studySeconds) }}</span>
+                @endif
             </a>
             @if ($running)
                 <button type="button" class="topbar-button" wire:click="pause" aria-label="Pause the session" title="Pause">

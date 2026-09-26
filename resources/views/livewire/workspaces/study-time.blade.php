@@ -24,6 +24,16 @@
             <dt class="text-sm text-fg-muted">In all</dt>
             <dd class="text-xl font-semibold">{{ SessionDetails::duration($totals['all']) }}</dd>
         </div>
+        @if ($totals['pomodoros'] > 0)
+            <div>
+                <dt class="text-sm text-fg-muted">Pomodoros this week</dt>
+                <dd class="text-xl font-semibold">{{ $totals['pomodoros_since'] }}</dd>
+            </div>
+            <div>
+                <dt class="text-sm text-fg-muted">Pomodoros in all</dt>
+                <dd class="text-xl font-semibold">{{ $totals['pomodoros'] }}</dd>
+            </div>
+        @endif
     </dl>
 
     @if ($openWorkspace)
@@ -105,7 +115,8 @@
                         </div>
                     @endif
                     @if ($mode === 'start')
-                        <p class="text-sm text-fg-muted">The clock starts now. Pause it, or take a break, whenever you stop.</p>
+                        @include('livewire.workspaces.partials.pomodoro-fields')
+                        <p class="text-sm text-fg-muted">The clock starts now. Pause it whenever you stop.</p>
                     @endif
                 </div>
                 <div class="modal-actions">

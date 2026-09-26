@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\PomodoroForm;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
@@ -25,6 +26,8 @@ use Livewire\Component;
  */
 final class StudyTime extends Component
 {
+    use PomodoroForm;
+
     #[Locked]
     public string $workspaceId;
 
@@ -74,6 +77,9 @@ final class StudyTime extends Component
     public function newSession(): void
     {
         $this->open('start');
+        // The clock the student used last, ready again.
+        $last = collect($this->sessions->list($this->principal(), $this->workspaceId, 10))->first(fn ($s) => ! $s->manual);
+        $this->fillPomodoro($last?->pomodoro);
     }
 
     public function logTime(): void
@@ -90,7 +96,7 @@ final class StudyTime extends Component
 
         try {
             if ($this->mode === 'start') {
-                $session = $this->sessions->start($by, $this->workspaceId, $this->topicId ?: null, $this->moduleId ?: null);
+                $session = $this->sessions->start($by, $this->workspaceId, $this->topicId ?: null, $this->moduleId ?: null, $this->pomodoroInput());
                 $this->dispatch('session-changed');
                 $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id]);
 
@@ -102,7 +108,7 @@ final class StudyTime extends Component
             }
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
-                $this->addError($field, $messages[0]);
+                $this->addError($this->pomodoroErrorField($field), $messages[0]);
             }
 
             return;
@@ -122,7 +128,7 @@ final class StudyTime extends Component
 
     public function close(): void
     {
-        $this->reset('mode', 'topicId', 'moduleId', 'date', 'time', 'minutes');
+        $this->reset('mode', 'topicId', 'moduleId', 'date', 'time', 'minutes', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto');
         $this->resetErrorBag();
     }
 

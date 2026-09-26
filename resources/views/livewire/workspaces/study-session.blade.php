@@ -26,9 +26,10 @@
                 ])) }}
             </p>
         </div>
-        @include('livewire.workspaces.partials.row-menu', ['id' => 'session-'.$session->id, 'label' => 'this session', 'items' => [
+        @include('livewire.workspaces.partials.row-menu', ['id' => 'session-'.$session->id, 'label' => 'this session', 'items' => array_values(array_filter([
+            $open ? [$session->usesPomodoro() ? 'Pomodoro settings' : 'Use the Pomodoro clock', 'timer', 'editPomodoro', false] : null,
             ['Delete session', 'trash-2', 'confirmDelete', false],
-        ]])
+        ]))])
     </div>
 
     <div role="status" aria-live="polite">
@@ -54,39 +55,43 @@
 
     <div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-3">
         <div class="min-w-0 space-y-4 lg:col-span-2">
-            <section aria-labelledby="clock-heading" class="overview-card session-clock">
-                <h2 id="clock-heading" class="sr-only">Clock</h2>
-                <p @class(['status-chip', 'status-understood' => $session->state === 'running', 'status-covered' => $session->state === 'break'])>
-                    <x-icon :name="$stateIcons[$session->state]" class="size-3.5" />{{ $session->stateWords() }}
-                </p>
-                <p class="session-time tabular-nums">
-                    <span class="sr-only">Study time: {{ SessionDetails::duration($session->studySeconds) }}</span>
-                    <span aria-hidden="true" data-clock data-base="{{ $session->studySeconds }}" data-running="{{ $session->state === 'running' ? '1' : '0' }}" data-drawn="{{ microtime(true) }}">{{ gmdate('G:i:s', $session->studySeconds) }}</span>
-                </p>
-                <p class="text-fg-muted">
-                    Study time
-                    @if ($session->state === 'break')
-                        · break <span class="tabular-nums" data-clock data-base="{{ $session->breakSeconds }}" data-running="1" data-drawn="{{ microtime(true) }}">{{ gmdate('G:i:s', $session->breakSeconds) }}</span>
-                    @elseif ($session->breakSeconds > 0)
-                        · breaks {{ SessionDetails::duration($session->breakSeconds) }}
-                    @endif
-                </p>
-                @if ($open)
-                    <div class="flex flex-wrap justify-center gap-2 pt-2">
-                        @if ($session->state === 'running')
-                            <x-button icon="pause" wire:click="pause">Pause</x-button>
-                            <x-button icon="coffee" wire:click="takeBreak">Take a break</x-button>
-                        @elseif ($session->state === 'paused')
-                            <x-button variant="primary" icon="play" wire:click="resume">Resume</x-button>
-                            <x-button icon="coffee" wire:click="takeBreak">Take a break</x-button>
-                        @else
-                            <x-button variant="primary" icon="play" wire:click="resume">Back to studying</x-button>
-                            <x-button icon="pause" wire:click="pause">Pause</x-button>
+            @if ($session->usesPomodoro() && $open)
+                @include('livewire.workspaces.partials.pomodoro-clock')
+            @else
+                <section aria-labelledby="clock-heading" class="overview-card session-clock">
+                    <h2 id="clock-heading" class="sr-only">Clock</h2>
+                    <p @class(['status-chip', 'status-understood' => $session->state === 'running', 'status-covered' => $session->state === 'break'])>
+                        <x-icon :name="$stateIcons[$session->state]" class="size-3.5" />{{ $session->stateWords() }}
+                    </p>
+                    <p class="session-time tabular-nums">
+                        <span class="sr-only">Study time: {{ SessionDetails::duration($session->studySeconds) }}</span>
+                        <span aria-hidden="true" data-clock data-base="{{ $session->studySeconds }}" data-running="{{ $session->state === 'running' ? '1' : '0' }}" data-drawn="{{ microtime(true) }}">{{ gmdate('G:i:s', $session->studySeconds) }}</span>
+                    </p>
+                    <p class="text-fg-muted">
+                        Study time
+                        @if ($session->state === 'break')
+                            · break <span class="tabular-nums" data-clock data-base="{{ $session->breakSeconds }}" data-running="1" data-drawn="{{ microtime(true) }}">{{ gmdate('G:i:s', $session->breakSeconds) }}</span>
+                        @elseif ($session->breakSeconds > 0)
+                            · breaks {{ SessionDetails::duration($session->breakSeconds) }}
                         @endif
-                        <x-button :variant="$session->state === 'running' ? 'primary' : 'secondary'" icon="square" wire:click="confirmEnd">End session</x-button>
-                    </div>
-                @endif
-            </section>
+                    </p>
+                    @if ($open)
+                        <div class="flex flex-wrap justify-center gap-2 pt-2">
+                            @if ($session->state === 'running')
+                                <x-button icon="pause" wire:click="pause">Pause</x-button>
+                                <x-button icon="coffee" wire:click="takeBreak">Take a break</x-button>
+                            @elseif ($session->state === 'paused')
+                                <x-button variant="primary" icon="play" wire:click="resume">Resume</x-button>
+                                <x-button icon="coffee" wire:click="takeBreak">Take a break</x-button>
+                            @else
+                                <x-button variant="primary" icon="play" wire:click="resume">Back to studying</x-button>
+                                <x-button icon="pause" wire:click="pause">Pause</x-button>
+                            @endif
+                            <x-button :variant="$session->state === 'running' ? 'primary' : 'secondary'" icon="square" wire:click="confirmEnd">End session</x-button>
+                        </div>
+                    @endif
+                </section>
+            @endif
 
             <section aria-labelledby="timeline-heading" class="overview-card space-y-3">
                 <h2 id="timeline-heading" class="font-semibold">What happened</h2>
@@ -161,13 +166,16 @@
         @if ($mode)
             <form wire:submit="save" novalidate class="modal-panel" wire:key="session-dialog-{{ $mode }}">
                 <div class="modal-head">
-                    <h2 id="session-dialog-title" class="min-w-0 flex-1 text-lg font-semibold" tabindex="-1" autofocus>{{ $mode === 'end' ? 'End this session?' : 'Delete this session?' }}</h2>
+                    <h2 id="session-dialog-title" class="min-w-0 flex-1 text-lg font-semibold" tabindex="-1" autofocus>{{ ['end' => 'End this session?', 'delete' => 'Delete this session?', 'pomodoro' => 'Session clock'][$mode] }}</h2>
                     <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
                         <x-icon name="x" />
                     </button>
                 </div>
                 <div class="space-y-4 px-5 pt-2">
-                    @if ($mode === 'end')
+                    @if ($mode === 'pomodoro')
+                        @include('livewire.workspaces.partials.pomodoro-fields')
+                        <p class="text-sm text-fg-muted">{{ $session->usesPomodoro() ? 'Time already studied stays, and the current phase keeps its progress with the new lengths.' : 'Time already studied stays. The first focus period starts counting now.' }}</p>
+                    @elseif ($mode === 'end')
                         <p>You studied {{ $studied }}.</p>
                         @if ($topic)
                             <fieldset class="space-y-2">
@@ -186,7 +194,7 @@
                 </div>
                 <div class="modal-actions">
                     <x-button x-on:click="$el.closest('dialog').close()">{{ $mode === 'end' ? 'Keep studying' : 'Cancel' }}</x-button>
-                    <x-button type="submit" :variant="$mode === 'delete' ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ $mode === 'end' ? 'End session' : 'Delete' }}</x-button>
+                    <x-button type="submit" :variant="$mode === 'delete' ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ ['end' => 'End session', 'delete' => 'Delete', 'pomodoro' => 'Save'][$mode] }}</x-button>
                 </div>
             </form>
         @endif

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithSession, makeStudentWithTopics, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithPomodoro, makeStudentWithSession, makeStudentWithTopics, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
 
 /* Study sessions and their clock (docs/specs/study-memory.md §4). */
 
@@ -93,6 +93,73 @@ test('another tab follows a pause straight away', async ({ page, context }) => {
     await page.getByRole('button', { name: 'Pause', exact: true }).click();
     await expect(pill(other).getByRole('button', { name: 'Resume the session' })).toBeVisible({ timeout: 5000 });
 });
+
+async function openPomodoro(page, secondsLeft) {
+    const student = makeStudentWithPomodoro(secondsLeft);
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
+    await page.waitForLoadState('load');
+    return student;
+}
+
+test('a Pomodoro focus period runs out on its own and the break begins, here and in the top bar', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openPomodoro(page, 4);
+    const card = page.getByRole('region', { name: 'Pomodoro clock' });
+    await expect(card).toContainText('Focus 1 of 4');
+    await expect(page).toHaveTitle(/Focus · Study session/);
+
+    await expect(card).toContainText('Short break', { timeout: 15000 });
+    await expect(card).toContainText('1 pomodoro');
+    await expect(card.getByRole('img', { name: '1 of 4 pomodoros before the long break' })).toBeVisible();
+    await expect(pill(page)).toContainText('00:5');
+    await expect(page).toHaveTitle(/Break · Study session/);
+    expect(await page.evaluate(() => localStorage.getItem('vistud.pomodoro.announced'))).toContain(':0:0:focus');
+
+    await card.getByRole('button', { name: 'Skip break' }).click();
+    await expect(card).toContainText('Focus 2 of 4');
+});
+
+test('a Pomodoro session is started from the Overview, and the sound can be turned off', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const student = makeStudentWithTopics();
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}`);
+    await page.waitForLoadState('load');
+    await page.getByRole('button', { name: 'Start studying' }).first().click();
+    const dialog = page.locator('#study-dialog');
+    await dialog.getByLabel('Pomodoro').check();
+    await dialog.getByLabel('Rhythm').selectOption('short');
+    await dialog.getByRole('button', { name: 'Start' }).click();
+    const card = page.getByRole('region', { name: 'Pomodoro clock' });
+    await expect(card).toContainText('Focus 1 of 4');
+    await expect(card.locator('[data-countdown]')).not.toHaveText('15:00', { timeout: 5000 });
+
+    const sound = card.getByRole('button', { name: 'Sound' });
+    await expect(sound).toHaveAttribute('aria-pressed', 'true');
+    await sound.click();
+    await expect(sound).toHaveAttribute('aria-pressed', 'false');
+    expect(await page.evaluate(() => localStorage.getItem('vistud.pomodoro.sound'))).toBe('false');
+});
+
+for (const [name, viewport] of Object.entries({ desktop, phone })) {
+    test(`every colour of the Pomodoro clock comes from a token: ${name}`, async ({ page }) => {
+        await page.setViewportSize(viewport);
+        await openPomodoro(page, 200);
+        await useSentinelTheme(page);
+        expect(await foreignColours(page), 'Pomodoro clock: colours not from a token').toEqual([]);
+    });
+}
+
+for (const theme of THEMES) {
+    test(`axe finds no violations on the Pomodoro clock: ${theme}`, async ({ page }) => {
+        await page.setViewportSize(desktop);
+        await openPomodoro(page, 200);
+        await useTheme(page, theme);
+        expect(await analyse(page)).toEqual([]);
+    });
+}
 
 for (const [name, viewport] of Object.entries({ desktop, phone })) {
     test(`every colour of a session comes from a token: ${name}`, async ({ page }) => {

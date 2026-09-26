@@ -39,6 +39,16 @@ final class Sessions
 
     public const MAX_LOG_MINUTES = 12 * 60;
 
+    /** The Pomodoro presets: name, focus, short break, long break (minutes), and focus periods before a long break. */
+    public const POMODORO_PRESETS = [
+        'classic' => ['Classic', 25, 5, 15, 4],
+        'deep' => ['Deep work', 50, 10, 30, 2],
+        'short' => ['Short bursts', 15, 3, 10, 4],
+    ];
+
+    /** The range each Pomodoro setting may take. */
+    public const POMODORO_LIMITS = ['focus' => [5, 120], 'short' => [1, 30], 'long' => [5, 60], 'every' => [2, 8]];
+
     public function __construct(private Memory $memory) {}
 
     /** The student's open session, in any workspace, or null. */
@@ -81,11 +91,11 @@ final class Sessions
      * Study time in a workspace: since $since (the start of the week, say),
      * and in all. A session counts where it started.
      *
-     * @return array{since: int, all: int, sessions: int}
+     * @return array{since: int, all: int, sessions: int, pomodoros_since: int, pomodoros: int}
      */
     public function totals(Principal $by, string $workspaceId, CarbonImmutable $since): array
     {
-        $totals = ['since' => 0, 'all' => 0, 'sessions' => 0];
+        $totals = ['since' => 0, 'all' => 0, 'sessions' => 0, 'pomodoros_since' => 0, 'pomodoros' => 0];
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
         $rows = LearnerTables::query($scope, 'study_sessions')->where('workspace_id', $workspaceId)->get();
@@ -93,30 +103,41 @@ final class Sessions
             $seconds = $row->state === 'ended' ? (int) $row->study_seconds : $this->details($scope, $row)->studySeconds;
             $totals['all'] += $seconds;
             $totals['sessions']++;
+            $totals['pomodoros'] += (int) $row->pomodoros;
             if (CarbonImmutable::parse($row->started_at, 'UTC')->greaterThanOrEqualTo($since)) {
                 $totals['since'] += $seconds;
+                $totals['pomodoros_since'] += (int) $row->pomodoros;
             }
         }
 
         return $totals;
     }
 
-    /** Starts studying in a workspace, on a topic and in a module if given. Another open session is a conflict. */
-    public function start(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null): SessionDetails
+    /**
+     * Starts studying in a workspace, on a topic and in a module if given,
+     * with the free clock or (given its settings) the Pomodoro clock.
+     * Another open session is a conflict.
+     *
+     * @param  ?array{focus?: mixed, short?: mixed, long?: mixed, every?: mixed, auto?: mixed}  $pomodoro
+     */
+    public function start(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $pomodoro = null): SessionDetails
     {
         $scope = Guard::learner($by);
+        $pomodoro = $pomodoro === null ? null : self::pomodoroSettings($pomodoro);
         $open = $this->openRow($scope);
         if ($open !== null && $this->settled($scope, $by, $open->id)->state !== 'ended') {
             throw new Conflict('session_open', 'Another session is still open. End it first.', ['session' => $open->id, 'workspace' => $open->workspace_id]);
         }
         $id = Ids::new();
 
-        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $id) {
+        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $pomodoro, $id) {
             Input::workspace($scope, $workspaceId, lock: true);
             [$topicId, $moduleId] = $this->place($scope, $workspaceId, $topicId, $moduleId);
             $now = self::now();
             LearnerTables::insert($scope, 'study_sessions', [
                 'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'topic_id' => $topicId,
+                'pomodoro' => $pomodoro === null ? null : json_encode($pomodoro), 'phase' => $pomodoro === null ? null : 'focus',
+                'phase_started_at' => $pomodoro === null ? null : $now,
                 'state' => 'running', 'started_at' => $now, 'last_activity_at' => $now, 'revision' => 1,
                 'created_at' => $now, 'updated_at' => $now,
             ]);
@@ -148,15 +169,89 @@ final class Sessions
         });
     }
 
-    /** Back to studying, after a pause or a break. */
+    /**
+     * Back to studying, after a pause or a break. On the Pomodoro clock, a
+     * pause in a Pomodoro break goes back to the break, and a Pomodoro break
+     * resumed early starts the next focus period.
+     */
     public function resume(Principal $by, string $id): void
     {
         $this->change($by, $id, ['paused', 'break'], function (LearnerScope $scope, object $row, CarbonImmutable $now) {
+            $inBreak = in_array($row->phase, ['short_break', 'long_break'], true);
             $this->closeOpen($scope, $row, $now, 'resume');
+            if ($inBreak && $row->state === 'paused') {
+                $this->openSegment($scope, $row->id, 'break', $now);
+
+                return ['state' => 'break', 'paused_by' => null];
+            }
+            $this->openSegment($scope, $row->id, 'study', $now);
+            $phase = $row->phase !== null && ($inBreak || $row->paused_by === 'pomodoro') ? ['phase' => 'focus', 'phase_started_at' => $now] : [];
+
+            return ['state' => 'running', 'paused_by' => null] + $phase;
+        });
+    }
+
+    /**
+     * The Pomodoro clock's next phase, now: a focus period ends early (it
+     * doesn't count as a pomodoro) and a short break starts, or a break ends
+     * and the next focus period starts.
+     */
+    public function skip(Principal $by, string $id): void
+    {
+        $this->change($by, $id, ['running', 'paused', 'break'], function (LearnerScope $scope, object $row, CarbonImmutable $now) {
+            if ($row->phase === null) {
+                throw new Conflict('not_pomodoro', 'This session uses the free clock.');
+            }
+            $this->closeOpen($scope, $row, $now, 'skip');
+            if ($row->phase === 'focus') {
+                $this->openSegment($scope, $row->id, 'break', $now);
+
+                return ['state' => 'break', 'paused_by' => null, 'phase' => 'short_break', 'phase_started_at' => $now, 'pomodoros_skipped' => $row->pomodoros_skipped + 1];
+            }
             $this->openSegment($scope, $row->id, 'study', $now);
 
-            return ['state' => 'running', 'paused_by' => null];
+            return ['state' => 'running', 'paused_by' => null, 'phase' => 'focus', 'phase_started_at' => $now];
         });
+    }
+
+    /**
+     * Turns the Pomodoro clock on (a focus period starts counting now) or,
+     * given null, off: the free clock carries on from here.
+     *
+     * @param  ?array{focus?: mixed, short?: mixed, long?: mixed, every?: mixed, auto?: mixed}  $settings
+     */
+    public function setPomodoro(Principal $by, string $id, ?array $settings): void
+    {
+        $settings = $settings === null ? null : self::pomodoroSettings($settings);
+        $this->change($by, $id, ['running', 'paused', 'break'], function (LearnerScope $scope, object $row, CarbonImmutable $now) use ($settings) {
+            if ($settings === null) {
+                return ['pomodoro' => null, 'phase' => null, 'phase_started_at' => null, 'paused_by' => $row->paused_by === 'pomodoro' ? 'student' : $row->paused_by];
+            }
+            $keep = $row->phase !== null && $row->pomodoro !== null;
+
+            return ['pomodoro' => json_encode($settings)] + ($keep ? [] : ['phase' => 'focus', 'phase_started_at' => $now]);
+        });
+    }
+
+    /**
+     * Checked Pomodoro settings, in whole minutes.
+     *
+     * @return array{focus: int, short: int, long: int, every: int, auto: bool}
+     */
+    public static function pomodoroSettings(array $input): array
+    {
+        $settings = [];
+        $errors = [];
+        foreach (self::POMODORO_LIMITS as $key => [$min, $max]) {
+            $value = filter_var($input[$key] ?? null, FILTER_VALIDATE_INT);
+            if ($value === false || $value < $min || $value > $max) {
+                $errors["pomodoro.{$key}"] = "From {$min} to {$max}.";
+            }
+            $settings[$key] = (int) $value;
+        }
+        Input::refuse($errors);
+
+        return $settings + ['auto' => filter_var($input['auto'] ?? false, FILTER_VALIDATE_BOOL)];
     }
 
     /**
@@ -335,8 +430,10 @@ final class Sessions
         }
 
         return DB::transaction(function () use ($scope, $by, $id) {
-            $row = $this->lock($scope, $id);
             $now = self::now();
+            // The Pomodoro phases that ended since, each at its exact moment.
+            for ($steps = 0; $steps < 200 && $this->pomodoroStep($scope, $this->lock($scope, $id), $now); $steps++);
+            $row = $this->lock($scope, $id);
             $last = CarbonImmutable::parse($row->last_activity_at, 'UTC');
             $fields = [];
 
@@ -369,9 +466,102 @@ final class Sessions
         });
     }
 
+    /**
+     * Ends the Pomodoro phase that is over by $now, if one is: a focus
+     * period becomes a pomodoro and its break starts where it ended; a break
+     * ends where it ran out, and the next focus period starts by itself or
+     * waits for the student. A focus period doesn't end in time the idle
+     * rule takes back: once the student is away, only before their last
+     * activity.
+     */
+    private function pomodoroStep(LearnerScope $scope, object $row, CarbonImmutable $now): bool
+    {
+        $boundary = $this->phaseBoundary($scope, $row);
+        if ($boundary === null || $boundary->greaterThan($now)) {
+            return false;
+        }
+        $settings = json_decode((string) $row->pomodoro, true);
+        if ($row->phase === 'focus') {
+            // Once the student is away, time after their last activity isn't study (the idle rule), so it can't finish a pomodoro.
+            $last = CarbonImmutable::parse($row->last_activity_at, 'UTC');
+            if ($now->greaterThan($last->addMinutes(self::IDLE_MINUTES)) && $boundary->greaterThan($last)) {
+                return false;
+            }
+            $this->closeOpen($scope, $row, $boundary, 'pomodoro');
+            $this->openSegment($scope, $row->id, 'break', $boundary);
+            $done = (int) $row->pomodoros + 1;
+            $fields = ['state' => 'break', 'paused_by' => null, 'phase' => $done % $settings['every'] === 0 ? 'long_break' : 'short_break', 'pomodoros' => $done];
+        } else {
+            $this->closeOpen($scope, $row, $boundary, 'pomodoro');
+            if ($settings['auto']) {
+                $this->openSegment($scope, $row->id, 'study', $boundary);
+                $fields = ['state' => 'running', 'paused_by' => null, 'phase' => 'focus'];
+            } else {
+                $fields = ['state' => 'paused', 'paused_by' => 'pomodoro', 'phase' => 'focus'];
+            }
+        }
+        LearnerTables::query($scope, 'study_sessions')->where('id', $row->id)->update($fields + ['phase_started_at' => $boundary, 'updated_at' => $now]);
+
+        return true;
+    }
+
+    /**
+     * When the current Pomodoro phase runs out, if its clock is running:
+     * focus counts study time since the phase began, a break counts break
+     * time. Null when the phase isn't counting now.
+     */
+    private function phaseBoundary(LearnerScope $scope, object $row): ?CarbonImmutable
+    {
+        if ($row->phase === null || $row->pomodoro === null || $row->phase_started_at === null) {
+            return null;
+        }
+        $kind = $row->phase === 'focus' ? 'study' : 'break';
+        if (($kind === 'study' && $row->state !== 'running') || ($kind === 'break' && $row->state !== 'break')) {
+            return null;
+        }
+        $open = $this->openSegmentRow($scope, $row->id);
+        if ($open === null || $open->kind !== $kind) {
+            return null;
+        }
+        $since = CarbonImmutable::parse($row->phase_started_at, 'UTC');
+        $done = $this->phaseSeconds($scope, $row, $kind, $since, null);
+        $openFrom = max($since, CarbonImmutable::parse($open->started_at, 'UTC'));
+
+        return $openFrom->addSeconds(max(0, self::phaseLength($row) - $done));
+    }
+
+    /** Seconds of $kind since the phase began, in closed segments, plus the open one up to $now if given. */
+    private function phaseSeconds(LearnerScope $scope, object $row, string $kind, CarbonImmutable $since, ?CarbonImmutable $now): int
+    {
+        $seconds = 0;
+        $segments = LearnerTables::query($scope, 'session_segments')->where('session_id', $row->id)->where('kind', $kind)
+            ->where(fn ($q) => $q->whereNull('ended_at')->orWhere('ended_at', '>', $since))->get();
+        foreach ($segments as $segment) {
+            if ($segment->ended_at === null && $now === null) {
+                continue;
+            }
+            $from = max($since, CarbonImmutable::parse($segment->started_at, 'UTC'));
+            $seconds += self::seconds($from, $segment->ended_at === null ? $now : CarbonImmutable::parse($segment->ended_at, 'UTC'));
+        }
+
+        return $seconds;
+    }
+
+    /** How long the current phase lasts, in seconds. */
+    private static function phaseLength(object $row): int
+    {
+        $settings = json_decode((string) $row->pomodoro, true);
+
+        return 60 * (int) ($settings[['focus' => 'focus', 'short_break' => 'short', 'long_break' => 'long'][$row->phase] ?? 'focus'] ?? 0);
+    }
+
     /** Whether any rule applies now (checked without a lock first). */
     private function due(LearnerScope $scope, object $row, CarbonImmutable $now): bool
     {
+        $boundary = $this->phaseBoundary($scope, $row);
+        if ($boundary !== null && $boundary->lessThanOrEqualTo($now)) {
+            return true;
+        }
         $last = CarbonImmutable::parse($row->last_activity_at, 'UTC');
         if ($now->greaterThan($last->addHours(self::AUTO_END_HOURS))) {
             return true;
@@ -462,6 +652,7 @@ final class Sessions
                 'ended_at' => $iso($row->ended_at),
                 'study_seconds' => $row->state === 'ended' ? (int) $row->study_seconds : null,
                 'break_seconds' => $row->state === 'ended' ? (int) $row->break_seconds : null,
+                'pomodoros' => $row->state === 'ended' && $row->pomodoro !== null ? (int) $row->pomodoros : null,
                 'status' => $deleted ? 'deleted' : ($row->state === 'ended' ? 'ended' : 'open'),
             ], fn ($value) => $value !== null),
         ]]);
@@ -487,10 +678,18 @@ final class Sessions
                 ->map(fn ($s) => new SessionSegment($s->kind, self::iso($s->started_at), $s->ended_at === null ? null : self::iso($s->ended_at), $s->ended_by))->all();
         }
 
+        $pomodoro = $row->pomodoro === null ? null : json_decode((string) $row->pomodoro, true);
+        $phaseElapsed = 0;
+        if ($pomodoro !== null && $row->phase !== null && $row->phase_started_at !== null && $row->state !== 'ended' && $row->paused_by !== 'pomodoro') {
+            $phaseElapsed = $this->phaseSeconds($scope, $row, $row->phase === 'focus' ? 'study' : 'break', CarbonImmutable::parse($row->phase_started_at, 'UTC'), self::now());
+        }
+
         return new SessionDetails(
             $row->id, $row->workspace_id, $row->module_id, $row->topic_id, $row->state, $row->paused_by, (bool) $row->manual,
             self::iso($row->started_at), $row->ended_at === null ? null : self::iso($row->ended_at), self::iso($row->last_activity_at),
             $study, $break, $openKind, $openSince, $segments,
+            $pomodoro, $row->phase, $pomodoro === null || $row->phase === null ? 0 : self::phaseLength($row), $phaseElapsed,
+            (int) $row->pomodoros, (int) $row->pomodoros_skipped,
         );
     }
 
