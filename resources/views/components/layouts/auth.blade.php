@@ -10,14 +10,7 @@
     data-theme-dark="{{ config('vistud.appearance.dark') }}"
     data-appearance="system">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="color-scheme" content="light dark">
-    <title>{{ $title }} · ViStud</title>
-    @include('partials.theme-script')
-    <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('brand/favicon-32.png') }}">
-    <link rel="apple-touch-icon" href="{{ asset('brand/apple-touch-icon-180.png') }}">
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('partials.head', ['title' => $title])
 </head>
 <body class="min-h-dvh bg-canvas text-fg antialiased">
     {{ $slot }}

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { foreignColours, loginToChallenge, openTwoFactorSetup, startTwoFactorSetup, totp, openConfirmPassword, useSentinelTheme } from './support.js';
+import { foreignColours, loginToChallenge, openAdminOverview, openTwoFactorSetup, startTwoFactorSetup, totp, openConfirmPassword, useSentinelTheme } from './support.js';
 
 /*
 | Layer 3 of theme enforcement (ADR 0003 §6.3, DESIGN.md §3.5): with the
@@ -234,6 +234,29 @@ for (const [name, viewport] of Object.entries(viewports)) {
             await page.waitForURL('**/reset-password/**');
             await useSentinelTheme(page);
             states['invalid token error'] = await foreignColours(page);
+
+            for (const [state, colours] of Object.entries(states)) {
+                expect(colours, `${state}: colours not from a token`).toEqual([]);
+            }
+        });
+    });
+}
+
+for (const [name, viewport] of Object.entries(viewports)) {
+    test.describe(`admin overview, ${name}`, () => {
+        test.use({ viewport, reducedMotion: 'reduce' });
+
+        test('every colour comes from a token, in every state', async ({ page }) => {
+            const states = {};
+            await openAdminOverview(page);
+            await useSentinelTheme(page);
+            states.idle = await foreignColours(page);
+
+            await page.getByRole('button', { name: 'Log out' }).hover();
+            states['header button hover'] = await foreignColours(page);
+
+            await page.getByRole('link', { name: 'Overview', exact: true }).focus();
+            states['nav focus'] = await foreignColours(page);
 
             for (const [state, colours] of Object.entries(states)) {
                 expect(colours, `${state}: colours not from a token`).toEqual([]);

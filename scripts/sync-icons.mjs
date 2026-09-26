@@ -5,6 +5,7 @@
 import { copyFileSync, readdirSync, rmSync, mkdirSync } from 'node:fs';
 
 const icons = [
+    'arrow-left-right',
     'check',
     'circle-alert',
     'circle-check',
@@ -12,10 +13,14 @@ const icons = [
     'eye-off',
     'info',
     'loader-circle',
+    'log-out',
     'monitor',
     'moon',
+    'scroll-text',
+    'shield',
     'sun',
     'triangle-alert',
+    'users',
     'x',
 ];
 

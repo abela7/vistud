@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { openAdminOverview, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -200,6 +200,19 @@ test('two-factor setup: off, QR code, recovery codes, on', async ({ page }) => {
             await useTheme(page, theme);
             await page.screenshot({ path: out(`two-factor-setup-${size}-${theme}-codes`), fullPage: size === 'mobile' });
 
+            await page.context().clearCookies();
+        }
+    }
+});
+
+test('admin overview', async ({ page }) => {
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await openAdminOverview(page);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`admin-overview-${size}-${theme}`), fullPage: size === 'mobile' });
             await page.context().clearCookies();
         }
     }

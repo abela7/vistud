@@ -95,12 +95,10 @@ export async function wasReloaded(page) {
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 /** An account in the app database the browser server uses. */
-function makeAccount(twoFactor) {
+function makeAccount(twoFactor, admin = false) {
     const email = `browser-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
     const php = process.env.PHP_BINARY || 'php';
-    const factory = twoFactor
-        ? '\\App\\Models\\User::factory()->student()->twoFactor()'
-        : '\\App\\Models\\User::factory()->student()';
+    const factory = `\\App\\Models\\User::factory()->student()${admin ? '->admin()' : ''}${twoFactor ? '->twoFactor()' : ''}`;
     const code = `if (!\\App\\Models\\User::query()->where('email', '${email}')->exists()) { ${factory}->create(['email' => '${email}']); }`;
     execFileSync(php, ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
 
@@ -181,4 +179,20 @@ export async function startTwoFactorSetup(page) {
     await page.waitForLoadState('load');
 
     return (await page.locator('#setup-key').textContent()).trim();
+}
+
+/** Log in as a new admin with 2FA (using a recovery code), confirm the password, and open the admin overview. */
+export async function openAdminOverview(page) {
+    const email = makeAccount(true, true);
+    await loginToChallenge(page, email);
+    await page.getByRole('button', { name: 'Use a recovery code instead' }).click();
+    await page.getByLabel('Recovery code').fill('code-one-aaaa');
+    await page.getByRole('button', { name: 'Verify' }).click();
+    await page.getByRole('link', { name: 'Admin area' }).click();
+    await page.waitForURL('**/user/confirm-password');
+    await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
+    await page.getByRole('button', { name: 'Confirm' }).click();
+    await page.waitForURL('**/admin');
+
+    return email;
 }

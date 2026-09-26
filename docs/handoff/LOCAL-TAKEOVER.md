@@ -48,7 +48,7 @@ Read [STATUS.md](../coordination/STATUS.md) with this page. STATUS.md is the liv
 |---|---|
 | `docs/design/previews/*` | Screenshots and a recording for review. They are generated, not a running feature |
 | Home after login | A placeholder that says you are logged in, with a logout button. No workspace (M2) |
-| Admin workspace in a browser | An admin without 2FA is sent to the two-factor setup screen. With 2FA on, `/admin` has no landing page yet, so it answers 404 |
+| Admin workspace in a browser | Works (WP6 branch): an admin with 2FA opens it from the home page (a fresh password is asked on entry) and lands on the admin overview, with the Admin marker and a switch back to the student area. Accounts and the audit log are the next pages; any other `/admin` URL answers 404 |
 | Two-factor authentication | Works end to end (WP6 branch): turn it on from the home page (`/user/two-factor`, after a password check), scan the QR code, confirm a code, save the recovery codes (shown once), then log in with a code or a recovery code |
 | Invitations | Backend only. The service returns a single-use token; there is no admin screen or console command to issue one, and no acceptance page |
 | Password reset, password confirmation | Fortify's POST endpoints only. The "Forgot password?" link appears by itself once a `password.request` route exists |
@@ -73,8 +73,8 @@ In this order; each step is small and reviewable. Every screen gets the DESIGN.m
 3. **Done:** ~~Two-factor setup screen:~~ named `two-factor.setup` (`WebErrors::TWO_FACTOR_SETUP_ROUTE`). It covers enable, QR code, confirm, and recovery codes shown once. The endpoints exist under `/user/two-factor-*`, and each needs a recent password confirmation (step 2).
 4. **Forgot and reset password screens:** `password.request` and `password.reset`. The POSTs exist. Locally, mail should go to the log.
 5. **Invitation acceptance page.** `POST /invitations/accept` exists (token, name, password with confirmation, optional time zone). The link format for the page needs choosing, and invitations are manual, single-use and expiring (PM decision Q3).
-6. **Install Livewire 4.4.6.** `composer.json` is a shared file, so coordinate the change.
-7. **Workspace switch** (admins only; `POST /workspace/{student|admin}` exists) and the **admin landing page**, in `routes/web/admin-screens.php`, with the admin marker from DESIGN.md §7.2.
+6. **Install Livewire 4.4.6** with the Accounts page (step 8), the first screen that needs it. Its navigation progress bar has its own colours, so theme it or turn it off. `composer.json` is a shared file, so coordinate the change.
+7. **Done:** ~~Workspace switch and admin landing page~~ (`routes/web/admin-screens.php`, `resources/views/admin/overview.blade.php`, `<x-layouts.admin>`, `<x-admin.marker>`).
 8. **Livewire surfaces for the security tests (V2)**, each a thin adapter over a service, with `#[Locked]` IDs:
    - `Admin\Accounts\Index`
    - `Admin\AuditLog\Index`

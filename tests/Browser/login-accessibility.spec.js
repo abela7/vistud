@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { loginToChallenge, openConfirmPassword, openTwoFactorSetup, startTwoFactorSetup, THEMES, useTheme } from './support.js';
+import { loginToChallenge, openAdminOverview, openConfirmPassword, openTwoFactorSetup, startTwoFactorSetup, THEMES, useTheme } from './support.js';
 
 /* Accessibility of the login screen in every built-in theme (DESIGN.md §9). */
 
@@ -158,6 +158,28 @@ for (const theme of THEMES) {
 test('the two-factor setup never scrolls sideways at 320 px', async ({ page }) => {
     await openTwoFactorSetup(page);
     await startTwoFactorSetup(page);
+    for (const zoom of ['100%', '200%']) {
+        await page.setViewportSize({ width: 320, height: 800 });
+        await page.evaluate((size) => (document.documentElement.style.fontSize = size), zoom);
+        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+        expect(overflow, `320 px at ${zoom} text`).toBeLessThanOrEqual(0);
+    }
+});
+
+for (const theme of THEMES) {
+    for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 900 }, mobile: { width: 390, height: 844 } })) {
+        test(`admin overview axe finds no violations: ${theme}, ${name}`, async ({ page }) => {
+            await page.setViewportSize(viewport);
+            await openAdminOverview(page);
+            await useTheme(page, theme);
+            const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+            expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`)).toEqual([]);
+        });
+    }
+}
+
+test('the admin overview never scrolls sideways at 320 px', async ({ page }) => {
+    await openAdminOverview(page);
     for (const zoom of ['100%', '200%']) {
         await page.setViewportSize({ width: 320, height: 800 });
         await page.evaluate((size) => (document.documentElement.style.fontSize = size), zoom);

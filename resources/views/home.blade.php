@@ -17,6 +17,15 @@
                 </div>
                 <a href="{{ route('two-factor.setup') }}" class="btn btn-secondary">{{ auth()->user()->two_factor_confirmed_at ? 'Manage' : 'Set up' }}</a>
             </div>
+            @if (app(\App\Identity\PrincipalFactory::class)->fromRequest(request())->hasRole(\App\Platform\Access\Role::Admin))
+                <div class="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+                    <div class="space-y-1">
+                        <x-admin.marker />
+                        <p class="text-sm text-fg-muted">Manage accounts and settings.</p>
+                    </div>
+                    <a href="{{ route('admin.overview') }}" class="btn btn-secondary">Admin area</a>
+                </div>
+            @endif
             <form method="POST" action="{{ route('logout') }}" data-busy-on-submit>
                 @csrf
                 <x-button type="submit" variant="secondary" busy-label="Logging out…">Log out</x-button>
