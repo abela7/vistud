@@ -17,3 +17,8 @@ require __DIR__.'/web/auth.php';
 require __DIR__.'/web/identity.php';
 require __DIR__.'/web/student.php';
 require __DIR__.'/web/admin.php';
+
+// Design mockups for the owner's review; local development only.
+if (app()->environment('local')) {
+    require __DIR__.'/web/mockups.php';
+}

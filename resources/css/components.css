@@ -660,6 +660,37 @@
         font-weight: 500;
     }
 
+    /* ---------- Workspace chips ---------- */
+
+    /*
+    | A workspace's colour and icon. Prototype: the tones borrow the status
+    | colours until the themes gain a category palette for workspaces
+    | (docs/specs/workspaces.md, decision W5).
+    */
+    .ws-chip {
+        display: inline-grid;
+        flex: none;
+        place-items: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: var(--radius-md);
+    }
+
+    .ws-tone-1 {
+        background-color: var(--info-subtle);
+        color: var(--info);
+    }
+
+    .ws-tone-2 {
+        background-color: var(--success-subtle);
+        color: var(--success);
+    }
+
+    .ws-tone-3 {
+        background-color: var(--warning-subtle);
+        color: var(--warning);
+    }
+
     /* ---------- QR codes ---------- */
 
     /*

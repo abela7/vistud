@@ -81,6 +81,8 @@ In this order; each step is small and reviewable. Every screen gets the DESIGN.m
    - `Journal\EntryShow` (**done**: `/journal/{entry}` with a `#[Locked]` ID, under a `/journal` list; another learner's entry, a tampered locked ID and an edited snapshot all answer 404 like a missing entry. `php artisan vistud:journal:sample {email}` fills an empty journal for trying it)
 9. **403 and 404 pages** on the shared layout.
 
+**Next, M2 (proposal, awaiting the owner's decisions):** [docs/specs/workspaces.md](../specs/workspaces.md), one workspace per subject with Overview, Modules, Notes & files, Calendar and Progress. Mockups in `docs/design/mockups/`, and on a development machine at `/_mockups/workspaces` (local only; regenerate with `MOCKUPS=1 npx playwright test mockups`).
+
 **Backend dependencies:**
 - **Services these screens call:** WP2's services (`Accounts`, `Roles`, `Invitations`, `TwoFactorReset`, `Workspaces`, the audit log) and WP3's `JournalReader`. Both are delivered but not yet reviewed, and nothing else is needed from the backend for these screens.
 - **Fortify's views** stay off (`config/fortify.php`). Register each screen's GET route yourself in `routes/web/auth.php`. Turning views on registers every Fortify GET route at once, so do it only when every view is bound.

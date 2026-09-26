@@ -5,6 +5,8 @@
     menu on tablets and phones (the owner's decision for now; ADR 0003 §11's
     phone bottom bar is revisited when Notes, Review and Calendar exist).
     The admin workspace adds the permanent Admin marker and its own items.
+    Optional slots: `sidebar` replaces the navigation (in the sidebar and
+    the slide-in menu), and `tabbar` adds a bottom bar of sections on phones.
 --}}
 @props(['title', 'area' => 'student'])
 @php
@@ -84,7 +86,11 @@
         <div class="app-body">
             <aside class="app-sidebar">
                 <nav aria-label="Main">
-                    <x-app.nav :items="$items" />
+                    @isset($sidebar)
+                        {{ $sidebar }}
+                    @else
+                        <x-app.nav :items="$items" />
+                    @endisset
                 </nav>
                 <button type="button" class="nav-item sidebar-toggle" data-sidebar-toggle title="Collapse sidebar">
                     <x-icon name="panel-left" />
@@ -92,10 +98,14 @@
                 </button>
             </aside>
 
-            <main id="main" class="app-main" tabindex="-1">
+            <main id="main" @class(['app-main', 'has-tabbar' => isset($tabbar)]) tabindex="-1">
                 {{ $slot }}
             </main>
         </div>
+
+        @isset($tabbar)
+            <nav class="app-tabbar" aria-label="Sections">{{ $tabbar }}</nav>
+        @endisset
     </div>
 
     <dialog id="app-drawer" class="drawer" aria-label="Menu">
@@ -110,7 +120,11 @@
                 <div class="px-4 pt-4"><x-admin.marker /></div>
             @endif
             <nav aria-label="Main" class="p-3">
-                <x-app.nav :items="$items" />
+                @isset($sidebar)
+                    {{ $sidebar }}
+                @else
+                    <x-app.nav :items="$items" />
+                @endisset
             </nav>
         </div>
     </dialog>
