@@ -14,7 +14,11 @@
     $user = auth()->user();
     $items = $area === 'admin'
         ? [['Overview', 'admin.overview', 'layout-dashboard'], ['Accounts', 'admin.accounts', 'users'], ['Audit log', 'admin.audit-log', 'scroll-text']]
-        : [['Home', 'home', 'house'], ['Security', 'two-factor.setup', 'shield-check']];
+        : array_values(array_filter([
+            ['Home', 'home', 'house'],
+            $isStudent ? ['Journal', 'journal.index', 'notebook-text', 'journal.*'] : null,
+            ['Security', 'two-factor.setup', 'shield-check'],
+        ]));
     $homeRoute = $area === 'admin' ? 'admin.overview' : 'home';
 @endphp
 <!DOCTYPE html>

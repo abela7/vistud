@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { makeNamedStudent, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { makeNamedStudent, makeStudentWithJournal, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -328,6 +328,26 @@ test('admin audit log', async ({ page }) => {
             await useTheme(page, theme);
             await page.evaluate(() => document.activeElement?.blur());
             await page.screenshot({ path: out(`admin-audit-log-${size}-${theme}`) });
+        }
+    }
+});
+
+test('student journal: list and entry', async ({ page }) => {
+    await openStudentHome(page, makeStudentWithJournal());
+    for (const [where, path] of [['list', '/journal'], ['entry', null]]) {
+        if (path) {
+            await page.goto(path);
+        } else {
+            await page.getByRole('link', { name: /^Attempt Correct/ }).click();
+            await page.getByRole('heading', { name: /^Attempt/ }).waitFor();
+        }
+        for (const [size, viewport] of Object.entries(sizes)) {
+            for (const theme of ['vistud-light', 'vistud-dark']) {
+                await page.setViewportSize(viewport);
+                await useTheme(page, theme);
+                await page.evaluate(() => document.activeElement?.blur());
+                await page.screenshot({ path: out(`journal-${where}-${size}-${theme}`), fullPage: size === 'mobile' });
+            }
         }
     }
 });

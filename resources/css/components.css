@@ -442,6 +442,15 @@
         color: var(--warning);
     }
 
+    .badge-success {
+        background-color: var(--success-subtle);
+        color: var(--text);
+    }
+
+    .badge-success svg {
+        color: var(--success);
+    }
+
     .badge-danger {
         background-color: var(--danger-subtle);
         color: var(--text);

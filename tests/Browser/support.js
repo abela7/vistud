@@ -116,6 +116,14 @@ export function makeNamedStudent(name) {
     return makeAccount(false, false, name);
 }
 
+/** A student whose journal holds the sample entries (php artisan vistud:journal:sample). */
+export function makeStudentWithJournal() {
+    const email = makeAccount(false);
+    execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'vistud:journal:sample', email], { cwd: appRoot, stdio: 'pipe' });
+
+    return email;
+}
+
 /** A student with no second factor, so login finishes on the home page. */
 export function makeStudentAccount() {
     return makeAccount(false);

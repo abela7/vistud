@@ -98,6 +98,12 @@ php artisan vistud:admin:reset-2fa you@example.com
 
 Admins must set up two-factor authentication before entering the admin workspace. Every one of these commands is written to the audit log as a system action.
 
+To try the Journal pages, give a student's empty journal a few synthetic entries (refused in production):
+
+```bash
+php artisan vistud:journal:sample student.a@vistud.test
+```
+
 ## Database users
 
 There are two MySQL users, on purpose:

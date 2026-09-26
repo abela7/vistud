@@ -15,4 +15,5 @@ Route::get('/', fn () => auth()->check() ? view('home') : redirect()->route('log
 
 require __DIR__.'/web/auth.php';
 require __DIR__.'/web/identity.php';
+require __DIR__.'/web/student.php';
 require __DIR__.'/web/admin.php';

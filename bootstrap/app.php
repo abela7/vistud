@@ -7,6 +7,7 @@ use App\Http\Middleware\EnterAdminWorkspace;
 use App\Http\Middleware\RequirePasswordConfirmation;
 use App\Http\Middleware\ShowRecoveryCodesOnce;
 use App\Platform\Errors\AppError;
+use App\Platform\Errors\NotFound;
 use App\Platform\Http\ErrorEnvelope;
 use App\Platform\Http\Middleware\AddAccountHeader;
 use App\Platform\Http\Middleware\AssignRequestId;
@@ -17,6 +18,9 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\ViewException;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
+use Livewire\Mechanisms\HandleComponents\CorruptComponentPayloadException;
 
 $wantsJson = fn (Request $request) => $request->is('api/*') || $request->expectsJson();
 
@@ -51,6 +55,22 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) use ($wantsJson): void {
         // Expected failures reported to callers are not application errors.
         $exceptions->dontReport([AppError::class]);
+
+        // A service refusal thrown while a view renders (a Livewire component
+        // on a page) keeps its own answer, not a generic server error.
+        $exceptions->map(function (ViewException $e) {
+            $inner = $e;
+            while ($inner instanceof ViewException && $inner->getPrevious() !== null) {
+                $inner = $inner->getPrevious();
+            }
+
+            return $inner instanceof AppError ? $inner : $e;
+        });
+
+        // A tampered Livewire request answers exactly like a record that
+        // doesn't exist (ADR 0003 §10.4 D6, T3).
+        $exceptions->map(CannotUpdateLockedPropertyException::class, fn () => new NotFound);
+        $exceptions->map(CorruptComponentPayloadException::class, fn () => new NotFound);
 
         $exceptions->shouldRenderJsonWhen($wantsJson);
 

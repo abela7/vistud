@@ -78,7 +78,7 @@ In this order; each step is small and reviewable. Every screen gets the DESIGN.m
 8. **Livewire surfaces for the security tests (V2)**, each a thin adapter over a service, with `#[Locked]` IDs:
    - `Admin\Accounts\Index` (**done**: list and search; suspend, reactivate, grant and revoke admin, reset 2FA; `selectedId` is `#[Locked]`)
    - `Admin\AuditLog\Index` (**done**: read-only, newest first, one action filter; it has no action that writes)
-   - `Journal\EntryShow`
+   - `Journal\EntryShow` (**done**: `/journal/{entry}` with a `#[Locked]` ID, under a `/journal` list; another learner's entry, a tampered locked ID and an edited snapshot all answer 404 like a missing entry. `php artisan vistud:journal:sample {email}` fills an empty journal for trying it)
 9. **403 and 404 pages** on the shared layout.
 
 **Backend dependencies:**
