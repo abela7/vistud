@@ -13,7 +13,7 @@
         : null;
     $holds = function (array $count) {
         $parts = [];
-        foreach (['notes' => 'note', 'files' => 'file', 'folders' => 'folder'] as $key => $word) {
+        foreach (['notes' => 'note', 'files' => 'file', 'links' => 'link', 'folders' => 'folder'] as $key => $word) {
             if (($count[$key] ?? 0) > 0) {
                 $parts[] = $count[$key].' '.Str::plural($word, $count[$key]);
             }
@@ -61,7 +61,9 @@
                             ['Edit', 'pencil', "editModule('{$module->id}')", false],
                             ['New note', 'file-plus', "newNote('module', '{$module->id}')", false],
                             ['Upload files', 'upload', "uploadFiles('module', '{$module->id}')", false],
+                            ['Add a link', 'link', "newLink('module', '{$module->id}')", false],
                             ['New folder', 'folder-plus', "newFolder('module', '{$module->id}')", false],
+                            ['Instructions for the assistant', 'message-square-text', "editInstructions('{$module->id}')", false],
                             ['Move up', 'arrow-up', "moveModuleBy('{$module->id}', -1)", $i === 0],
                             ['Move down', 'arrow-down', "moveModuleBy('{$module->id}', 1)", $i === count($modules) - 1],
                             ['Delete', 'trash-2', "confirmDelete('module', '{$module->id}')", false],
@@ -69,12 +71,13 @@
                     </div>
                     <div id="module-body-{{ $module->id }}" x-show="open" class="border-t border-divider px-3 py-2">
                         @include('livewire.workspaces.partials.place', ['key' => "module:{$module->id}"])
-                        @unless (isset($children["module:{$module->id}"]) || isset($notesIn["module:{$module->id}"]) || isset($filesIn["module:{$module->id}"]))
+                        @unless (isset($children["module:{$module->id}"]) || isset($notesIn["module:{$module->id}"]) || isset($filesIn["module:{$module->id}"]) || isset($linksIn["module:{$module->id}"]))
                             <p class="px-2 py-2 text-sm text-fg-muted">Nothing here yet.</p>
                         @endunless
                         <div class="flex flex-wrap gap-1">
                             <x-button variant="ghost" icon="file-plus" wire:click="newNote('module', '{{ $module->id }}')">New note</x-button>
                             <x-button variant="ghost" icon="upload" wire:click="uploadFiles('module', '{{ $module->id }}')">Upload files</x-button>
+                            <x-button variant="ghost" icon="link" wire:click="newLink('module', '{{ $module->id }}')">Add link</x-button>
                             <x-button variant="ghost" icon="folder-plus" wire:click="newFolder('module', '{{ $module->id }}')">New folder</x-button>
                         </div>
                     </div>

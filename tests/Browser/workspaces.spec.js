@@ -68,13 +68,13 @@ test('editing, archiving and restoring a workspace', async ({ page }) => {
     await page.getByRole('link', { name: 'Biology' }).last().click();
     await expect(heading(page, 'Biology')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Edit' }).click();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await expect(form(page).getByLabel('Name')).toHaveValue('Biology');
     await form(page).getByLabel('Name').fill('Human biology');
     await form(page).getByRole('button', { name: 'Save changes' }).click();
     await expect(heading(page, 'Human biology')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Edit' }).click();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await form(page).getByRole('button', { name: 'Archive' }).click();
     await expect(page.getByText('Human biology is archived.')).toBeVisible();
     await expect(page.locator('main').getByRole('link', { name: 'Human biology' })).toBeHidden();
@@ -169,6 +169,6 @@ test('workspaces never scroll sideways at 320 px, even with 200% text', async ({
     await page.locator('main').getByRole('link', { name: /rather long/ }).click();
     await page.getByRole('heading', { level: 1 }).waitFor();
     await check('workspace overview');
-    await page.getByRole('button', { name: 'Edit' }).click();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await check('edit dialog');
 });

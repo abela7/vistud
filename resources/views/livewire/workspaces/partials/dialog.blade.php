@@ -1,14 +1,16 @@
-{{-- The one dialog of App\Livewire\Workspaces\Contents: a module, a folder, renaming a file, uploading, a move, or deleting. --}}
+{{-- The one dialog of App\Livewire\Workspaces\Contents: a module, a folder, renaming a file, a web link, a module's instructions, uploading, a move, or deleting. --}}
 @php
     $headings = [
         'file' => 'Rename file',
         'upload' => 'Upload files'.($target ? ' to '.$target : ''),
         'module' => $creating ? 'New module' : 'Edit module',
         'folder' => $creating ? 'New folder'.($target ? ' in '.$target : '') : 'Rename folder',
+        'link' => $creating ? 'Add a link'.($target ? ' to '.$target : '') : 'Edit link',
+        'instructions' => 'Instructions for '.$target,
         'move' => 'Move “'.$target.'”',
         'delete' => in_array($targetType, ['note', 'file'], true) ? 'Delete “'.$target.'” for good?' : 'Delete “'.$target.'”?',
     ];
-    $submit = ['module' => $creating ? 'Add module' : 'Save', 'folder' => $creating ? 'Add folder' : 'Rename', 'file' => 'Rename', 'upload' => 'Upload', 'move' => 'Move', 'delete' => in_array($targetType, ['note', 'file'], true) ? 'Delete for good' : 'Delete'];
+    $submit = ['module' => $creating ? 'Add module' : 'Save', 'folder' => $creating ? 'Add folder' : 'Rename', 'file' => 'Rename', 'link' => $creating ? 'Add link' : 'Save', 'instructions' => 'Save', 'upload' => 'Upload', 'move' => 'Move', 'delete' => in_array($targetType, ['note', 'file'], true) ? 'Delete for good' : 'Delete'];
 @endphp
 <dialog id="structure-dialog" class="modal" aria-labelledby="structure-dialog-title"
     wire:ignore.self
@@ -42,6 +44,16 @@
                     <x-field name="name" label="Name" wire:model="name" maxlength="120" autocomplete="off" autofocus />
                 @elseif ($mode === 'file')
                     <x-field name="name" label="Name" wire:model="name" maxlength="200" autocomplete="off" hint="The ending (like .pdf) stays: it says what kind of file this is." autofocus />
+                @elseif ($mode === 'link')
+                    <x-field name="url" label="Address" type="url" inputmode="url" wire:model="url" maxlength="2000" autocomplete="off" placeholder="https://" autofocus />
+                    <x-field name="name" label="Title (optional)" wire:model="name" maxlength="200" autocomplete="off" hint="Like “Joins explained (video)”. Left empty, it's the site's name." />
+                @elseif ($mode === 'instructions')
+                    <div class="field">
+                        <label for="module-instructions" class="field-label">What should the assistant know when you study this module?</label>
+                        <textarea id="module-instructions" class="input" rows="6" maxlength="2000" wire:model="instructions" autofocus aria-describedby="module-instructions-hint"></textarea>
+                        <p id="module-instructions-hint" class="field-hint">Like “This week is revision: quiz me more than you explain” or “Focus on the SQL, skip the history”. It's added to the course's instructions when a study session starts.</p>
+                        @error('instructions') <p class="field-error">{{ $message }}</p> @enderror
+                    </div>
                 @elseif ($mode === 'upload')
                     <div class="space-y-3">
                         <label class="drop-zone" x-data="{ over: false }" x-bind:class="over && 'is-over'" x-on:dragenter="over = true" x-on:dragleave="over = false" x-on:drop="over = false">
@@ -94,6 +106,8 @@
                     <p class="text-fg-muted">The note and every saved version of it are deleted. This can't be undone.</p>
                 @elseif ($targetType === 'file')
                     <p class="text-fg-muted">The file is deleted from ViStud. This can't be undone.</p>
+                @elseif ($targetType === 'link')
+                    <p class="text-fg-muted">The link is removed from ViStud. The page it points to isn't touched.</p>
                 @else
                     <p class="text-fg-muted">This can't be undone. Only an empty {{ $targetType }} can be deleted.</p>
                 @endif

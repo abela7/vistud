@@ -1,13 +1,15 @@
 {{--
     What one place ($key: a module, a folder, or the top level) holds: its
-    notes, its files, then its folders, each folder with what it holds below it.
+    notes, its files, its web links, then its folders, each folder with what
+    it holds below it.
 --}}
 @php
     $placeNotes = $notesIn[$key] ?? [];
     $placeFiles = $filesIn[$key] ?? [];
+    $placeLinks = $linksIn[$key] ?? [];
     $placeFolders = $children[$key] ?? [];
 @endphp
-@if ($placeNotes !== [] || $placeFiles !== [] || $placeFolders !== [])
+@if ($placeNotes !== [] || $placeFiles !== [] || $placeLinks !== [] || $placeFolders !== [])
     <ul class="folder-list" role="list">
         @foreach ($placeNotes as $note)
             <li wire:key="note-{{ $note->id }}">
@@ -41,6 +43,22 @@
                 </div>
             </li>
         @endforeach
+        @foreach ($placeLinks as $link)
+            <li wire:key="link-{{ $link->id }}">
+                <div class="folder-row">
+                    <x-icon name="link" class="size-5 shrink-0 text-fg-muted" />
+                    <span class="min-w-0 flex-1 py-1">
+                        <a href="{{ $link->url }}" target="_blank" rel="noopener noreferrer" class="item-link">{{ $link->title }}<span class="sr-only"> (opens in a new tab)</span></a>
+                        <span class="block text-sm text-fg-muted">Link · {{ $link->site() }}</span>
+                    </span>
+                    @include('livewire.workspaces.partials.row-menu', ['id' => $link->id, 'label' => $link->title, 'items' => [
+                        ['Edit', 'pencil', "editLink('{$link->id}')", false],
+                        ['Move to…', 'folder-input', "moveLink('{$link->id}')", false],
+                        ['Delete', 'trash-2', "confirmDelete('link', '{$link->id}')", false],
+                    ]])
+                </div>
+            </li>
+        @endforeach
         @foreach ($placeFolders as $i => $folder)
             <li wire:key="folder-{{ $folder->id }}">
                 <div class="folder-row">
@@ -49,6 +67,7 @@
                     @include('livewire.workspaces.partials.row-menu', ['id' => $folder->id, 'label' => $folder->name, 'items' => [
                         ['New note inside', 'file-plus', "newNote('folder', '{$folder->id}')", false],
                         ['Upload files here', 'upload', "uploadFiles('folder', '{$folder->id}')", false],
+                        ['Add a link here', 'link', "newLink('folder', '{$folder->id}')", false],
                         ['New folder inside', 'folder-plus', "newFolder('folder', '{$folder->id}')", $folder->depth >= \App\Study\Folders::MAX_DEPTH],
                         ['Rename', 'pencil', "renameFolder('{$folder->id}')", false],
                         ['Move to…', 'folder-input', "moveFolder('{$folder->id}')", false],

@@ -128,9 +128,10 @@ final class Folders
             foreach ($subtree as $row) {
                 LearnerTables::query($scope, 'folders')->where('id', $row->id)->update(['module_id' => $moduleId, 'depth' => (int) $row->depth + $shift]);
             }
-            // The notes and files inside go with their folders.
+            // The notes, files and links inside go with their folders.
             LearnerTables::query($scope, 'notes')->whereIn('folder_id', array_column($subtree, 'id'))->update(['module_id' => $moduleId]);
             LearnerTables::query($scope, 'files')->whereIn('folder_id', array_column($subtree, 'id'))->update(['module_id' => $moduleId]);
+            LearnerTables::query($scope, 'links')->whereIn('folder_id', array_column($subtree, 'id'))->update(['module_id' => $moduleId]);
         });
     }
 
@@ -150,7 +151,7 @@ final class Folders
         });
     }
 
-    /** Only an empty folder can go: its folders, notes and files must be moved or deleted first. What's in the trash doesn't count. */
+    /** Only an empty folder can go: its folders, notes, files and links must be moved or deleted first. What's in the trash doesn't count. */
     public function delete(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
@@ -159,7 +160,8 @@ final class Folders
             $this->row($scope, $id, lock: true);
             if (LearnerTables::query($scope, 'folders')->where('parent_id', $id)->exists()
                 || LearnerTables::query($scope, 'notes')->where('folder_id', $id)->whereNull('trashed_at')->exists()
-                || LearnerTables::query($scope, 'files')->where('folder_id', $id)->whereNull('trashed_at')->exists()) {
+                || LearnerTables::query($scope, 'files')->where('folder_id', $id)->whereNull('trashed_at')->exists()
+                || LearnerTables::query($scope, 'links')->where('folder_id', $id)->exists()) {
                 throw new Conflict('not_empty', 'Move or delete what\'s inside first.');
             }
             LearnerTables::query($scope, 'folders')->where('id', $id)->delete();

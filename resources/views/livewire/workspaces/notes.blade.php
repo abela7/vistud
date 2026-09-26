@@ -1,7 +1,7 @@
 {{--
     A workspace's Notes & files section (App\Livewire\Workspaces\Contents,
     view `notes`): the notes edited most recently, what sits outside every
-    module, and the trash. Files arrive with step 4.
+    module (notes, files, web links and folders), and the trash.
 --}}
 @php
     use App\Study\Notes;
@@ -12,9 +12,10 @@
 @endphp
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <p class="text-fg-muted">{{ $noteCount }} {{ Str::plural('note', $noteCount) }} · {{ $fileCount }} {{ Str::plural('file', $fileCount) }}</p>
+        <p class="text-fg-muted">{{ $noteCount }} {{ Str::plural('note', $noteCount) }} · {{ $fileCount }} {{ Str::plural('file', $fileCount) }} · {{ $linkCount }} {{ Str::plural('link', $linkCount) }}</p>
         <div class="flex flex-wrap gap-2">
             <x-button icon="folder-plus" wire:click="newFolder('workspace', '{{ $workspaceId }}')">New folder</x-button>
+            <x-button icon="link" wire:click="newLink('workspace', '{{ $workspaceId }}')">Add link</x-button>
             <x-button icon="upload" wire:click="uploadFiles('workspace', '{{ $workspaceId }}')">Upload files</x-button>
             <x-button variant="primary" icon="file-plus" wire:click="newNote('workspace', '{{ $workspaceId }}')">New note</x-button>
         </div>
@@ -50,8 +51,8 @@
         <h2 id="loose-heading" class="text-lg font-semibold">Not in a module</h2>
         <div class="module-card px-3 py-2">
             @include('livewire.workspaces.partials.place', ['key' => $top])
-            @unless (isset($children[$top]) || isset($notesIn[$top]) || isset($filesIn[$top]))
-                <p class="px-2 py-3 text-sm text-fg-muted">Notes, files and folders that don't belong to one module, like exam revision or the course handbook, go here. What's inside modules is in Modules.</p>
+            @unless (isset($children[$top]) || isset($notesIn[$top]) || isset($filesIn[$top]) || isset($linksIn[$top]))
+                <p class="px-2 py-3 text-sm text-fg-muted">Notes, files, links and folders that don't belong to one module, like exam revision or the course handbook, go here. What's inside modules is in Modules.</p>
             @endunless
         </div>
     </section>

@@ -1,8 +1,8 @@
 # Study memory: the tracker, the session and the engine
 
-**Status:** decided by the owner on 2026-09-26. Built: step 1a, the tracker's
-topics, statuses and questions (the Progress section). Next: 1b (findings,
-links, assignments, instructions, Overview), then steps 2–4.
+**Status:** decided by the owner on 2026-09-26. Built: step 1, the tracker:
+topics, statuses and questions (1a); findings, web links, assignments and
+tasks, instructions and the Overview (1b). Next: step 2, the session engine.
 
 **The idea in one line.** ViStud is the body; the language model is the engine.
 The body keeps a living copy of what the student understands about each
@@ -37,11 +37,11 @@ still open. At exam time nothing has accumulated.
 | **Topics** | The spine of the course: Normalisation, Joins, Transactions… Each has a module, a status the student set, and the evidence label and flags the rules derive | `topics` table (organisation: name, module, order) + a `defines` claim in the journal (the entity) |
 | **Statuses** | *Covered* = an `exposure` about the topic (a lecture reached the student). *Understood* = a `confident` self-report. *Confused* = a `confused` self-report. *Mastered* = rules label secure or durable | The journal; the latest click is cached on the row |
 | **Questions** | What the student asked or didn't get: text, topic, and a state (*open* or *understood*), plus an *ask the teacher* flag | `questions` table + a question entity, a `question` event and a `refers_to` claim; *understood* is an explanation (exposure) that answers it and a `clicked` self-report |
-| **Findings** | Short "must know" lines pinned to a topic, with their source | Step 1b |
-| **Resources** | Files (built) and web links | Step 1b |
-| **Assignments and tasks** | With *to do / in progress / done* and a due date; also what the calendar shows | Step 1b, as `activity` records |
-| **Instructions** | *About me* (every course), per workspace, per module: how to teach, what to focus on, the student's level | Step 1b |
-| **Overview** | "Where am I": topics by status, open questions, what's due, continue where you left off | Step 1b |
+| **Findings** | Short "must know" lines pinned to a topic, with their source (a note or file, and where in it) and who wrote them (the student, or a study session) | `findings` table; plain rows, since they are material, not learning state. Under each topic in Progress |
+| **Resources** | Files and web links, in the same places as notes | `files` and `links` tables. In Modules and Notes & files |
+| **Assignments and tasks** | Assignment, quiz, exam, lab, problem set or to-do, with *to do / in progress / done* and a due date; also what the calendar will show | `activities` table + an `activity` record revision in the journal for every change. On the Overview |
+| **Instructions** | *About you* (every course), this course, and each module: how to teach, what to focus on, the student's level | `instructions` table. On the Overview; a module's in its menu in Modules |
+| **Overview** | "Where am I": topics by status, what's still confusing, open questions, assignments and tasks soonest first, notes to pick up, instructions | The workspace's Overview page |
 
 ## 4. The session (step 2)
 

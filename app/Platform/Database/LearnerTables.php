@@ -38,6 +38,10 @@ final class LearnerTables
         'files',
         'topics',
         'questions',
+        'findings',
+        'links',
+        'activities',
+        'instructions',
     ];
 
     public static function query(LearnerScope $scope, string $table): Builder

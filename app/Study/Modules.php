@@ -98,7 +98,7 @@ final class Modules
         });
     }
 
-    /** Only an empty module can go: its folders, notes and files must be moved or deleted first. What's in the trash doesn't count. */
+    /** Only an empty module can go: its folders, notes, files and links must be moved or deleted first. What's in the trash doesn't count; its topics and tasks move out of it. */
     public function delete(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
@@ -107,9 +107,14 @@ final class Modules
             $row = $this->lock($scope, $id);
             if (LearnerTables::query($scope, 'folders')->where('module_id', $id)->exists()
                 || LearnerTables::query($scope, 'notes')->where('module_id', $id)->whereNull('trashed_at')->exists()
-                || LearnerTables::query($scope, 'files')->where('module_id', $id)->whereNull('trashed_at')->exists()) {
+                || LearnerTables::query($scope, 'files')->where('module_id', $id)->whereNull('trashed_at')->exists()
+                || LearnerTables::query($scope, 'links')->where('module_id', $id)->exists()) {
                 throw new Conflict('not_empty', 'Move or delete what\'s inside first.');
             }
+            // Its topics and tasks stay in the course, outside every module; its instructions go.
+            LearnerTables::query($scope, 'topics')->where('module_id', $id)->update(['module_id' => null]);
+            LearnerTables::query($scope, 'activities')->where('module_id', $id)->update(['module_id' => null]);
+            LearnerTables::query($scope, 'instructions')->where('scope', "module:{$id}")->delete();
             LearnerTables::query($scope, 'modules')->where('id', $id)->delete();
             $row->revision++;
             $this->record($scope, $row, deleted: true);

@@ -536,6 +536,8 @@ test('progress: topics with statuses and evidence, questions, the topic dialog',
     await page.goto(`/workspaces/${student.workspace}/progress`);
     await page.getByRole('heading', { level: 1, name: 'Progress' }).waitFor();
     await page.waitForLoadState('load');
+    await page.getByRole('button', { name: '2 findings' }).click();
+    await page.getByRole('list', { name: 'Findings about Joins' }).waitFor();
     for (const [size, viewport] of Object.entries(sizes)) {
         for (const theme of ['vistud-light', 'vistud-dark']) {
             await page.setViewportSize(viewport);
@@ -546,8 +548,45 @@ test('progress: topics with statuses and evidence, questions, the topic dialog',
     }
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
+    const normalisation = page.locator('.topic-row').filter({ hasText: 'Normalisation' });
+    await normalisation.getByRole('button', { name: /Actions for/ }).click();
+    await normalisation.getByRole('button', { name: 'Add a finding' }).click();
+    await page.locator('#progress-dialog').getByLabel('What you need to know').fill('Third normal form: no column depends on another non-key column.');
+    await page.locator('#progress-dialog').getByLabel('From (optional)').selectOption({ label: 'Lecture 3: joins' });
+    await page.locator('#progress-dialog').getByLabel('Where in it (optional)').fill('slide 20');
+    await page.screenshot({ path: out('progress-desktop-vistud-light-finding') });
+    await page.keyboard.press('Escape');
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
     await page.getByRole('button', { name: 'New question' }).click();
     await page.locator('#progress-dialog').getByLabel('Question').fill('When is a table in third normal form?');
     await page.locator('#progress-dialog').getByLabel('About (optional)').selectOption({ label: 'Normalisation' });
     await page.screenshot({ path: out('progress-desktop-vistud-light-question') });
+});
+
+test('overview: where you are, assignments and tasks, instructions', async ({ page }) => {
+    const student = makeStudentWithTopics();
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}`);
+    await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
+    await page.waitForLoadState('load');
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`overview-${size}-${theme}`), fullPage: size === 'mobile' });
+        }
+    }
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#tasks-dialog').getByLabel('What').fill('Normalisation problem sheet');
+    await page.locator('#tasks-dialog').getByLabel('Kind').selectOption({ label: 'Problem set' });
+    await page.screenshot({ path: out('overview-desktop-vistud-light-task') });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Edit: About you' }).click();
+    await page.locator('#instructions-dialog').getByRole('textbox').fill("I'm in my second year. Explain with everyday examples, one step at a time, and check I follow before moving on.");
+    await page.screenshot({ path: out('overview-desktop-vistud-light-instructions') });
 });

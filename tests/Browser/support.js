@@ -196,6 +196,11 @@ export function makeStudentWithTopics() {
         `$t = app(\\App\\Study\\Topics::class); $joins = $t->create($p, $w->id, 'Joins', $m->id); $keys = $t->create($p, $w->id, 'Primary and foreign keys', $m->id); $norm = $t->create($p, $w->id, 'Normalisation');`,
         `$t->report($p, $joins->id, 'understood'); $t->report($p, $keys->id, 'confused');`,
         `app(\\App\\Study\\Questions::class)->ask($p, $w->id, 'Why does a left join keep the unmatched rows?', $joins->id);`,
+        `$note = app(\\App\\Study\\Notes::class)->create($p, 'module', $m->id, 'Lecture 3: joins');`,
+        `$f = app(\\App\\Study\\Findings::class); $f->add($p, $joins->id, ['text' => 'A left join keeps every row of the left table, matched or not.', 'source' => 'note:'.$note->id, 'locator' => 'slide 12']); $f->add($p, $joins->id, ['text' => 'An inner join keeps only the rows that match on both sides.'], 'ai');`,
+        `app(\\App\\Study\\Links::class)->add($p, 'module', $m->id, ['title' => 'Joins explained (video)', 'url' => 'https://www.youtube.com/watch?v=joins']);`,
+        `$a = app(\\App\\Study\\Activities::class); $a->create($p, $w->id, ['kind' => 'assignment', 'title' => 'ER diagram for the library', 'due_on' => now()->addDays(2)->toDateString(), 'module_id' => $m->id]); $a->create($p, $w->id, ['kind' => 'exam', 'title' => 'Midterm', 'due_on' => now()->addDays(20)->toDateString()]); $lab = $a->create($p, $w->id, ['kind' => 'lab', 'title' => 'SQL lab 2', 'due_on' => now()->subDay()->toDateString()]); $a->setStatus($p, $lab->id, 'doing');`,
+        `app(\\App\\Study\\Instructions::class)->set($p, 'workspace:'.$w->id, 'Go slide by slide. After each section, ask me two questions before moving on.');`,
         `echo json_encode(['workspace' => $w->id]);`,
     ].join(' ');
     const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();

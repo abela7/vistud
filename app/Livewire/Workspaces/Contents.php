@@ -11,6 +11,9 @@ use App\Study\FileDetails;
 use App\Study\Files;
 use App\Study\FolderDetails;
 use App\Study\Folders;
+use App\Study\Instructions;
+use App\Study\LinkDetails;
+use App\Study\Links;
 use App\Study\Modules;
 use App\Study\NoteDetails;
 use App\Study\Notes;
@@ -25,7 +28,7 @@ use Livewire\WithFileUploads;
  * What a workspace holds (docs/specs/workspaces.md, steps 2 and 3), for two
  * of its sections: `modules` (its modules, with the folders and notes inside
  * each) and `notes` (Notes & files: recent notes, what sits outside every
- * module, and the trash). One dialog serves every form. The services check
+ * module, and the trash). Web links sit beside notes and files. One dialog serves every form. The services check
  * everything; the IDs the dialog acts on are locked.
  */
 final class Contents extends Component
@@ -39,14 +42,14 @@ final class Contents extends Component
     #[Locked]
     public string $view = 'modules';
 
-    /** module · folder · file (renaming) · upload · move · delete, or null when the dialog is closed. */
+    /** module · folder · file (renaming) · link · instructions · upload · move · delete, or null when the dialog is closed. */
     #[Locked]
     public ?string $mode = null;
 
     #[Locked]
     public bool $creating = false;
 
-    /** module, folder, note or file: what the dialog acts on, or (creating a folder, uploading) where it goes. */
+    /** module, folder, note, file or link: what the dialog acts on, or (creating a folder or link, uploading) where it goes. */
     #[Locked]
     public ?string $targetType = null;
 
@@ -64,6 +67,11 @@ final class Contents extends Component
     public string $endsOn = '';
 
     public string $name = '';
+
+    public string $url = '';
+
+    /** A module's instructions for the assistant. */
+    public string $instructions = '';
 
     /** Where a moved folder, note or file goes: workspace:{id}, module:{id} or folder:{id}. */
     public string $destination = '';
@@ -89,12 +97,18 @@ final class Contents extends Component
 
     private Files $files;
 
+    private Links $links;
+
+    private Instructions $instructionTexts;
+
     private Workspaces $workspaces;
 
     private PrincipalFactory $principals;
 
-    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Workspaces $workspaces, PrincipalFactory $principals): void
+    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, PrincipalFactory $principals): void
     {
+        $this->links = $links;
+        $this->instructionTexts = $instructions;
         $this->modules = $modules;
         $this->folders = $folders;
         $this->notes = $notes;
@@ -164,6 +178,34 @@ final class Contents extends Component
         $this->name = $file->name;
     }
 
+    /** A web link at the top level (`workspace`), in a module or in a folder. */
+    public function newLink(string $placeType, string $placeId): void
+    {
+        $this->open('link', creating: true, targetType: in_array($placeType, ['workspace', 'module', 'folder'], true) ? $placeType : 'module', targetId: $placeId);
+    }
+
+    public function editLink(string $id): void
+    {
+        $link = $this->links->find($this->principal(), $id);
+        $this->open('link', targetType: 'link', targetId: $link->id);
+        [$this->name, $this->url] = [$link->title, $link->url];
+    }
+
+    public function moveLink(string $id): void
+    {
+        $link = $this->links->find($this->principal(), $id);
+        $this->open('move', targetType: 'link', targetId: $link->id);
+        $this->destination = $this->placeValue($link->moduleId, $link->folderId);
+    }
+
+    /** What the assistant should know when studying this module. */
+    public function editInstructions(string $moduleId): void
+    {
+        $module = $this->modules->find($this->principal(), $moduleId);
+        $this->open('instructions', targetType: 'module', targetId: $module->id);
+        $this->instructions = $this->instructionTexts->get($this->principal(), "module:{$module->id}");
+    }
+
     /** Upload files to the top level (`workspace`), a module or a folder. */
     public function uploadFiles(string $placeType, string $placeId): void
     {
@@ -172,7 +214,7 @@ final class Contents extends Component
 
     public function confirmDelete(string $type, string $id): void
     {
-        $this->open('delete', targetType: in_array($type, ['folder', 'note', 'file'], true) ? $type : 'module', targetId: $id);
+        $this->open('delete', targetType: in_array($type, ['folder', 'note', 'file', 'link'], true) ? $type : 'module', targetId: $id);
     }
 
     // ---------- Notes, straight away ----------
@@ -233,6 +275,9 @@ final class Contents extends Component
                 ['folder', true] => $this->folders->create($by, (string) $this->targetType, (string) $this->targetId, $this->name)->name.' is added.',
                 ['folder', false] => $this->renamed($by),
                 ['file', false] => $this->renamedFile($by),
+                ['link', true] => '“'.$this->links->add($by, (string) $this->targetType, (string) $this->targetId, ['title' => $this->name, 'url' => $this->url])->title.'” is added.',
+                ['link', false] => '“'.$this->links->update($by, (string) $this->targetId, ['title' => $this->name, 'url' => $this->url])->title.'” is saved.',
+                ['instructions', false] => $this->savedInstructions($by),
                 ['upload', true] => $this->uploaded($by),
                 ['move', false] => $this->moved($by),
                 ['delete', false] => $this->deleted($by),
@@ -240,7 +285,7 @@ final class Contents extends Component
             };
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
-                $this->addError(['starts_on' => 'startsOn', 'ends_on' => 'endsOn'][$field] ?? $field, $messages[0]);
+                $this->addError(['starts_on' => 'startsOn', 'ends_on' => 'endsOn', 'title' => $this->mode === 'link' ? 'name' : 'title', 'text' => 'instructions'][$field] ?? $field, $messages[0]);
             }
 
             return;
@@ -270,7 +315,7 @@ final class Contents extends Component
                 $upload->delete();
             }
         }
-        $this->reset('mode', 'creating', 'targetType', 'targetId', 'title', 'startsOn', 'endsOn', 'name', 'destination', 'error', 'uploads', 'uploadErrors');
+        $this->reset('mode', 'creating', 'targetType', 'targetId', 'title', 'startsOn', 'endsOn', 'name', 'url', 'instructions', 'destination', 'error', 'uploads', 'uploadErrors');
         $this->resetErrorBag();
     }
 
@@ -312,6 +357,7 @@ final class Contents extends Component
         $folders = $this->folders->tree($by, $this->workspaceId);
         $notes = $this->notes->list($by, $this->workspaceId);
         $files = $this->files->list($by, $this->workspaceId);
+        $links = $this->links->list($by, $this->workspaceId);
 
         $children = [];
         foreach ($folders as $folder) {
@@ -325,12 +371,17 @@ final class Contents extends Component
         foreach ($files as $file) {
             $filesIn[$file->placeKey()][] = $file;
         }
+        $linksIn = [];
+        foreach ($links as $link) {
+            $linksIn[$link->placeKey()][] = $link;
+        }
         $counts = [];
-        foreach ([...$folders, ...$notes, ...$files] as $item) {
+        foreach ([...$folders, ...$notes, ...$files, ...$links] as $item) {
             if ($item->moduleId !== null) {
                 $kind = match (true) {
                     $item instanceof NoteDetails => 'notes',
                     $item instanceof FileDetails => 'files',
+                    $item instanceof LinkDetails => 'links',
                     default => 'folders',
                 };
                 $counts[$item->moduleId][$kind] = ($counts[$item->moduleId][$kind] ?? 0) + 1;
@@ -343,6 +394,7 @@ final class Contents extends Component
             'children' => $children,
             'notesIn' => $notesIn,
             'filesIn' => $filesIn,
+            'linksIn' => $linksIn,
             'maxUpload' => Files::maxBytes(),
             'counts' => $counts,
             'target' => $this->targetName($modules, $folders, $notes, $files),
@@ -355,6 +407,7 @@ final class Contents extends Component
             $data += [
                 'noteCount' => count($notes),
                 'fileCount' => count($files),
+                'linkCount' => count($links),
                 'recent' => array_slice($recent, 0, 5),
                 'places' => $this->placeNames($modules, $folders),
                 'trash' => $this->notes->trashed($by, $this->workspaceId),
@@ -402,6 +455,13 @@ final class Contents extends Component
         return '“'.$this->files->find($by, (string) $this->targetId)->fileName().'” is renamed.';
     }
 
+    private function savedInstructions(Principal $by): string
+    {
+        $this->instructionTexts->set($by, "module:{$this->targetId}", $this->instructions);
+
+        return 'The instructions for '.$this->modules->find($by, (string) $this->targetId)->title.' are saved.';
+    }
+
     /** Each chosen file, checked and kept; the ones that fail are listed with the reason, and stay out. */
     private function uploaded(Principal $by): ?string
     {
@@ -445,6 +505,11 @@ final class Contents extends Component
 
             return '“'.$this->files->find($by, (string) $this->targetId)->fileName().'” is moved.';
         }
+        if ($this->targetType === 'link') {
+            $this->links->move($by, (string) $this->targetId, $type, $id);
+
+            return '“'.$this->links->find($by, (string) $this->targetId)->title.'” is moved.';
+        }
         if ($this->targetType === 'note') {
             $this->notes->move($by, (string) $this->targetId, $type, $id);
 
@@ -462,6 +527,7 @@ final class Contents extends Component
             'folder' => [$this->folders->find($by, $id)->name, fn () => $this->folders->delete($by, $id)],
             'note' => ['“'.$this->notes->find($by, $id)->displayTitle().'”', fn () => $this->notes->destroy($by, $id)],
             'file' => ['“'.$this->files->find($by, $id)->fileName().'”', fn () => $this->files->destroy($by, $id)],
+            'link' => ['“'.$this->links->find($by, $id)->title.'”', fn () => $this->links->delete($by, $id)],
             default => [$this->modules->find($by, $id)->title, fn () => $this->modules->delete($by, $id)],
         };
         $delete();
@@ -477,6 +543,9 @@ final class Contents extends Component
         }
         if ($this->targetType === 'file') {
             return $this->files->find($this->principal(), $this->targetId)->fileName();
+        }
+        if ($this->targetType === 'link') {
+            return $this->links->find($this->principal(), $this->targetId)->title;
         }
         if ($this->targetType === 'workspace') {
             return 'the top level';

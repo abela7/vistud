@@ -1,7 +1,7 @@
 {{--
     A workspace's Progress section (App\Livewire\Workspaces\Progress): the
-    topics, each with the student's own status and what the evidence says,
-    and the questions they registered.
+    topics, each with the student's own status, what the evidence says and
+    the findings pinned to it, and the questions they registered.
 --}}
 @php
     use App\Study\TopicDetails;
@@ -10,8 +10,8 @@
 
     $statusWords = ['not_started' => 'Not started', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Confused', 'mastered' => 'Mastered'];
     $statusIcons = ['not_started' => 'circle-dot', 'covered' => 'check', 'understood' => 'circle-check', 'confused' => 'circle-alert', 'mastered' => 'shield-check'];
-    $headings = ['topic' => $targetId === null ? 'New topic' : 'Rename topic', 'move' => 'Move “'.$target.'”', 'question' => 'New question'];
-    $submit = ['topic' => $targetId === null ? 'Add topic' : 'Rename', 'move' => 'Move', 'question' => 'Add question'];
+    $headings = ['topic' => $targetId === null ? 'New topic' : 'Rename topic', 'move' => 'Move “'.$target.'”', 'question' => 'New question', 'finding' => ($findingId === null ? 'New finding' : 'Edit finding').' · '.$target];
+    $submit = ['topic' => $targetId === null ? 'Add topic' : 'Rename', 'move' => 'Move', 'question' => 'Add question', 'finding' => $findingId === null ? 'Add finding' : 'Save'];
     $groups = [...array_map(fn ($m) => [$m->id, $m->title], $modules), ['', $modules === [] ? '' : 'Not in a module']];
 @endphp
 <div class="space-y-8">
@@ -39,7 +39,7 @@
             <div class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border-strong px-6 py-12 text-center">
                 <span class="ws-chip size-14"><x-icon name="trending-up" class="size-6" /></span>
                 <h3 class="text-lg font-semibold">No topics yet</h3>
-                <p class="max-w-md text-fg-muted">Topics are the spine of the course, like “Joins” or “Normalisation”. Add them as you go, and say for each one whether it's covered, understood or still confusing. The evidence line under each shows what your practice says.</p>
+                <p class="max-w-md text-fg-muted">Topics are the spine of the course, like “Joins” or “Normalisation”. Add them as you go, and say for each one whether it's covered, understood or still confusing. The evidence line under each shows what your practice says, and its findings keep what you must know.</p>
             </div>
         @else
             @foreach ($groups as [$groupId, $groupTitle])
@@ -50,7 +50,12 @@
                         @endif
                         <ul class="module-card divide-y divide-divider" role="list">
                             @foreach ($byModule[$groupId] as $topic)
-                                @php $shown = $topic->shown(); $i = array_search($topic, $topics, true); @endphp
+                                @php
+                                    $shown = $topic->shown();
+                                    $i = array_search($topic, $topics, true);
+                                    $topicFindings = $findings[$topic->id] ?? [];
+                                    $showFindings = $topicFindings !== [] && in_array($topic->id, $expanded, true);
+                                @endphp
                                 <li wire:key="topic-{{ $topic->id }}" class="topic-row">
                                     <div class="topic-main">
                                         <p class="flex flex-wrap items-center gap-2">
@@ -58,6 +63,12 @@
                                             <span @class(['status-chip', "status-{$shown}"])><x-icon :name="$statusIcons[$shown]" class="size-3.5" />{{ $statusWords[$shown] }}</span>
                                         </p>
                                         <p class="text-sm text-fg-muted">Evidence: {{ $topic->evidence() }}</p>
+                                        @if ($topicFindings !== [])
+                                            <button type="button" class="disclosure" wire:click="toggleFindings('{{ $topic->id }}')" aria-expanded="{{ $showFindings ? 'true' : 'false' }}" @if ($showFindings) aria-controls="findings-{{ $topic->id }}" @endif>
+                                                <x-icon name="chevron-right" @class(['size-4 transition-transform', 'rotate-90' => $showFindings]) />
+                                                {{ count($topicFindings) }} {{ Str::plural('finding', count($topicFindings)) }}
+                                            </button>
+                                        @endif
                                     </div>
                                     <div class="segmented" role="group" aria-label="Status of {{ $topic->name }}">
                                         @foreach (['covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Confused'] as $status => $word)
@@ -67,6 +78,7 @@
                                         @endforeach
                                     </div>
                                     @include('livewire.workspaces.partials.row-menu', ['id' => $topic->id, 'label' => $topic->name, 'items' => [
+                                        ['Add a finding', 'lightbulb', "newFinding('{$topic->id}')", false],
                                         ['New question about it', 'circle-help', "newQuestion('{$topic->id}')", false],
                                         ['Rename', 'pencil', "renameTopic('{$topic->id}')", false],
                                         ['Move to module…', 'folder-input', "moveTopic('{$topic->id}')", $modules === []],
@@ -74,6 +86,35 @@
                                         ['Move down', 'arrow-down', "moveTopicBy('{$topic->id}', 1)", $i === count($topics) - 1],
                                         ['Remove', 'trash-2', "retireTopic('{$topic->id}')", false],
                                     ]])
+                                    @if ($showFindings)
+                                        <div id="findings-{{ $topic->id }}" class="findings">
+                                            <ul role="list" aria-label="Findings about {{ $topic->name }}">
+                                                @foreach ($topicFindings as $finding)
+                                                    <li wire:key="finding-{{ $finding->id }}" class="finding-row">
+                                                        <x-icon name="lightbulb" class="mt-0.5 size-4 shrink-0 text-fg-muted" />
+                                                        <div class="min-w-0 flex-1">
+                                                            <p class="break-words">{{ $finding->text }}</p>
+                                                            @if ($finding->sourceName !== null || $finding->author === 'ai')
+                                                                <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-fg-muted">
+                                                                    @if ($finding->sourceName !== null)
+                                                                        <span>From <a href="{{ $finding->sourceUrl() }}" class="item-link">{{ $finding->sourceName }}</a>{{ $finding->locator ? ', '.$finding->locator : '' }}</span>
+                                                                    @endif
+                                                                    @if ($finding->author === 'ai')
+                                                                        <span class="status-chip"><x-icon name="sparkles" class="size-3.5" />From a study session</span>
+                                                                    @endif
+                                                                </p>
+                                                            @endif
+                                                        </div>
+                                                        @include('livewire.workspaces.partials.row-menu', ['id' => $finding->id, 'label' => Str::limit($finding->text, 60), 'items' => [
+                                                            ['Edit', 'pencil', "editFinding('{$finding->id}')", false],
+                                                            ['Remove', 'trash-2', "deleteFinding('{$finding->id}')", false],
+                                                        ]])
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                            <x-button variant="ghost" icon="plus" wire:click="newFinding('{{ $topic->id }}')">Add a finding</x-button>
+                                        </div>
+                                    @endif
                                 </li>
                             @endforeach
                         </ul>
@@ -143,6 +184,33 @@
                             </select>
                             @error('moduleId') <p class="field-error">{{ $message }}</p> @enderror
                         </div>
+                    @endif
+                    @if ($mode === 'finding')
+                        <div class="field">
+                            <label for="finding-text" class="field-label">What you need to know</label>
+                            <textarea id="finding-text" class="input" rows="3" maxlength="500" wire:model="text" autofocus placeholder="A left join keeps every row of the left table."></textarea>
+                            @error('text') <p class="field-error">{{ $message }}</p> @enderror
+                        </div>
+                        @if ($sources !== [])
+                            <div class="field">
+                                <label for="finding-source" class="field-label">From (optional)</label>
+                                <select id="finding-source" class="input" wire:model="source">
+                                    <option value="">Not from a note or file</option>
+                                    @foreach (['note' => 'Notes', 'file' => 'Files'] as $type => $group)
+                                        @php $options = array_filter($sources, fn ($key) => str_starts_with($key, "{$type}:"), ARRAY_FILTER_USE_KEY); @endphp
+                                        @if ($options !== [])
+                                            <optgroup label="{{ $group }}">
+                                                @foreach ($options as $value => $sourceName)
+                                                    <option value="{{ $value }}">{{ $sourceName }}</option>
+                                                @endforeach
+                                            </optgroup>
+                                        @endif
+                                    @endforeach
+                                </select>
+                                @error('source') <p class="field-error">{{ $message }}</p> @enderror
+                            </div>
+                            <x-field name="locator" label="Where in it (optional)" wire:model="locator" maxlength="60" autocomplete="off" hint="Like “slide 12” or “p. 4”." />
+                        @endif
                     @endif
                     @if ($mode === 'question')
                         <div class="field">

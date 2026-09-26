@@ -186,4 +186,16 @@ A learner table for the tracker (docs/specs/study-memory.md §3). The row's `id`
 ### `questions`
 A learner table for the tracker. The row's `id` is the journal question's id. `learner_id`, `workspace_id`, `topic_id` (nullable), `text` (≤ 1000), `ask_event_id` (the `question` event an answer responds to), `ask_teacher`, `retired_at`, `created_at`, `updated_at`. The state (open, answered, resolved…) comes from the projection.
 
-Note blocks and activities arrive with the next M2 steps ([docs/specs/workspaces.md §8](../specs/workspaces.md#8-for-developers), [ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).
+### `findings`
+A learner table for the tracker: the short "must know" lines pinned to a topic. `id`, `learner_id`, `workspace_id`, `topic_id`, `text` (≤ 500), `source_type` (`note`, `file` or null) and `source_id` (a note or file of the same workspace), `locator` (≤ 60, like "slide 12"; kept only with a source), `author` (`student`, or `ai` when a study session wrote it), `created_at`, `updated_at`. Plain rows, not journal events: they are the student's material, not learning state. A retired topic's findings leave the screens and stay in the table.
+
+### `links`
+A learner table: web links kept beside notes and files. `id`, `learner_id`, `workspace_id`, `module_id` and `folder_id` (where it is; both null at the workspace's top level), `title` (≤ 200; the site's name when left empty), `url` (≤ 2000, `http` or `https` only), `position`, `created_at`, `updated_at`. A folder or module holding a link isn't empty; moving a folder carries its links.
+
+### `activities`
+A learner table: assignments, quizzes, exams, labs, problem sets and other tasks. `id`, `learner_id`, `workspace_id`, `module_id` (nullable), `kind` (the journal's activity kinds; the screens offer all but `lecture`, which comes with the calendar), `title` (≤ 200), `due_on` (a date, nullable), `status` (`todo`, `doing`, `done`), `revision`, `created_at`, `updated_at`. Every change is also a new revision of the `activity` journal record (with `progress` for the status and `status` `active` or `deleted`), like modules. Deleting a module leaves its activities and topics outside every module.
+
+### `instructions`
+A learner table: what the assistant should know when a study session starts. `id`, `learner_id`, `scope` (`me` for every course, `workspace:{id}` or `module:{id}`; unique per learner), `text` (≤ 2000), `created_at`, `updated_at`. Empty text deletes the row; deleting a module deletes its instructions.
+
+Note blocks arrive with the next M2 steps ([docs/specs/workspaces.md §8](../specs/workspaces.md#8-for-developers), [ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).

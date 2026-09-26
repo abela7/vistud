@@ -1,0 +1,105 @@
+{{--
+    A workspace's assignments and tasks, on its Overview
+    (App\Livewire\Workspaces\Tasks). The round button marks one done or not;
+    "Start it" puts it in progress.
+--}}
+@php
+    use App\Study\Activities;
+    use Illuminate\Support\Str;
+@endphp
+<section aria-labelledby="tasks-heading" class="overview-card space-y-3">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="tasks-heading" class="font-semibold">Assignments and tasks <span class="font-normal text-fg-muted">({{ count($open) }} to do)</span></h2>
+        <x-button icon="plus" wire:click="newTask">New</x-button>
+    </div>
+
+    <div role="status" aria-live="polite">
+        @if ($notice)
+            <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
+        @endif
+    </div>
+
+    @if ($open === [] && $done === [])
+        <p class="text-sm text-fg-muted">Nothing yet. Add assignments, quizzes, exams and anything else you need to do, with the date it's due.</p>
+    @else
+        <ul class="divide-y divide-divider" role="list" aria-label="To do">
+            @forelse ($open as $task)
+                @include('livewire.workspaces.partials.task-row')
+            @empty
+                <li class="py-2 text-sm text-fg-muted">All done.</li>
+            @endforelse
+        </ul>
+        @if ($done !== [])
+            <x-button variant="ghost" wire:click="toggleDone" aria-expanded="{{ $showDone ? 'true' : 'false' }}" aria-controls="done-tasks">
+                {{ $showDone ? 'Hide' : 'Show' }} {{ count($done) }} done
+            </x-button>
+            @if ($showDone)
+                <ul id="done-tasks" class="divide-y divide-divider" role="list" aria-label="Done">
+                    @foreach ($done as $task)
+                        @include('livewire.workspaces.partials.task-row')
+                    @endforeach
+                </ul>
+            @endif
+        @endif
+    @endif
+
+    <dialog id="tasks-dialog" class="modal" aria-labelledby="tasks-dialog-title"
+        wire:ignore.self
+        x-data
+        x-on:tasks-dialog-open.window="$el.open || $el.showModal()"
+        x-on:tasks-dialog-close.window="$el.open && $el.close()"
+        x-on:close="$wire.mode && $wire.close()"
+        x-on:click="$event.target === $el && $el.close()">
+        @if ($mode)
+            <form wire:submit="save" novalidate class="modal-panel" wire:key="tasks-dialog-{{ $mode }}-{{ $targetId }}">
+                <div class="modal-head">
+                    <h2 id="tasks-dialog-title" class="min-w-0 flex-1 text-lg font-semibold break-words" @if ($mode === 'delete') tabindex="-1" autofocus @endif>
+                        {{ match (true) { $mode === 'delete' => 'Delete “'.$target.'”?', $targetId === null => 'New assignment or task', default => 'Edit “'.$target.'”' } }}
+                    </h2>
+                    <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
+                        <x-icon name="x" />
+                    </button>
+                </div>
+
+                <div class="space-y-4 px-5 pt-2">
+                    @if ($mode === 'task')
+                        <x-field name="title" label="What" wire:model="title" maxlength="200" autocomplete="off" hint="Like “ER diagram for the library” or “Revise joins”." autofocus />
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="field">
+                                <label for="task-kind" class="field-label">Kind</label>
+                                <select id="task-kind" class="input" wire:model="kind">
+                                    @foreach (Activities::KINDS as $value => $word)
+                                        <option value="{{ $value }}">{{ $word }}</option>
+                                    @endforeach
+                                </select>
+                                @error('kind') <p class="field-error">{{ $message }}</p> @enderror
+                            </div>
+                            <x-field name="dueOn" label="Due (optional)" type="date" wire:model="dueOn" />
+                        </div>
+                        @if ($modules !== [])
+                            <div class="field">
+                                <label for="task-module" class="field-label">Module (optional)</label>
+                                <select id="task-module" class="input" wire:model="moduleId">
+                                    <option value="">Not in a module</option>
+                                    @foreach ($modules as $module)
+                                        <option value="{{ $module->id }}">{{ $module->title }}</option>
+                                    @endforeach
+                                </select>
+                                @error('moduleId') <p class="field-error">{{ $message }}</p> @enderror
+                            </div>
+                        @endif
+                    @else
+                        <p class="text-fg-muted">It leaves your list. This can't be undone.</p>
+                    @endif
+                </div>
+
+                <div class="modal-actions">
+                    <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
+                    <x-button type="submit" :variant="$mode === 'delete' ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">
+                        {{ match (true) { $mode === 'delete' => 'Delete', $targetId === null => 'Add', default => 'Save' } }}
+                    </x-button>
+                </div>
+            </form>
+        @endif
+    </dialog>
+</section>

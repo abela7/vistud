@@ -622,6 +622,50 @@
 }
 
 @layer components {
+    /* ---------- Overview: "where am I" (docs/specs/study-memory.md) ---------- */
+
+    .overview-card {
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        background-color: var(--surface-raised);
+        padding: 1.25rem;
+    }
+
+    .task-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.625rem;
+        padding: 0.625rem 0;
+    }
+
+    /* The round "done" button: an empty circle, or a ticked one when pressed. */
+    /* A due date or state keeps to the row's width when the text is very large. */
+    .task-row .status-chip {
+        max-width: 100%;
+        white-space: normal;
+    }
+
+    .task-check {
+        flex: none;
+        display: inline-flex;
+        padding: 0.125rem;
+        border-radius: 9999px;
+        color: var(--text-muted);
+    }
+
+    .task-check:hover {
+        color: var(--text);
+    }
+
+    .task-check[aria-pressed='true'] {
+        color: var(--success);
+    }
+
+    .task-check:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
     /* ---------- Progress: topics and their statuses (docs/specs/study-memory.md) ---------- */
 
     .topic-row {
@@ -713,5 +757,48 @@
     .segmented-option:focus-visible {
         outline: 2px solid var(--focus-ring);
         outline-offset: 2px;
+    }
+
+    /* "3 findings": opens the list under the topic. */
+    .disclosure {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-top: 0.25rem;
+        margin-left: -0.25rem;
+        padding: 0.125rem 0.375rem 0.125rem 0.25rem;
+        border-radius: 0.375rem;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .disclosure:hover {
+        color: var(--text);
+        background-color: var(--surface-sunken);
+    }
+
+    .disclosure:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    /* A topic's findings take the whole width of its row. */
+    .findings {
+        flex-basis: 100%;
+        margin-left: 0.25rem;
+        padding-left: 0.75rem;
+        border-left: 2px solid var(--border);
+    }
+
+    .finding-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.625rem;
+        padding: 0.5rem 0;
+    }
+
+    .finding-row + .finding-row {
+        border-top: 1px solid var(--divider);
     }
 }
