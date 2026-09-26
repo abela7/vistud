@@ -145,6 +145,22 @@ final class Accounts
         return ['data' => $users->map(fn (User $user) => $this->toDetails($user))->values()->all(), 'next_cursor' => $next];
     }
 
+    /**
+     * Admin with 2FA. Account names by ID, for showing who did what (the
+     * audit log). IDs with no account are left out.
+     *
+     * @param  list<string>  $userIds
+     * @return array<string, string>
+     */
+    public function names(Principal $by, array $userIds): array
+    {
+        Guard::admin($by);
+
+        $userIds = array_values(array_unique(array_filter($userIds)));
+
+        return $userIds === [] ? [] : User::query()->whereKey($userIds)->pluck('name', 'id')->all();
+    }
+
     private function toDetails(User $user): AccountDetails
     {
         $lastActive = DB::table('sessions')->where('user_id', $user->id)->max('last_activity');

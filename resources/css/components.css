@@ -173,8 +173,9 @@
         border-color: var(--danger);
     }
 
+    /* :read-only also matches every <select>, which is never "read-only" to a person. */
     .input:disabled,
-    .input:read-only {
+    .input:is(input, textarea):read-only {
         background-color: var(--surface-sunken);
         border-color: var(--border);
         color: var(--text-disabled);
@@ -182,7 +183,7 @@
     }
 
     /* Read-only text meant to be read and copied, such as a link: full contrast, not greyed out. */
-    .input-copy:read-only {
+    .input.input-copy:read-only {
         color: var(--text);
         cursor: text;
     }

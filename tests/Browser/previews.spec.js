@@ -317,3 +317,17 @@ test('invitations: invite dialog, pending list, acceptance page', async ({ page,
     await fresh.screenshot({ path: out('accept-invitation-mobile-vistud-light-invalid'), fullPage: true });
     await guest.close();
 });
+
+test('admin audit log', async ({ page }) => {
+    await openAdminOverview(page);
+    await page.goto('/admin/audit-log');
+    await page.getByRole('heading', { name: 'Audit log', exact: true }).waitFor();
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`admin-audit-log-${size}-${theme}`) });
+        }
+    }
+});

@@ -15,7 +15,7 @@
         <div class="grid gap-4 sm:grid-cols-2">
             @foreach ([
                 ['users', 'Accounts', 'See everyone who can log in, suspend or reactivate accounts, and grant or remove admin.', route('admin.accounts')],
-                ['scroll-text', 'Audit log', 'A read-only record of sign-ins to the admin area and every account change.', null],
+                ['scroll-text', 'Audit log', 'A read-only record of sign-ins to the admin area and every account change.', route('admin.audit-log')],
             ] as [$icon, $name, $description, $href])
                 <section class="relative rounded-xl border border-border bg-surface-raised p-5">
                     <div class="flex items-start gap-3">

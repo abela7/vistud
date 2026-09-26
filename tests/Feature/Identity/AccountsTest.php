@@ -201,4 +201,17 @@ class AccountsTest extends TestCase
         $this->assertSame(['100%_sure'], $names('%_'));
         $this->assertCount(4, $names('  '));
     }
+
+    public function test_names_are_looked_up_for_admins_only(): void
+    {
+        $admin = $this->admin(attributes: ['name' => 'Grace Hopper']);
+        $ada = $this->student(['name' => 'Ada Lovelace']);
+
+        $names = $this->accounts->names($this->principal($admin), [$admin->id, $ada->id, $ada->id, 'missing-id', '']);
+
+        $this->assertCount(2, $names);
+        $this->assertSame('Grace Hopper', $names[$admin->id]);
+        $this->assertSame('Ada Lovelace', $names[$ada->id]);
+        $this->assertThrows(fn () => $this->accounts->names($this->principal($ada), [$admin->id]), Forbidden::class);
+    }
 }

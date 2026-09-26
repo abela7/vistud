@@ -10,3 +10,4 @@ use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'admin.overview')->name('overview');
 Route::view('/accounts', 'admin.accounts')->name('accounts');
+Route::view('/audit-log', 'admin.audit-log')->name('audit-log');

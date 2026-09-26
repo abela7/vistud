@@ -380,6 +380,6 @@ A pull request that adds or changes a screen includes:
 | The signed-in frame (top bar, sidebar, slide-in menu, account menu) | `resources/views/components/layouts/app.blade.php`, `components/app/nav.blade.php`, `resources/css/shell.css`, `resources/js/shell.js` |
 | Appearance switching, form behaviour | `resources/js/appearance.js`, `forms.js` |
 | Shared Blade components | `resources/views/components/` |
-| Livewire screens (admin Accounts) | `app/Livewire/`, `resources/views/livewire/` |
+| Livewire screens (admin Accounts and Audit log) | `app/Livewire/`, `resources/views/livewire/` |
 | Enforcement | `tests/Architecture/ThemeEnforcementTest.php`, `tests/Browser/theme-sentinel.spec.js` |
 | Setup, build and browser tests | [docs/development/setup.md](docs/development/setup.md) |
