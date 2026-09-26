@@ -8,4 +8,4 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('vistud:notes:purge-trash')->daily();
+Schedule::command('vistud:trash:purge')->daily();

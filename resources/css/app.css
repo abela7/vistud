@@ -19,7 +19,6 @@
 
 @source '../views';
 @source '../js';
-@source '../../storage/framework/views/*.php';
 
 /*
 | Focus uses the shared outline (base.css), never Tailwind's ring

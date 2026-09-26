@@ -35,6 +35,7 @@ final class LearnerTables
         'notes',
         'note_versions',
         'content_tombstones',
+        'files',
     ];
 
     public static function query(LearnerScope $scope, string $table): Builder

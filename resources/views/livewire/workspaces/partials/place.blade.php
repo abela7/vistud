@@ -1,12 +1,13 @@
 {{--
     What one place ($key: a module, a folder, or the top level) holds: its
-    notes, then its folders, each folder with what it holds below it.
+    notes, its files, then its folders, each folder with what it holds below it.
 --}}
 @php
     $placeNotes = $notesIn[$key] ?? [];
+    $placeFiles = $filesIn[$key] ?? [];
     $placeFolders = $children[$key] ?? [];
 @endphp
-@if ($placeNotes !== [] || $placeFolders !== [])
+@if ($placeNotes !== [] || $placeFiles !== [] || $placeFolders !== [])
     <ul class="folder-list" role="list">
         @foreach ($placeNotes as $note)
             <li wire:key="note-{{ $note->id }}">
@@ -23,6 +24,23 @@
                 </div>
             </li>
         @endforeach
+        @foreach ($placeFiles as $file)
+            <li wire:key="file-{{ $file->id }}">
+                <div class="folder-row">
+                    <x-icon :name="$file->icon()" class="size-5 shrink-0 text-fg-muted" />
+                    <span class="min-w-0 flex-1 py-1">
+                        <a href="{{ route('workspaces.files.show', [$file->workspaceId, $file->id]) }}" class="item-link">{{ $file->fileName() }}</a>
+                        <span class="block text-sm text-fg-muted">{{ $file->typeLabel() }} · {{ $file->humanSize() }}</span>
+                    </span>
+                    @include('livewire.workspaces.partials.row-menu', ['id' => $file->id, 'label' => $file->fileName(), 'items' => [
+                        ['Download', 'download', null, false, route('files.content', [$file->id, 'download' => 1])],
+                        ['Rename', 'pencil', "renameFile('{$file->id}')", false],
+                        ['Move to…', 'folder-input', "moveFile('{$file->id}')", false],
+                        ['Move to trash', 'trash-2', "trashFile('{$file->id}')", false],
+                    ]])
+                </div>
+            </li>
+        @endforeach
         @foreach ($placeFolders as $i => $folder)
             <li wire:key="folder-{{ $folder->id }}">
                 <div class="folder-row">
@@ -30,6 +48,7 @@
                     <span class="min-w-0 flex-1 break-words">{{ $folder->name }}</span>
                     @include('livewire.workspaces.partials.row-menu', ['id' => $folder->id, 'label' => $folder->name, 'items' => [
                         ['New note inside', 'file-plus', "newNote('folder', '{$folder->id}')", false],
+                        ['Upload files here', 'upload', "uploadFiles('folder', '{$folder->id}')", false],
                         ['New folder inside', 'folder-plus', "newFolder('folder', '{$folder->id}')", $folder->depth >= \App\Study\Folders::MAX_DEPTH],
                         ['Rename', 'pencil', "renameFolder('{$folder->id}')", false],
                         ['Move to…', 'folder-input', "moveFolder('{$folder->id}')", false],

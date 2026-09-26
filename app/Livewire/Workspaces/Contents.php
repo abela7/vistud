@@ -7,6 +7,8 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\FileDetails;
+use App\Study\Files;
 use App\Study\FolderDetails;
 use App\Study\Folders;
 use App\Study\Modules;
@@ -16,6 +18,8 @@ use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 
 /**
  * What a workspace holds (docs/specs/workspaces.md, steps 2 and 3), for two
@@ -26,6 +30,8 @@ use Livewire\Component;
  */
 final class Contents extends Component
 {
+    use WithFileUploads;
+
     #[Locked]
     public string $workspaceId;
 
@@ -33,14 +39,14 @@ final class Contents extends Component
     #[Locked]
     public string $view = 'modules';
 
-    /** module · folder · move · delete, or null when the dialog is closed. */
+    /** module · folder · file (renaming) · upload · move · delete, or null when the dialog is closed. */
     #[Locked]
     public ?string $mode = null;
 
     #[Locked]
     public bool $creating = false;
 
-    /** module, folder or note: what the dialog acts on, or (creating a folder) where it goes. */
+    /** module, folder, note or file: what the dialog acts on, or (creating a folder, uploading) where it goes. */
     #[Locked]
     public ?string $targetType = null;
 
@@ -59,8 +65,15 @@ final class Contents extends Component
 
     public string $name = '';
 
-    /** Where a moved folder or note goes: workspace:{id}, module:{id} or folder:{id}. */
+    /** Where a moved folder, note or file goes: workspace:{id}, module:{id} or folder:{id}. */
     public string $destination = '';
+
+    /** Files chosen in the upload dialog, waiting in Livewire's temporary storage. */
+    public array $uploads = [];
+
+    /** The files that couldn't be uploaded, and why: [name, reason]. */
+    #[Locked]
+    public array $uploadErrors = [];
 
     #[Locked]
     public ?string $notice = null;
@@ -74,15 +87,18 @@ final class Contents extends Component
 
     private Notes $notes;
 
+    private Files $files;
+
     private Workspaces $workspaces;
 
     private PrincipalFactory $principals;
 
-    public function boot(Modules $modules, Folders $folders, Notes $notes, Workspaces $workspaces, PrincipalFactory $principals): void
+    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Workspaces $workspaces, PrincipalFactory $principals): void
     {
         $this->modules = $modules;
         $this->folders = $folders;
         $this->notes = $notes;
+        $this->files = $files;
         $this->workspaces = $workspaces;
         $this->principals = $principals;
     }
@@ -134,9 +150,29 @@ final class Contents extends Component
         $this->destination = $this->placeValue($note->moduleId, $note->folderId);
     }
 
+    public function moveFile(string $id): void
+    {
+        $file = $this->files->find($this->principal(), $id);
+        $this->open('move', targetType: 'file', targetId: $file->id);
+        $this->destination = $this->placeValue($file->moduleId, $file->folderId);
+    }
+
+    public function renameFile(string $id): void
+    {
+        $file = $this->files->find($this->principal(), $id);
+        $this->open('file', targetType: 'file', targetId: $file->id);
+        $this->name = $file->name;
+    }
+
+    /** Upload files to the top level (`workspace`), a module or a folder. */
+    public function uploadFiles(string $placeType, string $placeId): void
+    {
+        $this->open('upload', creating: true, targetType: in_array($placeType, ['workspace', 'module', 'folder'], true) ? $placeType : 'module', targetId: $placeId);
+    }
+
     public function confirmDelete(string $type, string $id): void
     {
-        $this->open('delete', targetType: in_array($type, ['folder', 'note'], true) ? $type : 'module', targetId: $id);
+        $this->open('delete', targetType: in_array($type, ['folder', 'note', 'file'], true) ? $type : 'module', targetId: $id);
     }
 
     // ---------- Notes, straight away ----------
@@ -163,6 +199,20 @@ final class Contents extends Component
         $this->notice = "“{$note->displayTitle()}” is restored.";
     }
 
+    public function trashFile(string $id): void
+    {
+        $by = $this->principal();
+        $file = $this->files->find($by, $id);
+        $this->files->trash($by, $file->id);
+        $this->notice = "“{$file->fileName()}” is in the trash.";
+    }
+
+    public function restoreFile(string $id): void
+    {
+        $file = $this->files->restore($this->principal(), $id);
+        $this->notice = "“{$file->fileName()}” is restored.";
+    }
+
     public function toggleTrash(): void
     {
         $this->showTrash = ! $this->showTrash;
@@ -182,6 +232,8 @@ final class Contents extends Component
                 ['module', false] => $this->modules->update($by, (string) $this->targetId, $this->moduleInput())->title.' is saved.',
                 ['folder', true] => $this->folders->create($by, (string) $this->targetType, (string) $this->targetId, $this->name)->name.' is added.',
                 ['folder', false] => $this->renamed($by),
+                ['file', false] => $this->renamedFile($by),
+                ['upload', true] => $this->uploaded($by),
                 ['move', false] => $this->moved($by),
                 ['delete', false] => $this->deleted($by),
                 default => null,
@@ -201,6 +253,10 @@ final class Contents extends Component
 
             return;
         }
+        // Some files failed, or none was chosen: the dialog stays open to say which.
+        if ($this->uploadErrors !== [] || $this->getErrorBag()->isNotEmpty()) {
+            return;
+        }
 
         $this->close();
         $this->dispatch('structure-dialog-close');
@@ -209,7 +265,12 @@ final class Contents extends Component
     /** The dialog closed. */
     public function close(): void
     {
-        $this->reset('mode', 'creating', 'targetType', 'targetId', 'title', 'startsOn', 'endsOn', 'name', 'destination', 'error');
+        foreach ($this->uploads as $upload) {
+            if ($upload instanceof TemporaryUploadedFile) {
+                $upload->delete();
+            }
+        }
+        $this->reset('mode', 'creating', 'targetType', 'targetId', 'title', 'startsOn', 'endsOn', 'name', 'destination', 'error', 'uploads', 'uploadErrors');
         $this->resetErrorBag();
     }
 
@@ -250,6 +311,7 @@ final class Contents extends Component
         $modules = $this->modules->list($by, $this->workspaceId);
         $folders = $this->folders->tree($by, $this->workspaceId);
         $notes = $this->notes->list($by, $this->workspaceId);
+        $files = $this->files->list($by, $this->workspaceId);
 
         $children = [];
         foreach ($folders as $folder) {
@@ -259,10 +321,19 @@ final class Contents extends Component
         foreach ($notes as $note) {
             $notesIn[$note->placeKey()][] = $note;
         }
+        $filesIn = [];
+        foreach ($files as $file) {
+            $filesIn[$file->placeKey()][] = $file;
+        }
         $counts = [];
-        foreach ([...$folders, ...$notes] as $item) {
+        foreach ([...$folders, ...$notes, ...$files] as $item) {
             if ($item->moduleId !== null) {
-                $counts[$item->moduleId][$item instanceof NoteDetails ? 'notes' : 'folders'] = ($counts[$item->moduleId][$item instanceof NoteDetails ? 'notes' : 'folders'] ?? 0) + 1;
+                $kind = match (true) {
+                    $item instanceof NoteDetails => 'notes',
+                    $item instanceof FileDetails => 'files',
+                    default => 'folders',
+                };
+                $counts[$item->moduleId][$kind] = ($counts[$item->moduleId][$kind] ?? 0) + 1;
             }
         }
 
@@ -271,8 +342,10 @@ final class Contents extends Component
             'modules' => $modules,
             'children' => $children,
             'notesIn' => $notesIn,
+            'filesIn' => $filesIn,
+            'maxUpload' => Files::maxBytes(),
             'counts' => $counts,
-            'target' => $this->targetName($modules, $folders, $notes),
+            'target' => $this->targetName($modules, $folders, $notes, $files),
             'moveOptions' => $this->mode === 'move' ? $this->moveOptions($workspace->name, $modules, $folders) : [],
         ];
 
@@ -281,9 +354,11 @@ final class Contents extends Component
             usort($recent, fn ($a, $b) => $b->updatedAt <=> $a->updatedAt);
             $data += [
                 'noteCount' => count($notes),
+                'fileCount' => count($files),
                 'recent' => array_slice($recent, 0, 5),
                 'places' => $this->placeNames($modules, $folders),
                 'trash' => $this->notes->trashed($by, $this->workspaceId),
+                'trashedFiles' => $this->files->trashed($by, $this->workspaceId),
             ];
         }
 
@@ -320,9 +395,56 @@ final class Contents extends Component
         return $this->folders->find($by, (string) $this->targetId)->name.' is renamed.';
     }
 
+    private function renamedFile(Principal $by): string
+    {
+        $this->files->rename($by, (string) $this->targetId, $this->name);
+
+        return '“'.$this->files->find($by, (string) $this->targetId)->fileName().'” is renamed.';
+    }
+
+    /** Each chosen file, checked and kept; the ones that fail are listed with the reason, and stay out. */
+    private function uploaded(Principal $by): ?string
+    {
+        $this->uploadErrors = [];
+        $uploads = array_values(array_filter($this->uploads, fn ($u) => $u instanceof TemporaryUploadedFile));
+        if ($uploads === []) {
+            $this->addError('uploads', 'Choose at least one file.');
+
+            return null;
+        }
+        if (count($uploads) > 10) {
+            $this->addError('uploads', 'Upload up to 10 files at a time.');
+
+            return null;
+        }
+
+        $done = 0;
+        foreach ($uploads as $upload) {
+            $name = $upload->getClientOriginalName();
+            try {
+                $this->files->upload($by, (string) $this->targetType, (string) $this->targetId, $upload->getRealPath(), $name);
+                $done++;
+            } catch (Unprocessable $e) {
+                $this->uploadErrors[] = [$name, $e->details['fields']['file'][0] ?? $e->getMessage()];
+            } catch (Conflict $e) {
+                $this->uploadErrors[] = [$name, $e->getMessage()];
+            } finally {
+                $upload->delete();
+            }
+        }
+        $this->uploads = [];
+
+        return $done === 0 ? null : $done.' '.($done === 1 ? 'file' : 'files').' uploaded.';
+    }
+
     private function moved(Principal $by): string
     {
         [$type, $id] = array_pad(explode(':', $this->destination, 2), 2, '');
+        if ($this->targetType === 'file') {
+            $this->files->move($by, (string) $this->targetId, $type, $id);
+
+            return '“'.$this->files->find($by, (string) $this->targetId)->fileName().'” is moved.';
+        }
         if ($this->targetType === 'note') {
             $this->notes->move($by, (string) $this->targetId, $type, $id);
 
@@ -339,6 +461,7 @@ final class Contents extends Component
         [$name, $delete] = match ($this->targetType) {
             'folder' => [$this->folders->find($by, $id)->name, fn () => $this->folders->delete($by, $id)],
             'note' => ['“'.$this->notes->find($by, $id)->displayTitle().'”', fn () => $this->notes->destroy($by, $id)],
+            'file' => ['“'.$this->files->find($by, $id)->fileName().'”', fn () => $this->files->destroy($by, $id)],
             default => [$this->modules->find($by, $id)->title, fn () => $this->modules->delete($by, $id)],
         };
         $delete();
@@ -347,10 +470,13 @@ final class Contents extends Component
     }
 
     /** The name of what the dialog is about, for its heading. */
-    private function targetName(array $modules, array $folders, array $notes): ?string
+    private function targetName(array $modules, array $folders, array $notes, array $files): ?string
     {
         if ($this->targetId === null) {
             return null;
+        }
+        if ($this->targetType === 'file') {
+            return $this->files->find($this->principal(), $this->targetId)->fileName();
         }
         if ($this->targetType === 'workspace') {
             return 'the top level';

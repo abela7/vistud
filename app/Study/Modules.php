@@ -98,7 +98,7 @@ final class Modules
         });
     }
 
-    /** Only an empty module can go: its folders and notes (and later its files) must be moved or deleted first. Notes in the trash don't count. */
+    /** Only an empty module can go: its folders, notes and files must be moved or deleted first. What's in the trash doesn't count. */
     public function delete(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
@@ -106,7 +106,8 @@ final class Modules
         DB::transaction(function () use ($scope, $id) {
             $row = $this->lock($scope, $id);
             if (LearnerTables::query($scope, 'folders')->where('module_id', $id)->exists()
-                || LearnerTables::query($scope, 'notes')->where('module_id', $id)->whereNull('trashed_at')->exists()) {
+                || LearnerTables::query($scope, 'notes')->where('module_id', $id)->whereNull('trashed_at')->exists()
+                || LearnerTables::query($scope, 'files')->where('module_id', $id)->whereNull('trashed_at')->exists()) {
                 throw new Conflict('not_empty', 'Move or delete what\'s inside first.');
             }
             LearnerTables::query($scope, 'modules')->where('id', $id)->delete();

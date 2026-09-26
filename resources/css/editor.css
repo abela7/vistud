@@ -515,3 +515,108 @@
         }
     }
 }
+
+@layer components {
+    /* ---------- Files (docs/specs/workspaces.md step 4) ---------- */
+
+    .file-page {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    /* The preview takes the rest of the screen. */
+    .file-preview {
+        display: block;
+        width: 100%;
+        height: calc(100dvh - 15rem);
+        min-height: 24rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+    }
+
+    .file-preview-image {
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+        background-color: var(--surface-sunken);
+    }
+
+    .file-preview-image img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+
+    .file-text {
+        padding: 1.25rem 1.5rem;
+        overflow: auto;
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.875rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .file-preview-none {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        height: auto;
+        min-height: 20rem;
+        padding: 2rem 1.5rem;
+        text-align: center;
+    }
+
+    /* The upload dialog: the whole area takes a click or a drop. */
+    .drop-zone {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 1.75rem 1rem;
+        border: 2px dashed var(--border-strong);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+        text-align: center;
+        cursor: pointer;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.is-over {
+        border-color: var(--accent);
+        background-color: var(--drag-target);
+    }
+
+    .drop-zone:focus-within {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .drop-zone-input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    .upload-progress {
+        height: 0.5rem;
+        overflow: hidden;
+        border-radius: 9999px;
+        background-color: var(--surface-sunken);
+    }
+
+    .upload-progress > span {
+        display: block;
+        height: 100%;
+        background-color: var(--accent);
+    }
+}

@@ -95,3 +95,8 @@
         background-image: none;
     }
 }
+
+/* Hidden until Alpine has started. */
+[x-cloak] {
+    display: none !important;
+}

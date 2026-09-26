@@ -1,6 +1,8 @@
 <?php
 
 use App\Brain\Store\JournalReader;
+use App\Http\Controllers\FileContentController;
+use App\Http\Controllers\FilePageController;
 use App\Http\Controllers\NotePageController;
 use App\Http\Controllers\WorkspacePageController;
 use App\Identity\PrincipalFactory;
@@ -27,6 +29,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspaces/{workspace}/notes/{note}', NotePageController::class)
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'note' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.notes.show');
+
+    // An uploaded file's page, and its bytes (shown or downloaded) after the owner check.
+    Route::get('/workspaces/{workspace}/files/{file}', FilePageController::class)
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'file' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.files.show');
+    Route::get('/files/{file}/content', FileContentController::class)->where('file', '[A-Za-z0-9-]{1,64}')->name('files.content');
 
     // A workspace and its sections (docs/specs/workspaces.md).
     Route::get('/workspaces/{workspace}/{section?}', WorkspacePageController::class)

@@ -13,7 +13,12 @@ elsewhere are removed before they could be sent; an erased account's drafts
 are purged; a note uses the full width and height, with Full screen and a Read
 mode). Keeping editors (and their undo) alive across pages comes with step 7,
 no page reloads. Personal, dragging folders and notes, and version history
-come later in M2. Next: step 4, files.
+come later in M2. **Step 4** (files) is built too: upload into modules,
+folders and Notes & files, with every file checked by its bytes (no macros,
+no scripts), kept privately, previewed on its own page when the browser can
+show it (PDF, images, text) and downloadable; rename, move, trash and restore.
+The rules are in docs/architecture/conventions.md "Uploaded files". Next:
+step 5, the calendar.
 
 **Mockups:** [docs/design/mockups/](../design/mockups/). They use the real
 theme, top bar and components, so what is approved is what gets built. On a

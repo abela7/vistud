@@ -12,9 +12,10 @@
 @endphp
 <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <p class="text-fg-muted">{{ $noteCount }} {{ Str::plural('note', $noteCount) }}</p>
+        <p class="text-fg-muted">{{ $noteCount }} {{ Str::plural('note', $noteCount) }} · {{ $fileCount }} {{ Str::plural('file', $fileCount) }}</p>
         <div class="flex flex-wrap gap-2">
             <x-button icon="folder-plus" wire:click="newFolder('workspace', '{{ $workspaceId }}')">New folder</x-button>
+            <x-button icon="upload" wire:click="uploadFiles('workspace', '{{ $workspaceId }}')">Upload files</x-button>
             <x-button variant="primary" icon="file-plus" wire:click="newNote('workspace', '{{ $workspaceId }}')">New note</x-button>
         </div>
     </div>
@@ -49,34 +50,48 @@
         <h2 id="loose-heading" class="text-lg font-semibold">Not in a module</h2>
         <div class="module-card px-3 py-2">
             @include('livewire.workspaces.partials.place', ['key' => $top])
-            @unless (isset($children[$top]) || isset($notesIn[$top]))
-                <p class="px-2 py-3 text-sm text-fg-muted">Notes and folders that don't belong to one module, like exam revision or a reading list, go here. Notes inside modules are in Modules.</p>
+            @unless (isset($children[$top]) || isset($notesIn[$top]) || isset($filesIn[$top]))
+                <p class="px-2 py-3 text-sm text-fg-muted">Notes, files and folders that don't belong to one module, like exam revision or the course handbook, go here. What's inside modules is in Modules.</p>
             @endunless
         </div>
     </section>
 
     <section aria-labelledby="trash-heading" class="space-y-2">
         <h2 id="trash-heading" class="sr-only">Trash</h2>
+        @php $trashCount = count($trash) + count($trashedFiles); @endphp
         <x-button variant="ghost" icon="trash-2" wire:click="toggleTrash" aria-expanded="{{ $showTrash ? 'true' : 'false' }}" aria-controls="trash-list">
-            {{ $showTrash ? 'Hide the trash' : 'Trash' }} ({{ count($trash) }})
+            {{ $showTrash ? 'Hide the trash' : 'Trash' }} ({{ $trashCount }})
         </x-button>
         @if ($showTrash)
             <div id="trash-list" class="module-card">
-                @if ($trash === [])
+                @if ($trashCount === 0)
                     <p class="px-4 py-3 text-sm text-fg-muted">The trash is empty.</p>
                 @else
-                    <p class="border-b border-divider px-4 py-3 text-sm text-fg-muted">Notes in the trash are deleted for good {{ Notes::TRASH_DAYS }} days after they were trashed.</p>
+                    <p class="border-b border-divider px-4 py-3 text-sm text-fg-muted">What's in the trash is deleted for good {{ Notes::TRASH_DAYS }} days after it was trashed.</p>
                     <ul class="divide-y divide-divider" role="list">
                         @foreach ($trash as $note)
                             <li wire:key="trash-{{ $note->id }}" class="flex flex-wrap items-center gap-3 px-4 py-3">
                                 <x-icon name="file-text" class="size-5 shrink-0 text-fg-muted" />
                                 <span class="min-w-0 flex-1">
                                     <span class="block font-medium break-words">{{ $note->displayTitle() }}</span>
-                                    <span class="block text-sm text-fg-muted">Trashed {{ Carbon::parse($note->trashedAt)->diffForHumans() }}</span>
+                                    <span class="block text-sm text-fg-muted">Note · trashed {{ Carbon::parse($note->trashedAt)->diffForHumans() }}</span>
                                 </span>
                                 <span class="flex flex-wrap gap-2">
                                     <x-button icon="rotate-ccw" wire:click="restoreNote('{{ $note->id }}')" aria-label="Restore {{ $note->displayTitle() }}">Restore</x-button>
                                     <x-button variant="ghost" wire:click="confirmDelete('note', '{{ $note->id }}')" aria-label="Delete for good: {{ $note->displayTitle() }}">Delete for good</x-button>
+                                </span>
+                            </li>
+                        @endforeach
+                        @foreach ($trashedFiles as $file)
+                            <li wire:key="trash-{{ $file->id }}" class="flex flex-wrap items-center gap-3 px-4 py-3">
+                                <x-icon :name="$file->icon()" class="size-5 shrink-0 text-fg-muted" />
+                                <span class="min-w-0 flex-1">
+                                    <span class="block font-medium break-words">{{ $file->fileName() }}</span>
+                                    <span class="block text-sm text-fg-muted">{{ $file->typeLabel() }} · {{ $file->humanSize() }} · trashed {{ Carbon::parse($file->trashedAt)->diffForHumans() }}</span>
+                                </span>
+                                <span class="flex flex-wrap gap-2">
+                                    <x-button icon="rotate-ccw" wire:click="restoreFile('{{ $file->id }}')" aria-label="Restore {{ $file->fileName() }}">Restore</x-button>
+                                    <x-button variant="ghost" wire:click="confirmDelete('file', '{{ $file->id }}')" aria-label="Delete for good: {{ $file->fileName() }}">Delete for good</x-button>
                                 </span>
                             </li>
                         @endforeach

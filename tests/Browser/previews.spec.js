@@ -490,3 +490,41 @@ test('notes: the editor, Notes & files, and notes in a module', async ({ page })
     await page.setViewportSize(sizes.mobile);
     await page.screenshot({ path: out('note-mobile-vistud-light-logout') });
 });
+
+test('files: the upload dialog, a module with files, and file pages', async ({ page }) => {
+    const { fileURLToPath } = await import('node:url');
+    const fixture = (name) => fileURLToPath(new URL(`./fixtures/files/${name}`, import.meta.url));
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, makeStudentWithModules());
+    await page.locator('main').getByRole('link', { name: 'Biology' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
+    await page.goto(page.url().replace(/\/?$/, '/modules'));
+    await page.waitForLoadState('load');
+    const week1 = page.locator('.module-card').filter({ has: page.getByText('Week 1: Cells', { exact: true }) });
+
+    await week1.getByRole('button', { name: 'Upload files' }).click();
+    await page.locator('#structure-dialog input[type="file"]').setInputFiles(['Lecture 2 - cell division.pdf', 'Essay - why cells divide.docx', 'Onion cells.png', 'Homework with macros.docx'].map(fixture));
+    await page.locator('#structure-dialog').getByRole('listitem').nth(3).waitFor();
+    await page.screenshot({ path: out('files-upload-desktop-vistud-light') });
+    await page.locator('#structure-dialog').getByRole('button', { name: 'Upload', exact: true }).click();
+    await page.getByRole('status').filter({ hasText: '3 files uploaded.' }).waitFor();
+    await page.screenshot({ path: out('files-upload-desktop-vistud-light-refused') });
+    await page.keyboard.press('Escape');
+    await page.screenshot({ path: out('files-module-desktop-vistud-light') });
+
+    for (const [file, shot] of [['Onion cells.png', 'image'], ['Essay - why cells divide.docx', 'no-preview']]) {
+        await week1.getByRole('link', { name: file }).click();
+        await page.getByRole('heading', { level: 1, name: file }).waitFor();
+        await page.screenshot({ path: out(`file-desktop-vistud-light-${shot}`) });
+        if (shot === 'no-preview') {
+            await page.setViewportSize(sizes.mobile);
+            await page.screenshot({ path: out('file-mobile-vistud-light-no-preview') });
+            await useTheme(page, 'vistud-dark');
+            await page.screenshot({ path: out('file-mobile-vistud-dark-no-preview') });
+            await useTheme(page, 'vistud-light');
+            await page.setViewportSize(sizes.desktop);
+        }
+        await page.goBack();
+        await page.waitForLoadState('load');
+    }
+});
