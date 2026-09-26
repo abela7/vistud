@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 /**
  * Recovering admin access (ADR 0003 §10.3): another admin resets a user's
  * 2FA, or, when no admin is available, the console does. The user must enrol
- * again before entering the admin workspace, and is logged out everywhere.
+ * again before entering the admin area, and is logged out everywhere.
  */
 final class TwoFactorReset
 {

@@ -12,8 +12,7 @@ use InvalidArgumentException;
  * never carry arbitrary CSS (ADR 0003 §6.4).
  *
  * The token list is the contract in DESIGN.md §3 and ADR 0003 §6.1. The
- * category, editor and chart groups join it with the M2 screens that use
- * them.
+ * editor and chart groups join it with the M2 screens that use them.
  */
 final readonly class Theme
 {
@@ -49,7 +48,20 @@ final readonly class Theme
         // QR codes: dark modules on a light plate in every theme, so phone
         // scanners can read them (DESIGN.md §3.4)
         'qr-dark', 'qr-light',
+        // Workspace colours: a strong colour and a subtle background for each
+        // of the eight a student can pick (docs/specs/workspaces.md)
+        'category-blue', 'category-blue-subtle',
+        'category-teal', 'category-teal-subtle',
+        'category-green', 'category-green-subtle',
+        'category-amber', 'category-amber-subtle',
+        'category-orange', 'category-orange-subtle',
+        'category-red', 'category-red-subtle',
+        'category-pink', 'category-pink-subtle',
+        'category-purple', 'category-purple-subtle',
     ];
+
+    /** The colours a student can give a workspace. Each has `category-{name}` and `category-{name}-subtle`. */
+    public const CATEGORIES = ['blue', 'teal', 'green', 'amber', 'orange', 'red', 'pink', 'purple'];
 
     /** Gradient tokens: an angle and 2–6 opaque stops, or a solid fill. */
     public const GRADIENTS = [

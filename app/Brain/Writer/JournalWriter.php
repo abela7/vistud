@@ -37,10 +37,10 @@ use Illuminate\Support\Facades\DB;
 final class JournalWriter
 {
     /** Entity reference types, as opposed to references to journal entries. */
-    private const ENTITY_TYPES = ['topic', 'question', 'misconception', 'task', 'activity', 'source', 'course', 'module'];
+    private const ENTITY_TYPES = ['topic', 'question', 'misconception', 'task', 'activity', 'source', 'workspace', 'module'];
 
     /** Record types that introduce an entity others can reference. */
-    private const RECORD_ENTITIES = ['task', 'activity', 'source', 'course', 'module'];
+    private const RECORD_ENTITIES = ['task', 'activity', 'source', 'workspace', 'module'];
 
     public function __construct(private JournalStore $store) {}
 

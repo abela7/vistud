@@ -18,7 +18,7 @@ final class Index extends Component
 {
     /** What each action reads as, after the actor's name. */
     public const ACTIONS = [
-        AuditAction::WORKSPACE_ADMIN_ENTERED => 'entered the admin area',
+        AuditAction::ADMIN_AREA_ENTERED => 'entered the admin area',
         AuditAction::ADMIN_ACCESS_DENIED => 'was refused an admin page',
         AuditAction::ACCOUNT_CREATED => 'created an account for',
         AuditAction::ACCOUNT_SUSPENDED => 'suspended',
@@ -34,6 +34,11 @@ final class Index extends Component
         AuditAction::TWO_FACTOR_RESET => 'reset two-factor authentication for',
         AuditAction::RECOVERY_CODES_GENERATED => 'made new recovery codes',
         AuditAction::RECOVERY_CODE_USED => 'logged in with a recovery code',
+    ];
+
+    /** Names used by earlier versions. The log is never rewritten, so old entries keep them. */
+    public const LEGACY_ACTIONS = [
+        'workspace.admin_entered' => 'entered the admin area',
     ];
 
     /** The actions whose sentence ends with the account acted on. */

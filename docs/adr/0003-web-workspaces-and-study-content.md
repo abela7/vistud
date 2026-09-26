@@ -14,6 +14,8 @@
 - **Decision owner:** the project owner. The PM reviews and coordinates; the developer owns implementation.
 - **Depends on:** [ADR 0001](0001-permanent-store-and-retrieval-index.md) and [ADR 0002](0002-learning-event-schema.md). Both now carry cross-references back to this ADR.
 
+> **Terminology update (M2 step 0).** This ADR was written when "workspace" meant the student side or the admin side of the app. Those are now called **areas** (the student area and the admin area). **Workspace** now means a student's space for one subject, which replaces this ADR's "course" (docs/specs/workspaces.md). Read "student workspace" and "admin workspace" below as "student area" and "admin area", and "course" as "workspace".
+
 ## 1. Context
 
 ViStud is a full study platform, comparable in ambition to RemNote. Students work inside it through:

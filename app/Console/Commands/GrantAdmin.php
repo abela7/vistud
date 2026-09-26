@@ -15,7 +15,7 @@ use Illuminate\Console\Command;
 /**
  * Grants admin from the server's shell (ADR 0003 §10.3, first-admin setup
  * step 2). There is no web route for the first admin. Audited as a system
- * action. The new admin must enrol in 2FA before entering the admin workspace.
+ * action. The new admin must enrol in 2FA before entering the admin area.
  */
 #[Signature('vistud:admin:grant {email}')]
 #[Description('Grant the admin role to an existing account')]
@@ -38,7 +38,7 @@ class GrantAdmin extends Command
             return self::FAILURE;
         }
 
-        $this->info('Granted admin. The account must set up two-factor authentication before entering the admin workspace.');
+        $this->info('Granted admin. The account must set up two-factor authentication before entering the admin area.');
 
         return self::SUCCESS;
     }

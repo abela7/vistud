@@ -9,8 +9,8 @@ use App\Identity\PrincipalFactory;
 use App\Identity\Roles;
 use App\Livewire\Admin\AuditLog\Index;
 use App\Models\User;
+use App\Platform\Access\Area;
 use App\Platform\Access\Principal;
-use App\Platform\Access\Workspace;
 use App\Platform\Errors\Forbidden;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\ViewException;
@@ -76,7 +76,7 @@ class AuditLogScreenTest extends TestCase
     {
         DB::table('audit_log')->insert([
             'occurred_at' => now(), 'actor_type' => 'user', 'actor_user_id' => '01900000-0000-7000-8000-000000000000',
-            'actor_role' => 'admin', 'action' => AuditAction::WORKSPACE_ADMIN_ENTERED, 'request_id' => 'req',
+            'actor_role' => 'admin', 'action' => AuditAction::ADMIN_AREA_ENTERED, 'request_id' => 'req',
             'target_type' => 'user', 'target_id' => '01900000-0000-7000-8000-000000000000',
         ]);
 
@@ -99,7 +99,7 @@ class AuditLogScreenTest extends TestCase
     {
         $this->actingAs($as ?? $this->admin)->withSession([
             PrincipalFactory::PASSWORD_CONFIRMED_KEY => now()->getTimestamp(),
-            PrincipalFactory::WORKSPACE_KEY => Workspace::Admin->value,
+            PrincipalFactory::AREA_KEY => Area::Admin->value,
         ]);
         // Livewire's test requests skip middleware, so nothing gives them the session.
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));

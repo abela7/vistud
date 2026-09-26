@@ -55,7 +55,7 @@ class OpenApiContractTest extends TestCase
         $problems = (new OpenApi)->validateResponse('GET', '/api/v1/me', 200, [
             'account' => ['id' => 'u', 'name' => 'n', 'email' => 'e', 'roles' => ['student'], 'two_factor_confirmed' => false, 'secret' => 'x'],
             'learner' => null,
-            'workspace' => 'student',
+            'area' => 'student',
         ]);
 
         $this->assertSame(['$.account.secret: not documented.'], $problems);

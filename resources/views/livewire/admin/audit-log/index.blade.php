@@ -7,7 +7,7 @@
     use App\Livewire\Admin\AuditLog\Index;
     use Illuminate\Support\Carbon;
 
-    $icons = ['workspace' => 'layout-dashboard', 'admin' => 'triangle-alert', 'account' => 'users', 'role' => 'shield', 'invitation' => 'mail', 'two_factor' => 'key-round'];
+    $icons = ['area' => 'layout-dashboard', 'workspace' => 'layout-dashboard', 'admin' => 'triangle-alert', 'account' => 'users', 'role' => 'shield', 'invitation' => 'mail', 'two_factor' => 'key-round'];
     $name = fn (?string $id) => $id === null ? null : ($names[$id] ?? 'A deleted account');
 @endphp
 <div class="space-y-6">
@@ -36,7 +36,7 @@
                     $actor = $entry['actor_type'] === 'system' ? 'The server console' : $name($entry['actor_user_id']);
                     $target = $entry['target_type'] === 'user' && in_array($entry['action'], Index::NAMES_TARGET, true) ? $name($entry['target_id']) : null;
                     $self = $target !== null && $entry['target_id'] === $entry['actor_user_id'];
-                    $phrase = Index::ACTIONS[$entry['action']] ?? $entry['action'];
+                    $phrase = Index::ACTIONS[$entry['action']] ?? Index::LEGACY_ACTIONS[$entry['action']] ?? $entry['action'];
                 @endphp
                 <li wire:key="audit-{{ $entry['id'] }}" class="flex items-start gap-3 px-4 py-3 sm:px-5">
                     <span class="avatar mt-0.5 shrink-0" aria-hidden="true"><x-icon :name="$icons[strtok($entry['action'], '.')] ?? 'scroll-text'" class="size-4" /></span>

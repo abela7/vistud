@@ -37,7 +37,7 @@ class ResetTwoFactor extends Command
             return self::FAILURE;
         }
 
-        $this->info('Two-factor authentication was reset. The account must enrol again before entering the admin workspace.');
+        $this->info('Two-factor authentication was reset. The account must enrol again before entering the admin area.');
 
         return self::SUCCESS;
     }

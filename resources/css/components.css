@@ -660,13 +660,23 @@
         font-weight: 500;
     }
 
-    /* ---------- Workspace chips ---------- */
+    /* ---------- Workspace colours and chips ---------- */
 
     /*
-    | A workspace's colour and icon. Prototype: the tones borrow the status
-    | colours until the themes gain a category palette for workspaces
-    | (docs/specs/workspaces.md, decision W5).
+    | A workspace's colour (docs/specs/workspaces.md): .ws-colour-{name} sets
+    | --ws and --ws-subtle from the theme's category tokens, and anything
+    | inside uses them. The class list is fixed, so it can be built from data.
     */
+    .ws-colour-blue { --ws: var(--category-blue); --ws-subtle: var(--category-blue-subtle); }
+    .ws-colour-teal { --ws: var(--category-teal); --ws-subtle: var(--category-teal-subtle); }
+    .ws-colour-green { --ws: var(--category-green); --ws-subtle: var(--category-green-subtle); }
+    .ws-colour-amber { --ws: var(--category-amber); --ws-subtle: var(--category-amber-subtle); }
+    .ws-colour-orange { --ws: var(--category-orange); --ws-subtle: var(--category-orange-subtle); }
+    .ws-colour-red { --ws: var(--category-red); --ws-subtle: var(--category-red-subtle); }
+    .ws-colour-pink { --ws: var(--category-pink); --ws-subtle: var(--category-pink-subtle); }
+    .ws-colour-purple { --ws: var(--category-purple); --ws-subtle: var(--category-purple-subtle); }
+
+    /* The workspace's icon on its colour. */
     .ws-chip {
         display: inline-grid;
         flex: none;
@@ -674,21 +684,8 @@
         width: 2.25rem;
         height: 2.25rem;
         border-radius: var(--radius-md);
-    }
-
-    .ws-tone-1 {
-        background-color: var(--info-subtle);
-        color: var(--info);
-    }
-
-    .ws-tone-2 {
-        background-color: var(--success-subtle);
-        color: var(--success);
-    }
-
-    .ws-tone-3 {
-        background-color: var(--warning-subtle);
-        color: var(--warning);
+        background-color: var(--ws-subtle, var(--accent-subtle));
+        color: var(--ws, var(--accent-contrast));
     }
 
     /* ---------- QR codes ---------- */

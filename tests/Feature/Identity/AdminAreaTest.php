@@ -6,17 +6,17 @@ use App\Audit\AuditAction;
 use App\Http\AdminRoutes;
 use App\Identity\PrincipalFactory;
 use App\Models\User;
-use App\Platform\Access\Workspace;
+use App\Platform\Access\Area;
 use Illuminate\Support\Facades\Route;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
 /**
- * ADR 0003 §10.3–10.4: the /admin route group and the workspace switch.
+ * ADR 0003 §10.3–10.4: the /admin route group and the area switch.
  * Developer tests; the independent T1, T7 and T9 tests belong to V2.
  */
-class AdminWorkspaceTest extends TestCase
+class AdminAreaTest extends TestCase
 {
     use CreatesAccounts, RefreshesDatabase;
 
@@ -57,7 +57,7 @@ class AdminWorkspaceTest extends TestCase
             ->assertJsonPath('error.code', 'two_factor_required');
     }
 
-    public function test_entering_the_admin_workspace_by_url_needs_a_recent_password_confirmation(): void
+    public function test_entering_the_admin_area_by_url_needs_a_recent_password_confirmation(): void
     {
         $admin = $this->admin();
 
@@ -68,16 +68,16 @@ class AdminWorkspaceTest extends TestCase
         $this->actingAs($admin)->withSession($this->confirmedSession())
             ->getJson('/admin/_test/screen')
             ->assertOk()
-            ->assertSessionHas(PrincipalFactory::WORKSPACE_KEY, 'admin');
+            ->assertSessionHas(PrincipalFactory::AREA_KEY, 'admin');
 
-        $this->assertCount(1, $this->auditRows(AuditAction::WORKSPACE_ADMIN_ENTERED));
+        $this->assertCount(1, $this->auditRows(AuditAction::ADMIN_AREA_ENTERED));
     }
 
-    public function test_inside_the_admin_workspace_later_requests_pass_without_reconfirming(): void
+    public function test_inside_the_admin_area_later_requests_pass_without_reconfirming(): void
     {
         $admin = $this->admin();
 
-        $this->actingAs($admin)->withSession([PrincipalFactory::WORKSPACE_KEY => 'admin'])
+        $this->actingAs($admin)->withSession([PrincipalFactory::AREA_KEY => 'admin'])
             ->getJson('/admin/_test/screen')
             ->assertOk();
     }
@@ -86,28 +86,28 @@ class AdminWorkspaceTest extends TestCase
     {
         $admin = $this->admin();
 
-        $this->actingAs($admin)->withSession($this->confirmedSession(Workspace::Admin))
+        $this->actingAs($admin)->withSession($this->confirmedSession(Area::Admin))
             ->getJson('/admin/no/such/screen')
             ->assertNotFound();
     }
 
-    public function test_switching_workspace(): void
+    public function test_switching_area(): void
     {
         $student = $this->student();
         $admin = $this->admin();
 
-        $this->actingAs($student)->postJson('/workspace/admin')->assertForbidden();
+        $this->actingAs($student)->postJson('/area/admin')->assertForbidden();
 
-        $this->actingAs($admin)->postJson('/workspace/admin')->assertStatus(423);
-        $this->actingAs($admin)->withSession($this->confirmedSession())->postJson('/workspace/admin')
+        $this->actingAs($admin)->postJson('/area/admin')->assertStatus(423);
+        $this->actingAs($admin)->withSession($this->confirmedSession())->postJson('/area/admin')
             ->assertNoContent()
-            ->assertSessionHas(PrincipalFactory::WORKSPACE_KEY, 'admin');
-        $this->actingAs($admin)->postJson('/workspace/student')
+            ->assertSessionHas(PrincipalFactory::AREA_KEY, 'admin');
+        $this->actingAs($admin)->postJson('/area/student')
             ->assertNoContent()
-            ->assertSessionHas(PrincipalFactory::WORKSPACE_KEY, 'student');
+            ->assertSessionHas(PrincipalFactory::AREA_KEY, 'student');
 
         $adminOnly = $this->admin(student: false);
-        $this->actingAs($adminOnly)->postJson('/workspace/student')->assertForbidden()->assertJsonPath('error.code', 'student_role_required');
+        $this->actingAs($adminOnly)->postJson('/area/student')->assertForbidden()->assertJsonPath('error.code', 'student_role_required');
     }
 
     public function test_suspended_and_deleted_accounts_are_logged_out_on_their_next_request(): void

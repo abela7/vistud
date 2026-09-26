@@ -71,12 +71,12 @@ content:       { <field>: text }         # free text, stored separately
 - **`received_at`** is ignored by the writer, which always uses the server's time. Tests that need a particular time use `travelTo()`.
 - **Unknown top-level fields are refused.** Content fields are named with lower-case words (up to 32 characters) and hold at most 1 MiB of text each.
 - **Attempts** may carry `task_revision` (a positive integer). `judged_by: auto` requires `checker: {id, version, key_source}`, and `key_source` must be `course_material`, `instructor` or `derived_from_material`. A key the learner wrote (`key_source: learner`) is refused for `auto`; record the attempt as `judged_by: self` (ADR 0003 §9.4).
-- **Records** of type `task` need a `key` (and may carry `revision`, `content_hash`, `status`); `activity` needs `kind`; `course` needs `title`; `module` needs `course` and `title`.
+- **Records** of type `task` need a `key` (and may carry `revision`, `content_hash`, `status`); `activity` needs `kind`; `workspace` needs `title`; `module` needs `workspace` and `title`. (Until M2 step 0 these were `course`, and a module's `course`; renamed before any journal stored one, docs/specs/workspaces.md decision W2.)
 - **Records** carry `body.record_type` and `body.record_id`. A revision appends a new record entry with the same `record_id`.
 - **Claims** carry `body.type`, `targets`, `value`, `confidence`, `method {kind, id, version, prompt?}`, `derived_from`, `supersedes` and `review {state, by?}`.
 - **References** are `type:id`, optionally `#locator`, for example `source:NOTE#v12/blk-7f3` ([ADR 0002 §5](../adr/0002-learning-event-schema.md#5-claim-contracts)).
 
-Increment 3 brought `Journal\Vocabulary` and `EntryValidator` up to the latest ADR 0002 revision. The additions above (course and module records, `task_revision`, the checker rule, and the stricter checks on times, fields and content) are part of the Stable format.
+Increment 3 brought `Journal\Vocabulary` and `EntryValidator` up to the latest ADR 0002 revision. The additions above (workspace and module records, `task_revision`, the checker rule, and the stricter checks on times, fields and content) are part of the Stable format.
 
 ## Projection output (Stable keys, Provisional facts)
 
@@ -121,24 +121,24 @@ Provisional until the PM approves increment 2, then Stable.
 
 | Service | Methods | Checks |
 |---|---|---|
-| `Identity\PrincipalFactory` | `fromRequest(Request): Principal` (cached per request) · `forUser(User, channel, ?passwordConfirmedAt, ?workspace, ?ip, ?userAgent, ?requestId): Principal` · `forget(Request)` | Reads status and 2FA from the database on every call. Suspended: `403 access_revoked`. Deleted or missing: `401 account_deleted` |
+| `Identity\PrincipalFactory` | `fromRequest(Request): Principal` (cached per request) · `forUser(User, channel, ?passwordConfirmedAt, ?area, ?ip, ?userAgent, ?requestId): Principal` · `forget(Request)` | Reads status and 2FA from the database on every call. Suspended: `403 access_revoked`. Deleted or missing: `401 account_deleted` |
 | `Identity\Accounts` | `create(Principal, name, email, password, student = true, ?timezone): User` · `suspend(Principal, userId)` · `reactivate(Principal, userId)` · `requestDeletion(Principal, userId)` · `details(Principal, userId): AccountDetails` · `names(Principal, userIds): array<id, name>` (for showing who did what) · `list(Principal, ?cursor, limit = 50, ?search): {data: list<AccountDetails>, next_cursor}` (`search` matches part of a name or an email address) | `create`: protected admin, or the console. `suspend`, `reactivate`: protected admin. `requestDeletion`: protected admin, or the account's own user with a recent confirmation. `details`, `names`, `list`: admin with 2FA. Last-admin safeguard on suspend and delete |
 | `Identity\Roles` | `grantAdmin(Principal, userId)` · `revokeAdmin(Principal, userId)` | Protected admin. The console may grant, never revoke. Last-admin safeguard on revoke |
 | `Identity\Invitations` | `invite(Principal, email): IssuedInvitation` · `revoke(Principal, invitationId)` · `pending(Principal, limit = 100): list<PendingInvitation>` · `accept(token, name, password, ?timezone): User` | Protected admin to invite and revoke; admin with 2FA for `pending` (never returns a token). `accept` takes no role, always creates a student, and answers every invalid token with the same `422 invitation_invalid` |
 | `Identity\TwoFactorReset` | `reset(Principal, userId)` | Protected admin, or the console. Ends the user's sessions |
-| `Identity\Workspaces` | `enter(Principal, Workspace)` | `admin`: protected admin (2FA and a recent confirmation). `student`: the student role |
+| `Identity\Areas` | `enter(Principal, Area)` | `admin`: protected admin (2FA and a recent confirmation). `student`: the student role |
 | `Audit\AuditLog` | `record(Principal, action, ?targetType, ?targetId, metadata = [], ?role)` · `list(Principal, filters = [], ?cursor, limit = 50)` | `record` refuses metadata strings that aren't ID tokens (so no email addresses or free text). `list`: admin with 2FA |
 
 - `AccountDetails` holds id, name, email, status, roles, 2FA status, created, status changed and last active. **No admin service has a method that returns learning content** (ADR 0003 §10.4).
 - `IssuedInvitation` holds id, token and expiry. The token is returned once and only its hash is stored. M1 sends no email: the admin screen (WP6) shows the link once.
-- `Platform\Access\Workspace` (enum `student`, `admin`) and `Principal::$workspace` were added in increment 2. Both are additive.
+- `Platform\Access\Area` (enum `student`, `admin`) and `Principal::$area` were added in increment 2 as `Workspace` and `$workspace`, and renamed in M2 step 0 so that "workspace" means only a student's subject workspace (docs/specs/workspaces.md).
 
 **Web adapters and middleware (increment 2).** These are what WP6 builds screens on:
 
 | Route or middleware | Behaviour |
 |---|---|
-| `App\Http\AdminRoutes::group()` | The `/admin` group: `auth`, `role:admin` (403 and an audit record otherwise), `two_factor` (403 `two_factor_required`, or a redirect to the `two-factor.setup` page once WP6 adds it), `admin.workspace` (entering needs a recent password confirmation: 423, or a redirect to the confirm-password page). WP6 adds screens in `routes/web/admin-screens.php`. Any other `/admin` URL is 403 for non-admins and 404 for admins |
-| `POST /workspace/{student\|admin}` | Switches workspace. `204` for JSON, a redirect otherwise |
+| `App\Http\AdminRoutes::group()` | The `/admin` group: `auth`, `role:admin` (403 and an audit record otherwise), `two_factor` (403 `two_factor_required`, or a redirect to the `two-factor.setup` page once WP6 adds it), `admin.area` (entering needs a recent password confirmation: 423, or a redirect to the confirm-password page). WP6 adds screens in `routes/web/admin-screens.php`. Any other `/admin` URL is 403 for non-admins and 404 for admins |
+| `POST /area/{student\|admin}` | Switches area. `204` for JSON, a redirect otherwise |
 | `POST /invitations/accept` | `token`, `name`, `password`, `password_confirmation`, optional `timezone`. Creates the student, logs them in, `201 {id}` for JSON. A browser is sent to `/` instead; an invalid token sends it back to `/invitation` with an `invitation` error and no kept input |
 | `GET /journal`, `GET /journal/{entry}` | The student's own journal, and one entry (`App\Livewire\Journal\EntryShow`). Another learner's entry answers 404 exactly like a missing one; an account without a journal gets 403. A tampered Livewire request (a locked property changed, or an edited snapshot) also answers 404 |
 | `GET /invitation` | The acceptance page. Links are `/invitation#<token>`: the token after `#` never reaches the server, so it stays out of every log (Q3), and the page's script moves it into the form |
@@ -185,7 +185,7 @@ Conventions are in [conventions.md](conventions.md#json-api). The OpenAPI defini
 
 | Endpoint | Status | Arrives | Purpose |
 |---|---|---|---|
-| `GET /api/v1/me` | Provisional | Increment 2 (implemented) | The account, its roles, its learner ID and the active workspace |
+| `GET /api/v1/me` | Provisional | Increment 2 (implemented) | The account, its roles, its learner ID and the active area (`area`; called `workspace` before M2 step 0) |
 | `GET /api/v1/journal/entries/{id}` | Provisional | Increment 3 (implemented) | One of the learner's own entries, with content unless blocked. Another learner's ID gets the same 404 as a missing one; an account without a learner stream gets `403 student_role_required` |
 | `POST /api/v1/notes`, `PUT /api/v1/notes/{id}`, `GET /api/v1/sync/tombstones` | Draft | M2 | Note sync and deletion records ([ADR 0003 §5.3–5.4](../adr/0003-web-workspaces-and-study-content.md#53-autosave-drafts-ordering-and-conflicts)). Not built in M1 |
 
@@ -223,5 +223,5 @@ Implemented in increment 2 (`App\Audit\AuditAction`). Provisional until the PM a
 | `role.granted`, `role.revoked` (`metadata.role`) | user |
 | `two_factor.reset` | user |
 | `two_factor.confirmed`, `two_factor.disabled`, `two_factor.recovery_codes_generated`, `two_factor.recovery_code_used` | user |
-| `workspace.admin_entered` | user |
+| `area.admin_entered` (`workspace.admin_entered` before M2 step 0) | user |
 | `admin.access_denied` (a non-admin reached an admin route) | route name |

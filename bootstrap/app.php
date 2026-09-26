@@ -3,7 +3,7 @@
 use App\Http\Middleware\EnsureAccountActive;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureTwoFactorEnrolled;
-use App\Http\Middleware\EnterAdminWorkspace;
+use App\Http\Middleware\EnterAdminArea;
 use App\Http\Middleware\RequirePasswordConfirmation;
 use App\Http\Middleware\ShowRecoveryCodesOnce;
 use App\Platform\Errors\AppError;
@@ -46,7 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureRole::class,
             'two_factor' => EnsureTwoFactorEnrolled::class,
-            'admin.workspace' => EnterAdminWorkspace::class,
+            'admin.area' => EnterAdminArea::class,
             'password.confirm' => RequirePasswordConfirmation::class,
         ]);
         // Guests go to the login screen (routes/web/auth.php).

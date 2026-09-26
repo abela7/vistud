@@ -11,7 +11,7 @@
 @endphp
 <div class="space-y-3">
     <a href="/_mockups/workspaces" class="ws-switcher no-underline" title="Switch workspace">
-        <span class="ws-chip ws-tone-2"><x-icon name="microscope" class="size-4" /></span>
+        <span class="ws-chip ws-colour-green"><x-icon name="microscope" class="size-4" /></span>
         <span class="min-w-0 flex-1">
             <span class="block text-xs text-fg-muted">Workspace</span>
             <span class="block truncate font-semibold">Biology</span>

@@ -6,8 +6,8 @@ use App\Audit\AuditAction;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Admin\Accounts\Index;
 use App\Models\User;
+use App\Platform\Access\Area;
 use App\Platform\Access\Role;
-use App\Platform\Access\Workspace;
 use App\Platform\Errors\Forbidden;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\ViewException;
@@ -75,7 +75,7 @@ class AccountsScreenTest extends TestCase
         ]]];
         $uri = app(HandleRequests::class)->getUpdateUri();
 
-        $this->actingAs($this->admin)->withSession($this->confirmedSession(Workspace::Admin))
+        $this->actingAs($this->admin)->withSession($this->confirmedSession(Area::Admin))
             ->postJson($uri, $request, ['X-Livewire' => '1'])->assertOk();
 
         // Livewire resets its per-request state when a real request ends; a test has to do it.
@@ -190,7 +190,7 @@ class AccountsScreenTest extends TestCase
     {
         $this->actingAs($as ?? $this->admin)->withSession([
             PrincipalFactory::PASSWORD_CONFIRMED_KEY => $confirmedAt ?? now()->getTimestamp(),
-            PrincipalFactory::WORKSPACE_KEY => Workspace::Admin->value,
+            PrincipalFactory::AREA_KEY => Area::Admin->value,
         ]);
         // Livewire's test requests skip middleware, so nothing gives them the session.
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));

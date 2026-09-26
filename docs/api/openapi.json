@@ -9,7 +9,7 @@
     "/api/v1/me": {
       "get": {
         "operationId": "getMe",
-        "summary": "The current account, its roles, its learner and the active workspace",
+        "summary": "The current account, its roles, its learner and the active area",
         "x-stability": "provisional",
         "responses": {
           "200": {
@@ -90,7 +90,7 @@
         "required": [
           "account",
           "learner",
-          "workspace"
+          "area"
         ],
         "properties": {
           "account": {
@@ -147,7 +147,7 @@
               }
             }
           },
-          "workspace": {
+          "area": {
             "type": [
               "string",
               "null"

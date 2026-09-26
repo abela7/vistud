@@ -91,6 +91,8 @@ The full list is the allowlist in [app/Appearance/Theme.php](app/Appearance/Them
 
 Tailwind's own palette, shadows and radii are removed (`--color-*: initial` and friends in [resources/css/app.css](resources/css/app.css)), so an unthemed colour class simply doesn't exist.
 
+**Workspace colours.** Every theme also defines eight colours a student can give a workspace (`blue`, `teal`, `green`, `amber`, `orange`, `red`, `pink`, `purple`): `--category-{name}` and `--category-{name}-subtle`. The validator checks the strong colour on its subtle background (4.5:1) and on the page surfaces (3:1), and body text on the subtle background. Components use them through `.ws-colour-{name}`, which sets `--ws` and `--ws-subtle` for everything inside it (`.ws-chip`, for example).
+
 ### 3.2 Where gradients belong
 
 Gradients are part of the visual identity. Use them for:

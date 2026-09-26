@@ -3,9 +3,9 @@
 namespace App\Identity;
 
 use App\Models\User;
+use App\Platform\Access\Area;
 use App\Platform\Access\Principal;
 use App\Platform\Access\Role;
-use App\Platform\Access\Workspace;
 use App\Platform\Errors\AccessRevoked;
 use App\Platform\Errors\AccountDeleted;
 use App\Platform\Http\RequestId;
@@ -21,8 +21,8 @@ use Illuminate\Support\Facades\DB;
  */
 final class PrincipalFactory
 {
-    /** Session key for the active workspace. */
-    public const WORKSPACE_KEY = 'vistud.workspace';
+    /** Session key for the active area. */
+    public const AREA_KEY = 'vistud.area';
 
     /** Laravel's password-confirmation timestamp, also written by Fortify. */
     public const PASSWORD_CONFIRMED_KEY = 'auth.password_confirmed_at';
@@ -45,13 +45,13 @@ final class PrincipalFactory
 
         $session = $request->hasSession() ? $request->session() : null;
         $confirmedAt = $session?->get(self::PASSWORD_CONFIRMED_KEY);
-        $workspace = Workspace::tryFrom((string) $session?->get(self::WORKSPACE_KEY));
+        $area = Area::tryFrom((string) $session?->get(self::AREA_KEY));
 
         $principal = $this->forUser(
             $user,
             channel: $request->is('api/*') ? 'api' : 'web',
             passwordConfirmedAt: is_numeric($confirmedAt) ? new DateTimeImmutable('@'.(int) $confirmedAt) : null,
-            workspace: $workspace,
+            area: $area,
             ip: $request->ip(),
             userAgent: $request->userAgent(),
             requestId: RequestId::of($request),
@@ -75,7 +75,7 @@ final class PrincipalFactory
         User $user,
         string $channel,
         ?DateTimeImmutable $passwordConfirmedAt = null,
-        ?Workspace $workspace = null,
+        ?Area $area = null,
         ?string $ip = null,
         ?string $userAgent = null,
         ?string $requestId = null,
@@ -97,7 +97,7 @@ final class PrincipalFactory
             ip: $ip,
             userAgent: $userAgent,
             requestId: $requestId,
-            workspace: $workspace ?? (in_array(Role::Student, $roles, true) ? Workspace::Student : null),
+            area: $area ?? (in_array(Role::Student, $roles, true) ? Area::Student : null),
         );
     }
 

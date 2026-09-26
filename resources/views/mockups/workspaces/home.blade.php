@@ -1,9 +1,9 @@
 {{-- Mockup: "My workspaces", the student's home. Static content for review (docs/specs/workspaces.md). --}}
 @php
     $workspaces = [
-        ['Biology', 'BIO101 · Autumn 2026', 'microscope', 'ws-tone-2', 'Quiz 2 on Thursday', '4 modules · 9 notes · 3 files', '/_mockups/workspaces/biology'],
-        ['Mathematics', 'Linear algebra · Autumn 2026', 'sigma', 'ws-tone-1', 'Problem set 3 due Monday', '5 modules · 14 notes', '#'],
-        ['Spanish', 'Self-study · A2 level', 'languages', 'ws-tone-3', 'Nothing scheduled', '2 modules · 6 notes', '#'],
+        ['Biology', 'BIO101 · Autumn 2026', 'microscope', 'ws-colour-green', 'Quiz 2 on Thursday', '4 modules · 9 notes · 3 files', '/_mockups/workspaces/biology'],
+        ['Mathematics', 'Linear algebra · Autumn 2026', 'sigma', 'ws-colour-blue', 'Problem set 3 due Monday', '5 modules · 14 notes', '#'],
+        ['Spanish', 'Self-study · A2 level', 'languages', 'ws-colour-amber', 'Nothing scheduled', '2 modules · 6 notes', '#'],
     ];
 @endphp
 <x-layouts.app title="My workspaces">

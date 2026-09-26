@@ -5,7 +5,7 @@ namespace App\Providers;
 use App\Appearance\Themes;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureTwoFactorEnrolled;
-use App\Http\Middleware\EnterAdminWorkspace;
+use App\Http\Middleware\EnterAdminArea;
 use App\Platform\Database\RuntimeGrants;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\MigrationsEnded;
@@ -27,7 +27,7 @@ class AppServiceProvider extends ServiceProvider
         // A Livewire action re-runs its page's access checks, so an admin
         // component can't be reached by posting to Livewire's own endpoint
         // (ADR 0003 §10.3, T2). The services check again.
-        Livewire::addPersistentMiddleware([EnsureRole::class, EnsureTwoFactorEnrolled::class, EnterAdminWorkspace::class]);
+        Livewire::addPersistentMiddleware([EnsureRole::class, EnsureTwoFactorEnrolled::class, EnterAdminArea::class]);
 
         // New tables get their runtime-user privileges as soon as the schema
         // owner has created them (docs/development/setup.md).

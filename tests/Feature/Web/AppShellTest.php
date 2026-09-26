@@ -3,12 +3,12 @@
 namespace Tests\Feature\Web;
 
 use App\Models\User;
-use App\Platform\Access\Workspace;
+use App\Platform\Access\Area;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
-/** The signed-in frame shared by both workspaces (ADR 0003 §10–11, DESIGN.md §7.2). */
+/** The signed-in frame shared by both areas (ADR 0003 §10–11, DESIGN.md §7.2). */
 class AppShellTest extends TestCase
 {
     use CreatesAccounts, RefreshesDatabase;
@@ -50,7 +50,7 @@ class AppShellTest extends TestCase
             ->assertSee('class="admin-marker"', false)
             ->assertSee('title="Overview"  aria-current="page"', false)
             ->assertDontSee('title="Home"', false)
-            ->assertSee('action="'.route('workspace.switch', 'student').'"', false);
+            ->assertSee('action="'.route('area.switch', 'student').'"', false);
     }
 
     public function test_an_admin_without_a_student_role_gets_no_switch_back(): void
@@ -59,16 +59,16 @@ class AppShellTest extends TestCase
 
         $this->actingAs($admin)->withSession($this->confirmedSession())->get('/admin')
             ->assertOk()
-            ->assertDontSee('action="'.route('workspace.switch', 'student').'"', false);
+            ->assertDontSee('action="'.route('area.switch', 'student').'"', false);
     }
 
-    public function test_the_security_page_stays_in_the_workspace_it_was_opened_from(): void
+    public function test_the_security_page_stays_in_the_area_it_was_opened_from(): void
     {
         $admin = $this->admin();
 
-        $this->actingAs($admin)->withSession($this->confirmedSession(Workspace::Admin))->get('/user/two-factor')
+        $this->actingAs($admin)->withSession($this->confirmedSession(Area::Admin))->get('/user/two-factor')
             ->assertOk()->assertSee('class="admin-marker"', false);
-        $this->actingAs($admin)->withSession($this->confirmedSession(Workspace::Student))->get('/user/two-factor')
+        $this->actingAs($admin)->withSession($this->confirmedSession(Area::Student))->get('/user/two-factor')
             ->assertOk()->assertSee('title="Security"  aria-current="page"', false);
     }
 }

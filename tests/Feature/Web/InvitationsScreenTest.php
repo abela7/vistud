@@ -7,7 +7,7 @@ use App\Identity\Invitations as InvitationService;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Admin\Accounts\Invitations;
 use App\Models\User;
-use App\Platform\Access\Workspace;
+use App\Platform\Access\Area;
 use App\Platform\Errors\Forbidden;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\ViewException;
@@ -113,7 +113,7 @@ class InvitationsScreenTest extends TestCase
     {
         $this->actingAs($as ?? $this->admin)->withSession([
             PrincipalFactory::PASSWORD_CONFIRMED_KEY => $confirmedAt ?? now()->getTimestamp(),
-            PrincipalFactory::WORKSPACE_KEY => Workspace::Admin->value,
+            PrincipalFactory::AREA_KEY => Area::Admin->value,
         ]);
         // Livewire's test requests skip middleware, so nothing gives them the session.
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));

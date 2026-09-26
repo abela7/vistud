@@ -4,12 +4,12 @@ namespace Tests\Feature\Web;
 
 use App\Identity\PrincipalFactory;
 use App\Models\User;
-use App\Platform\Access\Workspace;
+use App\Platform\Access\Area;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
-/** The admin landing page and the switch between workspaces (WP6; ADR 0003 §10). */
+/** The admin landing page and the switch between areas (WP6; ADR 0003 §10). */
 class AdminOverviewScreenTest extends TestCase
 {
     use CreatesAccounts, RefreshesDatabase;
@@ -28,8 +28,8 @@ class AdminOverviewScreenTest extends TestCase
             ->assertSee('Admin overview')
             ->assertSee('class="admin-marker"', false)
             ->assertSee('aria-current="page"', false)
-            ->assertSee('action="'.route('workspace.switch', 'student').'"', false)
-            ->assertSessionHas(PrincipalFactory::WORKSPACE_KEY, Workspace::Admin->value);
+            ->assertSee('action="'.route('area.switch', 'student').'"', false)
+            ->assertSessionHas(PrincipalFactory::AREA_KEY, Area::Admin->value);
     }
 
     public function test_entering_the_admin_area_asks_for_the_password_first(): void
@@ -54,10 +54,10 @@ class AdminOverviewScreenTest extends TestCase
 
     public function test_an_admin_can_switch_back_to_the_student_area(): void
     {
-        $this->actingAs($this->admin())->withSession($this->confirmedSession(Workspace::Admin))
-            ->post('/workspace/student')
+        $this->actingAs($this->admin())->withSession($this->confirmedSession(Area::Admin))
+            ->post('/area/student')
             ->assertRedirect('/')
-            ->assertSessionHas(PrincipalFactory::WORKSPACE_KEY, Workspace::Student->value);
+            ->assertSessionHas(PrincipalFactory::AREA_KEY, Area::Student->value);
     }
 
     public function test_an_admin_without_a_student_role_gets_no_student_switch(): void
@@ -66,6 +66,6 @@ class AdminOverviewScreenTest extends TestCase
 
         $this->actingAs($admin)->withSession($this->confirmedSession())->get('/admin')
             ->assertOk()
-            ->assertDontSee('action="'.route('workspace.switch', 'student').'"', false);
+            ->assertDontSee('action="'.route('area.switch', 'student').'"', false);
     }
 }

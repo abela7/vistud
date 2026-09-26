@@ -108,6 +108,15 @@ final class ThemeValidator
         $add(['logo'], ['logo-plate>bg', 'logo-plate>surface'], self::UI);
         $add(['qr-dark'], ['qr-light'], self::QR);
 
+        // Workspace colours: the strong colour as text or an icon on its
+        // subtle background, and as a mark on the page; body text on the
+        // subtle background.
+        foreach (Theme::CATEGORIES as $name) {
+            $add(["category-{$name}"], ["category-{$name}-subtle"], self::TEXT);
+            $add(["category-{$name}"], ['bg', 'surface', 'surface-raised'], self::UI);
+            $add(['text'], ["category-{$name}-subtle"], self::TEXT);
+        }
+
         return $pairs;
     }
 

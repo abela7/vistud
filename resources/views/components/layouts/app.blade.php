@@ -1,10 +1,10 @@
 {{--
-    The signed-in frame for both workspaces (ADR 0003 §4, §10 and §11;
+    The signed-in frame for both areas (ADR 0003 §4, §10 and §11;
     DESIGN.md §6.1 and §7.2): a top bar on the header gradient, a sidebar on
     desktop that collapses to icons, and the same navigation as a slide-in
     menu on tablets and phones (the owner's decision for now; ADR 0003 §11's
     phone bottom bar is revisited when Notes, Review and Calendar exist).
-    The admin workspace adds the permanent Admin marker and its own items.
+    The admin area adds the permanent Admin marker and its own items.
     Optional slots: `sidebar` replaces the navigation (in the sidebar and
     the slide-in menu), and `tabbar` adds a bottom bar of sections on phones.
 --}}
@@ -65,7 +65,7 @@
                 @if ($area === 'student' && $isAdmin)
                     <a href="{{ route('admin.overview') }}" class="menu-item"><x-icon name="shield" class="size-4" />Admin area</a>
                 @elseif ($area === 'admin' && $isStudent)
-                    <form method="POST" action="{{ route('workspace.switch', 'student') }}">
+                    <form method="POST" action="{{ route('area.switch', 'student') }}">
                         @csrf
                         <button type="submit" class="menu-item"><x-icon name="arrow-left-right" class="size-4" />Student area</button>
                     </form>
