@@ -40,7 +40,7 @@
                             :error="false" :disabled="! $usingRecovery" :autofocus="! $challengeError && $usingRecovery" />
                     </div>
 
-                    <button type="button" class="text-sm font-medium" data-challenge-swap>{{ $swapLabel }}</button>
+                    <button type="button" class="text-sm font-medium text-accent-contrast underline underline-offset-2 hover:text-accent-hover hover:decoration-2" data-challenge-swap>{{ $swapLabel }}</button>
 
                     <x-button type="submit" variant="primary" size="lg" class="w-full" busy-label="Verifying…">Verify</x-button>
                 </form>
@@ -53,25 +53,4 @@
             <x-appearance-switcher class="mt-8" />
         </main>
     </div>
-
-    <script>
-        document.addEventListener('click', (event) => {
-            const swap = event.target.closest('[data-challenge-swap]');
-            if (!swap) return;
-            const form = swap.closest('form');
-            const showRecovery = form.getAttribute('data-challenge-mode') !== 'recovery';
-            form.setAttribute('data-challenge-mode', showRecovery ? 'recovery' : 'code');
-            form.querySelector('[data-challenge-panel="code"]').hidden = showRecovery;
-            form.querySelector('[data-challenge-panel="recovery"]').hidden = !showRecovery;
-            const activeName = showRecovery ? 'recovery_code' : 'code';
-            const inactiveName = showRecovery ? 'code' : 'recovery_code';
-            const active = form.querySelector(`[name="${activeName}"]`);
-            const inactive = form.querySelector(`[name="${inactiveName}"]`);
-            inactive.value = '';
-            inactive.disabled = true;
-            active.disabled = false;
-            active.focus();
-            swap.textContent = showRecovery ? 'Use an authentication code instead' : 'Use a recovery code instead';
-        });
-    </script>
 </x-layouts.auth>

@@ -21,3 +21,9 @@ Route::middleware('guest')->group(function () {
         return view('auth.two-factor-challenge');
     })->name('two-factor.login');
 });
+
+Route::middleware('auth')->group(function () {
+    // Fortify handles POST /user/confirm-password and then returns the user
+    // to the page they were trying to open.
+    Route::view('/user/confirm-password', 'auth.confirm-password')->name('password.confirm');
+});

@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { loginToChallenge, useTheme } from './support.js';
+import { loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -35,6 +35,27 @@ for (const theme of ['vistud-light', 'vistud-dark']) {
         });
     }
 }
+
+for (const theme of ['vistud-light', 'vistud-dark']) {
+    for (const [size, viewport] of Object.entries(sizes)) {
+        test(`confirm password ${size} ${theme}`, async ({ page }) => {
+            await page.setViewportSize(viewport);
+            await openConfirmPassword(page);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`confirm-password-${size}-${theme}`), fullPage: size === 'mobile' });
+        });
+    }
+}
+
+test('confirm password state: wrong password', async ({ page }) => {
+    await page.setViewportSize(sizes.desktop);
+    await openConfirmPassword(page);
+    await page.getByLabel('Password', { exact: true }).fill('not-the-password');
+    await page.getByRole('button', { name: 'Confirm' }).click();
+    await page.waitForURL('**/user/confirm-password');
+    await page.screenshot({ path: out('confirm-password-desktop-vistud-light-wrong-password') });
+});
 
 test('two-factor challenge states: wrong code and recovery code', async ({ page }) => {
     await page.setViewportSize(sizes.desktop);

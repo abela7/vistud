@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { foreignColours, loginToChallenge, useSentinelTheme } from './support.js';
+import { foreignColours, loginToChallenge, openConfirmPassword, useSentinelTheme } from './support.js';
 
 /*
 | Layer 3 of theme enforcement (ADR 0003 §6.3, DESIGN.md §3.5): with the
@@ -113,6 +113,41 @@ for (const [name, viewport] of Object.entries(viewports)) {
             await page.waitForURL('**/two-factor-challenge');
             await useSentinelTheme(page);
             states['wrong-code error'] = await foreignColours(page);
+
+            for (const [state, colours] of Object.entries(states)) {
+                expect(colours, `${state}: colours not from a token`).toEqual([]);
+            }
+        });
+    });
+}
+
+for (const [name, viewport] of Object.entries(viewports)) {
+    test.describe(`confirm password, ${name}`, () => {
+        test.use({ viewport, reducedMotion: 'reduce' });
+
+        test('every colour comes from a token, in every state', async ({ page }) => {
+            const states = {};
+
+            await openConfirmPassword(page);
+            await useSentinelTheme(page);
+            states.idle = await foreignColours(page);
+
+            await page.getByLabel('Password', { exact: true }).focus();
+            states['field focus'] = await foreignColours(page);
+
+            await page.evaluate(() => {
+                document.querySelector('button[type="submit"]').setAttribute('aria-busy', 'true');
+            });
+            states['primary loading'] = await foreignColours(page);
+
+            await page.evaluate(() => {
+                document.querySelector('button[type="submit"]').removeAttribute('aria-busy');
+            });
+            await page.getByLabel('Password', { exact: true }).fill('not-the-password');
+            await page.getByRole('button', { name: 'Confirm' }).click();
+            await page.waitForURL('**/user/confirm-password');
+            await useSentinelTheme(page);
+            states['wrong-password error'] = await foreignColours(page);
 
             for (const [state, colours] of Object.entries(states)) {
                 expect(colours, `${state}: colours not from a token`).toEqual([]);

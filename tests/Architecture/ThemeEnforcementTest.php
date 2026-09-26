@@ -211,7 +211,7 @@ class ThemeEnforcementTest extends TestCase
             }
             $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(base_path($directory), RecursiveDirectoryIterator::SKIP_DOTS));
             foreach ($iterator as $file) {
-                $relative = str_replace(base_path().'/', '', $file->getPathname());
+                $relative = $this->relativePath($file->getPathname());
                 if (preg_match('/\.(css|js|mjs|php)$/', $relative) !== 1) {
                     continue;
                 }
@@ -226,5 +226,14 @@ class ThemeEnforcementTest extends TestCase
         sort($files);
 
         return $files;
+    }
+
+    /** Forward slashes, relative to the project root, on every operating system. */
+    private function relativePath(string $pathname): string
+    {
+        $pathname = str_replace('\\', '/', $pathname);
+        $root = rtrim(str_replace('\\', '/', base_path()), '/').'/';
+
+        return str_starts_with($pathname, $root) ? substr($pathname, strlen($root)) : $pathname;
     }
 }

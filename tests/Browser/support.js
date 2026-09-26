@@ -90,18 +90,27 @@ export async function wasReloaded(page) {
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-/** A confirmed two-factor account in the app database the browser server uses. */
-export function makeTwoFactorAccount() {
-    const email = `2fa-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
+/** An account in the app database the browser server uses. */
+function makeAccount(twoFactor) {
+    const email = `browser-${Date.now()}-${Math.random().toString(16).slice(2)}@example.test`;
     const php = process.env.PHP_BINARY || 'php';
-    const code = [
-        `if (!\\App\\Models\\User::query()->where('email', '${email}')->exists()) {`,
-        `\\App\\Models\\User::factory()->student()->twoFactor()->create(['email' => '${email}']);`,
-        '}',
-    ].join(' ');
+    const factory = twoFactor
+        ? '\\App\\Models\\User::factory()->student()->twoFactor()'
+        : '\\App\\Models\\User::factory()->student()';
+    const code = `if (!\\App\\Models\\User::query()->where('email', '${email}')->exists()) { ${factory}->create(['email' => '${email}']); }`;
     execFileSync(php, ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
 
     return email;
+}
+
+/** A confirmed two-factor account in the app database the browser server uses. */
+export function makeTwoFactorAccount() {
+    return makeAccount(true);
+}
+
+/** A student with no second factor, so login finishes on the home page. */
+export function makeStudentAccount() {
+    return makeAccount(false);
 }
 
 /** Log in as a confirmed two-factor account and wait on the challenge screen. */
@@ -111,6 +120,19 @@ export async function loginToChallenge(page, email = makeTwoFactorAccount()) {
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
     await page.waitForURL('**/two-factor-challenge');
+
+    return email;
+}
+
+/** Sign in as a student and open the password confirmation screen. */
+export async function openConfirmPassword(page, email = makeStudentAccount()) {
+    await page.goto('/login');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.getByRole('heading', { name: "You're logged in" }).waitFor();
+    await page.goto('/user/confirm-password');
+    await page.waitForURL('**/user/confirm-password');
 
     return email;
 }

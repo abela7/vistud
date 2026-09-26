@@ -2,7 +2,8 @@
 | Small form behaviours shared by the M1 screens (DESIGN.md §5):
 | - a form marked data-busy-on-submit shows its submit button's loading
 |   state and ignores repeated submits;
-| - a password field's reveal button toggles visibility.
+| - a password field's reveal button toggles visibility;
+| - the two-factor challenge swaps between the code and recovery-code fields.
 */
 
 document.addEventListener('submit', (event) => {
@@ -39,4 +40,25 @@ document.addEventListener('click', (event) => {
     toggle.setAttribute('title', label);
     toggle.querySelector('[data-icon-show]').hidden = show;
     toggle.querySelector('[data-icon-hide]').hidden = !show;
+});
+
+document.addEventListener('click', (event) => {
+    const swap = event.target.closest('[data-challenge-swap]');
+    if (!swap) return;
+
+    const form = swap.closest('form');
+    const showRecovery = form.getAttribute('data-challenge-mode') !== 'recovery';
+    form.setAttribute('data-challenge-mode', showRecovery ? 'recovery' : 'code');
+    form.querySelector('[data-challenge-panel="code"]').hidden = showRecovery;
+    form.querySelector('[data-challenge-panel="recovery"]').hidden = !showRecovery;
+
+    const activeName = showRecovery ? 'recovery_code' : 'code';
+    const inactiveName = showRecovery ? 'code' : 'recovery_code';
+    const active = form.querySelector(`[name="${activeName}"]`);
+    const inactive = form.querySelector(`[name="${inactiveName}"]`);
+    inactive.value = '';
+    inactive.disabled = true;
+    active.disabled = false;
+    active.focus();
+    swap.textContent = showRecovery ? 'Use an authentication code instead' : 'Use a recovery code instead';
 });
