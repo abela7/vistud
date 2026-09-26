@@ -45,6 +45,9 @@ return [
     // through "/" (which sends guests there anyway).
     'redirects' => [
         'logout' => '/login',
+        // Land on the login screen, which already shows the status message.
+        // The default with views off is "/", and that bounce drops the message.
+        'password-reset' => '/login',
     ],
 
     'features' => [

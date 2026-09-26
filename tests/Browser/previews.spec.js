@@ -141,6 +141,26 @@ test('login tablet vistud-light', async ({ page }) => {
     await page.screenshot({ path: out('login-tablet-vistud-light') });
 });
 
+for (const theme of ['vistud-light', 'vistud-dark']) {
+    for (const [size, viewport] of Object.entries(sizes)) {
+        test(`forgot password ${size} ${theme}`, async ({ page }) => {
+            await page.setViewportSize(viewport);
+            await page.goto('/forgot-password');
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`forgot-password-${size}-${theme}`), fullPage: size === 'mobile' });
+        });
+
+        test(`reset password ${size} ${theme}`, async ({ page }) => {
+            await page.setViewportSize(viewport);
+            await page.goto('/reset-password/not-a-real-token?email=ada@example.test');
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`reset-password-${size}-${theme}`), fullPage: size === 'mobile' });
+        });
+    }
+}
+
 test('live theme switch recording', async ({ browser }) => {
     const size = { width: 1280, height: 800 };
     const context = await browser.newContext({ viewport: size, reducedMotion: 'reduce', colorScheme: 'light', recordVideo: { dir: 'test-results/video', size } });

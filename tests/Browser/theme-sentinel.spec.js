@@ -193,3 +193,51 @@ for (const [name, viewport] of Object.entries(viewports)) {
         });
     });
 }
+
+for (const [name, viewport] of Object.entries(viewports)) {
+    test.describe(`forgot password, ${name}`, () => {
+        test.use({ viewport, reducedMotion: 'reduce' });
+
+        test('every colour comes from a token, in every state', async ({ page }) => {
+            const states = {};
+
+            await page.goto('/forgot-password');
+            await useSentinelTheme(page);
+            states.idle = await foreignColours(page);
+
+            await page.getByRole('button', { name: 'Send reset link' }).click();
+            await page.waitForURL('**/forgot-password');
+            await useSentinelTheme(page);
+            states['empty email error'] = await foreignColours(page);
+
+            for (const [state, colours] of Object.entries(states)) {
+                expect(colours, `${state}: colours not from a token`).toEqual([]);
+            }
+        });
+    });
+}
+
+for (const [name, viewport] of Object.entries(viewports)) {
+    test.describe(`reset password, ${name}`, () => {
+        test.use({ viewport, reducedMotion: 'reduce' });
+
+        test('every colour comes from a token, in every state', async ({ page }) => {
+            const states = {};
+
+            await page.goto('/reset-password/not-a-real-token?email=ada@example.test');
+            await useSentinelTheme(page);
+            states.idle = await foreignColours(page);
+
+            await page.getByLabel('New password', { exact: true }).fill('replacement-password');
+            await page.getByLabel('Confirm new password').fill('replacement-password');
+            await page.getByRole('button', { name: 'Reset password' }).click();
+            await page.waitForURL('**/reset-password/**');
+            await useSentinelTheme(page);
+            states['invalid token error'] = await foreignColours(page);
+
+            for (const [state, colours] of Object.entries(states)) {
+                expect(colours, `${state}: colours not from a token`).toEqual([]);
+            }
+        });
+    });
+}

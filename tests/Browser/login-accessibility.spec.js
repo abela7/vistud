@@ -20,7 +20,7 @@ test('the keyboard reaches every control in order, each with a visible focus rin
     await page.goto('/login');
     const reached = [];
     // Email has focus on arrival (autofocus); Tab walks on from there.
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 7; i++) {
         if (i > 0) await page.keyboard.press('Tab');
         reached.push(await page.evaluate(() => {
             const el = document.activeElement;
@@ -33,7 +33,7 @@ test('the keyboard reaches every control in order, each with a visible focus rin
         }));
     }
     // One stop for the radio group: arrow keys move within it.
-    expect(reached.slice(0, 6)).toEqual(['Email', 'Password', 'Show password', 'Keep me logged in on this device', 'Log in', 'System']);
+    expect(reached.slice(0, 7)).toEqual(['Email', 'Forgot password?', 'Password', 'Show password', 'Keep me logged in on this device', 'Log in', 'System']);
 });
 
 test('touch targets are at least 44 px on a phone', async ({ browser }) => {
@@ -71,6 +71,38 @@ for (const theme of THEMES) {
         });
     }
 }
+
+for (const path of ['/forgot-password', '/reset-password/not-a-real-token?email=ada@example.test']) {
+    for (const theme of THEMES) {
+        for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 900 }, mobile: { width: 390, height: 844 } })) {
+            test(`password reset axe finds no violations: ${path} ${theme}, ${name}`, async ({ page }) => {
+                await page.setViewportSize(viewport);
+                await page.goto(path);
+                await useTheme(page, theme);
+                const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+                expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`)).toEqual([]);
+            });
+        }
+    }
+}
+
+test('the forgot-password screen never scrolls sideways at 320 px with 200% text', async ({ page }) => {
+    await page.goto('/forgot-password');
+    await page.getByLabel('Email').fill(`a.very.long.address.${'x'.repeat(60)}@example.test`);
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.evaluate(() => (document.documentElement.style.fontSize = '200%'));
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow, '320 px at 200% text').toBeLessThanOrEqual(0);
+});
+
+test('the reset-password screen never scrolls sideways at 320 px with 200% text', async ({ page }) => {
+    await page.goto('/reset-password/not-a-real-token?email=ada@example.test');
+    await page.getByLabel('New password', { exact: true }).fill(`replacement-password.${'x'.repeat(40)}`);
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.evaluate(() => (document.documentElement.style.fontSize = '200%'));
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow, '320 px at 200% text').toBeLessThanOrEqual(0);
+});
 
 test('the password confirmation screen never scrolls sideways at 320 px', async ({ page }) => {
     await openConfirmPassword(page);
