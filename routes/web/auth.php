@@ -32,6 +32,11 @@ Route::middleware('guest')->group(function () {
     })->name('password.reset');
 });
 
+// Accepting an invitation. The link carries its token after "#", which the
+// browser keeps to itself, so the token never appears in a server log; the
+// page's script moves it into the form (POST /invitations/accept).
+Route::view('/invitation', 'auth.accept-invitation')->name('invitations.show');
+
 Route::middleware('auth')->group(function () {
     // Fortify handles POST /user/confirm-password and then returns the user
     // to the page they were trying to open.

@@ -65,9 +65,11 @@ class AccountsScreenTest extends TestCase
     {
         $ada = $this->student();
         $page = $this->actingAs($this->admin)->withSession($this->confirmedSession())->get('/admin/accounts')->getContent();
-        preg_match('/wire:snapshot="([^"]+)"/', $page, $match);
+        preg_match_all('/wire:snapshot="([^"]+)"/', $page, $matches);
+        $snapshot = collect($matches[1])->map(fn ($raw) => html_entity_decode($raw))
+            ->first(fn ($json) => json_decode($json, true)['memo']['name'] === 'admin.accounts.index');
         $request = ['components' => [[
-            'snapshot' => html_entity_decode($match[1]),
+            'snapshot' => $snapshot,
             'updates' => [],
             'calls' => [['method' => 'open', 'params' => [$ada->id], 'metadata' => []]],
         ]]];

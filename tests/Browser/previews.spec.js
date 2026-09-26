@@ -274,3 +274,46 @@ test('admin accounts: list, account dialog, confirmation', async ({ page }) => {
         }
     }
 });
+
+test('invitations: invite dialog, pending list, acceptance page', async ({ page, browser }) => {
+    const email = `mary.somerville-${Date.now()}@example.test`;
+    await openAccounts(page);
+    await page.getByRole('button', { name: 'Invite someone' }).click();
+    await page.locator('#invite-dialog').getByLabel('Their email address').fill(email);
+    for (const [size, viewport] of Object.entries(sizes)) {
+        await page.setViewportSize(viewport);
+        await page.screenshot({ path: out(`invite-dialog-${size}-vistud-light-form`) });
+    }
+    await page.locator('#invite-dialog').getByRole('button', { name: 'Create invitation link' }).click();
+    await page.getByRole('heading', { name: `Invitation for ${email}` }).waitFor();
+    const link = await page.locator('#invite-link').inputValue();
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.screenshot({ path: out(`invite-dialog-${size}-${theme}-link`) });
+        }
+    }
+    await page.locator('#invite-dialog').getByRole('button', { name: 'Done' }).click();
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('admin-accounts-desktop-vistud-light-pending') });
+
+    const guest = await browser.newContext({ reducedMotion: 'reduce' });
+    const them = await guest.newPage();
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await them.setViewportSize(viewport);
+            await them.goto(link);
+            await useTheme(them, theme);
+            await them.evaluate(() => document.activeElement?.blur());
+            await them.screenshot({ path: out(`accept-invitation-${size}-${theme}`), fullPage: size === 'mobile' });
+        }
+    }
+    const fresh = await guest.newPage(); // a new tab, without the token kept by the first
+    await fresh.setViewportSize(sizes.mobile);
+    await fresh.goto('/invitation');
+    await fresh.screenshot({ path: out('accept-invitation-mobile-vistud-light-invalid'), fullPage: true });
+    await guest.close();
+});

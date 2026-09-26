@@ -4,7 +4,8 @@
 |   state and ignores repeated submits;
 | - a password field's reveal button toggles visibility;
 | - the two-factor challenge swaps between the code and recovery-code fields;
-| - a button with data-copy-target copies that element's text and says so.
+| - a button with data-copy-target copies that element's text (or an
+|   input's value) and says so.
 */
 
 document.addEventListener('submit', (event) => {
@@ -70,11 +71,16 @@ document.addEventListener('click', async (event) => {
 
     const source = document.getElementById(button.dataset.copyTarget);
     if (!source) return;
-    const text = [...source.querySelectorAll('li')].map((item) => item.textContent.trim()).join('\n') || source.textContent.trim();
+    const text =
+        source instanceof HTMLInputElement
+            ? source.value
+            : [...source.querySelectorAll('li')].map((item) => item.textContent.trim()).join('\n') || source.textContent.trim();
     try {
         await navigator.clipboard.writeText(text);
     } catch {
-        return; // Clipboard unavailable (not a secure context): the text stays selectable.
+        // Clipboard unavailable (not a secure context): select the text to copy by hand.
+        if (source instanceof HTMLInputElement) source.select();
+        return;
     }
     const label = button.querySelector('.btn-idle') ?? button;
     const original = label.textContent;

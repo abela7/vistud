@@ -1,5 +1,5 @@
 {{--
-    The admin Accounts page (App\Livewire\Admin\Accounts\Index). A list of
+    The account list on the admin Accounts page (App\Livewire\Admin\Accounts\Index). A list of
     accounts, each opening a dialog with the account's details and actions;
     an action asks for confirmation in the same dialog before it runs.
     Details only, never learning content (ADR 0003 §10.2).
@@ -20,14 +20,7 @@
         'reset-two-factor' => ['Reset two-factor authentication', 'key-round'],
     ];
 @endphp
-<div class="mx-auto max-w-5xl space-y-6">
-    <div class="space-y-2">
-        <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Accounts</h1>
-        <p class="max-w-2xl text-fg-muted">
-            Everyone who can log in. You see account details here, never anyone's notes or learning history.
-        </p>
-    </div>
-
+<div class="space-y-6">
     <div role="status" aria-live="polite">
         @if ($notice)
             <x-alert tone="success" :live="false">{{ $notice }}</x-alert>

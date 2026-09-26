@@ -54,6 +54,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->shouldRenderJsonWhen($wantsJson);
 
+        // A form sent back with errors keeps what was typed, but never a
+        // token (invitation and reset links) or a password.
+        $exceptions->dontFlash(['token', 'password', 'password_confirmation', 'current_password']);
+
         $exceptions->render(function (Throwable $e, Request $request) use ($wantsJson) {
             if ($e instanceof HttpResponseException) {
                 return null;

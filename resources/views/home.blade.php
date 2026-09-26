@@ -8,13 +8,20 @@
     $firstName = strtok($user->name, ' ') ?: $user->name;
     $twoFactorOn = $user->two_factor_confirmed_at !== null;
     $isAdmin = app(\App\Identity\PrincipalFactory::class)->fromRequest(request())->hasRole(\App\Platform\Access\Role::Admin);
+    $isNew = session('status') === 'invitation-accepted';
 @endphp
 <x-layouts.app title="Home">
     <div class="mx-auto max-w-4xl space-y-8">
         <div class="space-y-1.5">
-            <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Welcome back, {{ $firstName }}</h1>
+            <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ $isNew ? 'Welcome' : 'Welcome back' }}, {{ $firstName }}</h1>
             <p class="text-fg-muted">Signed in as {{ $user->email }}. Your notes, courses and calendar arrive with the study workspace.</p>
         </div>
+
+        @if ($isNew)
+            <x-alert tone="success" title="Your account is ready">
+                From now on, log in with {{ $user->email }} and the password you just chose.
+            </x-alert>
+        @endif
 
         <div class="grid gap-4 md:grid-cols-2">
             <section class="flex flex-col gap-4 rounded-xl border border-border bg-surface-raised p-5">

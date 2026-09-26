@@ -11,6 +11,7 @@ const icons = [
     'chevron-down',
     'circle-alert',
     'circle-check',
+    'copy',
     'eye',
     'eye-off',
     'house',
@@ -19,6 +20,7 @@ const icons = [
     'layout-dashboard',
     'loader-circle',
     'log-out',
+    'mail',
     'menu',
     'monitor',
     'moon',
@@ -31,6 +33,7 @@ const icons = [
     'sun',
     'triangle-alert',
     'user-check',
+    'user-plus',
     'users',
     'x',
 ];

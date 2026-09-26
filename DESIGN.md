@@ -314,7 +314,9 @@ At least 44 × 44 px for every interactive element on touch devices (`pointer: c
 
 Login, two-factor challenge, password reset and invitation acceptance share `<x-layouts.auth>`: a `surface-brand` panel with the white logo and a short line of copy, and the form on a calm card over `surface-subtle`. The brand line "Your study brain, kept for you." stays for now (PM decision). The appearance switcher sits below the form. These screens submit as normal forms because the session changes; that is the one place a full page load is expected.
 
-Previews of the login screen: [docs/design/previews/](docs/design/previews/).
+The invitation page has three answers: the form (name, password, confirmation); "You're already logged in" for a signed-in visitor; and "This link doesn't work" for any invalid link, whatever the reason, so a link's state can't be probed. A first visit after accepting greets the person on home and tells them which email address they log in with.
+
+Previews of the signed-out screens: [docs/design/previews/](docs/design/previews/).
 
 ### 7.2 Student and admin workspaces
 
