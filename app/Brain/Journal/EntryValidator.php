@@ -343,7 +343,7 @@ final class EntryValidator
         match ($body['record_type']) {
             'task' => self::recordTask($body),
             'activity' => self::in($body['kind'] ?? null, Vocabulary::ACTIVITY_KINDS, 'body.kind'),
-            'course' => is_string($body['title'] ?? null) ? null : throw new InvalidEntry('Required.', 'body.title'),
+            'workspace' => is_string($body['title'] ?? null) ? null : throw new InvalidEntry('Required.', 'body.title'),
             'module' => self::recordModule($body),
             default => null,
         };
@@ -364,7 +364,7 @@ final class EntryValidator
 
     private static function recordModule(array $body): void
     {
-        self::id($body['course'] ?? null, 'body.course');
+        self::id($body['workspace'] ?? null, 'body.workspace');
         if (! is_string($body['title'] ?? null)) {
             throw new InvalidEntry('Required.', 'body.title');
         }

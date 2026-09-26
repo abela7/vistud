@@ -13,7 +13,7 @@
 - **Revised:** 2026-09-25. Cross-references to [ADR 0003](0003-web-workspaces-and-study-content.md):
   - task content revisions, and trusted checkers for `judged_by: auto`;
   - citations of note versions;
-  - `course` and `module` records;
+  - `workspace` and `module` records (`workspace` was `course` until M2 step 0);
   - purging browser drafts when content is redacted;
   - batched attempts, now scheduled with flashcards.
 - **Decision owner:** project owner (project manager and system architect)
@@ -68,7 +68,7 @@ Each of the following fields has a fixed list of values owned by the core. Plugi
 | claim `type` | defines · refers_to · same_as · splits_into · relates · judges · reviews |
 | `relates` relation | prerequisite_of · part_of · contrasts_with · example_of · related_to · covers · emphasizes · stems_from · addresses · exercises |
 | `reviews` decision | accept · reject · dispute · withdraw |
-| record `type` | source · extraction · activity · task · session · profile · consent · course · module |
+| record `type` | source · extraction · activity · task · session · profile · consent · workspace · module |
 | amendment `action` | retract · amend · redact |
 | observation `origin` | first_hand · reported · material |
 | `precision` | exact · minute · day · week |
@@ -178,8 +178,8 @@ A **task** is the problem that was posed. An **attempt** is one try at it.
 | `activity` | kind (lecture · lab · assignment · quiz · exam · problem_set), title, `starts_at`, `ends_at?` |
 | `task` | key, activity, title, `revision`, `content_hash`, `checker?`, `status` (active or retired), prompt as content |
 | `session` | channel, client, `started_at`, `ended_at` |
-| `course` | title, code, term, dates, colour category (ADR 0003 §9.2) |
-| `module` | course, title, position, optional dates |
+| `workspace` | title, code, term, dates, colour category (a student's space for one subject; docs/specs/workspaces.md) |
+| `module` | workspace, title, position, optional dates |
 | `profile` | — |
 | `consent` | — |
 
@@ -495,7 +495,7 @@ The active states are detected, recurring, resurfaced and addressed.
 
 ### Learning profile
 
-- **Grouping:** by teaching approach. Once `course` records exist (ADR 0003 milestone M4), it also groups by course.
+- **Grouping:** by teaching approach. Once `workspace` records exist (milestone M2), it also groups by workspace.
 - **What it counts:** effective `effect` verdicts, as helped, no_effect or confused.
 - **What it keeps:** the targets, as examples.
 

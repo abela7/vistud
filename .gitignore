@@ -25,3 +25,8 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+/playwright-report
+/test-results
+
+# A developer's local PHP, Node and MySQL copies (see docs/development/setup.md)
+/.tools/

@@ -117,16 +117,20 @@ final class Accounts
     }
 
     /**
-     * Admin with 2FA. Oldest first, by ID.
+     * Admin with 2FA. Oldest first, by ID. $search matches part of a name or
+     * an email address.
      *
      * @return array{data: list<AccountDetails>, next_cursor: ?string}
      */
-    public function list(Principal $by, ?string $cursor = null, int $limit = 50): array
+    public function list(Principal $by, ?string $cursor = null, int $limit = 50, ?string $search = null): array
     {
         Guard::admin($by);
 
         $limit = max(1, min($limit, 200));
+        $search = trim((string) $search);
+        $pattern = '%'.addcslashes(mb_substr($search, 0, 100), '\\%_').'%';
         $users = User::query()
+            ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', $pattern)->orWhere('email', 'like', $pattern)))
             ->when($cursor !== null, fn ($q) => $q->where('id', '>', $cursor))
             ->orderBy('id')
             ->limit($limit + 1)
@@ -139,6 +143,22 @@ final class Accounts
         }
 
         return ['data' => $users->map(fn (User $user) => $this->toDetails($user))->values()->all(), 'next_cursor' => $next];
+    }
+
+    /**
+     * Admin with 2FA. Account names by ID, for showing who did what (the
+     * audit log). IDs with no account are left out.
+     *
+     * @param  list<string>  $userIds
+     * @return array<string, string>
+     */
+    public function names(Principal $by, array $userIds): array
+    {
+        Guard::admin($by);
+
+        $userIds = array_values(array_unique(array_filter($userIds)));
+
+        return $userIds === [] ? [] : User::query()->whereKey($userIds)->pluck('name', 'id')->all();
     }
 
     private function toDetails(User $user): AccountDetails

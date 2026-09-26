@@ -33,7 +33,7 @@ final class AuditAction
 
     public const RECOVERY_CODE_USED = 'two_factor.recovery_code_used';
 
-    public const WORKSPACE_ADMIN_ENTERED = 'workspace.admin_entered';
+    public const ADMIN_AREA_ENTERED = 'area.admin_entered';
 
     public const ADMIN_ACCESS_DENIED = 'admin.access_denied';
 }

@@ -29,6 +29,13 @@ final class LearnerTables
         'journal_blocks',
         'redactions',
         'projection_snapshots',
+        'workspaces',
+        'modules',
+        'folders',
+        'notes',
+        'note_versions',
+        'content_tombstones',
+        'files',
     ];
 
     public static function query(LearnerScope $scope, string $table): Builder

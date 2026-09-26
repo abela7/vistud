@@ -31,7 +31,7 @@ Authoritative: [ADR 0003 §10](docs/adr/0003-web-workspaces-and-study-content.md
 | Permanent store | MySQL 8.4 LTS for structured data; Laravel Storage for canonical files | ADR 0001 |
 | Retrieval index | Qdrant with local embeddings, derived and rebuildable, holding no content (arrives in M3) | ADR 0001 |
 | Learning model | An append-only journal of observations, claims, records and amendments; state derived by versioned rules (`rules@1`) | [ADR 0002](docs/adr/0002-learning-event-schema.md) |
-| Web UI | Blade and Livewire 4, Alpine for local interactions, Tailwind 4 with semantic tokens only (from M2) | ADR 0003 |
+| Web UI | Blade and Livewire 4, Alpine for local interactions, Tailwind 4 with semantic tokens only. The visual foundation (themes, gradients, shared components) arrives with WP6; the workspace with M2 | ADR 0003, [DESIGN.md](DESIGN.md) |
 | Note editor | Tiptap 3 with ViStud's block schema, isolated from Livewire (from M2) | ADR 0003 |
 | Authentication | Laravel sessions through Fortify, mandatory 2FA for admins; Passport for external clients in M6 | ADR 0003 |
 
@@ -50,9 +50,10 @@ These are requirements, and the M2 prototype must prove them with automated test
 - **Local interactions are instant**, and saving, loading, error and retry states are always visible without blocking the workspace.
 - **Responsive by design:** a desktop layout, a tablet layout, and a deliberately different mobile layout with bottom navigation and drill-down lists.
 - **Colours come only from semantic tokens.** Tailwind's built-in palette is removed, a three-layer check enforces this, and students can build a basic custom theme from seed colours, which must work across both workspaces.
+- **The brand is the owner's ViStud logo:** deep blue to ocean to teal. Gradients in that direction mark the brand panel, headers, featured panels and primary actions; notes, forms and dense information stay on calm surfaces. Every gradient is theme data (angle, stops, or a solid fill), checked for contrast across its whole area, and switchable without a reload. Light, dark and system appearance are supported.
 - **Offline is draft-safe, not offline-first:** open notes stay editable while disconnected, but the app cannot be opened offline (decision D1).
 
-Authoritative: [ADR 0003 §3–7 and §11](docs/adr/0003-web-workspaces-and-study-content.md), and its acceptance checklist in §14.
+Authoritative: [ADR 0003 §3–7 and §11](docs/adr/0003-web-workspaces-and-study-content.md), and its acceptance checklist in §14. The shared UI and UX guide, covering the brand, gradients, scales, components and their states, responsive behaviour, feedback, accessibility and the checks at UI handoff, is [DESIGN.md](DESIGN.md).
 
 ## 5. Milestones and gates
 
@@ -80,7 +81,7 @@ XAMPP's existing PHP 8.0 and MariaDB installation does not meet this baseline. U
 | PHP | 8.4, with `pdo_mysql`, `mbstring`, `intl` and `sodium` |
 | Composer | 2.x |
 | MySQL | 8.4 LTS, the supported and tested database |
-| Node | Not needed on this branch. WP6 (`m1/wp6-web-adapters`, [PR #3](https://github.com/abela7/vistud/pull/3)) adds Node 22 for the front-end build and the browser tests |
+| Node | 22 LTS with npm 10, for the front-end build and the browser tests (from WP6) |
 | Unix, for one test | `pcntl` and `posix`, so the process-forking concurrency test can run. Windows PHP does not provide them |
 
 The database-user command below is a **Unix shell** command. It uses shell input redirection and is not a PowerShell command. A Windows procedure has not been verified. Details: [docs/development/setup.md](docs/development/setup.md).
@@ -89,6 +90,7 @@ The database-user command below is a **Unix shell** command. It uses shell input
 # Unix shell only (bash). Not PowerShell.
 sudo mysql < database/scripts/local-mysql-users.sql   # once per machine: two MySQL users
 composer setup                                        # install, .env, key, migrations
+npm ci && npm run build                               # front-end assets
 composer test                                         # every suite
 composer lint                                         # code style
 ```
@@ -117,16 +119,17 @@ Migrations always run as the schema owner (`composer migrate`), and the applicat
 
 1. [README.md](README.md), then this page.
 2. [docs/coordination/STATUS.md](docs/coordination/STATUS.md): the current state, owners and open decisions.
-3. The decisions, in order:
+3. [DESIGN.md](DESIGN.md), if you will build or change anything people see.
+4. The decisions, in order:
    - [ADR 0001: Permanent store and retrieval index](docs/adr/0001-permanent-store-and-retrieval-index.md)
    - [ADR 0002: Learning event schema](docs/adr/0002-learning-event-schema.md)
    - [ADR 0003: Web workspaces, front-end stack and study content](docs/adr/0003-web-workspaces-and-study-content.md)
-4. [docs/specs/golden-replay-sql-joins.md](docs/specs/golden-replay-sql-joins.md): the reference scenario that the projection must reproduce.
-5. The architecture documents:
+5. [docs/specs/golden-replay-sql-joins.md](docs/specs/golden-replay-sql-joins.md): the reference scenario that the projection must reproduce.
+6. The architecture documents:
    - [modules.md](docs/architecture/modules.md): structure, module responsibilities, shared files
    - [conventions.md](docs/architecture/conventions.md): authentication, authorization, validation, errors, tests
    - [contracts.md](docs/architecture/contracts.md): what you can build on, and how to change it
    - [schema.md](docs/architecture/schema.md): the database
    - [docs/api/openapi.json](docs/api/openapi.json): the JSON API
-6. [docs/development/setup.md](docs/development/setup.md): get it running.
-7. [docs/handoff/m1-work-packages.md](docs/handoff/m1-work-packages.md): the package you have been assigned, its acceptance criteria and its files.
+7. [docs/development/setup.md](docs/development/setup.md): get it running.
+8. [docs/handoff/m1-work-packages.md](docs/handoff/m1-work-packages.md): the package you have been assigned, its acceptance criteria and its files.

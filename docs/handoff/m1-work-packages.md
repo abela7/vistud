@@ -24,7 +24,7 @@ M1 is complete when the PM confirms all of these ([ADR 0003 §14](../adr/0003-we
 | **WP3** | Journal writer and store | Architect | WP1 | Delivered in increment 3, awaiting review |
 | **WP4** | Projection engine to `rules@1` | Architect | WP1 (entry format) | Medium |
 | **WP5** | Redaction, clean-up and canonical files | A second backend developer | WP1, WP3's writer | Medium |
-| **WP6** | M1 web adapters: auth screens and security test surfaces (unstyled) | A Livewire/Blade developer | WP2's service contracts | Small–medium |
+| **WP6** | M1 web adapters: auth screens and security test surfaces, on the shared visual foundation | The architect (assigned by the PM) | WP2's service contracts | Medium |
 | **V1** | Golden replay and edge-case acceptance tests | An independent validator | WP1 (entry format, projection output) | Medium |
 | **V2** | Security acceptance tests T1–T10 | An independent validator (ideally not V1's) | WP2, WP3, WP6 | Medium |
 
@@ -155,11 +155,13 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 
 ---
 
-## WP6 · M1 web adapters (unstyled)
+## WP6 · M1 web adapters
 
-**Owner:** a Livewire/Blade developer (proposed). **Needs:** WP2's service signatures.
+**Owner:** the architect (assigned by the PM). **Needs:** WP2's service signatures.
 
-**Scope:** only the screens M1 needs for its gate and for the owner to use it. **Plain, unstyled markup**: the theme system, tokens, the workspace shell and every other M2 screen are out of scope.
+**Scope:** only the screens M1 needs for its gate and for the owner to use it, **styled with the shared visual foundation in [DESIGN.md](../../DESIGN.md)**: the brand, theme tokens and gradients, and the shared components. This replaces the earlier "plain, unstyled markup" direction (PM decision, recorded in [ADR 0003 §16](../adr/0003-web-workspaces-and-study-content.md#16-decisions)). The workspace shell, the theme editor, the calendar, the note editor and every other M2 screen stay out of scope.
+- **First:** DESIGN.md, the theme system and the login screen, with desktop and mobile previews in light and dark and an alternate gradient palette, for the PM's visual review. The other screens are styled after that review.
+- The front-end tooling pinned in ADR 0003 §12 arrives with it: Vite, Tailwind, the Inter font, Lucide icons, Playwright and axe.
 - Install **Livewire 4.4.6**.
 - **Fortify views:** login, two-factor challenge, two-factor setup (QR code, confirmation, recovery codes shown once), confirm password, forgot and reset password.
 - **Invitation acceptance** page.
@@ -174,9 +176,9 @@ WP1 ──┬── WP2 ──┬── WP6 ──┐
 - The owner can do the whole flow in a browser: create the first admin from the console, log in, enrol in 2FA, save the recovery codes, enter the admin workspace, invite a synthetic student; the student accepts, logs in and opens one of their own entries.
 - Components contain no business rules and no queries on learner tables. Every action calls one service.
 - Every ID a component receives from the browser is `#[Locked]`.
-- No styling beyond what's needed to be usable, and no theme work.
+- Screens use only the shared foundations. The theme checks (source scan, compiled-CSS scan and sentinel test, gradients included) pass on every WP6 screen and state, and each screen passes the handoff checks in DESIGN.md §10.
 
-**Owns:** `app/Livewire/**`, `resources/views/**`, `routes/web/auth.php`, `routes/web/student.php`, `routes/web/admin-screens.php` (loaded inside the protected admin group), `app/Providers/FortifyViewsServiceProvider.php`, `tests/Feature/Web/**`. Turning on Fortify's views (`'views' => true` in `config/fortify.php`) is a one-line change the architect makes when WP6 asks.
+**Owns:** `app/Livewire/**`, `resources/views/**`, `routes/web/auth.php`, `routes/web/student.php`, `routes/web/admin-screens.php` (loaded inside the protected admin group), `app/Providers/FortifyViewsServiceProvider.php`, `tests/Feature/Web/**`, and its screens' browser tests and previews in `tests/Browser/`. The shared visual foundation (DESIGN.md, themes, styles, scripts and the theme enforcement tests) is listed under the architect's shared files in [modules.md](../architecture/modules.md#shared-files). Turning on Fortify's views (`'views' => true` in `config/fortify.php`) is a one-line change the architect makes when WP6 asks.
 
 ---
 

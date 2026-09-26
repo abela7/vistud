@@ -98,4 +98,27 @@ class InvitationsTest extends TestCase
         $this->assertSame(['student'], DB::table('user_roles')->where('user_id', $user->id)->pluck('role')->all());
         $this->assertAuthenticatedAs($user);
     }
+
+    public function test_pending_lists_open_invitations_newest_first_and_never_the_token(): void
+    {
+        $admin = $this->admin(attributes: ['name' => 'Grace Hopper']);
+        $by = $this->principal($admin);
+        $old = $this->invitations->invite($by, 'old@example.test');
+        $this->travel(80)->hours();
+        $by = $this->principal($admin);
+        $new = $this->invitations->invite($by, 'new@example.test');
+        $revoked = $this->invitations->invite($by, 'revoked@example.test');
+        $this->invitations->revoke($by, $revoked->id);
+        $accepted = $this->invitations->invite($by, 'accepted@example.test');
+        $this->invitations->accept($accepted->token, 'Accepted', 'a-long-enough-password');
+
+        $pending = $this->invitations->pending($by);
+
+        $this->assertSame(['new@example.test', 'old@example.test'], array_map(fn ($i) => $i->email, $pending));
+        $this->assertSame([false, true], array_map(fn ($i) => $i->expired, $pending));
+        $this->assertSame('Grace Hopper', $pending[0]->invitedByName);
+        $this->assertStringNotContainsString($new->token, serialize($pending));
+        $this->assertStringNotContainsString($old->token, serialize($pending));
+        $this->assertThrows(fn () => $this->invitations->pending($this->principal($this->student())), Forbidden::class);
+    }
 }

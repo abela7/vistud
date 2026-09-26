@@ -33,7 +33,7 @@ final class Vocabulary
 
     public const DECISIONS = ['accept', 'reject', 'dispute', 'withdraw'];
 
-    public const RECORD_TYPES = ['source', 'extraction', 'activity', 'task', 'session', 'profile', 'consent', 'course', 'module'];
+    public const RECORD_TYPES = ['source', 'extraction', 'activity', 'task', 'session', 'profile', 'consent', 'workspace', 'module'];
 
     public const ACTIVITY_KINDS = ['lecture', 'lab', 'assignment', 'quiz', 'exam', 'problem_set'];
 
@@ -47,8 +47,8 @@ final class Vocabulary
 
     public const TRUSTED_KEY_SOURCES = ['course_material', 'instructor', 'derived_from_material'];
 
-    /** Reference types (ADR 0002 §5), plus the course and module records. */
-    public const REF_TYPES = ['event', 'claim', 'topic', 'question', 'misconception', 'task', 'activity', 'source', 'mention', 'course', 'module'];
+    /** Reference types (ADR 0002 §5), plus the workspace and module records. */
+    public const REF_TYPES = ['event', 'claim', 'topic', 'question', 'misconception', 'task', 'activity', 'source', 'mention', 'workspace', 'module'];
 
     public const LINK_RELS = ['about', 'cites', 'responds_to', 'triggered_by'];
 

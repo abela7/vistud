@@ -22,7 +22,7 @@ class MeApiTest extends TestCase
             ->assertJsonPath('account.roles', ['admin', 'student'])
             ->assertJsonPath('account.two_factor_confirmed', true)
             ->assertJsonPath('learner.timezone', 'UTC')
-            ->assertJsonPath('workspace', 'student');
+            ->assertJsonPath('area', 'student');
     }
 
     public function test_an_admin_only_account_has_no_learner(): void
@@ -30,7 +30,7 @@ class MeApiTest extends TestCase
         $this->actingAs($this->admin(student: false))->getJson('/api/v1/me')
             ->assertOk()
             ->assertJsonPath('learner', null)
-            ->assertJsonPath('workspace', null);
+            ->assertJsonPath('area', null);
     }
 
     public function test_guests_get_401(): void

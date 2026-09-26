@@ -185,4 +185,33 @@ class AccountsTest extends TestCase
         $this->assertCount(1, $second['data']);
         $this->assertNull($second['next_cursor']);
     }
+
+    public function test_listing_accounts_can_search_names_and_emails(): void
+    {
+        $admin = $this->admin(attributes: ['name' => 'Grace Hopper']);
+        $this->student(['name' => 'Ada Lovelace', 'email' => 'countess@example.test']);
+        $this->student(['name' => 'Alan Turing', 'email' => 'alan@example.test']);
+        $this->student(['name' => '100%_sure', 'email' => 'percent@example.test']);
+        $by = $this->principal($admin);
+
+        $names = fn (?string $search) => array_map(fn ($account) => $account->name, $this->accounts->list($by, search: $search)['data']);
+
+        $this->assertSame(['Ada Lovelace'], $names('lovelace'));
+        $this->assertSame(['Ada Lovelace'], $names('COUNTESS@'));
+        $this->assertSame(['100%_sure'], $names('%_'));
+        $this->assertCount(4, $names('  '));
+    }
+
+    public function test_names_are_looked_up_for_admins_only(): void
+    {
+        $admin = $this->admin(attributes: ['name' => 'Grace Hopper']);
+        $ada = $this->student(['name' => 'Ada Lovelace']);
+
+        $names = $this->accounts->names($this->principal($admin), [$admin->id, $ada->id, $ada->id, 'missing-id', '']);
+
+        $this->assertCount(2, $names);
+        $this->assertSame('Grace Hopper', $names[$admin->id]);
+        $this->assertSame('Ada Lovelace', $names[$ada->id]);
+        $this->assertThrows(fn () => $this->accounts->names($this->principal($ada), [$admin->id]), Forbidden::class);
+    }
 }

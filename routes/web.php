@@ -9,9 +9,16 @@ use Illuminate\Support\Facades\Route;
 | (docs/handoff/m1-work-packages.md). Fortify registers its own routes.
 */
 
-Route::get('/', function () {
-    return view('welcome');
-});
+// Guests start at the login screen. Signed-in accounts get a placeholder
+// until the workspace screens arrive (WP6, then M2).
+Route::get('/', fn () => auth()->check() ? view('home') : redirect()->route('login'))->name('home');
 
+require __DIR__.'/web/auth.php';
 require __DIR__.'/web/identity.php';
+require __DIR__.'/web/student.php';
 require __DIR__.'/web/admin.php';
+
+// Design mockups for the owner's review; local development only.
+if (app()->environment('local')) {
+    require __DIR__.'/web/mockups.php';
+}

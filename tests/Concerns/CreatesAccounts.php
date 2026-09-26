@@ -4,8 +4,8 @@ namespace Tests\Concerns;
 
 use App\Identity\PrincipalFactory;
 use App\Models\User;
+use App\Platform\Access\Area;
 use App\Platform\Access\Principal;
-use App\Platform\Access\Workspace;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -27,22 +27,22 @@ trait CreatesAccounts
     }
 
     /** A principal for $user, with a password confirmation just now unless told otherwise. */
-    protected function principal(User $user, bool $confirmed = true, ?Workspace $workspace = null, string $channel = 'web'): Principal
+    protected function principal(User $user, bool $confirmed = true, ?Area $area = null, string $channel = 'web'): Principal
     {
         return app(PrincipalFactory::class)->forUser(
             $user->fresh(),
             $channel,
             passwordConfirmedAt: $confirmed ? new DateTimeImmutable('@'.now()->getTimestamp()) : null,
-            workspace: $workspace,
+            area: $area,
         );
     }
 
     /** Session values for an HTTP request with a recent password confirmation. */
-    protected function confirmedSession(?Workspace $workspace = null): array
+    protected function confirmedSession(?Area $area = null): array
     {
         return array_filter([
             PrincipalFactory::PASSWORD_CONFIRMED_KEY => now()->getTimestamp(),
-            PrincipalFactory::WORKSPACE_KEY => $workspace?->value,
+            PrincipalFactory::AREA_KEY => $area?->value,
         ]);
     }
 

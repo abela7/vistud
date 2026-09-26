@@ -47,10 +47,10 @@ Read [STATUS.md](../coordination/STATUS.md) with this page. STATUS.md is the liv
 | Item | Reality |
 |---|---|
 | `docs/design/previews/*` | Screenshots and a recording for review. They are generated, not a running feature |
-| Home after login | A placeholder that says you are logged in, with a logout button. No workspace (M2) |
-| Admin workspace in a browser | Not reachable. An admin without 2FA gets the plain 403 page, because there is no 2FA setup screen to send them to. There is no admin landing page yet |
-| Accounts with 2FA enabled | Can't finish a browser login: there is no two-factor challenge screen yet. Don't enable 2FA on a local account you need in the browser |
-| Invitations | Backend only. The service returns a single-use token; there is no admin screen or console command to issue one, and no acceptance page |
+| Home after login | **My workspaces** (M2 step 1): create a workspace (name, colour, icon, optional code, term and dates), open it (Overview, and "coming next" pages for Modules, Notes & files, Calendar and Progress), switch between workspaces from the sidebar, edit, archive and restore. **Modules** (M2 step 2): add, edit, reorder (drag the handle, or Move up/down in the ⋯ menu) and delete empty modules; folders inside them, up to 8 levels, with rename, move and delete. **Notes** (M2 step 3a): New note in a module, a folder or Notes & files opens the editor; it saves by itself and says where your text is (Saved, Saved on this device, retrying). Trash and restore in Notes & files. A note fills the screen, with **Full screen** and **Read** buttons. Two tabs of one note keep each other up to date; logging out with unsaved changes asks to save, keep or discard them. **Files** (M2 step 4): Upload files in a module, a folder's menu or Notes & files; PDF, images and text preview on the file's page, the rest download. After pulling, run `composer migrate` (the `files` table). **Raise PHP's upload limit** in php.ini (`upload_max_filesize = 25M`, `post_max_size = 30M`) and restart, or uploads stop at PHP's default of 2 MB; the upload dialog shows the limit in force. Office files need PHP's `zip` extension (on in Laragon and XAMPP) After pulling, run `npm install` (the editor, Tiptap), `composer migrate` (new tables) and `npm run build`. Trashed notes are deleted after 30 days by `php artisan schedule:work` (optional locally) |
+| Admin workspace in a browser | Works (WP6 branch): an admin with 2FA opens it from the home page (a fresh password is asked on entry) and lands on the admin overview in the same frame, with the Admin marker in the top bar and a switch back to the student area in the account menu. The Accounts page (`/admin/accounts`, Livewire) lists and searches accounts, and suspends, reactivates, grants or removes admin, and resets 2FA, each confirmed in a dialog, without a page reload. The Audit log page (`/admin/audit-log`) is a read-only list, newest first, each entry a sentence (who, what, to whom, when), filtered by action. Any other `/admin` URL answers 404 |
+| Two-factor authentication | Works end to end (WP6 branch): turn it on from the home page (`/user/two-factor`, after a password check), scan the QR code, confirm a code, save the recovery codes (shown once), then log in with a code or a recovery code |
+| Invitations | Works (WP6 branch): **Invite someone** on the Accounts page makes a single-use link, valid 72 hours, shown once for the admin to share; pending invitations can be cancelled. The link (`/invitation#<token>`) opens a page where the person chooses a name and password, then lands on home logged in as a student. No email is sent (Q3) |
 | Password reset, password confirmation | Fortify's POST endpoints only. The "Forgot password?" link appears by itself once a `password.request` route exists |
 | Error pages | Laravel's default, unstyled 403 and 404 pages |
 | Appearance preference | Kept in the browser only. Account storage is M2 |
@@ -60,7 +60,7 @@ Read [STATUS.md](../coordination/STATUS.md) with this page. STATUS.md is the liv
 
 In this order; each step is small and reviewable. Every screen gets the DESIGN.md §10 checks (screenshots, keyboard, sentinel test in all its states, axe, touch targets, long content) and a PM visual review before the next one is styled. Who does this is the PM's decision.
 
-0. **Apply the PM's logo decision.** Show the white logo directly on dark and gradient surfaces, and keep the full-colour logo on light surfaces. Today the code shows the full-colour logo on a light plate on dark surfaces. The change touches:
+0. **Deferred to the polish phase (owner's decision):** apply the PM's logo decision. Show the white logo directly on dark and gradient surfaces, and keep the full-colour logo on light surfaces. Today the code shows the full-colour logo on a light plate on dark surfaces. The change touches:
    - the `<x-logo>` component and `.logo-plate` in `resources/css/components.css`;
    - the `logo-plate` token in `resources/themes/*.json`, `App\Appearance\Theme::COLORS` and `app.css`;
    - the logo check in `ThemeValidator` (it becomes the white logo against dark surfaces) and its test;
@@ -68,24 +68,28 @@ In this order; each step is small and reviewable. Every screen gets the DESIGN.m
    - the logo-treatments preview.
 
    The component can't see the theme, so the choice needs a theme-driven switch, for example CSS generated per dark theme by `Themes::stylesheet()`. Rebuild the themes and previews afterwards.
-1. **Two-factor challenge screen:** `GET /two-factor-challenge`, named `two-factor.login`. Fortify's POST (`two-factor.login.store`) exists.
-2. **Password confirmation screen:** named `password.confirm`, which `App\Platform\Http\WebErrors` already redirects to once it exists. Fortify's POST (`password.confirm.store`) exists.
-3. **Two-factor setup screen:** named `two-factor.setup` (`WebErrors::TWO_FACTOR_SETUP_ROUTE`). It covers enable, QR code, confirm, and recovery codes shown once. The endpoints exist under `/user/two-factor-*`, and each needs a recent password confirmation (step 2).
+1. **Done:** ~~Two-factor challenge screen:~~ `GET /two-factor-challenge`, named `two-factor.login`. Fortify's POST (`two-factor.login.store`) exists.
+2. **Done:** ~~Password confirmation screen:~~ named `password.confirm`, which `App\Platform\Http\WebErrors` already redirects to once it exists. Fortify's POST (`password.confirm.store`) exists.
+3. **Done:** ~~Two-factor setup screen:~~ named `two-factor.setup` (`WebErrors::TWO_FACTOR_SETUP_ROUTE`). It covers enable, QR code, confirm, and recovery codes shown once. The endpoints exist under `/user/two-factor-*`, and each needs a recent password confirmation (step 2).
 4. **Forgot and reset password screens:** `password.request` and `password.reset`. The POSTs exist. Locally, mail should go to the log.
-5. **Invitation acceptance page.** `POST /invitations/accept` exists (token, name, password with confirmation, optional time zone). The link format for the page needs choosing, and invitations are manual, single-use and expiring (PM decision Q3).
-6. **Install Livewire 4.4.6.** `composer.json` is a shared file, so coordinate the change.
-7. **Workspace switch** (admins only; `POST /workspace/{student|admin}` exists) and the **admin landing page**, in `routes/web/admin-screens.php`, with the admin marker from DESIGN.md §7.2.
+5. **Done:** ~~Invitation acceptance page~~ (`GET /invitation`, `resources/views/auth/accept-invitation.blade.php`, `resources/js/invitation.js`) and the admin side (`App\Livewire\Admin\Accounts\Invitations`). Link format: `/invitation#<token>`, so the token never reaches a server log.
+6. **Done:** ~~Install Livewire 4.4.6~~ with the Accounts page. `config/livewire.php` points the navigation progress bar at `var(--accent)`, and `AppServiceProvider` registers the admin checks (`role`, `two_factor`, `admin.workspace`) as Livewire persistent middleware, so a Livewire action re-runs its page's checks.
+7. **Done:** ~~Workspace switch and admin landing page~~ (`routes/web/admin-screens.php`, `resources/views/admin/overview.blade.php`, `<x-layouts.app area="admin">`, `<x-admin.marker>`).
 8. **Livewire surfaces for the security tests (V2)**, each a thin adapter over a service, with `#[Locked]` IDs:
-   - `Admin\Accounts\Index`
-   - `Admin\AuditLog\Index`
-   - `Journal\EntryShow`
+   - `Admin\Accounts\Index` (**done**: list and search; suspend, reactivate, grant and revoke admin, reset 2FA; `selectedId` is `#[Locked]`)
+   - `Admin\AuditLog\Index` (**done**: read-only, newest first, one action filter; it has no action that writes)
+   - `Journal\EntryShow` (**done**: `/journal/{entry}` with a `#[Locked]` ID, under a `/journal` list; another learner's entry, a tampered locked ID and an edited snapshot all answer 404 like a missing entry. `php artisan vistud:journal:sample {email}` fills an empty journal for trying it)
 9. **403 and 404 pages** on the shared layout.
+
+**M2, in progress (approved):** [docs/specs/workspaces.md](../specs/workspaces.md), one workspace per subject with Overview, Modules, Notes & files, Calendar and Progress. Mockups in `docs/design/mockups/`, and on a development machine at `/_mockups/workspaces` (local only; regenerate with `MOCKUPS=1 npx playwright test mockups`).
 
 **Backend dependencies:**
 - **Services these screens call:** WP2's services (`Accounts`, `Roles`, `Invitations`, `TwoFactorReset`, `Workspaces`, the audit log) and WP3's `JournalReader`. Both are delivered but not yet reviewed, and nothing else is needed from the backend for these screens.
 - **Fortify's views** stay off (`config/fortify.php`). Register each screen's GET route yourself in `routes/web/auth.php`. Turning views on registers every Fortify GET route at once, so do it only when every view is bound.
 
 ## 5. Known issues
+
+- **Reset emails have no rate limit per address or IP.** Fortify's `POST /forgot-password` has no throttle; the password broker only stops a second email to the same address within 60 seconds. Before a live server sends real mail, add a limiter on that route.
 
 - **The logo decision is not implemented yet** (§4, step 0).
 - **The concurrency test needs Unix** `pcntl` and `posix`. On Windows it is skipped, and a skip does not satisfy the M1 gate. CI runs it.
@@ -239,7 +243,7 @@ The handover commits trigger new runs; see each pull request's checks.
 
 **Logo:**
 - `resources/brand/vistud-logo-original.png` is the owner's original, kept byte for byte. Never edit it. Its checkerboard is painted into the pixels.
-- `php resources/brand/clean-logo.php` regenerates the four transparent assets in `public/brand/` from it: full colour, white, mark, and white mark.
+- `php resources/brand/clean-logo.php` regenerates the four transparent assets in `public/brand/` from it (full colour, white, mark, and white mark), plus the 96 px display copies, the favicon and the Apple touch icon that pages actually load.
 - The measured colours are in `resources/brand/logo-colours.json` and DESIGN.md §2.2.
 
 **Themes:**

@@ -9,7 +9,7 @@
     "/api/v1/me": {
       "get": {
         "operationId": "getMe",
-        "summary": "The current account, its roles, its learner and the active workspace",
+        "summary": "The current account, its roles, its learner and the active area",
         "x-stability": "provisional",
         "responses": {
           "200": {
@@ -68,6 +68,145 @@
           }
         }
       }
+    },
+    "/api/v1/notes/{id}": {
+      "get": {
+        "operationId": "getNote",
+        "summary": "One of the current learner's own notes, at its current version. A note in the trash answers 410",
+        "x-stability": "provisional",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Note"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveNote",
+        "summary": "Saves the editor's document as the note's next version (ADR 0003 section 5.3). Only updates: it never creates a note",
+        "x-stability": "provisional",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteSave"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved, or already saved under this save_id, or unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error",
+            "description": "version_conflict: base_version is not the current version; details.current_version says which is"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          },
+          "419": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/sync/tombstones": {
+      "get": {
+        "operationId": "listTombstones",
+        "summary": "The learner's deletion records after a cursor, oldest first (ADR 0003 section 5.4). Browsers read them before replaying drafts",
+        "x-stability": "provisional",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The cursor of the last record already seen; 0 or none for all"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Up to 500 records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tombstones"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -90,7 +229,7 @@
         "required": [
           "account",
           "learner",
-          "workspace"
+          "area"
         ],
         "properties": {
           "account": {
@@ -147,7 +286,7 @@
               }
             }
           },
-          "workspace": {
+          "area": {
             "type": [
               "string",
               "null"
@@ -397,6 +536,168 @@
                 "type": "object"
               }
             }
+          }
+        }
+      },
+      "Note": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "workspace",
+          "module",
+          "folder",
+          "title",
+          "version",
+          "doc",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspace": {
+            "type": "string"
+          },
+          "module": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null at the workspace's top level"
+          },
+          "folder": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "Empty for an untitled note"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "doc": {
+            "type": "object",
+            "description": "The editor's document (ProseMirror JSON), as cleaned by App\\Study\\NoteDoc"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "NoteSave": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "base_version",
+          "save_id",
+          "client_id",
+          "title",
+          "doc"
+        ],
+        "properties": {
+          "base_version": {
+            "type": "integer",
+            "description": "The version this change is based on"
+          },
+          "save_id": {
+            "type": "string",
+            "description": "8-64 letters, digits, - or _; a retry with the same save_id answers the same"
+          },
+          "client_id": {
+            "type": "string",
+            "description": "The browser tab, 8-64 letters, digits, - or _"
+          },
+          "title": {
+            "type": "string"
+          },
+          "doc": {
+            "type": "object"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "autosave",
+              "conflict_resolution"
+            ]
+          }
+        }
+      },
+      "SavedVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "saved_at"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer"
+          },
+          "saved_at": {
+            "type": "string"
+          }
+        }
+      },
+      "Tombstones": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "data",
+          "next_since",
+          "more"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "cursor",
+                "entity_type",
+                "entity_id",
+                "kind",
+                "at"
+              ],
+              "properties": {
+                "cursor": {
+                  "type": "integer"
+                },
+                "entity_type": {
+                  "type": "string",
+                  "enum": [
+                    "note"
+                  ]
+                },
+                "entity_id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "trashed",
+                    "restored",
+                    "deleted",
+                    "redacted"
+                  ]
+                },
+                "at": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "next_since": {
+            "type": "integer",
+            "description": "The cursor to send next time"
+          },
+          "more": {
+            "type": "boolean",
+            "description": "More records follow: ask again with next_since"
           }
         }
       }

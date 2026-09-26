@@ -34,6 +34,17 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # The Architecture suite scans the built stylesheet (ADR 0003 §6.3).
+      - name: Build front-end assets
+        run: |
+          npm ci
+          npm run build
+
       - name: Create databases and users
         run: mysql -h127.0.0.1 -uroot -proot < database/scripts/local-mysql-users.sql
 
@@ -56,3 +67,62 @@ jobs:
         if: hashFiles('tests/Acceptance/**/*Test.php') != ''
         continue-on-error: true
         run: php artisan test --testsuite=Acceptance
+
+  # Theme enforcement in the browser (sentinel theme), live theme switching
+  # and accessibility checks (ADR 0003 §6.3, DESIGN.md §3.5 and §9).
+  browser:
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, mbstring, intl, sodium
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --no-progress
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Create databases and users
+        run: mysql -h127.0.0.1 -uroot -proot < database/scripts/local-mysql-users.sql
+
+      - name: Prepare the application
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          composer migrate
+          npm run build
+
+      - name: Browser tests
+        run: npx playwright test
+
+      - name: Keep the report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

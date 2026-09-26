@@ -30,8 +30,27 @@ return [
         'password_confirmation_seconds' => 600,
     ],
 
+    'files' => [
+        // Where uploaded files are kept: a private disk, never served
+        // directly (docs/specs/workspaces.md step 4).
+        'disk' => env('VISTUD_FILES_DISK', 'local'),
+        // The largest file a student can upload. PHP's upload_max_filesize
+        // and post_max_size must allow it too; the lower limit applies.
+        'max_bytes' => (int) env('VISTUD_FILES_MAX_BYTES', 25 * 1024 * 1024),
+        // Everything one student can store, the trash included.
+        'quota_bytes' => (int) env('VISTUD_FILES_QUOTA_BYTES', 2 * 1024 * 1024 * 1024),
+    ],
+
     'invitations' => [
         'ttl_hours' => 72,
+    ],
+
+    'appearance' => [
+        // The default light and dark themes. In "system" mode the browser's
+        // preference picks between them before the first paint
+        // (ADR 0003 §6.4, DESIGN.md §3.6).
+        'light' => 'vistud-light',
+        'dark' => 'vistud-dark',
     ],
 
 ];

@@ -11,6 +11,7 @@ use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -70,6 +71,37 @@ final class Invitations
             DB::table('invitations')->where('id', $invitationId)->update(['revoked_at' => now(), 'updated_at' => now()]);
             $this->audit->record($by, AuditAction::INVITATION_REVOKED, 'invitation', $invitationId, role: 'admin');
         });
+    }
+
+    /**
+     * Admin with 2FA. Invitations not yet accepted or cancelled, newest
+     * first, including expired ones, but not those whose email address has
+     * since got an account.
+     *
+     * @return list<PendingInvitation>
+     */
+    public function pending(Principal $by, int $limit = 100): array
+    {
+        Guard::admin($by);
+
+        return DB::table('invitations')
+            ->leftJoin('users as inviters', 'inviters.id', '=', 'invitations.invited_by')
+            ->whereNull('invitations.accepted_at')
+            ->whereNull('invitations.revoked_at')
+            ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('users')->whereColumn('users.email', 'invitations.email'))
+            ->orderByDesc('invitations.created_at')
+            ->orderByDesc('invitations.id')
+            ->limit(max(1, min($limit, 200)))
+            ->get(['invitations.id', 'invitations.email', 'inviters.name as inviter', 'invitations.created_at', 'invitations.expires_at'])
+            ->map(fn (object $row) => new PendingInvitation(
+                id: $row->id,
+                email: $row->email,
+                invitedByName: $row->inviter,
+                createdAt: CarbonImmutable::parse($row->created_at)->toIso8601String(),
+                expiresAt: CarbonImmutable::parse($row->expires_at)->toIso8601String(),
+                expired: now()->greaterThanOrEqualTo($row->expires_at),
+            ))
+            ->all();
     }
 
     /**

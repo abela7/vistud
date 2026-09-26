@@ -20,8 +20,8 @@ class EntryValidatorTest extends TestCase
 
     public function test_course_and_module_records_are_accepted(): void
     {
-        EntryValidator::validate($this->record(['record_type' => 'course', 'record_id' => 'CS101', 'title' => 'Databases']));
-        EntryValidator::validate($this->record(['record_type' => 'module', 'record_id' => 'CS101-M1', 'course' => 'CS101', 'title' => 'Joins', 'position' => 1]));
+        EntryValidator::validate($this->record(['record_type' => 'workspace', 'record_id' => 'CS101', 'title' => 'Databases']));
+        EntryValidator::validate($this->record(['record_type' => 'module', 'record_id' => 'CS101-M1', 'workspace' => 'CS101', 'title' => 'Joins', 'position' => 1]));
         $this->addToAssertionCount(2);
     }
 

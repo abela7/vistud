@@ -30,7 +30,7 @@ class MeController
                 'id' => $principal->learnerId,
                 'timezone' => DB::table('learners')->where('id', $principal->learnerId)->value('timezone'),
             ],
-            'workspace' => $principal->workspace?->value,
+            'area' => $principal->area?->value,
         ]);
     }
 }

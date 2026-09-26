@@ -17,7 +17,7 @@ final readonly class Principal
     /**
      * @param  list<Role>  $roles
      * @param  string  $channel  web · api · mcp · console · job
-     * @param  Workspace|null  $workspace  the workspace the request was made in, when there is one
+     * @param  Area|null  $area  the area the request was made in, when there is one
      */
     public function __construct(
         public ?string $userId,
@@ -30,7 +30,7 @@ final readonly class Principal
         public ?string $userAgent = null,
         public ?string $requestId = null,
         private bool $system = false,
-        public ?Workspace $workspace = null,
+        public ?Area $area = null,
     ) {}
 
     /**
@@ -65,13 +65,13 @@ final readonly class Principal
 
     /**
      * The role written to audit records when the service doesn't name one:
-     * the workspace the user acted in, or their only role.
+     * the area the user acted in, or their only role.
      */
     public function auditRole(): string
     {
         return match (true) {
             $this->system => 'system',
-            $this->workspace === Workspace::Admin => 'admin',
+            $this->area === Area::Admin => 'admin',
             $this->hasRole(Role::Student) => 'student',
             $this->hasRole(Role::Admin) => 'admin',
             default => 'student',

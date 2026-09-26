@@ -33,7 +33,8 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            // Private: students' files are served only by FileContentController, after its checks.
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],

@@ -155,6 +155,29 @@ These belong to work package WP5, whose owner may revise them through the contra
 
 The **redaction ledger** itself is deliberately not a table: it lives outside MySQL and the file backups (ADR 0002 §10).
 
-## Not in M1
+## Study content (Provisional, M2)
 
-Notes, note versions, note blocks, deletion records (`content_tombstones`), courses, modules, folders and activities arrive with M2 and M4 ([ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).
+### `workspaces`
+A learner table (`LearnerTables`): a student's space for one subject ([docs/specs/workspaces.md](../specs/workspaces.md)). `id` (UUIDv7), `learner_id`, `name` (≤ 80), `code` (≤ 20), `term` (≤ 40), `starts_on`, `ends_on`, `colour` (one of the theme's workspace colours), `icon`, `type` (`general` until workspace types arrive), `position`, `revision` (matches the journal record's), `archived_at`, `created_at`, `updated_at`. Each change also appends a revision of the `workspace` journal record.
+
+## Not yet built
+
+### `modules`
+A learner table: a unit of a workspace, like "Week 1: Cells". `id`, `learner_id`, `workspace_id`, `title` (≤ 120), `starts_on`, `ends_on`, `position` (1 is first), `revision`, `created_at`, `updated_at`. Each change, reordering included, appends a revision of the `module` journal record; deleting (only when empty) appends one with status `deleted`.
+
+### `folders`
+A learner table, for organisation only: never journalled (ADR 0003 §9.2). `id`, `learner_id`, `workspace_id`, `module_id` (null for a folder outside every module, at the workspace's top level), `parent_id` (another folder, or null at the top of its module or workspace), `name` (≤ 120), `depth` (1 at the top, at most 8), `position` among its siblings, `created_at`, `updated_at`.
+
+### `notes`
+A learner table ([ADR 0003 §9.1](../adr/0003-web-workspaces-and-study-content.md#91-notes-versions-and-citations-d3--a-with-the-evidence-exception)). `id`, `learner_id`, `workspace_id`, `module_id` and `folder_id` (where it is; both null at the workspace's top level), `title` (≤ 200, empty for an untitled note), `current_version`, `position`, `trashed_at` (deleted for good 30 days later by `vistud:trash:purge`, daily), `created_at`, `updated_at`. Not journalled yet: the note's `source` record arrives with the extractor (ADR 0003 §9.3).
+
+### `note_versions`
+A learner table. Every accepted save, never changed: `id`, `learner_id`, `note_id`, `version` (unique per note), `title`, `doc` (the editor's JSON, cleaned by `App\Study\NoteDoc`), `base_version`, `save_id` (unique per note: a retried save answers the same), `client_id` (the browser tab), `kind` (`created`, `autosave`, `conflict_resolution`), `created_at`. All versions are kept for now; the retention rules of ADR 0003 §9.1 come with version history.
+
+### `content_tombstones`
+A learner table of deletion records (ADR 0003 §5.4): `id` (auto-increment, the sync cursor), `learner_id`, `entity_type` (`note`), `entity_id`, `kind` (`trashed`, `restored`, `deleted`), `at`. Written now; browsers read them from step 3b.
+
+### `files`
+A learner table (docs/architecture/conventions.md "Uploaded files"). `id`, `learner_id`, `workspace_id`, `module_id` and `folder_id` (where it is; both null at the workspace's top level), `name` (≤ 200, without the extension), `extension`, `kind` (`pdf`, `document`, `slides`, `spreadsheet`, `text`, `image`), `mime` (the type it was checked as), `size`, `sha256`, `storage_key` (where the bytes are on the files disk), `position`, `trashed_at` (deleted for good, bytes included, 30 days later by `vistud:trash:purge`), `created_at`, `updated_at`.
+
+Note blocks and activities arrive with the next M2 steps ([docs/specs/workspaces.md §8](../specs/workspaces.md#8-for-developers), [ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).

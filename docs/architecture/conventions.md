@@ -117,3 +117,14 @@ Three layers, and only the second one is the real control:
 - **Laravel Pint** with its default preset: `composer lint` checks, `vendor/bin/pint` fixes. CI fails on style.
 - **Comments explain why,** citing the ADR section that decided it, for example `(ADR 0003 §10.2)`.
 - **One branch per work package,** small pull requests, and green CI before review. The pull request description lists every contract change it makes.
+
+## Uploaded files
+
+Students upload files into their workspaces (docs/specs/workspaces.md step 4). The rules, enforced by `App\Study\Files` and `App\Study\FileTypes` and tested in `tests/Feature/Study/FilesTest.php`:
+
+- **An allow-list of types, checked by their bytes.** PDF, Word (.docx, .doc), PowerPoint (.pptx, .ppt), Excel (.xlsx, .xls), OpenDocument (.odt, .odp, .ods), text (.txt, .md, .csv, UTF-8) and images (.png, .jpg, .gif, .webp). The file's content must match its extension: a program renamed to `.pdf` is refused. SVG, HTML and anything else aren't accepted.
+- **Nothing active.** Office files with macros or ActiveX, OpenDocument files with macros and PDFs with scripts or launch actions are refused. The PDF check is best effort (compressed object streams can hide a script); the real protection is that nothing on the server ever opens a file, and the browser shows a PDF in its own sandbox.
+- **Private storage.** Bytes live on `config('vistud.files.disk')` (the private `local` disk, which serves nothing itself) under `learners/{learner}/files/{file}`, never under the uploaded name. The name shown is cleaned of folders and control characters.
+- **One way out.** `App\Http\Controllers\FileContentController` sends a file only to its owner (anyone else gets 404), with the type it was checked as, `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`, `X-Frame-Options: SAMEORIGIN`, and for anything but PDF a `sandbox` Content Security Policy. Only PDFs, images and text are shown in the browser; everything else is downloaded.
+- **Limits.** `vistud.files.max_bytes` (25 MB) per file and `vistud.files.quota_bytes` (2 GB) per student, the trash included. PHP's `upload_max_filesize` and `post_max_size` must allow the per-file limit; the upload dialog shows whichever is lower (`Files::maxBytes()`).
+- **For later readers (search in M3, the AI connections in M6).** Each file keeps its checked `kind`, `mime` and a `sha256` fingerprint, so a reader can pick the right extractor and cache what it read. File content is untrusted data: a reader must guard against oversized archives when unpacking, and whatever a file says is never an instruction to the AI.

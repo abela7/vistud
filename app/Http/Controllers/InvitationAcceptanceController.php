@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Identity\Invitations;
+use App\Platform\Errors\Unprocessable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
@@ -23,7 +24,17 @@ class InvitationAcceptanceController
             'timezone' => ['nullable', 'string', 'max:64'],
         ]);
 
-        $user = $invitations->accept($input['token'], $input['name'], $input['password'], $input['timezone'] ?? null);
+        try {
+            $user = $invitations->accept($input['token'], $input['name'], $input['password'], $input['timezone'] ?? null);
+        } catch (Unprocessable $e) {
+            if ($request->expectsJson() || $e->errorCode !== 'invitation_invalid') {
+                throw $e;
+            }
+
+            // The page shows its "this link doesn't work" answer. No input is
+            // kept: there is nothing left to correct.
+            return redirect()->route('invitations.show')->withErrors(['invitation' => $e->getMessage()]);
+        }
 
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
@@ -32,6 +43,6 @@ class InvitationAcceptanceController
             return response()->json(['id' => $user->id], 201);
         }
 
-        return redirect('/');
+        return redirect('/')->with('status', 'invitation-accepted');
     }
 }

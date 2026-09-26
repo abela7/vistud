@@ -5,7 +5,7 @@ use App\Platform\Errors\NotFound;
 use Illuminate\Support\Facades\Route;
 
 /*
-| The admin workspace. Owned by work package WP2 (the protected group);
+| The admin area. Owned by work package WP2 (the protected group);
 | screens come from WP6 in routes/web/admin-screens.php.
 |
 | The fallback is matched after every other route, whenever it was

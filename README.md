@@ -18,6 +18,7 @@ derives where each topic stands, independent of any AI model.
 |---|---|
 | Understand the project | [PROJECT.md](PROJECT.md) |
 | See who is doing what | [docs/coordination/STATUS.md](docs/coordination/STATUS.md) |
+| Build or change a screen | [DESIGN.md](DESIGN.md): brand, themes and gradients, scales, components and states, responsive rules, accessibility and the checks at UI handoff |
 | Understand the decisions | [ADR 0001](docs/adr/0001-permanent-store-and-retrieval-index.md) (storage and retrieval), [ADR 0002](docs/adr/0002-learning-event-schema.md) (learning events), [ADR 0003](docs/adr/0003-web-workspaces-and-study-content.md) (web workspaces and study content) |
 | Set up and run the tests | [docs/development/setup.md](docs/development/setup.md) |
 | Find where code belongs | [docs/architecture/modules.md](docs/architecture/modules.md) |
@@ -35,6 +36,7 @@ The database command is a **Unix shell** command. It uses input redirection and 
 # Unix shell only (bash). Not PowerShell.
 sudo mysql < database/scripts/local-mysql-users.sql   # once per machine
 composer setup
+npm ci && npm run build                               # front-end assets
 composer test
 ```
 

@@ -9,8 +9,12 @@
   - an explicit policy for undo history.
 
   Also: basic custom themes moved into the prototype; retrieval timing reconciled with ADR 0001; milestones and the acceptance checklist revised.
+
+  For WP6, on the PM's instruction: gradient tokens and rules added to §6 alongside the existing theme rules, the front-end build and browser-test dependencies brought forward to M1 (§12), and the design guide recorded in §16. The visual detail lives in [DESIGN.md](../../DESIGN.md).
 - **Decision owner:** the project owner. The PM reviews and coordinates; the developer owns implementation.
 - **Depends on:** [ADR 0001](0001-permanent-store-and-retrieval-index.md) and [ADR 0002](0002-learning-event-schema.md). Both now carry cross-references back to this ADR.
+
+> **Terminology update (M2 step 0).** This ADR was written when "workspace" meant the student side or the admin side of the app. Those are now called **areas** (the student area and the admin area). **Workspace** now means a student's space for one subject, which replaces this ADR's "course" (docs/specs/workspaces.md). Read "student workspace" and "admin workspace" below as "student area" and "admin area", and "course" as "workspace".
 
 ## 1. Context
 
@@ -258,9 +262,14 @@ Actual colour values live **only** in theme definitions. Everything else uses se
 | Categories | `--category-1…8`, each with `-subtle`. Used for course colours, calendar event types and chart series. A course's colour is chosen from these, **never typed as a hex value** |
 | Editor | `--topic-link`, `--topic-link-bg`, `--code-bg`, `--syntax-keyword`, `--syntax-string`, `--syntax-number`, `--syntax-comment`, `--syntax-function`, `--card-marker`, `--block-hover` |
 | Charts | `--chart-grid`, `--chart-axis`. Series colours come from the categories |
-| Other | `--shadow-color`, `--role-admin` |
+| Gradients | `--grad-brand`, `--grad-header`, `--grad-featured`, `--grad-surface`, `--grad-primary`, `--grad-primary-hover`, `--grad-primary-active`, `--grad-selected`. Each is a complete definition (angle, stop colours and stop positions) or a solid fill |
+| On gradients | `--on-brand`, `--on-brand-muted`, `--on-header`, `--on-header-muted`, `--on-featured`, `--on-featured-muted`, `--on-primary`, `--on-selected`: text and icons on each gradient |
+| Overlays on gradients | `--brand-hover`, `--brand-pressed`, `--header-hover`, `--header-pressed`, `--header-selected` |
+| Other | `--shadow-color`, `--role-admin`, `--role-admin-on`, `--qr-dark` and `--qr-light` (QR codes, always dark on light), `--logo-plate` (behind the full-colour logo; clear on light themes) |
 
 Tailwind 4 exposes the tokens through `@theme inline` and removes its own palette with `--color-*: initial`.
+
+**Gradients** are part of the visual identity (brand panels, workspace and section headers, selected summary panels, primary actions); long-form notes, forms and dense information stay on calm solid surfaces. Where each gradient is used, and the brand it follows, are set in [DESIGN.md](../../DESIGN.md) §2–3. Components never contain a colour, a gradient stop or a gradient direction: a theme can change any gradient independently, or replace it with a solid fill, without a component edit. The category, editor and chart groups join the theme data with the M2 screens that use them.
 
 ### 6.2 Everything the tokens must cover
 
@@ -274,27 +283,29 @@ Tailwind 4 exposes the tokens through `@theme inline` and removes its own palett
 | Interaction states | Hover, pressed, selected, disabled and dragging states all use their tokens |
 | Text selection, scrollbars, shadows | Their tokens |
 | Icons | `currentColor` |
+| Gradients | `var(--grad-…)` through the shared gradient-surface utilities, which also point the text, hover and focus tokens at that gradient's own tokens. Hover, pressed and selected states use their gradient or overlay tokens. Third-party components take gradients only from these tokens |
 
 ### 6.3 Enforcement
 
 Three checks run in CI, and all three must pass:
 
 1. **Source scan.** Scans `resources/css`, `resources/js`, `resources/views` and PHP files that output styles.
-   - **Forbidden:** hex colours, colour functions (`rgb`, `hsl`, `hwb`, `lab`, `lch`, `oklab`, `oklch`, `color`), named colours in colour positions, `color-mix()`, Tailwind arbitrary colour classes, and colour strings in JavaScript.
+   - **Forbidden:** hex colours, colour functions (`rgb`, `hsl`, `hwb`, `lab`, `lch`, `oklab`, `oklch`, `color`), named colours in colour positions, `color-mix()`, Tailwind arbitrary colour classes, colour strings in JavaScript, **gradient functions** (`linear-`, `radial-` and `conic-gradient`, repeating or not) and **Tailwind gradient utilities** (`bg-linear-*`, `from-*`, `via-*`, `to-*`).
    - **Allowed:** `currentColor`, `transparent`, `inherit`, `initial`, `unset`, `none` and `var(--…)`.
-   - **Exempt:** only `resources/css/themes/*.css` and the preset seed data.
-2. **Compiled CSS scan.** Every colour value in the built CSS must sit inside a theme block.
+   - **Exempt:** only `resources/css/themes/*.css` and the theme and preset data (`resources/themes/`, and the measured logo colours in `resources/brand/`), which the scan never reads.
+2. **Compiled CSS scan.** Every colour value **and every gradient** in the built CSS must sit inside a theme block.
 3. **Sentinel theme test (Playwright).**
-   - Every token gets a unique colour that would never appear by chance.
-   - The test visits every screen and state: hover, focus, dialogs, dragging, the editor (including code blocks and topic chips), the calendar, charts, notifications and errors. This happens **in both workspaces**.
-   - Every colour computed on the page, chart SVG included, must match a sentinel value.
+   - Every token **and every gradient stop** gets a unique colour that would never appear by chance.
+   - The test visits every screen and state: hover, pressed, focus, selected, disabled, loading, dialogs, dragging, the editor (including code blocks and topic chips), the calendar, charts, notifications and errors. This happens **in both workspaces**.
+   - Every colour computed on the page, **gradient images and shadows** and chart SVG included, must match a sentinel value.
+4. **Live switching.** A browser test switches themes and checks that the gradient treatments change with no reload and no change to the page's markup.
 
 **Focus.** Removing outlines is forbidden unless the shared focus-visible style replaces them. That style is a 2 px `--focus-ring` with an offset.
 
 ### 6.4 Custom themes (D7 = A), contrast and preferences
 
 **Basic custom themes** arrive with the prototype and the first usable study workspace, not later:
-- **What the student sets.** The student picks **seed colours**: background, surface, text and accent, plus optional categories. The server derives every other token from these, stepping lightness in OKLCH.
+- **What the student sets.** The student picks **seed colours**: background, surface, text and accent, plus optional categories. The server derives every other token from these, **matching gradients included** ([DESIGN.md](../../DESIGN.md) §3.7), stepping lightness in OKLCH. Any gradient can be set to a solid fill.
 - **Live preview.** A preview updates live and shows contrast using culori.
 - **Scope.** The saved theme belongs to the account and applies across **both workspaces**.
 
@@ -311,8 +322,13 @@ Three checks run in CI, and all three must pass:
 |---|---|
 | Text on background and on surface, including muted text on surface | 4.5:1 |
 | Text on accent, and the `-on` colours on their status colours | 4.5:1 |
+| Text and icons on a gradient, against **every colour the whole gradient shows** (sampled along the gradient line, not only at its stops), and over its hover, pressed and selected overlays | 4.5:1 |
 | Focus ring against background and surface | 3:1 |
 | Strong border against surface | 3:1 |
+| Every logo colour against the logo plate over each surface | 3:1 |
+| QR modules against their plate, dark on light | 7:1 |
+
+- **Gradients that fail somewhere.** The theme adjusts the foreground or the stops, or puts the content on a theme-defined supporting surface. Information is never conveyed by colour alone.
 
 - **Failures and presets.** A theme that fails is rejected, with the reason and a suggested fix. Built-in themes and admin presets must pass the same check, enforced by a unit test.
 - **Saved preferences.** The preference is stored on the account as a theme ID, or as *system* with a light/dark pair. It syncs across devices and is cached per account.
@@ -616,8 +632,9 @@ Checked on 2026-09-25. Exact versions will be pinned in the lock files.
 | livewire/livewire | 4.4.6 | MIT | Screens, `wire:navigate`, `@persist`, `wire:offline`, `wire:dirty`, `wire:loading`, `wire:ignore` | M1–M2 |
 | laravel/fortify | 1.40.0 | MIT | Login, 2FA and recovery codes, password confirmation and reset, with our own views | M1 |
 | phpunit/phpunit | 12.5.x | BSD-3-Clause | Server tests | M1 |
-| vite / laravel-vite-plugin | 8.3.1 / 3.2.0 | MIT | Build | M2 |
-| tailwindcss / @tailwindcss/vite | 4.3.3 | MIT | Token utilities | M2 |
+| vite / laravel-vite-plugin | 8.3.1 / 3.2.0 | MIT | Build | M1 (WP6 visual foundation) |
+| tailwindcss / @tailwindcss/vite | 4.3.3 | MIT | Token utilities | M1 (WP6) |
+| @fontsource-variable/inter | 5.3.0 | OFL-1.1 | The self-hosted UI font (DESIGN.md §4.1) | M1 (WP6) |
 | Alpine (bundled) with @alpinejs/focus, @alpinejs/anchor, @alpinejs/collapse | 3.17.4 | MIT | Local interactions | M2 |
 | @tiptap/core, pm, starter-kit, extension-unique-id, extension-drag-handle, suggestion, extension-link, extension-image, extension-file-handler, extension-code-block-lowlight, markdown | 3.31.3 | MIT | Editor foundation | M2 |
 | lowlight | 3.3.0 | MIT | Code highlighting | M2 |
@@ -625,9 +642,9 @@ Checked on 2026-09-25. Exact versions will be pinned in the lock files.
 | echarts | 6.1.0 | Apache-2.0 | Charts | M2 |
 | idb | 8.0.3 | ISC | IndexedDB drafts | M2 |
 | culori | 4.0.2 | MIT | Contrast preview in the basic theme editor | M2 |
-| Lucide icon SVGs | 1.48.0 | ISC | Blade icon components drawn with `currentColor` | M2 |
-| @playwright/test | 1.63.0 | Apache-2.0 | Browser and acceptance tests | M2 |
-| @axe-core/playwright | 4.13.0 | MPL-2.0 | Accessibility checks | M2 |
+| Lucide icon SVGs (lucide-static) | 1.48.0 | ISC | Blade icon components drawn with `currentColor` | M1 (WP6) |
+| @playwright/test | 1.63.0 | Apache-2.0 | Browser and acceptance tests | M1 (WP6) |
+| @axe-core/playwright | 4.13.0 | MPL-2.0 | Accessibility checks | M1 (WP6) |
 | laravel/passport | 13.8.0 | MIT | OAuth for Flutter, MCP and plugins | M6 |
 | laravel/mcp | 1.0.1 | MIT | MCP server | M6 |
 | laravel/reverb | 1.12.0 | MIT | Live updates | M6 |
@@ -774,6 +791,10 @@ Every item below is an automated Playwright test unless marked *review*.
 - **D6 A:** 403 for admin routes, and 404 for other learners' records.
 - **D7 A:** seed-colour themes in the prototype, with Advanced editing later.
 - **D8 A (revised):** the order in §13.
+
+**Decided by the PM for WP6 (M1):**
+- **Design guide and brand.** [DESIGN.md](../../DESIGN.md) is the shared UI and UX guide, under this ADR's authority. The owner's ViStud logo sets the brand colours (deep blue to ocean to teal), replacing the earlier indigo proposal. Gradients are part of the identity and fully theme-controlled (§6). WP6 uses the shared visual foundations for its functional screens, replacing the earlier "unstyled markup" direction; this does not start M2.
+- **Design review of PR #3** (at `8ac9f03`). The visual direction is approved for continuation; WP6 is not accepted. Keep "Your study brain, kept for you." for now. Keep Ember as the third built-in theme. Prefer the white logo directly on dark or gradient surfaces and the full-colour logo on light surfaces (not implemented yet; [DESIGN.md](../../DESIGN.md) §2.3).
 
 **Decided by the PM before WP4 (M1):**
 - **D9 A (staged):** G1a measures in-app queries, starting at M4; G1b later checks chat queries, once MCP capture exists (M6). The agreed evidence thresholds apply to each stage. If the evidence is insufficient, the result is reported as **inconclusive**; nothing is decided just because 4–6 weeks have passed. See ADR 0001, G1.

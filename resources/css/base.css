@@ -1,0 +1,102 @@
+/*
+| Page-wide defaults: every colour the browser would otherwise pick itself
+| (text, placeholders, selection, scrollbars, native controls, focus) is
+| set from a token (ADR 0003 §6.2).
+*/
+
+@layer base {
+    html {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family: var(--font-sans);
+        accent-color: var(--accent);
+        scrollbar-color: var(--border-strong) transparent;
+        -webkit-tap-highlight-color: transparent;
+        text-size-adjust: 100%;
+    }
+
+    body {
+        background-color: var(--bg);
+        color: var(--text);
+        font-size: 1rem;
+        line-height: 1.5;
+        /* Long emails and URLs break instead of widening the page (DESIGN.md §6.3). */
+        overflow-wrap: anywhere;
+    }
+
+    ::selection {
+        background-color: var(--selection);
+        color: var(--text);
+    }
+
+    ::placeholder {
+        color: var(--text-subtle);
+        opacity: 1;
+    }
+
+    a {
+        color: var(--accent-contrast);
+        text-decoration-line: underline;
+        text-decoration-thickness: 1px;
+        text-underline-offset: 0.2em;
+    }
+
+    a:hover {
+        text-decoration-thickness: 2px;
+    }
+
+    /*
+    | One focus style for everything (ADR 0003 §6.3): a 2 px ring with an
+    | offset gap filled by --focus-ring-offset, so the ring stays visible on
+    | any background, gradients included.
+    */
+    :focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 2px var(--focus-ring-offset);
+    }
+
+    :focus:not(:focus-visible) {
+        outline: none;
+    }
+
+    [hidden] {
+        display: none !important;
+    }
+}
+
+/*
+| Reduced motion: changes are instant (DESIGN.md §9). Zero, not a tiny
+| duration: a tiny one would give every property on every element a
+| transition, so colours would lag a frame behind a theme switch.
+*/
+@media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+        animation-duration: 0s !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0s !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/*
+| Forced colours (Windows contrast themes): the system palette replaces the
+| theme. Gradients step aside so system text colours sit on system
+| backgrounds, and controls keep a visible edge.
+*/
+@media (forced-colors: active) {
+    .surface-brand,
+    .surface-header,
+    .surface-featured,
+    .surface-subtle,
+    .btn {
+        background-image: none;
+    }
+}
+
+/* Hidden until Alpine has started. */
+[x-cloak] {
+    display: none !important;
+}

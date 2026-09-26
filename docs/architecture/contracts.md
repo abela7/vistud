@@ -71,12 +71,12 @@ content:       { <field>: text }         # free text, stored separately
 - **`received_at`** is ignored by the writer, which always uses the server's time. Tests that need a particular time use `travelTo()`.
 - **Unknown top-level fields are refused.** Content fields are named with lower-case words (up to 32 characters) and hold at most 1 MiB of text each.
 - **Attempts** may carry `task_revision` (a positive integer). `judged_by: auto` requires `checker: {id, version, key_source}`, and `key_source` must be `course_material`, `instructor` or `derived_from_material`. A key the learner wrote (`key_source: learner`) is refused for `auto`; record the attempt as `judged_by: self` (ADR 0003 §9.4).
-- **Records** of type `task` need a `key` (and may carry `revision`, `content_hash`, `status`); `activity` needs `kind`; `course` needs `title`; `module` needs `course` and `title`.
+- **Records** of type `task` need a `key` (and may carry `revision`, `content_hash`, `status`); `activity` needs `kind`; `workspace` needs `title`; `module` needs `workspace` and `title`. (Until M2 step 0 these were `course`, and a module's `course`; renamed before any journal stored one, docs/specs/workspaces.md decision W2.)
 - **Records** carry `body.record_type` and `body.record_id`. A revision appends a new record entry with the same `record_id`.
 - **Claims** carry `body.type`, `targets`, `value`, `confidence`, `method {kind, id, version, prompt?}`, `derived_from`, `supersedes` and `review {state, by?}`.
 - **References** are `type:id`, optionally `#locator`, for example `source:NOTE#v12/blk-7f3` ([ADR 0002 §5](../adr/0002-learning-event-schema.md#5-claim-contracts)).
 
-Increment 3 brought `Journal\Vocabulary` and `EntryValidator` up to the latest ADR 0002 revision. The additions above (course and module records, `task_revision`, the checker rule, and the stricter checks on times, fields and content) are part of the Stable format.
+Increment 3 brought `Journal\Vocabulary` and `EntryValidator` up to the latest ADR 0002 revision. The additions above (workspace and module records, `task_revision`, the checker rule, and the stricter checks on times, fields and content) are part of the Stable format.
 
 ## Projection output (Stable keys, Provisional facts)
 
@@ -121,25 +121,37 @@ Provisional until the PM approves increment 2, then Stable.
 
 | Service | Methods | Checks |
 |---|---|---|
-| `Identity\PrincipalFactory` | `fromRequest(Request): Principal` (cached per request) · `forUser(User, channel, ?passwordConfirmedAt, ?workspace, ?ip, ?userAgent, ?requestId): Principal` · `forget(Request)` | Reads status and 2FA from the database on every call. Suspended: `403 access_revoked`. Deleted or missing: `401 account_deleted` |
-| `Identity\Accounts` | `create(Principal, name, email, password, student = true, ?timezone): User` · `suspend(Principal, userId)` · `reactivate(Principal, userId)` · `requestDeletion(Principal, userId)` · `details(Principal, userId): AccountDetails` · `list(Principal, ?cursor, limit = 50): {data: list<AccountDetails>, next_cursor}` | `create`: protected admin, or the console. `suspend`, `reactivate`: protected admin. `requestDeletion`: protected admin, or the account's own user with a recent confirmation. `details`, `list`: admin with 2FA. Last-admin safeguard on suspend and delete |
+| `Identity\PrincipalFactory` | `fromRequest(Request): Principal` (cached per request) · `forUser(User, channel, ?passwordConfirmedAt, ?area, ?ip, ?userAgent, ?requestId): Principal` · `forget(Request)` | Reads status and 2FA from the database on every call. Suspended: `403 access_revoked`. Deleted or missing: `401 account_deleted` |
+| `Identity\Accounts` | `create(Principal, name, email, password, student = true, ?timezone): User` · `suspend(Principal, userId)` · `reactivate(Principal, userId)` · `requestDeletion(Principal, userId)` · `details(Principal, userId): AccountDetails` · `names(Principal, userIds): array<id, name>` (for showing who did what) · `list(Principal, ?cursor, limit = 50, ?search): {data: list<AccountDetails>, next_cursor}` (`search` matches part of a name or an email address) | `create`: protected admin, or the console. `suspend`, `reactivate`: protected admin. `requestDeletion`: protected admin, or the account's own user with a recent confirmation. `details`, `names`, `list`: admin with 2FA. Last-admin safeguard on suspend and delete |
 | `Identity\Roles` | `grantAdmin(Principal, userId)` · `revokeAdmin(Principal, userId)` | Protected admin. The console may grant, never revoke. Last-admin safeguard on revoke |
-| `Identity\Invitations` | `invite(Principal, email): IssuedInvitation` · `revoke(Principal, invitationId)` · `accept(token, name, password, ?timezone): User` | Protected admin to invite and revoke. `accept` takes no role, always creates a student, and answers every invalid token with the same `422 invitation_invalid` |
+| `Identity\Invitations` | `invite(Principal, email): IssuedInvitation` · `revoke(Principal, invitationId)` · `pending(Principal, limit = 100): list<PendingInvitation>` · `accept(token, name, password, ?timezone): User` | Protected admin to invite and revoke; admin with 2FA for `pending` (never returns a token). `accept` takes no role, always creates a student, and answers every invalid token with the same `422 invitation_invalid` |
 | `Identity\TwoFactorReset` | `reset(Principal, userId)` | Protected admin, or the console. Ends the user's sessions |
-| `Identity\Workspaces` | `enter(Principal, Workspace)` | `admin`: protected admin (2FA and a recent confirmation). `student`: the student role |
+| `Identity\Areas` | `enter(Principal, Area)` | `admin`: protected admin (2FA and a recent confirmation). `student`: the student role |
+| `Study\Workspaces` | `list(Principal, archived = false): list<WorkspaceDetails>` · `find(Principal, id)` · `create(Principal, input)` · `update(Principal, id, input)` · `archive(Principal, id)` · `restore(Principal, id)`; constants `ICONS`, `SECTIONS` | The principal's own learner stream only (`Guard::learner`): another student's workspace is `404 not_found`, like a missing one. Input refusals are `422 validation_failed` with `details.fields`. Every change appends a revision of the `workspace` journal record |
+| `Study\Modules` | `list(Principal, workspaceId): list<ModuleDetails>` · `find(Principal, id)` · `create(Principal, workspaceId, input)` · `update(Principal, id, input)` · `move(Principal, id, position)` · `delete(Principal, id)` | As `Study\Workspaces`. `delete` answers `409 not_empty` while the module has folders. Every change appends a revision of the `module` journal record |
+| `Study\Folders` | `tree(Principal, workspaceId): list<FolderDetails>` (parents before children, siblings in order, the top level last) · `find(Principal, id)` · `create(Principal, 'workspace'\|'module'\|'folder', parentId, name)` · `rename(Principal, id, name)` · `move(Principal, id, 'workspace'\|'module'\|'folder', parentId)` · `reorder(Principal, id, position)` · `delete(Principal, id)`; constants `MAX_DEPTH` (8), `MAX_NAME` | As `Study\Workspaces`, and only within one workspace. `409 too_deep` past 8 levels, `409 invalid_move` into itself, `409 not_empty` for a folder with folders inside. Not journalled |
+| `Study\Notes` | `list(Principal, workspaceId): list<NoteDetails>` · `trashed(Principal, workspaceId)` · `find(Principal, id)` · `open(Principal, id)` (with its document) · `create(Principal, 'workspace'\|'module'\|'folder', placeId, title = '')` · `save(Principal, id, {base_version, save_id, client_id, title, doc, kind?}): SavedVersion` · `move(Principal, id, placeType, placeId)` · `trash` · `restore` · `destroy` (only from the trash) · `purgeTrash(LearnerScope)`; constants `MAX_TITLE`, `TRASH_DAYS` (30) | As `Study\Workspaces`. `save` answers `409 version_conflict` (with `details.current_version`) when `base_version` isn't current, `410 gone` (`reason: trashed`) for a note in the trash, and the same answer again for a retried `save_id`. Documents are cleaned by `Study\NoteDoc` (unknown nodes refused, other links than http, https and mailto dropped). Moves stay within one workspace. Modules and folders can't be deleted while notes outside the trash are in them |
+| `Study\Files` | `list(Principal, workspaceId): list<FileDetails>` · `trashed(Principal, workspaceId)` · `find(Principal, id)` · `upload(Principal, placeType, placeId, path, originalName)` · `rename(Principal, id, name)` · `move(Principal, id, placeType, placeId)` · `trash` · `restore` · `destroy` (only from the trash) · `purgeTrash(LearnerScope)` · `content(Principal, id): [FileDetails, storageKey]` · `textPreview(Principal, id)`; `Files::maxBytes()`, `Files::disk()` | As `Study\Workspaces`. `upload` refuses with `422` on `file` anything `Study\FileTypes::inspect` rejects, and `409 quota_exceeded` over the quota. `content` of a trashed file is `410 gone`. Modules and folders can't be deleted while files outside the trash are in them |
+| `Study\Tombstones` | `since(Principal, int since): {data, next_since, more}` | The principal's own deletion records only |
 | `Audit\AuditLog` | `record(Principal, action, ?targetType, ?targetId, metadata = [], ?role)` · `list(Principal, filters = [], ?cursor, limit = 50)` | `record` refuses metadata strings that aren't ID tokens (so no email addresses or free text). `list`: admin with 2FA |
 
 - `AccountDetails` holds id, name, email, status, roles, 2FA status, created, status changed and last active. **No admin service has a method that returns learning content** (ADR 0003 §10.4).
 - `IssuedInvitation` holds id, token and expiry. The token is returned once and only its hash is stored. M1 sends no email: the admin screen (WP6) shows the link once.
-- `Platform\Access\Workspace` (enum `student`, `admin`) and `Principal::$workspace` were added in increment 2. Both are additive.
+- `Platform\Access\Area` (enum `student`, `admin`) and `Principal::$area` were added in increment 2 as `Workspace` and `$workspace`, and renamed in M2 step 0 so that "workspace" means only a student's subject workspace (docs/specs/workspaces.md).
 
 **Web adapters and middleware (increment 2).** These are what WP6 builds screens on:
 
 | Route or middleware | Behaviour |
 |---|---|
-| `App\Http\AdminRoutes::group()` | The `/admin` group: `auth`, `role:admin` (403 and an audit record otherwise), `two_factor` (403 `two_factor_required`, or a redirect to the `two-factor.setup` page once WP6 adds it), `admin.workspace` (entering needs a recent password confirmation: 423, or a redirect to the confirm-password page). WP6 adds screens in `routes/web/admin-screens.php`. Any other `/admin` URL is 403 for non-admins and 404 for admins |
-| `POST /workspace/{student\|admin}` | Switches workspace. `204` for JSON, a redirect otherwise |
-| `POST /invitations/accept` | `token`, `name`, `password`, `password_confirmation`, optional `timezone`. Creates the student, logs them in, `201 {id}` for JSON |
+| `App\Http\AdminRoutes::group()` | The `/admin` group: `auth`, `role:admin` (403 and an audit record otherwise), `two_factor` (403 `two_factor_required`, or a redirect to the `two-factor.setup` page once WP6 adds it), `admin.area` (entering needs a recent password confirmation: 423, or a redirect to the confirm-password page). WP6 adds screens in `routes/web/admin-screens.php`. Any other `/admin` URL is 403 for non-admins and 404 for admins |
+| `POST /area/{student\|admin}` | Switches area. `204` for JSON, a redirect otherwise |
+| `POST /invitations/accept` | `token`, `name`, `password`, `password_confirmation`, optional `timezone`. Creates the student, logs them in, `201 {id}` for JSON. A browser is sent to `/` instead; an invalid token sends it back to `/invitation` with an `invitation` error and no kept input |
+| `GET /workspaces/{workspace}/{section?}` | A workspace's pages (`section`: `modules`, `notes`, `calendar`, `progress`; none for Overview). Another student's workspace answers 404 like a missing one. `/` is My workspaces for a student. Modules and Notes & files are `App\Livewire\Workspaces\Contents` (locked workspace, section and target IDs) |
+| `GET /workspaces/{workspace}/files/{file}` | A file's page: a large preview for PDF, images and text, a download for the rest. Another workspace's or student's file answers 404. Trash and restore: `App\Livewire\Workspaces\FileActions` |
+| `GET /files/{file}/content[?download=1]` | The file's bytes, to its owner only (404 otherwise, 410 in the trash), with the headers in conventions.md "Uploaded files". Shown inline for PDF, images and text, downloaded otherwise |
+| `GET /workspaces/{workspace}/notes/{note}` | A note and its editor (`resources/js/note/`), which saves through `PUT /api/v1/notes/{id}`. The note must belong to that workspace; anything else answers 404. Trash and restore: `App\Livewire\Workspaces\NoteActions`. For a student, every page carries `<meta name="vistud-account">`; the browser keeps drafts per account and asks before logging out with unsaved ones (`resources/js/note/logout.js`) |
+| `GET /journal`, `GET /journal/{entry}` | The student's own journal, and one entry (`App\Livewire\Journal\EntryShow`). Another learner's entry answers 404 exactly like a missing one; an account without a journal gets 403. A tampered Livewire request (a locked property changed, or an edited snapshot) also answers 404 |
+| `GET /invitation` | The acceptance page. Links are `/invitation#<token>`: the token after `#` never reaches the server, so it stays out of every log (Q3), and the page's script moves it into the form |
 | Fortify endpoints | `POST /login`, `POST /logout`, `POST /two-factor-challenge`, `POST /forgot-password`, `POST /reset-password`, `PUT /user/password`, `POST /user/confirm-password`, `GET /user/confirmed-password-status`, and the `/user/two-factor-*` endpoints. Success formats are Fortify's own; errors use the envelope. `GET /user/two-factor-recovery-codes` answers once after codes are generated in the session, then `403 recovery_codes_already_shown` |
 | `EnsureAccountActive` (every web and API request) | Logs out a suspended or deleted account on its next request |
 
@@ -163,15 +175,31 @@ Provisional until the PM approves increment 3, then Stable.
 
 **Not in M1:** the writer does not yet check that `review.state: accepted` matches `policy@1` (ADR 0002 §8). The capture services that create claims (M6) will apply the policy.
 
+## Appearance (Provisional)
+
+The visual foundation for every screen (WP6), under [ADR 0003 §6](../adr/0003-web-workspaces-and-study-content.md#6-themes-and-colour) and [DESIGN.md](../../DESIGN.md). Provisional until the PM's visual review of WP6.
+
+| Contract | Summary |
+|---|---|
+| Theme data (`resources/themes/*.json`) | `id`, `name`, `scheme` (`light` · `dark`), `colors` (every token in `Appearance\Theme::COLORS`, `#rrggbb` or `#rrggbbaa`) and `gradients` (every token in `Theme::GRADIENTS`: `{angle, stops}` with 2–6 opaque stops at ascending positions 0–100, or `{solid}`). Unknown or missing tokens are rejected |
+| CSS variables | `--{token}` for colours, `--grad-{token}` for gradients, under `[data-theme="{id}"]`; the default light theme also on `:root`. Components use only these, through the Tailwind token utilities and the `surface-*` gradient utilities |
+| `Appearance\ThemeValidator` | `failures(Theme): list<{pair, minimum, actual, at, suggestion}>`. Empty means the theme passes. M2's custom themes and admin presets use the same check |
+| `php artisan vistud:themes:build [--check]` | Validates the built-in themes and writes `resources/css/themes/themes.css` and the sentinel fixture. `--check` fails if either is out of date |
+| `<html>` attributes | `data-theme` (the active theme), `data-theme-light`, `data-theme-dark` (the pair) and `data-appearance` (`system` · `light` · `dark`) |
+| `vistud:theme-changed` | A window event, `detail: {mode, theme}`, fired when the active theme changes. Script-drawn components (charts) rebuild on it |
+| Shared Blade components | `x-layouts.auth`, `x-logo`, `x-icon`, `x-button`, `x-field`, `x-checkbox`, `x-alert`, `x-appearance-switcher` ([DESIGN.md §5](../../DESIGN.md#5-components-and-their-states)) |
+
 ## HTTP API
 
 Conventions are in [conventions.md](conventions.md#json-api). The OpenAPI definition is [`docs/api/openapi.json`](../api/openapi.json). `tests/Feature/Api/OpenApiContractTest.php` fails if a `/api/v1` route is missing from it, or a response doesn't match its schema (ADR 0003 §8).
 
 | Endpoint | Status | Arrives | Purpose |
 |---|---|---|---|
-| `GET /api/v1/me` | Provisional | Increment 2 (implemented) | The account, its roles, its learner ID and the active workspace |
+| `GET /api/v1/me` | Provisional | Increment 2 (implemented) | The account, its roles, its learner ID and the active area (`area`; called `workspace` before M2 step 0) |
 | `GET /api/v1/journal/entries/{id}` | Provisional | Increment 3 (implemented) | One of the learner's own entries, with content unless blocked. Another learner's ID gets the same 404 as a missing one; an account without a learner stream gets `403 student_role_required` |
-| `POST /api/v1/notes`, `PUT /api/v1/notes/{id}`, `GET /api/v1/sync/tombstones` | Draft | M2 | Note sync and deletion records ([ADR 0003 §5.3–5.4](../adr/0003-web-workspaces-and-study-content.md#53-autosave-drafts-ordering-and-conflicts)). Not built in M1 |
+| `GET /api/v1/notes/{id}`, `PUT /api/v1/notes/{id}` | Provisional | M2 step 3a (implemented) | The editor's read and autosave ([ADR 0003 §5.3](../adr/0003-web-workspaces-and-study-content.md#53-autosave-drafts-ordering-and-conflicts)). `PUT` only updates; its body is read raw, so no request middleware changes the note's text. `409 version_conflict`, `410 gone`, `422 validation_failed` |
+| `GET /api/v1/sync/tombstones?since={cursor}` | Provisional | M2 step 3b (implemented) | The learner's deletion records after a cursor, oldest first, 500 at a time (`next_since`, `more`). Browsers read them before replaying drafts ([ADR 0003 §5.4](../adr/0003-web-workspaces-and-study-content.md#54-deletion-trash-and-redaction-reaching-browsers)) |
+| `POST /api/v1/notes` | Draft | Later in M2 | Creating a note from the browser with its own ID (offline creation). Notes are created on the workspace screens until then |
 
 There is no admin JSON API in M1. Admin actions run through Livewire and the console, and both go through the same services.
 
@@ -207,5 +235,5 @@ Implemented in increment 2 (`App\Audit\AuditAction`). Provisional until the PM a
 | `role.granted`, `role.revoked` (`metadata.role`) | user |
 | `two_factor.reset` | user |
 | `two_factor.confirmed`, `two_factor.disabled`, `two_factor.recovery_codes_generated`, `two_factor.recovery_code_used` | user |
-| `workspace.admin_entered` | user |
+| `area.admin_entered` (`workspace.admin_entered` before M2 step 0) | user |
 | `admin.access_denied` (a non-admin reached an admin route) | route name |
