@@ -152,6 +152,40 @@ export function makeStudentWithModules() {
     return email;
 }
 
+/**
+ * makeStudentWithModules(), plus the note "Mitosis vs meiosis" in Week 2 and
+ * an empty one in Labs. Returns the email and the written note's page.
+ */
+export function makeStudentWithNote() {
+    const email = makeStudentWithModules();
+    return { email, ...noteFor(email) };
+}
+
+function noteFor(email) {
+    const paragraph = (...parts) => `['type' => 'paragraph', 'content' => [${parts.join(', ')}]]`;
+    const text = (t, mark = null) => `['type' => 'text', 'text' => '${t}'${mark ? `, 'marks' => [['type' => '${mark}']]` : ''}]`;
+    const item = (...parts) => `['type' => 'listItem', 'content' => [${paragraph(...parts)}]]`;
+    const heading = (t) => `['type' => 'heading', 'attrs' => ['level' => 2], 'content' => [${text(t)}]]`;
+    const doc = `['type' => 'doc', 'content' => [${[
+        paragraph(text('Both are ways a cell divides, but they have different jobs.')),
+        heading('Mitosis'),
+        `['type' => 'bulletList', 'content' => [${[item(text('For growth and repair, like healing a cut.')), item(text('Makes '), text('2', 'bold'), text(' cells, each a copy of the original.'))].join(', ')}]]`,
+        heading('Meiosis'),
+        `['type' => 'bulletList', 'content' => [${[item(text('Makes egg and sperm cells.')), item(text('Makes '), text('4', 'bold'), text(' cells, each different.'))].join(', ')}]]`,
+        `['type' => 'blockquote', 'content' => [${paragraph(text('Trick to remember: '), text('meiosis', 'bold'), text(' makes '), text('me', 'bold'), text(', the cells that make a new person.'))}]]`,
+    ].join(', ')}]]`;
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
+        `$w = app(\\App\\Study\\Workspaces::class)->list($p)[0]; $mods = app(\\App\\Study\\Modules::class)->list($p, $w->id);`,
+        `$labs = collect(app(\\App\\Study\\Folders::class)->tree($p, $w->id))->firstWhere('name', 'Labs');`,
+        `$notes = app(\\App\\Study\\Notes::class); $n = $notes->create($p, 'module', $mods[1]->id, 'Mitosis vs meiosis');`,
+        `$notes->save($p, $n->id, ['base_version' => 1, 'save_id' => 'seed-0001', 'client_id' => 'seed-0001', 'title' => 'Mitosis vs meiosis', 'doc' => ${doc}]);`,
+        `$e = $notes->create($p, 'folder', $labs->id);`,
+        `echo json_encode(['url' => "/workspaces/{$w->id}/notes/{$n->id}", 'empty' => "/workspaces/{$w->id}/notes/{$e->id}", 'workspace' => $w->id]);`,
+    ].join(' ');
+    return JSON.parse(execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop());
+}
+
 /** A student with no second factor, so login finishes on the home page. */
 export function makeStudentAccount() {
     return makeAccount(false);
@@ -205,6 +239,8 @@ export async function openTwoFactorSetup(page, email = makeStudentAccount()) {
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
     await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
+    // The account menu works once the page's script has run.
+    await page.waitForLoadState('load');
     await page.locator('[data-menu-button]').click();
     await page.getByRole('link', { name: 'Security' }).click();
     await page.waitForURL('**/user/confirm-password');
@@ -232,6 +268,8 @@ export async function openAdminOverview(page) {
     await page.getByLabel('Recovery code').fill('code-one-aaaa');
     await page.getByRole('button', { name: 'Verify' }).click();
     await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
+    // The account menu works once the page's script has run.
+    await page.waitForLoadState('load');
     await page.locator('[data-menu-button]').click();
     await page.getByRole('link', { name: 'Admin area' }).click();
     await page.waitForURL('**/user/confirm-password');

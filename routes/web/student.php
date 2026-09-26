@@ -1,6 +1,7 @@
 <?php
 
 use App\Brain\Store\JournalReader;
+use App\Http\Controllers\NotePageController;
 use App\Http\Controllers\WorkspacePageController;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Guard;
@@ -21,6 +22,11 @@ Route::middleware('auth')->group(function () {
 
         return view('journal.index', ['entries' => array_reverse($entries)]);
     })->name('journal.index');
+
+    // A note in a workspace; its editor saves through PUT /api/v1/notes/{id}.
+    Route::get('/workspaces/{workspace}/notes/{note}', NotePageController::class)
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'note' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.notes.show');
 
     // A workspace and its sections (docs/specs/workspaces.md).
     Route::get('/workspaces/{workspace}/{section?}', WorkspacePageController::class)

@@ -2,7 +2,7 @@
 
 namespace Tests\Feature\Web;
 
-use App\Livewire\Workspaces\Modules;
+use App\Livewire\Workspaces\Contents;
 use App\Models\User;
 use App\Study\Folders;
 use App\Study\Modules as ModuleService;
@@ -165,6 +165,6 @@ class ModulesScreenTest extends TestCase
         // Livewire's test requests skip middleware, so nothing gives them the session.
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
 
-        return Livewire::test(Modules::class, ['workspaceId' => $this->biology->id]);
+        return Livewire::test(Contents::class, ['workspaceId' => $this->biology->id, 'view' => 'modules']);
     }
 }

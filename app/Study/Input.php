@@ -58,6 +58,43 @@ final class Input
         }
     }
 
+    /**
+     * A place in a workspace: its top level (`workspace`), a module, or a
+     * folder. Returns [workspace, module or null, folder or null, the depth a
+     * folder placed there has]. Anything not the owner's is 404, like a
+     * missing one.
+     *
+     * @return array{0: string, 1: ?string, 2: ?string, 3: int}
+     */
+    public static function place(LearnerScope $scope, string $type, string $id): array
+    {
+        if ($type === 'workspace') {
+            return [self::workspace($scope, $id)->id, null, null, 1];
+        }
+        if ($type === 'module') {
+            $module = LearnerTables::query($scope, 'modules')->where('id', $id)->first() ?? throw new NotFound;
+
+            return [$module->workspace_id, $module->id, null, 1];
+        }
+        if ($type === 'folder') {
+            $folder = LearnerTables::query($scope, 'folders')->where('id', $id)->first() ?? throw new NotFound;
+
+            return [$folder->workspace_id, $folder->module_id, $folder->id, (int) $folder->depth + 1];
+        }
+
+        throw new NotFound;
+    }
+
+    /** The key the screens group a place's contents by: folder:{id}, module:{id} or workspace:{id}. */
+    public static function placeKey(string $workspaceId, ?string $moduleId, ?string $folderId): string
+    {
+        return match (true) {
+            $folderId !== null => "folder:{$folderId}",
+            $moduleId !== null => "module:{$moduleId}",
+            default => "workspace:{$workspaceId}",
+        };
+    }
+
     /** The owner's workspace row, or 404 exactly like a missing one. */
     public static function workspace(LearnerScope $scope, string $workspaceId, bool $lock = false): object
     {

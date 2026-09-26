@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { makeNamedStudent, makeStudentWithJournal, makeStudentWithModules, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { makeNamedStudent, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -421,4 +421,48 @@ test('modules: the list, a row menu, the move and module dialogs', async ({ page
     await page.getByRole('button', { name: 'New module' }).click();
     await page.locator('#structure-dialog').getByLabel('Title').fill('Week 3: Genetics');
     await page.screenshot({ path: out('modules-mobile-vistud-light-new') });
+});
+
+test('notes: the editor, Notes & files, and notes in a module', async ({ page }) => {
+    const note = makeStudentWithNote();
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, note.email);
+    await page.goto(note.url);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`note-${size}-${theme}`) });
+        }
+    }
+
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.route('**/api/v1/notes/*', (route) => route.fulfill({ status: 409, contentType: 'application/json', body: '{"error":{"code":"version_conflict","message":"x","details":{"current_version":9}}}' }));
+    await page.locator('.note-prose').click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.type(' Cells in my cheek looked round.');
+    await page.locator('[data-alert="conflict"]').waitFor();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('note-desktop-vistud-light-conflict') });
+    await page.unroute('**/api/v1/notes/*');
+
+    await page.goto(`/workspaces/${note.workspace}/notes`);
+    await page.getByRole('button', { name: 'New folder' }).click();
+    await page.locator('#structure-dialog').getByLabel('Name').fill('Exam revision');
+    await page.locator('#structure-dialog').getByRole('button', { name: 'Add folder' }).click();
+    await page.locator('#structure-dialog').waitFor({ state: 'hidden' });
+    await page.getByRole('button', { name: 'Trash (0)' }).click();
+    await page.getByText('The trash is empty.').waitFor();
+    for (const [size, viewport] of Object.entries(sizes)) {
+        await page.setViewportSize(viewport);
+        await page.screenshot({ path: out(`notes-and-files-${size}-vistud-light`), fullPage: size === 'mobile' });
+    }
+
+    await page.setViewportSize(sizes.desktop);
+    await page.goto(`/workspaces/${note.workspace}/modules`);
+    await page.getByRole('heading', { level: 1, name: 'Modules' }).waitFor();
+    await page.screenshot({ path: out('modules-desktop-vistud-light-notes') });
 });

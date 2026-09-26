@@ -4,9 +4,12 @@
 far: **step 0** (renames and workspace colours), **step 1** (workspaces:
 create, open, switch, edit, archive and restore) and **step 2** (modules, and
 folders inside them up to 8 levels: add, rename, reorder by dragging or from a
-menu, move, delete when empty). Folders at a workspace's top level and in
-Personal, and dragging folders, come with step 3 (Notes & files). Next: step 3,
-notes and the editor.
+menu, move, delete when empty) and **step 3a** (notes: the editor with
+autosave, drafts kept in the browser, conflicts, trash and restore; folders
+and notes at a workspace's top level in Notes & files). Next: step 3b (warning
+other open tabs, the logout choice for unsaved drafts, deletion records
+reaching browsers, keeping editors alive across pages). Personal, dragging
+folders and notes, and version history come later in M2.
 
 **Mockups:** [docs/design/mockups/](../design/mockups/). They use the real
 theme, top bar and components, so what is approved is what gets built. On a

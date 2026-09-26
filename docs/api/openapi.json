@@ -68,6 +68,106 @@
           }
         }
       }
+    },
+    "/api/v1/notes/{id}": {
+      "get": {
+        "operationId": "getNote",
+        "summary": "One of the current learner's own notes, at its current version. A note in the trash answers 410",
+        "x-stability": "provisional",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Note"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "put": {
+        "operationId": "saveNote",
+        "summary": "Saves the editor's document as the note's next version (ADR 0003 section 5.3). Only updates: it never creates a note",
+        "x-stability": "provisional",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteSave"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved, or already saved under this save_id, or unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedVersion"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error",
+            "description": "version_conflict: base_version is not the current version; details.current_version says which is"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error"
+          },
+          "419": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -397,6 +497,109 @@
                 "type": "object"
               }
             }
+          }
+        }
+      },
+      "Note": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "workspace",
+          "module",
+          "folder",
+          "title",
+          "version",
+          "doc",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspace": {
+            "type": "string"
+          },
+          "module": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Null at the workspace's top level"
+          },
+          "folder": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "Empty for an untitled note"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "doc": {
+            "type": "object",
+            "description": "The editor's document (ProseMirror JSON), as cleaned by App\\Study\\NoteDoc"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "NoteSave": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "base_version",
+          "save_id",
+          "client_id",
+          "title",
+          "doc"
+        ],
+        "properties": {
+          "base_version": {
+            "type": "integer",
+            "description": "The version this change is based on"
+          },
+          "save_id": {
+            "type": "string",
+            "description": "8-64 letters, digits, - or _; a retry with the same save_id answers the same"
+          },
+          "client_id": {
+            "type": "string",
+            "description": "The browser tab, 8-64 letters, digits, - or _"
+          },
+          "title": {
+            "type": "string"
+          },
+          "doc": {
+            "type": "object"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "autosave",
+              "conflict_resolution"
+            ]
+          }
+        }
+      },
+      "SavedVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "saved_at"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer"
+          },
+          "saved_at": {
+            "type": "string"
           }
         }
       }

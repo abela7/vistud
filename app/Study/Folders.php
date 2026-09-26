@@ -12,10 +12,11 @@ use App\Platform\Ids;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Folders inside a workspace's modules (docs/specs/workspaces.md, step 2).
+ * Folders in a workspace (docs/specs/workspaces.md, steps 2 and 3).
  * Organisation only: they never enter the journal (ADR 0003 §9.2). A folder
- * sits in a module or in another folder, at most MAX_DEPTH levels deep. The
- * student's own stream only; anyone else's folder is 404, like a missing one.
+ * sits at the workspace's top level, in a module or in another folder, at
+ * most MAX_DEPTH levels deep. The student's own stream only; anyone else's
+ * folder is 404, like a missing one.
  */
 final class Folders
 {
@@ -24,8 +25,8 @@ final class Folders
     public const MAX_NAME = 120;
 
     /**
-     * Every folder in the workspace: parents before their children, and
-     * siblings in order.
+     * Every folder in the workspace: parents before their children, siblings
+     * in order, the modules' folders first and the top level's last.
      *
      * @return list<FolderDetails>
      */
@@ -36,7 +37,7 @@ final class Folders
 
         $byParent = [];
         foreach ($this->rows($scope, $workspaceId) as $row) {
-            $byParent[$row->parent_id ?? "module:{$row->module_id}"][] = $row;
+            $byParent[$row->parent_id ?? Input::placeKey($workspaceId, $row->module_id, null)][] = $row;
         }
         $modules = LearnerTables::query($scope, 'modules')->where('workspace_id', $workspaceId)->orderBy('position')->orderBy('id')->pluck('id');
 
@@ -52,6 +53,7 @@ final class Folders
         foreach ($modules as $moduleId) {
             $walk("module:{$moduleId}");
         }
+        $walk("workspace:{$workspaceId}");
 
         return $ordered;
     }
@@ -61,7 +63,7 @@ final class Folders
         return self::details($this->row(Guard::learner($by), $id));
     }
 
-    /** A new folder at the end of a module (`module`) or of another folder (`folder`). */
+    /** A new folder at the end of a workspace's top level (`workspace`), a module (`module`) or another folder (`folder`). */
     public function create(Principal $by, string $parentType, string $parentId, mixed $name): FolderDetails
     {
         $scope = Guard::learner($by);
@@ -69,13 +71,13 @@ final class Folders
         $id = Ids::new();
 
         DB::transaction(function () use ($scope, $parentType, $parentId, $name, $id) {
-            [$workspaceId, $moduleId, $parentFolder, $depth] = $this->parent($scope, $parentType, $parentId);
+            [$workspaceId, $moduleId, $parentFolder, $depth] = Input::place($scope, $parentType, $parentId);
             if ($depth > self::MAX_DEPTH) {
                 throw new Conflict('too_deep', 'Folders go at most '.self::MAX_DEPTH.' levels deep.');
             }
             LearnerTables::insert($scope, 'folders', [
                 'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'parent_id' => $parentFolder,
-                'name' => $name, 'depth' => $depth, 'position' => $this->nextPosition($scope, $moduleId, $parentFolder),
+                'name' => $name, 'depth' => $depth, 'position' => $this->nextPosition($scope, $workspaceId, $moduleId, $parentFolder),
                 'created_at' => now(), 'updated_at' => now(),
             ]);
         });
@@ -93,8 +95,8 @@ final class Folders
     }
 
     /**
-     * Moves a folder, with everything inside it, to the end of another module
-     * or folder in the same workspace.
+     * Moves a folder, with everything inside it, to the end of another place
+     * in the same workspace.
      */
     public function move(Principal $by, string $id, string $parentType, string $parentId): void
     {
@@ -102,7 +104,7 @@ final class Folders
 
         DB::transaction(function () use ($scope, $id, $parentType, $parentId) {
             $folder = $this->row($scope, $id, lock: true);
-            [$workspaceId, $moduleId, $parentFolder, $depth] = $this->parent($scope, $parentType, $parentId);
+            [$workspaceId, $moduleId, $parentFolder, $depth] = Input::place($scope, $parentType, $parentId);
             if ($workspaceId !== $folder->workspace_id) {
                 throw new NotFound;
             }
@@ -121,11 +123,13 @@ final class Folders
 
             $shift = $depth - (int) $folder->depth;
             LearnerTables::query($scope, 'folders')->where('id', $id)->update([
-                'parent_id' => $parentFolder, 'position' => $this->nextPosition($scope, $moduleId, $parentFolder), 'updated_at' => now(),
+                'parent_id' => $parentFolder, 'position' => $this->nextPosition($scope, $workspaceId, $moduleId, $parentFolder), 'updated_at' => now(),
             ]);
             foreach ($subtree as $row) {
                 LearnerTables::query($scope, 'folders')->where('id', $row->id)->update(['module_id' => $moduleId, 'depth' => (int) $row->depth + $shift]);
             }
+            // The notes inside go with their folders.
+            LearnerTables::query($scope, 'notes')->whereIn('folder_id', array_column($subtree, 'id'))->update(['module_id' => $moduleId]);
         });
     }
 
@@ -136,7 +140,7 @@ final class Folders
 
         DB::transaction(function () use ($scope, $id, $position) {
             $folder = $this->row($scope, $id, lock: true);
-            $ids = $this->siblings($scope, $folder->module_id, $folder->parent_id)->pluck('id')->all();
+            $ids = $this->siblings($scope, $folder->workspace_id, $folder->module_id, $folder->parent_id)->pluck('id')->all();
             $ids = array_values(array_diff($ids, [$id]));
             array_splice($ids, max(0, min($position, count($ids))), 0, [$id]);
             foreach ($ids as $index => $folderId) {
@@ -145,39 +149,19 @@ final class Folders
         });
     }
 
-    /** Only an empty folder can go: its folders (and later its notes and files) must be moved or deleted first. */
+    /** Only an empty folder can go: its folders and notes (and later its files) must be moved or deleted first. Notes in the trash don't count. */
     public function delete(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
 
         DB::transaction(function () use ($scope, $id) {
             $this->row($scope, $id, lock: true);
-            if (LearnerTables::query($scope, 'folders')->where('parent_id', $id)->exists()) {
+            if (LearnerTables::query($scope, 'folders')->where('parent_id', $id)->exists()
+                || LearnerTables::query($scope, 'notes')->where('folder_id', $id)->whereNull('trashed_at')->exists()) {
                 throw new Conflict('not_empty', 'Move or delete what\'s inside first.');
             }
             LearnerTables::query($scope, 'folders')->where('id', $id)->delete();
         });
-    }
-
-    /**
-     * Where a new or moved folder goes: [workspace, module, parent folder or null, depth].
-     *
-     * @return array{0: string, 1: string, 2: ?string, 3: int}
-     */
-    private function parent(LearnerScope $scope, string $type, string $id): array
-    {
-        if ($type === 'module') {
-            $module = LearnerTables::query($scope, 'modules')->where('id', $id)->first() ?? throw new NotFound;
-
-            return [$module->workspace_id, $module->id, null, 1];
-        }
-        if ($type === 'folder') {
-            $folder = $this->row($scope, $id);
-
-            return [$folder->workspace_id, $folder->module_id, $folder->id, (int) $folder->depth + 1];
-        }
-
-        throw new NotFound;
     }
 
     /** @return list<object> the folder and everything inside it */
@@ -200,16 +184,21 @@ final class Folders
         return $result;
     }
 
-    private function siblings(LearnerScope $scope, string $moduleId, ?string $parentId)
+    private function siblings(LearnerScope $scope, string $workspaceId, ?string $moduleId, ?string $parentId)
     {
-        return LearnerTables::query($scope, 'folders')->where('module_id', $moduleId)
-            ->when($parentId === null, fn ($q) => $q->whereNull('parent_id'), fn ($q) => $q->where('parent_id', $parentId))
-            ->orderBy('position')->orderBy('id')->get();
+        $query = LearnerTables::query($scope, 'folders')->where('workspace_id', $workspaceId);
+        $query = match (true) {
+            $parentId !== null => $query->where('parent_id', $parentId),
+            $moduleId !== null => $query->whereNull('parent_id')->where('module_id', $moduleId),
+            default => $query->whereNull('parent_id')->whereNull('module_id'),
+        };
+
+        return $query->orderBy('position')->orderBy('id')->get();
     }
 
-    private function nextPosition(LearnerScope $scope, string $moduleId, ?string $parentId): int
+    private function nextPosition(LearnerScope $scope, string $workspaceId, ?string $moduleId, ?string $parentId): int
     {
-        return (int) $this->siblings($scope, $moduleId, $parentId)->max('position') + 1;
+        return (int) $this->siblings($scope, $workspaceId, $moduleId, $parentId)->max('position') + 1;
     }
 
     /** @return list<object> */
