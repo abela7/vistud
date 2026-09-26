@@ -77,7 +77,7 @@ Themes follow ADR 0003 §6. This section adds the gradient rules and the details
 
 ### 3.1 Semantic tokens
 
-Components use semantic tokens only. The colour tokens are those of ADR 0003 §6.1, plus the gradient foregrounds and overlays in §3.3 and two additions: `--role-admin-on` (text on the admin marker) and `--logo-plate` (§2.3). The category, editor and chart groups join with the M2 screens that use them.
+Components use semantic tokens only. The colour tokens are those of ADR 0003 §6.1, plus the gradient foregrounds and overlays in §3.3 and these additions: `--role-admin-on` (text on the admin marker), `--logo-plate` (§2.3), and `--qr-dark` and `--qr-light` (QR codes: dark modules on a light plate in every theme, dark mode included, because phone scanners expect that). The category, editor and chart groups join with the M2 screens that use them.
 
 The full list is the allowlist in [app/Appearance/Theme.php](app/Appearance/Theme.php). In Tailwind, each colour token is a utility named after its role:
 
@@ -140,6 +140,7 @@ Every theme, built-in or custom, passes these checks before it is saved or shipp
 | **Gradient foregrounds over the interaction overlays on that gradient**, composited at every point | 4.5:1 |
 | The focus ring on every surface, on `--grad-surface` and on `--focus-ring-offset`; the strong border, the accent and the admin marker on surfaces | 3:1 |
 | Every logo colour on `--logo-plate` over each surface | 3:1 |
+| `--qr-dark` on `--qr-light`, and `--qr-dark` must be the darker one | 7:1 |
 
 **Across the whole background, not the endpoints.** Each gradient is sampled along its gradient line, 48 points between every pair of stops, interpolated in sRGB as browsers do for these colours. Every point of an element maps to a point on that line, so the samples cover the entire background. A midpoint can be darker than both ends, and the check catches that (tested in `ThemeValidatorTest`). Translucent foregrounds and overlays are composited over each sample before measuring.
 

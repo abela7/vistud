@@ -61,6 +61,8 @@
   --role-admin: #6b3fa0;
   --role-admin-on: #ffffff;
   --logo-plate: #ffffff00;
+  --qr-dark: #0b1422;
+  --qr-light: #ffffff;
   --grad-brand: linear-gradient(135deg, #003272 0%, #006e91 60%, #007378 100%);
   --grad-header: linear-gradient(100deg, #003272 0%, #005f88 70%, #00687e 100%);
   --grad-featured: linear-gradient(135deg, #e5eef9 0%, #dcf1f1 100%);
@@ -128,6 +130,8 @@
   --role-admin: #1f5fa6;
   --role-admin-on: #ffffff;
   --logo-plate: #ffffff00;
+  --qr-dark: #1a0c14;
+  --qr-light: #ffffff;
   --grad-brand: linear-gradient(160deg, #3d1650 0%, #8e2352 55%, #a3401b 100%);
   --grad-header: linear-gradient(90deg, #3d1650 0%, #7d2150 100%);
   --grad-featured: linear-gradient(120deg, #fcebe6 0%, #f8e6f0 100%);
@@ -195,6 +199,8 @@
   --role-admin: #b48be6;
   --role-admin-on: #1c0b33;
   --logo-plate: #eef4f9;
+  --qr-dark: #0b1422;
+  --qr-light: #ffffff;
   --grad-brand: linear-gradient(135deg, #00245a 0%, #005675 60%, #005f63 100%);
   --grad-header: linear-gradient(100deg, #0f2a55 0%, #0e4a66 70%, #0c5560 100%);
   --grad-featured: linear-gradient(135deg, #12284a 0%, #0f3440 100%);

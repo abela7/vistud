@@ -263,7 +263,7 @@ Actual colour values live **only** in theme definitions. Everything else uses se
 | Gradients | `--grad-brand`, `--grad-header`, `--grad-featured`, `--grad-surface`, `--grad-primary`, `--grad-primary-hover`, `--grad-primary-active`, `--grad-selected`. Each is a complete definition (angle, stop colours and stop positions) or a solid fill |
 | On gradients | `--on-brand`, `--on-brand-muted`, `--on-header`, `--on-header-muted`, `--on-featured`, `--on-featured-muted`, `--on-primary`, `--on-selected`: text and icons on each gradient |
 | Overlays on gradients | `--brand-hover`, `--brand-pressed`, `--header-hover`, `--header-pressed`, `--header-selected` |
-| Other | `--shadow-color`, `--role-admin`, `--role-admin-on`, `--logo-plate` (behind the full-colour logo; clear on light themes) |
+| Other | `--shadow-color`, `--role-admin`, `--role-admin-on`, `--qr-dark` and `--qr-light` (QR codes, always dark on light), `--logo-plate` (behind the full-colour logo; clear on light themes) |
 
 Tailwind 4 exposes the tokens through `@theme inline` and removes its own palette with `--color-*: initial`.
 
@@ -324,6 +324,7 @@ Three checks run in CI, and all three must pass:
 | Focus ring against background and surface | 3:1 |
 | Strong border against surface | 3:1 |
 | Every logo colour against the logo plate over each surface | 3:1 |
+| QR modules against their plate, dark on light | 7:1 |
 
 - **Gradients that fail somewhere.** The theme adjusts the foreground or the stops, or puts the content on a theme-defined supporting surface. Information is never conveyed by colour alone.
 

@@ -14,6 +14,9 @@ final class ThemeValidator
 
     public const UI = 3.0;
 
+    /** QR codes need strong contrast, dark on light, to scan reliably. */
+    public const QR = 7.0;
+
     private const STATUSES = ['danger', 'warning', 'success', 'info'];
 
     /**
@@ -33,6 +36,17 @@ final class ThemeValidator
                     'suggestion' => $this->suggest($theme, $foreground, $background, $minimum),
                 ];
             }
+        }
+
+        // Scanners expect dark modules on a light background, never inverted.
+        if ($theme->color('qr-dark')->luminance() >= $theme->color('qr-light')->luminance()) {
+            $failures[] = [
+                'pair' => 'qr-dark on qr-light',
+                'minimum' => self::QR,
+                'actual' => round(Color::contrast($theme->color('qr-dark'), $theme->color('qr-light')), 2),
+                'at' => 'qr-light',
+                'suggestion' => 'qr-dark must be the darker of the two: scanners read dark modules on a light plate.',
+            ];
         }
 
         return $failures;
@@ -92,6 +106,7 @@ final class ThemeValidator
         $add(['accent', 'role-admin'], ['bg', 'surface'], self::UI);
         $add(['drop-indicator'], ['surface'], self::UI);
         $add(['logo'], ['logo-plate>bg', 'logo-plate>surface'], self::UI);
+        $add(['qr-dark'], ['qr-light'], self::QR);
 
         return $pairs;
     }

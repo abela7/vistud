@@ -117,6 +117,8 @@
     --color-role-admin: var(--role-admin);
     --color-role-admin-on: var(--role-admin-on);
     --color-logo-plate: var(--logo-plate);
+    --color-qr-dark: var(--qr-dark);
+    --color-qr-light: var(--qr-light);
 }
 
 /*

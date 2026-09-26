@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { foreignColours, loginToChallenge, openConfirmPassword, useSentinelTheme } from './support.js';
+import { foreignColours, loginToChallenge, openTwoFactorSetup, startTwoFactorSetup, totp, openConfirmPassword, useSentinelTheme } from './support.js';
 
 /*
 | Layer 3 of theme enforcement (ADR 0003 §6.3, DESIGN.md §3.5): with the
@@ -148,6 +148,44 @@ for (const [name, viewport] of Object.entries(viewports)) {
             await page.waitForURL('**/user/confirm-password');
             await useSentinelTheme(page);
             states['wrong-password error'] = await foreignColours(page);
+
+            for (const [state, colours] of Object.entries(states)) {
+                expect(colours, `${state}: colours not from a token`).toEqual([]);
+            }
+        });
+    });
+}
+
+for (const [name, viewport] of Object.entries(viewports)) {
+    test.describe(`two-factor setup, ${name}`, () => {
+        test.use({ viewport, reducedMotion: 'reduce' });
+
+        test('every colour comes from a token, in every state', async ({ page }) => {
+            const states = {};
+
+            await openTwoFactorSetup(page);
+            await useSentinelTheme(page);
+            states.off = await foreignColours(page);
+
+            const key = await startTwoFactorSetup(page);
+            await useSentinelTheme(page);
+            states['QR code and key'] = await foreignColours(page);
+
+            await page.getByLabel('Authentication code').fill('000000');
+            await page.getByRole('button', { name: 'Confirm' }).click();
+            await page.getByText('The provided two factor authentication code was invalid.').waitFor();
+            await useSentinelTheme(page);
+            states['wrong code'] = await foreignColours(page);
+
+            await page.getByLabel('Authentication code').fill(totp(key));
+            await page.getByRole('button', { name: 'Confirm' }).click();
+            await page.getByRole('heading', { name: 'Save your recovery codes' }).waitFor();
+            await useSentinelTheme(page);
+            states['recovery codes'] = await foreignColours(page);
+
+            await page.goto('/user/two-factor');
+            await useSentinelTheme(page);
+            states.on = await foreignColours(page);
 
             for (const [state, colours] of Object.entries(states)) {
                 expect(colours, `${state}: colours not from a token`).toEqual([]);

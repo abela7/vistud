@@ -46,6 +46,9 @@ final readonly class Theme
         'header-hover', 'header-pressed', 'header-selected',
         // Other
         'shadow-color', 'role-admin', 'role-admin-on', 'logo-plate',
+        // QR codes: dark modules on a light plate in every theme, so phone
+        // scanners can read them (DESIGN.md §3.4)
+        'qr-dark', 'qr-light',
     ];
 
     /** Gradient tokens: an angle and 2–6 opaque stops, or a solid fill. */

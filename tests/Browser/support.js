@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -135,4 +136,45 @@ export async function openConfirmPassword(page, email = makeStudentAccount()) {
     await page.waitForURL('**/user/confirm-password');
 
     return email;
+}
+
+/** The current 6-digit code for a base32 setup key (RFC 6238, as authenticator apps compute it). */
+export function totp(setupKey, now = Date.now()) {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = '';
+    for (const char of setupKey.replace(/\s+/g, '').toUpperCase()) {
+        bits += alphabet.indexOf(char).toString(2).padStart(5, '0');
+    }
+    const key = Buffer.from(bits.match(/.{8}/g).map((byte) => parseInt(byte, 2)));
+    const counter = Buffer.alloc(8);
+    counter.writeBigUInt64BE(BigInt(Math.floor(now / 30000)));
+    const hmac = createHmac('sha1', key).update(counter).digest();
+    const offset = hmac[hmac.length - 1] & 0xf;
+    const value = (hmac.readUInt32BE(offset) & 0x7fffffff) % 1000000;
+
+    return String(value).padStart(6, '0');
+}
+
+/** Sign in as a new student and open the two-factor setup, confirming the password on the way. */
+export async function openTwoFactorSetup(page, email = makeStudentAccount()) {
+    await page.goto('/login');
+    await page.getByLabel('Email').fill(email);
+    await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
+    await page.getByRole('button', { name: 'Log in' }).click();
+    await page.getByRole('heading', { name: "You're logged in" }).waitFor();
+    await page.getByRole('link', { name: 'Set up' }).click();
+    await page.waitForURL('**/user/confirm-password');
+    await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
+    await page.getByRole('button', { name: 'Confirm' }).click();
+    await page.waitForURL('**/user/two-factor');
+
+    return email;
+}
+
+/** From the setup screen's "off" state, turn it on and wait for the QR code. */
+export async function startTwoFactorSetup(page) {
+    await page.getByRole('button', { name: 'Turn on two-factor authentication' }).click();
+    await page.getByRole('heading', { name: 'Set up your authenticator app' }).waitFor();
+
+    return (await page.locator('#setup-key').textContent()).trim();
 }

@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -159,4 +159,28 @@ test('live theme switch recording', async ({ browser }) => {
     const video = page.video();
     await context.close();
     await video.saveAs('docs/design/previews/theme-switch.webm');
+});
+
+test('two-factor setup: off, QR code, recovery codes, on', async ({ page }) => {
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await openTwoFactorSetup(page);
+            await useTheme(page, theme);
+            await page.screenshot({ path: out(`two-factor-setup-${size}-${theme}-off`), fullPage: size === 'mobile' });
+
+            const key = await startTwoFactorSetup(page);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`two-factor-setup-${size}-${theme}-qr`), fullPage: size === 'mobile' });
+
+            await page.getByLabel('Authentication code').fill(totp(key));
+            await page.getByRole('button', { name: 'Confirm' }).click();
+            await page.getByRole('heading', { name: 'Save your recovery codes' }).waitFor();
+            await useTheme(page, theme);
+            await page.screenshot({ path: out(`two-factor-setup-${size}-${theme}-codes`), fullPage: size === 'mobile' });
+
+            await page.context().clearCookies();
+        }
+    }
 });

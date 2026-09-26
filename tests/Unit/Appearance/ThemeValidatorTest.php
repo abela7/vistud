@@ -82,6 +82,17 @@ class ThemeValidatorTest extends TestCase
         $this->failure($theme, 'border-strong on surface');
     }
 
+    public function test_qr_codes_need_strong_contrast_and_dark_modules_on_light(): void
+    {
+        $weak = $this->theme()->with(colors: ['qr-dark' => Color::hex('#6b7a8c')]);
+        $this->failure($weak, 'qr-dark on qr-light');
+
+        // Enough contrast but inverted: scanners expect dark modules on a light plate.
+        $inverted = $this->theme()->with(colors: ['qr-dark' => Color::hex('#ffffff'), 'qr-light' => Color::hex('#0b1422')]);
+        $failure = $this->failure($inverted, 'qr-dark on qr-light');
+        $this->assertStringContainsString('darker', $failure['suggestion']);
+    }
+
     /** @return array{pair: string, minimum: float, actual: float, at: string, suggestion: string} */
     private function failure(Theme $theme, string $pair): array
     {

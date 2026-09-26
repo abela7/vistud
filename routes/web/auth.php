@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\TwoFactorSetupController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -26,4 +27,10 @@ Route::middleware('auth')->group(function () {
     // Fortify handles POST /user/confirm-password and then returns the user
     // to the page they were trying to open.
     Route::view('/user/confirm-password', 'auth.confirm-password')->name('password.confirm');
+
+    // Turning on two-factor authentication. A fresh password confirmation
+    // comes first, as Fortify's own two-factor endpoints require one.
+    Route::get('/user/two-factor', TwoFactorSetupController::class)
+        ->middleware('password.confirm')
+        ->name('two-factor.setup');
 });

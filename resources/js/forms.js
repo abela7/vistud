@@ -3,7 +3,8 @@
 | - a form marked data-busy-on-submit shows its submit button's loading
 |   state and ignores repeated submits;
 | - a password field's reveal button toggles visibility;
-| - the two-factor challenge swaps between the code and recovery-code fields.
+| - the two-factor challenge swaps between the code and recovery-code fields;
+| - a button with data-copy-target copies that element's text and says so.
 */
 
 document.addEventListener('submit', (event) => {
@@ -61,4 +62,22 @@ document.addEventListener('click', (event) => {
     active.disabled = false;
     active.focus();
     swap.textContent = showRecovery ? 'Use an authentication code instead' : 'Use a recovery code instead';
+});
+
+document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-copy-target]');
+    if (!button) return;
+
+    const source = document.getElementById(button.dataset.copyTarget);
+    if (!source) return;
+    const text = [...source.querySelectorAll('li')].map((item) => item.textContent.trim()).join('\n') || source.textContent.trim();
+    try {
+        await navigator.clipboard.writeText(text);
+    } catch {
+        return; // Clipboard unavailable (not a secure context): the text stays selectable.
+    }
+    const label = button.querySelector('.btn-idle') ?? button;
+    const original = label.textContent;
+    label.textContent = button.dataset.copiedLabel ?? 'Copied';
+    setTimeout(() => (label.textContent = original), 2000);
 });

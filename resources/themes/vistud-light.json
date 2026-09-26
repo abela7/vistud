@@ -57,7 +57,9 @@
         "shadow-color": "#0b1b2e1f",
         "role-admin": "#6b3fa0",
         "role-admin-on": "#ffffff",
-        "logo-plate": "#ffffff00"
+        "logo-plate": "#ffffff00",
+        "qr-dark": "#0b1422",
+        "qr-light": "#ffffff"
     },
     "gradients": {
         "brand": { "angle": 135, "stops": [["#003272", 0], ["#006e91", 60], ["#007378", 100]] },

@@ -379,6 +379,28 @@
         outline-offset: 2px;
     }
 
+    /* ---------- QR codes ---------- */
+
+    /*
+    | Dark modules on a light plate in every theme (--qr-dark, --qr-light),
+    | with the quiet zone scanners need around the code.
+    */
+    .qr-plate {
+        display: inline-flex;
+        max-width: 100%;
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        background-color: var(--qr-light);
+        color: var(--qr-dark);
+    }
+
+    .qr-plate svg {
+        width: 11rem;
+        max-width: 100%;
+        height: auto;
+        aspect-ratio: 1;
+    }
+
     /* ---------- The logo plate ---------- */
 
     .logo-plate {
