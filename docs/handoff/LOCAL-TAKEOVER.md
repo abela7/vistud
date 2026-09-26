@@ -89,6 +89,8 @@ In this order; each step is small and reviewable. Every screen gets the DESIGN.m
 
 ## 5. Known issues
 
+- **Reset emails have no rate limit per address or IP.** Fortify's `POST /forgot-password` has no throttle; the password broker only stops a second email to the same address within 60 seconds. Before a live server sends real mail, add a limiter on that route.
+
 - **The logo decision is not implemented yet** (§4, step 0).
 - **The concurrency test needs Unix** `pcntl` and `posix`. On Windows it is skipped, and a skip does not satisfy the M1 gate. CI runs it.
 - **Windows setup is unverified.**

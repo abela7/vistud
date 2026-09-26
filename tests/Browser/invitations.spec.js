@@ -18,6 +18,8 @@ const analyse = async (page) =>
     );
 
 test.use({ reducedMotion: 'reduce' });
+// Each test signs an admin in with a recovery code and a password check first; slower machines need more than the default 30 s.
+test.describe.configure({ timeout: 60_000 });
 
 /** From the Accounts page, invite $email and return the link the dialog shows. */
 async function invite(page, email) {

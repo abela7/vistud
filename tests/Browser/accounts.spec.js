@@ -13,6 +13,8 @@ const phone = { width: 390, height: 844 };
 const dialog = (page) => page.locator('#account-dialog');
 
 test.use({ reducedMotion: 'reduce' });
+// Each test signs an admin in with a recovery code and a password check first; slower machines need more than the default 30 s.
+test.describe.configure({ timeout: 60_000 });
 
 for (const [name, viewport] of Object.entries({ desktop, phone })) {
     test(`${name}: suspend and reactivate an account, confirmed in the dialog, without a reload`, async ({ page }) => {
