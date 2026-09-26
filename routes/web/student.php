@@ -1,8 +1,10 @@
 <?php
 
 use App\Brain\Store\JournalReader;
+use App\Http\Controllers\WorkspacePageController;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Guard;
+use App\Study\Workspaces;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +21,12 @@ Route::middleware('auth')->group(function () {
 
         return view('journal.index', ['entries' => array_reverse($entries)]);
     })->name('journal.index');
+
+    // A workspace and its sections (docs/specs/workspaces.md).
+    Route::get('/workspaces/{workspace}/{section?}', WorkspacePageController::class)
+        ->where('workspace', '[A-Za-z0-9-]{1,64}')
+        ->whereIn('section', array_column(Workspaces::SECTIONS, 0))
+        ->name('workspaces.show');
 
     // One entry (App\Livewire\Journal\EntryShow). Another learner's ID answers 404, like a missing one.
     Route::view('/journal/{entry}', 'journal.show')->where('entry', '[A-Za-z0-9._:-]{1,64}')->name('journal.show');

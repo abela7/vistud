@@ -155,6 +155,11 @@ These belong to work package WP5, whose owner may revise them through the contra
 
 The **redaction ledger** itself is deliberately not a table: it lives outside MySQL and the file backups (ADR 0002 §10).
 
-## Not in M1
+## Study content (Provisional, M2)
 
-Notes, note versions, note blocks, deletion records (`content_tombstones`), courses, modules, folders and activities arrive with M2 and M4 ([ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).
+### `workspaces`
+A learner table (`LearnerTables`): a student's space for one subject ([docs/specs/workspaces.md](../specs/workspaces.md)). `id` (UUIDv7), `learner_id`, `name` (≤ 80), `code` (≤ 20), `term` (≤ 40), `starts_on`, `ends_on`, `colour` (one of the theme's workspace colours), `icon`, `type` (`general` until workspace types arrive), `position`, `revision` (matches the journal record's), `archived_at`, `created_at`, `updated_at`. Each change also appends a revision of the `workspace` journal record.
+
+## Not yet built
+
+Modules, folders, notes, note versions, note blocks, deletion records (`content_tombstones`), files and activities arrive with the next M2 steps ([docs/specs/workspaces.md §8](../specs/workspaces.md#8-for-developers), [ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).

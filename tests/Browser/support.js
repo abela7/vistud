@@ -124,6 +124,18 @@ export function makeStudentWithJournal() {
     return email;
 }
 
+/** A student with workspaces, made through the real service: [[name, colour, icon], ...]. */
+export function makeStudentWithWorkspaces(workspaces) {
+    const email = makeAccount(false);
+    const creates = workspaces
+        .map(([name, colour, icon]) => `$w->create($p, ['name' => '${name}', 'colour' => '${colour}', 'icon' => '${icon}']);`)
+        .join(' ');
+    const code = `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web'); $w = app(\\App\\Study\\Workspaces::class); ${creates}`;
+    execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
+
+    return email;
+}
+
 /** A student with no second factor, so login finishes on the home page. */
 export function makeStudentAccount() {
     return makeAccount(false);
@@ -146,7 +158,7 @@ export async function openConfirmPassword(page, email = makeStudentAccount()) {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
-    await page.getByRole('heading', { name: /^Welcome back/ }).waitFor();
+    await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
     await page.goto('/user/confirm-password');
     await page.waitForURL('**/user/confirm-password');
 
@@ -176,8 +188,9 @@ export async function openTwoFactorSetup(page, email = makeStudentAccount()) {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
-    await page.getByRole('heading', { name: /^Welcome back/ }).waitFor();
-    await page.getByRole('link', { name: 'Set up' }).click();
+    await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
+    await page.locator('[data-menu-button]').click();
+    await page.getByRole('link', { name: 'Security' }).click();
     await page.waitForURL('**/user/confirm-password');
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Confirm' }).click();
@@ -202,6 +215,8 @@ export async function openAdminOverview(page) {
     await page.getByRole('button', { name: 'Use a recovery code instead' }).click();
     await page.getByLabel('Recovery code').fill('code-one-aaaa');
     await page.getByRole('button', { name: 'Verify' }).click();
+    await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
+    await page.locator('[data-menu-button]').click();
     await page.getByRole('link', { name: 'Admin area' }).click();
     await page.waitForURL('**/user/confirm-password');
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
@@ -217,7 +232,7 @@ export async function openStudentHome(page, email = makeStudentAccount()) {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
-    await page.getByRole('heading', { name: /^Welcome back/ }).waitFor();
+    await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
     await page.waitForLoadState('load');
 
     return email;

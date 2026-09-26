@@ -71,7 +71,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await expect(them.getByLabel('Your name')).toHaveValue('Mary Somerville');
 
         await fillAcceptance(them, 'Mary Somerville');
-        await expect(them.getByRole('heading', { name: 'Welcome, Mary' })).toBeVisible();
+        await expect(them.getByText('Welcome, Mary')).toBeVisible();
         await expect(them.getByText(`From now on, log in with ${email}`)).toBeVisible();
         await guest.close();
 

@@ -45,11 +45,11 @@ class AdminOverviewScreenTest extends TestCase
         $this->actingAs($student)->get('/')->assertDontSee(route('admin.overview'));
     }
 
-    public function test_home_links_admins_to_the_admin_area(): void
+    public function test_home_links_admins_to_the_admin_area_from_the_account_menu(): void
     {
         $this->actingAs($this->admin())->get('/')
-            ->assertSee('href="'.route('admin.overview').'"', false)
-            ->assertSee('class="admin-marker"', false);
+            ->assertSee('href="'.route('admin.overview').'" class="menu-item"', false)
+            ->assertDontSee('class="admin-marker"', false);
     }
 
     public function test_an_admin_can_switch_back_to_the_student_area(): void

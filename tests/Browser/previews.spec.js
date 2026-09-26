@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { makeNamedStudent, makeStudentWithJournal, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { makeNamedStudent, makeStudentWithJournal, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -350,4 +350,44 @@ test('student journal: list and entry', async ({ page }) => {
             }
         }
     }
+});
+
+test('workspaces: my workspaces, the form, a workspace and its switcher', async ({ page }) => {
+    await openStudentHome(page, makeStudentWithWorkspaces([['Biology', 'green', 'microscope'], ['Mathematics', 'blue', 'sigma'], ['Spanish', 'amber', 'languages']]));
+    const phone = { width: 390, height: 844 };
+    for (const [size, viewport] of Object.entries({ ...sizes, mobile: phone })) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`workspaces-home-${size}-${theme}`) });
+        }
+    }
+
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'New workspace' }).first().click();
+    await page.locator('#workspace-form').getByLabel('Name').fill('Physics');
+    await page.locator('#workspace-form').getByText('Purple', { exact: true }).click({ force: true });
+    await page.locator('#workspace-form').getByText('Flask conical', { exact: true }).click({ force: true });
+    await page.screenshot({ path: out('workspaces-form-desktop-vistud-light') });
+    await page.setViewportSize(sizes.mobile);
+    await page.screenshot({ path: out('workspaces-form-mobile-vistud-light') });
+    await page.keyboard.press('Escape');
+
+    await page.setViewportSize(sizes.desktop);
+    await page.locator('main').getByRole('link', { name: 'Biology' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`workspaces-overview-${size}-${theme}`) });
+        }
+    }
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.locator('.app-sidebar .ws-switcher').click();
+    await page.screenshot({ path: out('workspaces-switcher-desktop-vistud-light') });
 });

@@ -107,10 +107,9 @@ class TwoFactorSetupScreenTest extends TestCase
             ->assertRedirect(route('two-factor.setup'));
     }
 
-    public function test_home_links_to_the_setup(): void
+    public function test_the_account_menu_links_to_the_setup(): void
     {
         $this->actingAs($this->student())->get('/')
-            ->assertSee('href="'.route('two-factor.setup').'"', false)
-            ->assertSee('Set up');
+            ->assertSee('href="'.route('two-factor.setup').'" class="menu-item"', false);
     }
 }

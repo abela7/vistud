@@ -22,12 +22,12 @@ test('desktop: the sidebar is always there, collapses to icons, and remembers it
 
     await expect(sidebar).toBeVisible();
     await expect(menuButton(page)).toBeHidden();
-    await expect(sidebar.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
+    await expect(sidebar.getByRole('link', { name: 'All workspaces' })).toHaveAttribute('aria-current', 'page');
 
     await sidebar.getByRole('button', { name: 'Collapse sidebar' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-sidebar', 'collapsed');
     expect((await sidebar.boundingBox()).width).toBeLessThan(90);
-    await expect(sidebar.getByRole('link', { name: 'Home' })).toBeVisible();
+    await expect(sidebar.getByRole('link', { name: 'All workspaces' })).toBeVisible();
 
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-sidebar', 'collapsed');
@@ -58,8 +58,8 @@ for (const [name, viewport] of Object.entries({ tablet, phone })) {
         await expect(drawer(page)).toBeHidden();
 
         await menuButton(page).click();
-        await drawer(page).getByRole('link', { name: 'Security' }).click();
-        await page.waitForURL('**/user/confirm-password');
+        await drawer(page).getByRole('link', { name: 'Journal' }).click();
+        await page.waitForURL('**/journal');
     });
 }
 

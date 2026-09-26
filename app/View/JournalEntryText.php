@@ -32,7 +32,7 @@ final class JournalEntryText
         return match ($entry->kind) {
             Kind::Attempt => 'Task '.($entry->body['task'] ?? '?'),
             Kind::Claim => Str::ucfirst(self::words((string) ($entry->body['type'] ?? ''))).' '.implode(', ', $entry->body['targets'] ?? []),
-            Kind::Record => (string) ($entry->body['key'] ?? $entry->body['record_id'] ?? ''),
+            Kind::Record => (string) ($entry->body['title'] ?? $entry->body['key'] ?? $entry->body['record_id'] ?? ''),
             default => '',
         };
     }

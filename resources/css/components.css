@@ -688,6 +688,62 @@
         color: var(--ws, var(--accent-contrast));
     }
 
+    /* ---------- Colour and icon pickers (the workspace form) ---------- */
+
+    .swatch {
+        position: relative;
+        display: inline-grid;
+        place-items: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 9999px;
+        background-color: var(--ws);
+        color: var(--ws-subtle);
+        cursor: pointer;
+    }
+
+    .swatch svg {
+        visibility: hidden;
+    }
+
+    .swatch:has(input:checked) {
+        outline: 2px solid var(--text);
+        outline-offset: 2px;
+    }
+
+    .swatch:has(input:checked) svg {
+        visibility: visible;
+    }
+
+    .swatch:has(input:focus-visible),
+    .icon-option:has(input:focus-visible) {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .icon-option {
+        display: inline-grid;
+        place-items: center;
+        width: 2.75rem;
+        height: 2.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+
+    .icon-option:hover {
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    .icon-option:has(input:checked) {
+        border-color: transparent;
+        background-color: var(--ws-subtle);
+        color: var(--ws);
+        box-shadow: inset 0 0 0 2px var(--ws);
+    }
+
     /* ---------- QR codes ---------- */
 
     /*

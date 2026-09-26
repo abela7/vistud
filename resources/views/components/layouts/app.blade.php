@@ -5,10 +5,12 @@
     menu on tablets and phones (the owner's decision for now; ADR 0003 §11's
     phone bottom bar is revisited when Notes, Review and Calendar exist).
     The admin area adds the permanent Admin marker and its own items.
-    Optional slots: `sidebar` replaces the navigation (in the sidebar and
-    the slide-in menu), and `tabbar` adds a bottom bar of sections on phones.
+    Inside a study workspace (`workspace` and `section` props) the sidebar
+    holds that workspace's switcher and sections, and phones get a bottom tab
+    bar of its sections. Optional slots (used by the design mockups):
+    `sidebar` replaces the navigation, and `tabbar` adds a bottom bar.
 --}}
-@props(['title', 'area' => 'student'])
+@props(['title', 'area' => 'student', 'workspace' => null, 'section' => null])
 @php
     $principal = app(\App\Identity\PrincipalFactory::class)->fromRequest(request());
     $isAdmin = $principal->hasRole(\App\Platform\Access\Role::Admin);
@@ -16,11 +18,9 @@
     $user = auth()->user();
     $items = $area === 'admin'
         ? [['Overview', 'admin.overview', 'layout-dashboard'], ['Accounts', 'admin.accounts', 'users'], ['Audit log', 'admin.audit-log', 'scroll-text']]
-        : array_values(array_filter([
-            ['Home', 'home', 'house'],
-            $isStudent ? ['Journal', 'journal.index', 'notebook-text', 'journal.*'] : null,
-            ['Security', 'two-factor.setup', 'shield-check'],
-        ]));
+        : [['Home', 'home', 'house'], ['Security', 'two-factor.setup', 'shield-check']];
+    // A student's own workspaces, for the sidebar and the switcher.
+    $workspaces = $area === 'student' && $isStudent ? app(\App\Study\Workspaces::class)->list($principal) : null;
     $homeRoute = $area === 'admin' ? 'admin.overview' : 'home';
 @endphp
 <!DOCTYPE html>
@@ -88,6 +88,10 @@
                 <nav aria-label="Main">
                     @isset($sidebar)
                         {{ $sidebar }}
+                    @elseif ($workspace)
+                        <x-workspace.nav :workspace="$workspace" :workspaces="$workspaces ?? []" :section="$section" menu-id="ws-menu-sidebar" />
+                    @elseif ($workspaces !== null)
+                        <x-app.student-nav :workspaces="$workspaces" />
                     @else
                         <x-app.nav :items="$items" />
                     @endisset
@@ -98,13 +102,15 @@
                 </button>
             </aside>
 
-            <main id="main" @class(['app-main', 'has-tabbar' => isset($tabbar)]) tabindex="-1">
+            <main id="main" @class(['app-main', 'has-tabbar' => isset($tabbar) || $workspace]) tabindex="-1">
                 {{ $slot }}
             </main>
         </div>
 
         @isset($tabbar)
             <nav class="app-tabbar" aria-label="Sections">{{ $tabbar }}</nav>
+        @elseif ($workspace)
+            <nav class="app-tabbar" aria-label="{{ $workspace->name }} sections"><x-workspace.tabs :workspace="$workspace" :section="$section" /></nav>
         @endisset
     </div>
 
@@ -122,6 +128,10 @@
             <nav aria-label="Main" class="p-3">
                 @isset($sidebar)
                     {{ $sidebar }}
+                @elseif ($workspace)
+                    <x-workspace.nav :workspace="$workspace" :workspaces="$workspaces ?? []" :section="$section" menu-id="ws-menu-drawer" />
+                @elseif ($workspaces !== null)
+                    <x-app.student-nav :workspaces="$workspaces" />
                 @else
                     <x-app.nav :items="$items" />
                 @endisset

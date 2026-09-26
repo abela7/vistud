@@ -1,8 +1,9 @@
 # Workspaces: the plan for milestone M2
 
-**Status:** proposal for the owner's review. Nothing here is built yet except
-the mockups. Once approved, ADR 0003 (§4, §9.2, §11, §13, §14) is updated to
-match, and the build starts at step 0.
+**Status:** approved by the owner (decisions W0–W6 as recommended). Built so
+far: **step 0** (renames and workspace colours) and **step 1** (workspaces:
+create, open, switch, edit, archive and restore). Next: step 2, modules and
+folders.
 
 **Mockups:** [docs/design/mockups/](../design/mockups/). They use the real
 theme, top bar and components, so what is approved is what gets built. On a

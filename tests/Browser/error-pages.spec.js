@@ -15,7 +15,7 @@ async function openForbidden(page) {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
-    await page.getByRole('heading', { name: /^Welcome back/ }).waitFor();
+    await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
     await page.goto('/admin');
     await page.getByRole('heading', { name: "You can't open this page" }).waitFor();
 }

@@ -51,7 +51,7 @@ tests/
   Concerns/            Shared test traits, e.g. RefreshesDatabase
 ```
 
-Folders marked with an increment or work package don't exist yet. `app/Study/` (notes, courses, folders) arrives with M2 and isn't created until that work is assigned.
+Folders marked with an increment or work package don't exist yet. `app/Study/` holds a student's study content: workspaces since M2 step 1, then modules, folders, notes, files and activities (docs/specs/workspaces.md).
 
 ## Module responsibilities
 

@@ -47,7 +47,7 @@ Read [STATUS.md](../coordination/STATUS.md) with this page. STATUS.md is the liv
 | Item | Reality |
 |---|---|
 | `docs/design/previews/*` | Screenshots and a recording for review. They are generated, not a running feature |
-| Home after login | The signed-in frame (top bar, sidebar, slide-in menu below 1280 px, account menu; DESIGN.md §6.1) around a welcome page with a two-factor card, and an admin card for admins. No study workspace yet (M2) |
+| Home after login | **My workspaces** (M2 step 1): create a workspace (name, colour, icon, optional code, term and dates), open it (Overview, and "coming next" pages for Modules, Notes & files, Calendar and Progress), switch between workspaces from the sidebar, edit, archive and restore. After pulling, run `composer migrate` (the `workspaces` table) |
 | Admin workspace in a browser | Works (WP6 branch): an admin with 2FA opens it from the home page (a fresh password is asked on entry) and lands on the admin overview in the same frame, with the Admin marker in the top bar and a switch back to the student area in the account menu. The Accounts page (`/admin/accounts`, Livewire) lists and searches accounts, and suspends, reactivates, grants or removes admin, and resets 2FA, each confirmed in a dialog, without a page reload. The Audit log page (`/admin/audit-log`) is a read-only list, newest first, each entry a sentence (who, what, to whom, when), filtered by action. Any other `/admin` URL answers 404 |
 | Two-factor authentication | Works end to end (WP6 branch): turn it on from the home page (`/user/two-factor`, after a password check), scan the QR code, confirm a code, save the recovery codes (shown once), then log in with a code or a recovery code |
 | Invitations | Works (WP6 branch): **Invite someone** on the Accounts page makes a single-use link, valid 72 hours, shown once for the admin to share; pending invitations can be cancelled. The link (`/invitation#<token>`) opens a page where the person chooses a name and password, then lands on home logged in as a student. No email is sent (Q3) |
@@ -81,7 +81,7 @@ In this order; each step is small and reviewable. Every screen gets the DESIGN.m
    - `Journal\EntryShow` (**done**: `/journal/{entry}` with a `#[Locked]` ID, under a `/journal` list; another learner's entry, a tampered locked ID and an edited snapshot all answer 404 like a missing entry. `php artisan vistud:journal:sample {email}` fills an empty journal for trying it)
 9. **403 and 404 pages** on the shared layout.
 
-**Next, M2 (proposal, awaiting the owner's decisions):** [docs/specs/workspaces.md](../specs/workspaces.md), one workspace per subject with Overview, Modules, Notes & files, Calendar and Progress. Mockups in `docs/design/mockups/`, and on a development machine at `/_mockups/workspaces` (local only; regenerate with `MOCKUPS=1 npx playwright test mockups`).
+**M2, in progress (approved):** [docs/specs/workspaces.md](../specs/workspaces.md), one workspace per subject with Overview, Modules, Notes & files, Calendar and Progress. Mockups in `docs/design/mockups/`, and on a development machine at `/_mockups/workspaces` (local only; regenerate with `MOCKUPS=1 npx playwright test mockups`).
 
 **Backend dependencies:**
 - **Services these screens call:** WP2's services (`Accounts`, `Roles`, `Invitations`, `TwoFactorReset`, `Workspaces`, the audit log) and WP3's `JournalReader`. Both are delivered but not yet reviewed, and nothing else is needed from the backend for these screens.

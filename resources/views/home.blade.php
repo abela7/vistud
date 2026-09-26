@@ -1,7 +1,7 @@
 {{--
-    The student home, inside the signed-in frame. Until the study workspace
-    arrives (M2) it shows the account's security and, for admins, the way
-    into the admin area.
+    Home. A student's is My workspaces (docs/specs/workspaces.md); an account
+    that is only an admin has no workspaces, so its home shows the account's
+    security and the way into the admin area.
 --}}
 @php
     $user = auth()->user();
@@ -9,7 +9,34 @@
     $twoFactorOn = $user->two_factor_confirmed_at !== null;
     $isAdmin = app(\App\Identity\PrincipalFactory::class)->fromRequest(request())->hasRole(\App\Platform\Access\Role::Admin);
     $isNew = session('status') === 'invitation-accepted';
+    $isStudent = app(\App\Identity\PrincipalFactory::class)->fromRequest(request())->hasRole(\App\Platform\Access\Role::Student);
 @endphp
+@if ($isStudent)
+<x-layouts.app title="My workspaces">
+    <div class="mx-auto max-w-5xl space-y-6">
+        <div class="flex flex-wrap items-end justify-between gap-4">
+            <div class="space-y-1">
+                <p class="text-fg-muted">{{ $isNew ? 'Welcome' : 'Welcome back' }}, {{ $firstName }}</p>
+                <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">My workspaces</h1>
+            </div>
+            <x-button variant="primary" icon="plus" class="max-w-full whitespace-normal" x-data x-on:click="$dispatch('workspace-form-open')">New workspace</x-button>
+        </div>
+
+        @if ($isNew)
+            <x-alert tone="success" title="Your account is ready">
+                From now on, log in with {{ $user->email }} and the password you just chose.
+            </x-alert>
+        @endif
+        @if (session('workspace-notice'))
+            <x-alert tone="success">{{ session('workspace-notice') }}</x-alert>
+        @endif
+
+        <livewire:workspaces.index />
+    </div>
+
+    <livewire:workspaces.form :open-on-load="request()->boolean('new')" />
+</x-layouts.app>
+@else
 <x-layouts.app title="Home">
     <div class="mx-auto max-w-4xl space-y-8">
         <div class="space-y-1.5">
@@ -50,3 +77,4 @@
         </div>
     </div>
 </x-layouts.app>
+@endif
