@@ -180,4 +180,10 @@ A learner table of deletion records (ADR 0003 §5.4): `id` (auto-increment, the 
 ### `files`
 A learner table (docs/architecture/conventions.md "Uploaded files"). `id`, `learner_id`, `workspace_id`, `module_id` and `folder_id` (where it is; both null at the workspace's top level), `name` (≤ 200, without the extension), `extension`, `kind` (`pdf`, `document`, `slides`, `spreadsheet`, `text`, `image`), `mime` (the type it was checked as), `size`, `sha256`, `storage_key` (where the bytes are on the files disk), `position`, `trashed_at` (deleted for good, bytes included, 30 days later by `vistud:trash:purge`), `created_at`, `updated_at`.
 
+### `topics`
+A learner table for the tracker (docs/specs/study-memory.md §3). The row's `id` is the journal topic's id (its `defines` claim). `learner_id`, `workspace_id`, `module_id` (nullable), `name` (≤ 120), `status` (the student's latest word: `covered`, `understood`, `confused`, or null; each is also a journal event, so this is a cache), `position`, `retired_at`, `created_at`, `updated_at`. The evidence label and flags are never stored: the screens read them from the projection.
+
+### `questions`
+A learner table for the tracker. The row's `id` is the journal question's id. `learner_id`, `workspace_id`, `topic_id` (nullable), `text` (≤ 1000), `ask_event_id` (the `question` event an answer responds to), `ask_teacher`, `retired_at`, `created_at`, `updated_at`. The state (open, answered, resolved…) comes from the projection.
+
 Note blocks and activities arrive with the next M2 steps ([docs/specs/workspaces.md §8](../specs/workspaces.md#8-for-developers), [ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).

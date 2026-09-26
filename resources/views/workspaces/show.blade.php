@@ -1,7 +1,7 @@
 {{--
     A workspace's pages (App\Http\Controllers\WorkspacePageController).
-    The Overview, Modules and Notes & files are built; the other sections say
-    what they will hold until their steps arrive (docs/specs/workspaces.md §6).
+    The Overview, Modules, Notes & files and Progress are built; the Calendar
+    says what it will hold until its step arrives (docs/specs/workspaces.md §6).
 --}}
 @php
     use App\Study\Workspaces;
@@ -12,7 +12,6 @@
     $date = fn (?string $d) => $d ? Carbon::parse($d)->format('j M Y') : null;
     $upcoming = [
         'calendar' => ['Calendar', 'Lectures, labs, quizzes, exams and deadlines for this subject, on a calendar and in "Coming up".'],
-        'progress' => ['Progress', 'What you\'ve mastered and what\'s worth revisiting, in plain words, from your journal.'],
     ];
 @endphp
 <x-layouts.app :title="$section === 'overview' ? $workspace->name : $label.' · '.$workspace->name" :workspace="$workspace" :section="$section">
@@ -97,6 +96,8 @@
             </div>
         @elseif (in_array($section, ['modules', 'notes'], true))
             <livewire:workspaces.contents :workspace-id="$workspace->id" :view="$section" :key="$section" />
+        @elseif ($section === 'progress')
+            <livewire:workspaces.progress :workspace-id="$workspace->id" />
         @else
             <section class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border-strong px-6 py-12 text-center">
                 <x-workspace.chip :workspace="$workspace" size="lg" />

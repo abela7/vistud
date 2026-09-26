@@ -620,3 +620,98 @@
         background-color: var(--accent);
     }
 }
+
+@layer components {
+    /* ---------- Progress: topics and their statuses (docs/specs/study-memory.md) ---------- */
+
+    .topic-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        padding: 0.75rem 0.5rem 0.75rem 1rem;
+    }
+
+    /* The words keep a readable width; when the row is narrow, the controls wrap under them. */
+    .topic-main {
+        flex: 1 1 16rem;
+        min-width: 0;
+    }
+
+    .topic-row .segmented {
+        flex: 1 1 auto;
+    }
+
+    .topic-row .segmented-option {
+        flex: 1 1 auto;
+        justify-content: center;
+    }
+
+    .status-chip,
+    .status-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.125rem 0.625rem;
+        border-radius: 9999px;
+        border: 1px solid var(--border);
+        background-color: var(--surface-sunken);
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .status-count {
+        padding-block: 0.25rem;
+    }
+
+    /* Like the badges: the student's text on the subtle tint, the icon in the strong colour. */
+    .status-covered {
+        border-color: var(--info);
+        background-color: var(--info-subtle);
+        color: var(--text);
+    }
+
+    .status-covered svg {
+        color: var(--info);
+    }
+
+    .status-understood,
+    .status-mastered {
+        border-color: var(--success);
+        background-color: var(--success-subtle);
+        color: var(--text);
+    }
+
+    .status-understood svg,
+    .status-mastered svg {
+        color: var(--success);
+    }
+
+    .status-confused {
+        border-color: var(--warning);
+        background-color: var(--warning-subtle);
+        color: var(--text);
+    }
+
+    .status-confused svg {
+        color: var(--warning);
+    }
+
+    /* A status the student pressed: the segmented control's selected look, without a radio. */
+    .segmented-option.is-current {
+        background-image: var(--grad-selected);
+        color: var(--on-selected);
+        box-shadow: var(--elevation-sm);
+    }
+
+    .segmented-option.is-current::before {
+        display: none;
+    }
+
+    .segmented-option:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+}

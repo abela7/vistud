@@ -25,6 +25,7 @@ const icons = [
     'circle-alert',
     'circle-check',
     'circle-dot',
+    'circle-help',
     'clock',
     'cloud-off',
     'code',

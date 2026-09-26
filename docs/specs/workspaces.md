@@ -17,8 +17,10 @@ come later in M2. **Step 4** (files) is built too: upload into modules,
 folders and Notes & files, with every file checked by its bytes (no macros,
 no scripts), kept privately, previewed on its own page when the browser can
 show it (PDF, images, text) and downloadable; rename, move, trash and restore.
-The rules are in docs/architecture/conventions.md "Uploaded files". Next:
-step 5, the calendar.
+The rules are in docs/architecture/conventions.md "Uploaded files". **Progress**
+is now the topic tracker (docs/specs/study-memory.md): topics with a status
+and the evidence behind it, and the student's questions. Next: the rest of
+the tracker (study-memory.md §5), then the calendar (Grok or Gemini).
 
 **Mockups:** [docs/design/mockups/](../design/mockups/). They use the real
 theme, top bar and components, so what is approved is what gets built. On a

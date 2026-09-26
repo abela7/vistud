@@ -186,6 +186,22 @@ function noteFor(email) {
     return JSON.parse(execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop());
 }
 
+/** A student with a Databases workspace, one module, three topics in different states, and one open question. */
+export function makeStudentWithTopics() {
+    const email = makeAccount(false);
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
+        `$w = app(\\App\\Study\\Workspaces::class)->create($p, ['name' => 'Databases', 'colour' => 'blue', 'icon' => 'landmark']);`,
+        `$m = app(\\App\\Study\\Modules::class)->create($p, $w->id, ['title' => 'Week 1: Relational model']);`,
+        `$t = app(\\App\\Study\\Topics::class); $joins = $t->create($p, $w->id, 'Joins', $m->id); $keys = $t->create($p, $w->id, 'Primary and foreign keys', $m->id); $norm = $t->create($p, $w->id, 'Normalisation');`,
+        `$t->report($p, $joins->id, 'understood'); $t->report($p, $keys->id, 'confused');`,
+        `app(\\App\\Study\\Questions::class)->ask($p, $w->id, 'Why does a left join keep the unmatched rows?', $joins->id);`,
+        `echo json_encode(['workspace' => $w->id]);`,
+    ].join(' ');
+    const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
+    return { email, ...JSON.parse(out) };
+}
+
 /** A student with no second factor, so login finishes on the home page. */
 export function makeStudentAccount() {
     return makeAccount(false);
