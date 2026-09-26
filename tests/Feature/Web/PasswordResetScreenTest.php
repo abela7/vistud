@@ -65,6 +65,16 @@ class PasswordResetScreenTest extends TestCase
         }
     }
 
+    public function test_json_clients_also_get_the_same_answer_for_known_and_unknown_emails(): void
+    {
+        $this->student(['email' => 'ada@example.test']);
+
+        $known = $this->postJson('/forgot-password', ['email' => 'ada@example.test'])->assertOk()->json();
+        $unknown = $this->postJson('/forgot-password', ['email' => 'nobody@example.test'])->assertOk()->json();
+
+        $this->assertSame($known, $unknown);
+    }
+
     public function test_a_blank_or_badly_formed_email_is_a_field_error(): void
     {
         $this->from('/forgot-password')->post('/forgot-password', ['email' => ''])

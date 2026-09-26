@@ -4,12 +4,14 @@ namespace App\Http\Responses;
 
 use Illuminate\Http\JsonResponse;
 use Laravel\Fortify\Contracts\FailedPasswordResetLinkRequestResponse as FailedPasswordResetLinkRequestResponseContract;
+use Laravel\Fortify\Contracts\SuccessfulPasswordResetLinkRequestResponse as SuccessfulPasswordResetLinkRequestResponseContract;
 
 /**
- * The same answer whether or not the email belongs to an account.
- * Fortify's own failure response would say that no account exists.
+ * The same answer whether or not the email belongs to an account, for
+ * browsers and JSON clients alike. Fortify's own responses differ ("we have
+ * emailed…" against "no account…"), which would let anyone look people up.
  */
-class NeutralPasswordResetLinkResponse implements FailedPasswordResetLinkRequestResponseContract
+class NeutralPasswordResetLinkResponse implements FailedPasswordResetLinkRequestResponseContract, SuccessfulPasswordResetLinkRequestResponseContract
 {
     public const MESSAGE = "If that email has an account, we've sent a link to reset the password.";
 

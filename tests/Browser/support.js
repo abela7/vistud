@@ -10,6 +10,8 @@ export const THEMES = ['vistud-light', 'vistud-dark', 'ember'];
 
 /** Switch the theme in place, as a saved preset or custom theme would, without reloading. */
 export async function useTheme(page, theme) {
+    // Checks must see the styled page: a heading can be visible before the stylesheet has loaded.
+    await page.waitForLoadState('load');
     await page.evaluate((id) => {
         document.documentElement.dataset.theme = id;
     }, theme);
@@ -21,6 +23,7 @@ export async function useTheme(page, theme) {
  * first, so colour transitions finish at once.
  */
 export async function useSentinelTheme(page) {
+    await page.waitForLoadState('load');
     await page.addStyleTag({ content: sentinel.css });
     await useTheme(page, 'sentinel');
 }
@@ -175,6 +178,7 @@ export async function openTwoFactorSetup(page, email = makeStudentAccount()) {
 export async function startTwoFactorSetup(page) {
     await page.getByRole('button', { name: 'Turn on two-factor authentication' }).click();
     await page.getByRole('heading', { name: 'Set up your authenticator app' }).waitFor();
+    await page.waitForLoadState('load');
 
     return (await page.locator('#setup-key').textContent()).trim();
 }
