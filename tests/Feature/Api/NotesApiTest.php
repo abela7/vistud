@@ -7,6 +7,8 @@ use App\Platform\Http\Middleware\AddAccountHeader;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Workspaces;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\Support\OpenApi;
@@ -143,6 +145,25 @@ class NotesApiTest extends TestCase
         $bob = $this->student();
         $theirs = app(Workspaces::class)->create($this->principal($bob), ['name' => 'Theirs']);
         $this->postJson('/api/v1/notes', ['place' => ['type' => 'workspace', 'id' => $theirs->id], 'create_id' => 'new-note-0004', 'title' => 'Mine?', 'doc' => $empty])->assertNotFound();
+    }
+
+    public function test_note_images_can_be_uploaded_and_served_to_owner(): void
+    {
+        Storage::fake('local');
+        $file = UploadedFile::fake()->image('diagram.png', 400, 300);
+
+        $upload = $this->actingAs($this->ada)->post('/api/v1/notes/images', [
+            'image' => $file,
+        ])->assertCreated()->assertJsonStructure(['id', 'url']);
+
+        $id = $upload->json('id');
+        $this->get("/notes/images/{$id}")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png');
+
+        // Another student cannot view it
+        $bob = $this->student();
+        $this->actingAs($bob)->get("/notes/images/{$id}")->assertNotFound();
     }
 
     private function save(int $base, ?array $doc, string $saveId): array
