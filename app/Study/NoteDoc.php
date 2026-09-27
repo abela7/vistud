@@ -17,7 +17,7 @@ final class NoteDoc
 
     private const MAX_NODES = 100_000;
 
-    private const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table'];
+    private const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'callout', 'image', 'pageBreak'];
 
     private const INLINE = ['text', 'hardBreak'];
 
@@ -27,6 +27,9 @@ final class NoteDoc
         'paragraph' => self::INLINE,
         'heading' => self::INLINE,
         'blockquote' => self::BLOCKS,
+        'callout' => self::BLOCKS,
+        'image' => [],
+        'pageBreak' => [],
         'bulletList' => ['listItem'],
         'orderedList' => ['listItem'],
         'listItem' => self::BLOCKS,
@@ -178,6 +181,30 @@ final class NoteDoc
                     }
                     $lines[] = '';
                     break;
+                case 'callout':
+                    $tone = strtoupper($node['attrs']['tone'] ?? 'NOTE');
+                    $inner = self::blocks($node['content'] ?? [], '');
+                    while ($inner !== [] && end($inner) === '') {
+                        array_pop($inner);
+                    }
+                    $lines[] = $indent."> [!{$tone}]";
+                    foreach ($inner as $line) {
+                        $lines[] = $indent.($line === '' ? '>' : '> '.$line);
+                    }
+                    $lines[] = '';
+                    break;
+                case 'image':
+                    $src = $node['attrs']['src'] ?? '';
+                    $alt = $node['attrs']['alt'] ?? 'Image';
+                    if ($src !== '') {
+                        $lines[] = $indent."![{$alt}]({$src})";
+                        $lines[] = '';
+                    }
+                    break;
+                case 'pageBreak':
+                    $lines[] = $indent.'---';
+                    $lines[] = '';
+                    break;
             }
         }
 
@@ -218,6 +245,10 @@ final class NoteDoc
 
         $cleaned = ['type' => $type];
         $attrs = self::attrs($type, is_array($node['attrs'] ?? null) ? $node['attrs'] : []);
+        if ($type === 'image' && ! isset($attrs['src'])) {
+            // A picture from somewhere a note can't keep (another app's clipboard, a data: address) is left out.
+            return null;
+        }
         if ($attrs !== []) {
             $cleaned['attrs'] = $attrs;
         }
@@ -257,7 +288,7 @@ final class NoteDoc
         switch ($type) {
             case 'heading':
                 $level = $attrs['level'] ?? null;
-                $kept['level'] = is_int($level) && $level >= 1 && $level <= 3 ? $level : 2;
+                $kept['level'] = is_int($level) && $level >= 1 && $level <= 4 ? $level : 2;
                 break;
             case 'tableHeader':
             case 'tableCell':
@@ -279,6 +310,33 @@ final class NoteDoc
                 $language = $attrs['language'] ?? null;
                 if (is_string($language) && preg_match('/^[A-Za-z0-9+#-]{1,32}$/', $language)) {
                     $kept['language'] = $language;
+                }
+                break;
+            case 'callout':
+                $tone = $attrs['tone'] ?? null;
+                $kept['tone'] = in_array($tone, ['theorem', 'definition', 'formula', 'example', 'note'], true) ? $tone : 'note';
+                break;
+            case 'image':
+                $src = $attrs['src'] ?? null;
+                // A web address, or a picture kept for the note (App\Http\Controllers\Api\V1\NoteImageController).
+                if (is_string($src) && strlen($src) <= 2048 && preg_match('#^(https?://[^\s"<>]+|/notes/images/[A-Za-z0-9-]{1,64})$#i', $src)) {
+                    $kept['src'] = $src;
+                }
+                $alt = $attrs['alt'] ?? null;
+                if (is_string($alt)) {
+                    $kept['alt'] = mb_substr($alt, 0, 500);
+                }
+                $title = $attrs['title'] ?? null;
+                if (is_string($title)) {
+                    $kept['title'] = mb_substr($title, 0, 500);
+                }
+                $width = $attrs['width'] ?? null;
+                if (is_string($width) && preg_match('/^(100%|75%|50%|33%|25%|[1-9][0-9]{1,3}px)$/', $width)) {
+                    $kept['width'] = $width;
+                }
+                $align = $attrs['align'] ?? null;
+                if (in_array($align, ['left', 'center', 'right'], true)) {
+                    $kept['align'] = $align;
                 }
                 break;
         }

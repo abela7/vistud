@@ -109,6 +109,7 @@ class NotesTest extends TestCase
             ]],
             ['type' => 'codeBlock', 'content' => [['type' => 'text', 'text' => 'x = 1', 'marks' => [['type' => 'bold']]]]],
             ['type' => 'taskList', 'content' => [['type' => 'taskItem', 'attrs' => ['checked' => true], 'content' => [['type' => 'paragraph']]]]],
+            ['type' => 'pageBreak'],
         ]];
 
         $this->notes->save($this->by, $note->id, ['doc' => $doc] + $this->edit(1, '', '', 'clean-001'));
@@ -123,6 +124,7 @@ class NotesTest extends TestCase
             ]],
             ['type' => 'codeBlock', 'content' => [['type' => 'text', 'text' => 'x = 1']]],
             ['type' => 'taskList', 'content' => [['type' => 'taskItem', 'attrs' => ['checked' => true], 'content' => [['type' => 'paragraph']]]]],
+            ['type' => 'pageBreak'],
         ]], $this->notes->open($this->by, $note->id)->doc);
 
         foreach ([
@@ -273,6 +275,75 @@ class NotesTest extends TestCase
             $this->assertThrows($attempt, NotFound::class);
         }
         $this->assertSame('Secret', $this->notes->open($bob, $note->id)->title);
+    }
+
+    public function test_callout_blocks_are_kept_cleaned_and_rendered_in_markdown(): void
+    {
+        $note = $this->notes->create($this->by, 'module', $this->cells->id);
+        $doc = ['type' => 'doc', 'content' => [
+            ['type' => 'callout', 'attrs' => ['tone' => 'theorem'], 'content' => [
+                ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'F = ma']]],
+            ]],
+            ['type' => 'callout', 'attrs' => ['tone' => 'unknown'], 'content' => [
+                ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'A reminder.']]],
+            ]],
+        ]];
+
+        $this->notes->save($this->by, $note->id, ['doc' => $doc] + $this->edit(1, 'Physics Laws', '', 'callout-001'));
+        $saved = $this->notes->open($this->by, $note->id)->doc;
+
+        $this->assertSame('theorem', $saved['content'][0]['attrs']['tone']);
+        $this->assertSame('note', $saved['content'][1]['attrs']['tone']);
+        $this->assertStringContainsString("> [!THEOREM]\n> F = ma", NoteDoc::markdown($saved));
+        $this->assertStringContainsString("> [!NOTE]\n> A reminder.", NoteDoc::markdown($saved));
+    }
+
+    public function test_image_blocks_are_saved_cleaned_and_rendered_in_markdown(): void
+    {
+        $note = $this->notes->create($this->by, 'module', $this->cells->id, 'Diagram Note');
+        $doc = [
+            'type' => 'doc',
+            'content' => [
+                [
+                    'type' => 'image',
+                    'attrs' => [
+                        'src' => 'https://example.com/cell-diagram.png',
+                        'alt' => 'Cell Structure Diagram',
+                        'title' => 'Figure 1: Organelles',
+                        'width' => '75%',
+                        'align' => 'center',
+                    ],
+                ],
+            ],
+        ];
+
+        $this->notes->save($this->by, $note->id, ['doc' => $doc] + $this->edit(1, 'Diagram Note', '', 'image-001'));
+        $saved = $this->notes->open($this->by, $note->id)->doc;
+
+        $this->assertSame('https://example.com/cell-diagram.png', $saved['content'][0]['attrs']['src']);
+        $this->assertSame('Cell Structure Diagram', $saved['content'][0]['attrs']['alt']);
+        $this->assertSame('Figure 1: Organelles', $saved['content'][0]['attrs']['title']);
+        $this->assertSame('75%', $saved['content'][0]['attrs']['width']);
+        $this->assertSame('center', $saved['content'][0]['attrs']['align']);
+        $this->assertStringContainsString('![Cell Structure Diagram](https://example.com/cell-diagram.png)', NoteDoc::markdown($saved));
+    }
+
+    public function test_a_picture_from_an_address_a_note_cant_keep_is_left_out(): void
+    {
+        $note = $this->notes->create($this->by, 'module', $this->cells->id);
+        $doc = ['type' => 'doc', 'content' => [
+            ['type' => 'image', 'attrs' => ['src' => 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=']],
+            ['type' => 'image', 'attrs' => ['src' => 'javascript:alert(1)']],
+            ['type' => 'image', 'attrs' => ['src' => '/notes/images/0199a5b2-0000-7000-8000-000000000001', 'width' => '1e9px']],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Kept']]],
+        ]];
+
+        $this->notes->save($this->by, $note->id, ['doc' => $doc] + $this->edit(1, 'Pictures', '', 'image-002'));
+
+        $this->assertSame([
+            ['type' => 'image', 'attrs' => ['src' => '/notes/images/0199a5b2-0000-7000-8000-000000000001']],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Kept']]],
+        ], $this->notes->open($this->by, $note->id)->doc['content']);
     }
 
     private function edit(int $base, string $title, string $text, string $saveId): array

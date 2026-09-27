@@ -7,6 +7,8 @@ use App\Platform\Http\Middleware\AddAccountHeader;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Workspaces;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\Support\OpenApi;
@@ -143,6 +145,47 @@ class NotesApiTest extends TestCase
         $bob = $this->student();
         $theirs = app(Workspaces::class)->create($this->principal($bob), ['name' => 'Theirs']);
         $this->postJson('/api/v1/notes', ['place' => ['type' => 'workspace', 'id' => $theirs->id], 'create_id' => 'new-note-0004', 'title' => 'Mine?', 'doc' => $empty])->assertNotFound();
+    }
+
+    public function test_note_images_can_be_uploaded_and_served_to_owner(): void
+    {
+        Storage::fake('local');
+        $file = UploadedFile::fake()->image('diagram.png', 400, 300);
+
+        $upload = $this->actingAs($this->ada)->post('/api/v1/notes/images', [
+            'image' => $file,
+        ])->assertCreated()->assertJsonStructure(['id', 'url']);
+
+        $id = $upload->json('id');
+        $this->get("/notes/images/{$id}")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png');
+
+        // Another student cannot view it
+        $bob = $this->student();
+        $this->actingAs($bob)->get("/notes/images/{$id}")->assertNotFound();
+    }
+
+    public function test_only_real_raster_pictures_are_kept_for_a_note(): void
+    {
+        Storage::fake('local');
+        $svg = UploadedFile::fake()->createWithContent('drawing.svg', '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+        $html = UploadedFile::fake()->createWithContent('page.png', '<html><script>alert(1)</script></html>');
+
+        foreach ([$svg, $html] as $file) {
+            $this->actingAs($this->ada)->post('/api/v1/notes/images', ['image' => $file], ['Accept' => 'application/json'])
+                ->assertUnprocessable()->assertJsonPath('error.code', 'validation_failed')
+                ->assertJsonPath('error.details.fields.image.0', 'Use a PNG, JPEG, WebP or GIF picture.');
+        }
+        $this->actingAs($this->ada)->post('/api/v1/notes/images', [], ['Accept' => 'application/json'])
+            ->assertUnprocessable()->assertJsonPath('error.details.fields.image.0', 'Choose a picture.');
+
+        // A picture named .html is kept as what its bytes say it is.
+        $jpeg = UploadedFile::fake()->image('photo.html', 20, 20);
+        $id = $this->actingAs($this->ada)->post('/api/v1/notes/images', ['image' => $jpeg])->assertCreated()->json('id');
+        $this->assertSame(["{$id}.jpg"], array_map('basename', Storage::disk('local')->allFiles()));
+        $this->get("/notes/images/{$id}")->assertOk()->assertHeader('Content-Type', 'image/jpeg')->assertHeader('X-Content-Type-Options', 'nosniff');
+        $this->get('/notes/images/'.str_repeat('x', 20))->assertNotFound();
     }
 
     private function save(int $base, ?array $doc, string $saveId): array

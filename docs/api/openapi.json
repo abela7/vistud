@@ -115,6 +115,58 @@
         }
       }
     },
+    "/api/v1/notes/images": {
+      "post": {
+        "operationId": "uploadNoteImage",
+        "summary": "Keeps a picture for a note (pasted, dropped or chosen in the editor) and answers with its address, shown only to its owner at /notes/images/{id}. PNG, JPEG, WebP or GIF, checked by their bytes; nothing that can run a script",
+        "x-stability": "provisional",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image"
+                ],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Up to 10 MB"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Kept",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteImage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "419": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error",
+            "description": "validation_failed: no picture, too large, or not a PNG, JPEG, WebP or GIF"
+          }
+        }
+      }
+    },
     "/api/v1/notes/{id}": {
       "get": {
         "operationId": "getNote",
@@ -814,6 +866,24 @@
           "more": {
             "type": "boolean",
             "description": "More records follow: ask again with next_since"
+          }
+        }
+      },
+      "NoteImage": {
+        "type": "object",
+        "required": [
+          "id",
+          "url"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Where the note's image block points"
           }
         }
       }

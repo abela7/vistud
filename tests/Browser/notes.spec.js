@@ -567,3 +567,64 @@ test('the toolbar menus and the table bar: colours from tokens, and axe finds no
     await useSentinelTheme(page);
     expect(await foreignColours(page)).toEqual([]);
 });
+
+test('Word shortcuts act once, a picture is kept with the note, and the side panels pass axe', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = await openNote(page, 'empty');
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+    const key = async (keys) => {
+        await page.keyboard.press(keys);
+        await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    };
+    const violations = async () => (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations.map((v) => v.id);
+
+    // Ctrl+E centres (Tiptap alone would make code); a list shortcut toggles once, not on and off again.
+    await body(page).click();
+    await page.keyboard.type('Cells');
+    await key('Control+e');
+    await expect(body(page).locator('p').first()).toHaveCSS('text-align', 'center');
+    await expect(body(page).locator('code')).toHaveCount(0);
+    await key('End');
+    await key('Enter');
+    await key('Control+Shift+8');
+    await page.keyboard.type('Nucleus');
+    await expect(body(page).locator('ul > li')).toHaveText(['Nucleus']);
+    await key('Enter');
+    await key('Enter');
+    await key('Control+Enter');
+    await expect(body(page).locator('[data-page-break]')).toHaveCount(1);
+
+    // A picture from this device: kept for the note, and shown from its own address.
+    await key('Control+Shift+i');
+    const panel = page.getByRole('dialog', { name: 'Add a picture' });
+    await expect(panel).toBeVisible();
+    expect(await violations()).toEqual([]);
+    const chooser = page.waitForEvent('filechooser');
+    await panel.getByRole('button', { name: 'Choose a picture' }).click();
+    await (await chooser).setFiles({ name: 'cell.png', mimeType: 'image/png', buffer: png });
+    await expect(panel).toBeHidden();
+    const picture = body(page).locator('figure[data-note-image] img');
+    await expect(picture).toHaveAttribute('src', /\/notes\/images\/[0-9a-f-]+$/);
+    await expect.poll(() => picture.evaluate((img) => img.naturalWidth)).toBe(1);
+    // The writing goes on after the picture and the break; neither is typed over.
+    await page.keyboard.type('Seen at 400x');
+    await expect(body(page).locator('p').last()).toHaveText('Seen at 400x');
+    await expect(status(page)).toHaveText('Saved');
+
+    await page.goto(note.empty);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(body(page).locator('figure[data-note-image] img')).toHaveAttribute('src', /\/notes\/images\/[0-9a-f-]+$/);
+    await expect(body(page).locator('ul > li')).toHaveText(['Nucleus']);
+    await expect(body(page).locator('[data-page-break]')).toHaveCount(1);
+
+    // The shortcuts, in a side panel like every other.
+    await body(page).click();
+    await key('Control+/');
+    const shortcuts = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+    await expect(shortcuts).toBeVisible();
+    expect(await violations()).toEqual([]);
+    await useSentinelTheme(page);
+    expect(await foreignColours(page)).toEqual([]);
+    await shortcuts.getByRole('button', { name: 'Close' }).click();
+    await expect(shortcuts).toBeHidden();
+});

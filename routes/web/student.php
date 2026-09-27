@@ -1,6 +1,7 @@
 <?php
 
 use App\Brain\Store\JournalReader;
+use App\Http\Controllers\Api\V1\NoteImageController;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
 use App\Http\Controllers\FlashcardReviewController;
@@ -37,6 +38,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspaces/{workspace}/notes/{note}', NotePageController::class)
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'note' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.notes.show');
+
+    // Embedded note images (served with learner authentication).
+    Route::get('/notes/images/{id}', [NoteImageController::class, 'show'])
+        ->where('id', '[A-Za-z0-9-]{1,64}')
+        ->name('notes.images.show');
 
     // An uploaded file's page, and its bytes (shown or downloaded) after the owner check.
     Route::get('/workspaces/{workspace}/files/{file}', FilePageController::class)
