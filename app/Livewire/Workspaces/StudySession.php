@@ -12,6 +12,8 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Briefings;
 use App\Study\Files;
+use App\Study\Folders;
+use App\Study\ModuleDetails;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Questions;
@@ -62,14 +64,17 @@ final class StudySession extends Component
 
     private Files $files;
 
+    private Folders $folders;
+
     private Briefings $briefings;
 
     private Questions $questions;
 
     private PrincipalFactory $principals;
 
-    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, Questions $questions, PrincipalFactory $principals): void
+    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, Questions $questions, Folders $folders, PrincipalFactory $principals): void
     {
+        $this->folders = $folders;
         $this->briefings = $briefings;
         $this->questions = $questions;
         $this->sessions = $sessions;
@@ -294,30 +299,16 @@ final class StudySession extends Component
                 // Deleted since.
             }
         }
-        // The module's notes and files, and any chosen from elsewhere in the course; the rest under "Elsewhere" in the panel.
-        [$material, $other] = [[], []];
-        $items = [];
-        $fileColours = ['pdf' => 'red', 'document' => 'blue', 'slides' => 'orange', 'spreadsheet' => 'green', 'text' => 'pink', 'image' => 'purple'];
-        foreach ($this->notes->list($by, $this->workspaceId) as $note) {
-            $items[] = ['key' => "note:{$note->id}", 'icon' => 'file-text', 'colour' => 'blue', 'name' => $note->displayTitle(), 'url' => route('workspaces.notes.show', [$this->workspaceId, $note->id]), 'type' => 'Note', 'module' => $note->moduleId];
-        }
-        foreach ($this->files->list($by, $this->workspaceId) as $file) {
-            $items[] = ['key' => "file:{$file->id}", 'icon' => $file->icon(), 'colour' => $fileColours[$file->kind] ?? 'teal', 'name' => $file->fileName(), 'url' => route('workspaces.files.show', [$this->workspaceId, $file->id]), 'type' => $file->typeLabel(), 'module' => $file->moduleId];
-        }
-        foreach ($items as $item) {
-            if (($module !== null && $item['module'] === $module->id) || $session->uses($item['key'])) {
-                $material[] = $item;
-            } else {
-                $other[] = $item;
-            }
-        }
+        $material = $this->material($by, $session, $module);
 
         return view('livewire.workspaces.study-session', [
             'session' => $session,
             'topic' => $topic,
             'module' => $module,
-            'material' => $material,
-            'otherMaterial' => $other,
+            'groups' => $material['groups'],
+            'alsoUsed' => $material['alsoUsed'],
+            'materialCount' => $material['count'],
+            'usedCount' => $material['used'],
             'openQuestions' => count(array_filter(
                 $module !== null ? $this->questions->list($by, $this->workspaceId, $module->id) : $this->questions->list($by, $this->workspaceId, null, $this->sessionId),
                 fn ($question) => $question->status !== 'answered',
@@ -328,6 +319,81 @@ final class StudySession extends Component
             'ended' => $session->endedAt === null ? null : Carbon::parse($session->endedAt)->setTimezone($zone),
             'awaySince' => $session->pausedBy === 'away' ? $time($session->lastActivityAt) : null,
         ]);
+    }
+
+    /**
+     * The notes and files for the panel, by place: in a module, only that
+     * module's (its top level, then its folders in order, each with its
+     * path), never another module's (the owner's review, 2026-09-27). With
+     * no module, every module's and the top level's, each apart. Anything
+     * used in the briefing from elsewhere (chosen before) is listed apart,
+     * so it can be taken out.
+     *
+     * @return array{groups: list<array{key: string, title: ?string, depth: int, items: list<array>}>, alsoUsed: list<array>, count: int, used: int}
+     */
+    private function material(Principal $by, SessionDetails $session, ?ModuleDetails $module): array
+    {
+        $fileColours = ['pdf' => 'red', 'document' => 'blue', 'slides' => 'orange', 'spreadsheet' => 'green', 'text' => 'pink', 'image' => 'purple'];
+        $byPlace = [];
+        foreach ($this->notes->list($by, $this->workspaceId) as $note) {
+            $byPlace[$note->placeKey()][] = ['key' => "note:{$note->id}", 'icon' => 'file-text', 'colour' => 'blue', 'name' => $note->displayTitle(), 'url' => route('workspaces.notes.show', [$this->workspaceId, $note->id]), 'type' => 'Note'];
+        }
+        foreach ($this->files->list($by, $this->workspaceId) as $file) {
+            $byPlace[$file->placeKey()][] = ['key' => "file:{$file->id}", 'icon' => $file->icon(), 'colour' => $fileColours[$file->kind] ?? 'teal', 'name' => $file->fileName(), 'url' => route('workspaces.files.show', [$this->workspaceId, $file->id]), 'type' => $file->typeLabel()];
+        }
+
+        // The places to show, in order: [key, title, depth].
+        $folders = $this->folders->tree($by, $this->workspaceId);
+        $names = [];
+        $places = function (?string $moduleId, ?string $title) use ($folders, &$names): array {
+            $list = [[$moduleId === null ? "workspace:{$this->workspaceId}" : "module:{$moduleId}", $title, 0]];
+            foreach ($folders as $folder) {
+                if ($folder->moduleId !== $moduleId) {
+                    continue;
+                }
+                $names[$folder->id] = ($folder->parentId !== null ? ($names[$folder->parentId] ?? '').' › ' : ($title !== null ? $title.' › ' : '')).$folder->name;
+                $list[] = ["folder:{$folder->id}", $names[$folder->id], $folder->depth];
+            }
+
+            return $list;
+        };
+        $order = [];
+        if ($module !== null) {
+            $order = $places($module->id, null);
+        } else {
+            foreach ($this->modules->list($by, $this->workspaceId) as $each) {
+                array_push($order, ...$places($each->id, $each->title));
+            }
+            array_push($order, ...$places(null, 'Notes & files'));
+        }
+
+        $groups = [];
+        $shown = [];
+        foreach ($order as [$key, $title, $depth]) {
+            if (($byPlace[$key] ?? []) === []) {
+                continue;
+            }
+            $groups[] = ['key' => $key, 'title' => $title, 'depth' => $depth, 'items' => $byPlace[$key]];
+            foreach ($byPlace[$key] as $item) {
+                $shown[$item['key']] = true;
+            }
+        }
+        $alsoUsed = [];
+        foreach ($byPlace as $items) {
+            foreach ($items as $item) {
+                if (! isset($shown[$item['key']]) && $session->uses($item['key'])) {
+                    $alsoUsed[] = $item;
+                }
+            }
+        }
+        $all = [...array_merge([], ...array_column($groups, 'items')), ...$alsoUsed];
+
+        return [
+            'groups' => $groups,
+            'alsoUsed' => $alsoUsed,
+            'count' => count($shown),
+            'used' => count(array_filter($all, fn ($item) => $session->uses($item['key']))),
+        ];
     }
 
     /**

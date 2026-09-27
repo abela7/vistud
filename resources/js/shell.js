@@ -114,3 +114,11 @@ document.addEventListener('keydown', (event) => {
         open.focus();
     }
 });
+
+// A top bar that very large text has made tall stops sticking, so it never covers most of the page.
+const topbar = document.querySelector('.app-topbar');
+if (topbar && 'ResizeObserver' in window) {
+    const fit = () => topbar.classList.toggle('is-tall', topbar.offsetHeight > window.innerHeight * 0.25);
+    new ResizeObserver(fit).observe(topbar);
+    window.addEventListener('resize', fit);
+}

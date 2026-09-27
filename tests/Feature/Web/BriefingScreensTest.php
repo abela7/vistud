@@ -74,15 +74,17 @@ class BriefingScreensTest extends TestCase
         $revision = app(Notes::class)->create($by, 'workspace', $this->databases->id, 'Exam revision');
         $session = app(Sessions::class)->start($by, $this->databases->id, $joins->id);
 
+        // Only the module's: the workspace's other notes aren't mixed in.
         $page = $this->page($session->id)->assertSee('1 in Week 1')
             ->call('openMaterial')
-            ->assertSeeInOrder(['Notes &amp; files', 'Lecture 3', 'Use', 'Elsewhere', 'Exam revision'], false)
+            ->assertSeeInOrder(['Notes &amp; files', 'Search Week 1', 'Lecture 3', 'Use'], false)
+            ->assertDontSee('Exam revision')
             ->assertSee('aria-pressed="false"', false);
 
         $page->call('toggleMaterial', "note:{$lecture->id}")->call('toggleMaterial', "note:{$revision->id}");
         $this->assertSame(["note:{$lecture->id}", "note:{$revision->id}"], $this->current()->material);
-        // A note chosen from elsewhere moves up with the module's material.
-        $page->assertDontSee('Elsewhere')->assertSeeInOrder(['Lecture 3', 'Exam revision'])->assertSee('2 for the AI');
+        // One given to the AI from outside the module (chosen before) is listed apart, to take out.
+        $page->assertSeeInOrder(['Also given to the AI', 'Exam revision', 'In Week 1', 'Lecture 3'])->assertSee('2 for the AI');
 
         $page->call('toggleMaterial', 'note:not-mine')->assertSee('That note or file no longer exists.');
     }

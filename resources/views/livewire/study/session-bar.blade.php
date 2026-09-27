@@ -32,12 +32,13 @@
                     <span class="tabular-nums" aria-hidden="true" data-clock data-base="{{ $session->studySeconds }}" data-running="{{ $running ? '1' : '0' }}" data-drawn="{{ microtime(true) }}">{{ gmdate('G:i:s', $session->studySeconds) }}</span>
                 @endif
             </a>
+            {{-- On a phone the pill stays small: pause and resume are on the session page. --}}
             @if ($running)
-                <button type="button" class="topbar-button" wire:click="pause" aria-label="Pause the session" title="Pause">
+                <button type="button" class="topbar-button max-sm:hidden" wire:click="pause" aria-label="Pause the session" title="Pause">
                     <x-icon name="pause" class="size-5" />
                 </button>
             @else
-                <button type="button" class="topbar-button" wire:click="resume" aria-label="{{ $session->state === 'break' ? 'End the break and study' : 'Resume the session' }}" title="Resume">
+                <button type="button" class="topbar-button max-sm:hidden" wire:click="resume" aria-label="{{ $session->state === 'break' ? 'End the break and study' : 'Resume the session' }}" title="Resume">
                     <x-icon name="play" class="size-5" />
                 </button>
             @endif

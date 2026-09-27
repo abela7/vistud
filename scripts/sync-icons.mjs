@@ -99,6 +99,7 @@ const icons = [
     'redo-2',
     'rotate-ccw',
     'scroll-text',
+    'search',
     'settings',
     'shield',
     'shield-check',

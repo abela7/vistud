@@ -45,6 +45,10 @@
         padding: 0.5rem 1rem;
     }
 
+    .app-topbar.is-tall {
+        position: static;
+    }
+
     .app-brand {
         display: inline-flex;
         align-items: center;

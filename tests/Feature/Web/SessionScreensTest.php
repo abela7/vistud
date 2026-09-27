@@ -7,6 +7,7 @@ use App\Livewire\Workspaces\Progress;
 use App\Livewire\Workspaces\StudySession;
 use App\Livewire\Workspaces\StudyTime;
 use App\Models\User;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Sessions;
@@ -87,6 +88,25 @@ class SessionScreensTest extends TestCase
             ->assertSee('Studied 45 min, with 10 min of breaks')
             ->assertDontSee('Take a break');
         $this->assertSame('understood', app(Topics::class)->find($by, $joins->id)->status);
+    }
+
+    public function test_the_notes_and_files_panel_holds_only_the_modules_by_folder(): void
+    {
+        $by = $this->principal($this->ada);
+        $week1 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 1']);
+        $week2 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 2']);
+        $labs = app(Folders::class)->create($by, 'module', $week1->id, 'Labs');
+        $sql = app(Folders::class)->create($by, 'folder', $labs->id, 'SQL');
+        app(Notes::class)->create($by, 'module', $week1->id, 'Lecture 1');
+        app(Notes::class)->create($by, 'folder', $sql->id, 'Joins lab');
+        app(Notes::class)->create($by, 'module', $week2->id, 'Week 2 reading');
+        app(Notes::class)->create($by, 'workspace', $this->databases->id, 'Exam revision');
+        $session = app(Sessions::class)->start($by, $this->databases->id, null, $week1->id);
+
+        $this->page($session->id)->assertSee('2 in Week 1')
+            ->call('openMaterial')
+            ->assertSeeInOrder(['In Week 1', 'Lecture 1', 'Labs', 'SQL', 'Joins lab'])
+            ->assertDontSee('Week 2 reading')->assertDontSee('Exam revision');
     }
 
     public function test_a_note_written_from_a_session_goes_into_its_module_and_opens(): void

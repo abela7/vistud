@@ -75,7 +75,15 @@ test('the session page is an open space: a slim clock, what to do as tiles, and 
     expect((await page.locator('.clock-bar').boundingBox()).height).toBeLessThan(120);
 
     await tiles.getByRole('button', { name: 'Notes & files', exact: true }).click();
-    await expect(page.locator('#session-dialog').getByRole('list', { name: 'In Week 1: Relational model' })).toContainText('Lecture 3: joins');
+    const panel = page.locator('#session-dialog');
+    await expect(panel.getByRole('list', { name: 'In Week 1: Relational model' })).toContainText('Lecture 3: joins');
+    const search = panel.getByRole('searchbox', { name: /Search the notes and files in Week 1/ });
+    await search.fill('zzz');
+    await expect(panel.getByText('Nothing matches.')).toBeVisible();
+    await expect(panel.getByRole('link', { name: 'Lecture 3: joins' })).toBeHidden();
+    await search.fill('LECTURE');
+    await expect(panel.getByRole('link', { name: 'Lecture 3: joins' })).toBeVisible();
+    await expect(panel.getByText('Nothing matches.')).toBeHidden();
     await page.locator('#session-dialog').getByRole('button', { name: 'Done' }).click();
     await page.locator('#session-dialog').waitFor({ state: 'hidden' });
 

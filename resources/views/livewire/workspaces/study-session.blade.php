@@ -16,7 +16,6 @@
     $statusIcons = ['covered' => 'check', 'understood' => 'circle-check', 'confused' => 'circle-alert'];
     $stateIcons = ['running' => 'timer', 'paused' => 'pause', 'break' => 'coffee', 'ended' => 'square'];
     $studied = SessionDetails::duration($session->studySeconds).($session->breakSeconds > 0 ? ', with '.SessionDetails::duration($session->breakSeconds).' of breaks' : '');
-    $usedCount = count(array_filter([...$material, ...$otherMaterial], fn ($item) => $session->uses($item['key'])));
     $title = $topic?->name ?? $module?->title ?? 'Study session';
     $uid = $this->getId();
     $tiles = array_values(array_filter([
@@ -25,7 +24,7 @@
         ['question', 'Ask a question', 'circle-help', 'blue', $openQuestions > 0 ? $openQuestions.' '.Str::plural('question', $openQuestions).' open' : 'Something you don\'t get', ['x-on:click' => "Livewire.dispatch('question-new')"]],
         ['card', 'New flashcard', 'gallery-vertical-end', 'orange', 'To review later', ['wire:click' => 'newFlashcard']],
         ['note', 'Write a note', 'file-plus', 'teal', $module ? 'In '.$module->title : 'In Notes & files', ['wire:click' => 'newNote']],
-        ['material', 'Notes & files', 'folder-open', 'amber', $usedCount > 0 ? $usedCount.' for the AI' : ($material !== [] ? count($material).' in '.($module?->title ?? 'this session') : 'Choose what the AI gets'), ['wire:click' => 'openMaterial']],
+        ['material', 'Notes & files', 'folder-open', 'amber', $usedCount > 0 ? $usedCount.' for the AI' : ($materialCount > 0 ? $materialCount.' in '.($module?->title ?? 'this workspace') : 'Nothing here yet'), ['wire:click' => 'openMaterial']],
     ]));
 @endphp
 <div class="space-y-6">
@@ -199,26 +198,52 @@
                         <p class="text-sm text-fg-muted">About {{ number_format($briefing->tokens()) }} tokens · <button type="button" class="text-link" wire:click="editTeaching">How the AI teaches</button></p>
                         <p class="sr-only" role="status" x-text="copied ? 'Copied to the clipboard.' : ''"></p>
                     @elseif ($mode === 'material')
-                        @if ($open)
-                            <p class="text-sm text-fg-muted">Press Use on what the AI should get: a note's text, or a file's name for you to share.</p>
-                        @endif
-                        @if ($material !== [])
-                            <ul class="item-list" role="list" aria-label="{{ $module ? 'In '.$module->title : 'Used' }}">
-                                @foreach ($material as $item)
-                                    @include('livewire.workspaces.partials.material-row')
-                                @endforeach
-                            </ul>
-                        @elseif ($module)
-                            <p class="text-fg-muted">Nothing in {{ $module->title }} yet.</p>
-                        @endif
-                        @if ($open && $otherMaterial !== [])
-                            <h3 class="section-title pt-2">{{ $module ? 'Elsewhere' : 'In this workspace' }}</h3>
-                            <ul class="item-list" role="list" aria-label="{{ $module ? 'Elsewhere' : 'In this workspace' }}">
-                                @foreach ($otherMaterial as $item)
-                                    @include('livewire.workspaces.partials.material-row')
-                                @endforeach
-                            </ul>
-                        @endif
+                        @php
+                            $lower = fn ($item) => Str::lower($item['name']);
+                            $every = array_map($lower, [...array_merge([], ...array_column($groups, 'items')), ...$alsoUsed]);
+                        @endphp
+                        <div class="space-y-4" x-data="{ q: '', has(name) { const q = this.q.trim().toLowerCase(); return q === '' || name.includes(q); } }">
+                            @if ($every !== [])
+                                <div class="search-field">
+                                    <x-icon name="search" class="size-4" />
+                                    <label for="material-search" class="sr-only">Search {{ $module ? 'the notes and files in '.$module->title : 'notes and files' }}</label>
+                                    <input id="material-search" type="search" class="input" placeholder="Search {{ $module ? $module->title : 'notes and files' }}" x-model="q" autocomplete="off">
+                                </div>
+                                @if ($open)
+                                    <p class="text-sm text-fg-muted">Use gives it to the AI in the briefing.</p>
+                                @endif
+                            @else
+                                <div class="empty-place">
+                                    <span class="item-icon" aria-hidden="true"><x-icon name="folder-open" class="size-5" /></span>
+                                    <p class="font-medium">{{ $module ? 'Nothing in '.$module->title.' yet' : 'No notes or files yet' }}</p>
+                                </div>
+                            @endif
+                            @if ($alsoUsed !== [])
+                                <section class="space-y-2" x-show="@js(array_map($lower, $alsoUsed)).some((n) => has(n))">
+                                    <h3 class="section-title">Also given to the AI</h3>
+                                    <ul class="item-list" role="list" aria-label="Also given to the AI">
+                                        @foreach ($alsoUsed as $item)
+                                            @include('livewire.workspaces.partials.material-row')
+                                        @endforeach
+                                    </ul>
+                                </section>
+                            @endif
+                            @foreach ($groups as $group)
+                                <section class="material-group space-y-2" wire:key="group-{{ $group['key'] }}" style="--depth: {{ min($group['depth'], 4) }}" x-show="@js(array_map($lower, $group['items'])).some((n) => has(n))">
+                                    @if ($group['title'] !== null)
+                                        <h3 class="material-group-title"><x-icon name="folder" class="size-4" />{{ $group['title'] }}</h3>
+                                    @endif
+                                    <ul class="item-list" role="list" aria-label="{{ $group['title'] ?? 'In '.$module?->title }}">
+                                        @foreach ($group['items'] as $item)
+                                            @include('livewire.workspaces.partials.material-row')
+                                        @endforeach
+                                    </ul>
+                                </section>
+                            @endforeach
+                            @if ($every !== [])
+                                <p class="text-fg-muted" x-show="! @js($every).some((n) => has(n))" x-cloak>Nothing matches.</p>
+                            @endif
+                        </div>
                     @elseif ($mode === 'teaching')
                         @include('livewire.workspaces.partials.teaching-fields')
                         <p class="text-sm text-fg-muted">The briefing asks for this from now on. An AI you already briefed needs the new briefing, or to be told.</p>

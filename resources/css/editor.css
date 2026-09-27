@@ -925,6 +925,43 @@
         background-color: var(--accent);
     }
 
+    /* A search box with its icon inside. */
+    .search-field {
+        position: relative;
+    }
+
+    .search-field > svg {
+        position: absolute;
+        top: 50%;
+        left: 0.875rem;
+        translate: 0 -50%;
+        color: var(--text-muted);
+        pointer-events: none;
+    }
+
+    .search-field > .input {
+        padding-left: 2.5rem;
+    }
+
+    /* A session's notes and files, one place (a module's top level or a folder) at a time, indented by depth. */
+    .material-group {
+        margin-left: calc(var(--depth, 0) * 0.75rem);
+    }
+
+    .material-group-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+    .material-group-title > svg {
+        color: var(--category-amber);
+    }
+
     /* The open session, in the panel that says one is already running. */
     .busy-session {
         display: flex;

@@ -226,7 +226,7 @@ session are always whole, the rest fills in by relevance, and what doesn't
 fit is counted ("… and 12 more"). A note gives at most 8,000 characters.
 The student's name and email never go into it.
 
-**Material.** In the session page's *Notes & files* panel, *Use* puts a note or file of the course
+**Material.** In the session page's *Notes & files* panel (only the session's module's notes and files, by folder with each folder's path, with a search; never another module's; with no module, each module's and the top level's apart; anything given to the AI from elsewhere before is listed apart to take out), *Use* puts a note or file of the course
 into the session's material: a note's text goes into the briefing, a file
 goes in by name for the student to share (the MCP server and the built-in
 chat will send its pages). With nothing chosen, the briefing lists what the

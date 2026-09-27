@@ -1,6 +1,6 @@
 {{-- A note or file ($item) in a session's Notes & files panel (App\Livewire\Workspaces\StudySession): open it, or Use it in the briefing while the session is open. --}}
 @php $used = $session->uses($item['key']); @endphp
-<li class="item-row" wire:key="material-{{ $item['key'] }}">
+<li class="item-row" wire:key="material-{{ $item['key'] }}" x-show="has(@js(\Illuminate\Support\Str::lower($item['name'])))">
     <span class="item-icon ws-colour-{{ $item['colour'] }}" aria-hidden="true"><x-icon :name="$item['icon']" class="size-5" /></span>
     <span class="min-w-0 flex-1">
         <a href="{{ $item['url'] }}" class="tile-link">{{ $item['name'] }}</a>
