@@ -89,6 +89,11 @@ test('the richer toolbar: underline, highlight, alignment, scripts, a table and 
     await page.setViewportSize(desktop);
     const note = await openNote(page, 'empty');
     const tool = (name) => page.getByRole('toolbar', { name: 'Formatting' }).getByRole('button', { name, exact: true });
+    // A selection made with the keyboard reaches the editor a moment later; the next key waits for it, as a person would.
+    const key = async (keys) => {
+        await page.keyboard.press(keys);
+        await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    };
 
     await body(page).click();
     await page.keyboard.type('Water is H');
@@ -99,7 +104,7 @@ test('the richer toolbar: underline, highlight, alignment, scripts, a table and 
     await tool('Superscript').click();
     await page.keyboard.type('2');
     await tool('Superscript').click();
-    await page.keyboard.press('Shift+Home');
+    await key('Shift+Home');
     await tool('Underline').click();
     await tool('Highlight').click();
     await page.getByRole('menuitemradio', { name: 'Green' }).click();
@@ -108,20 +113,20 @@ test('the richer toolbar: underline, highlight, alignment, scripts, a table and 
     await expect(body(page).locator('p').first()).toHaveCSS('text-align', 'center');
     await expect(tool('Align').locator('[data-align-icon="center"]')).toBeVisible();
 
-    await page.keyboard.press('End');
-    await page.keyboard.press('Enter');
+    await key('End');
+    await key('Enter');
     await page.getByLabel('Text style').selectOption('paragraph');
     await tool('Align').click();
     await page.getByRole('menuitemradio', { name: 'Left' }).click();
     await page.keyboard.type('See the lab sheet');
-    await page.keyboard.press('Shift+Home');
+    await key('Shift+Home');
     await tool('Link').click();
     await page.getByRole('textbox', { name: 'Link address' }).fill('example.org/lab');
     await page.getByRole('textbox', { name: 'Link address' }).press('Enter');
     await expect(body(page).locator('a')).toHaveAttribute('href', 'https://example.org/lab');
 
-    await page.keyboard.press('End');
-    await page.keyboard.press('Enter');
+    await key('End');
+    await key('Enter');
     await tool('Table').click();
     const tableBar = page.getByRole('toolbar', { name: 'Table' });
     await expect(tableBar).toBeVisible();

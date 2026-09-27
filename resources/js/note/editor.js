@@ -322,6 +322,12 @@ export async function mount(host) {
         const words = editor.storage.characterCount.words();
         count.textContent = `${words} ${words === 1 ? 'word' : 'words'} · ${editor.storage.characterCount.characters()} characters`;
     }
+    // A click on a tool leaves the focus (and the selection) in the note; the keyboard still reaches the toolbar.
+    toolbar.addEventListener('mousedown', (event) => {
+        if (event.target.closest('button')) event.preventDefault();
+    });
+    /** Back to writing at once: Tiptap's own focus waits a frame, and a key pressed meanwhile would go elsewhere. */
+    const backToNote = () => editor.view.focus();
     toolbar.addEventListener('click', (event) => {
         const button = event.target.closest('button[data-command]');
         if (!button) return;
@@ -332,6 +338,7 @@ export async function mount(host) {
         COMMANDS[button.dataset.command][0](editor.chain().focus()).run();
     });
     blockStyle.addEventListener('change', () => {
+        backToNote();
         const chain = editor.chain().focus();
         (blockStyle.value === 'paragraph' ? chain.setParagraph() : chain.setHeading({ level: Number(blockStyle.value) })).run();
     });
@@ -373,6 +380,7 @@ export async function mount(host) {
         if (!item) return;
         // Closed first: closing hands focus back to its button, and the writing goes on in the note.
         highlightMenu.hidePopover();
+        backToNote();
         const chain = editor.chain().focus();
         (item.dataset.highlight === '' ? chain.unsetHighlight() : chain.setHighlight({ tone: item.dataset.highlight })).run();
     });
@@ -380,6 +388,7 @@ export async function mount(host) {
         const item = event.target.closest('[data-align]');
         if (!item) return;
         alignMenu.hidePopover();
+        backToNote();
         editor.chain().focus().setTextAlign(item.dataset.align).run();
     });
 
@@ -396,14 +405,16 @@ export async function mount(host) {
     function applyLink() {
         const typed = linkInput.value.trim();
         const href = typed === '' || /^(https?:\/\/|mailto:)/i.test(typed) ? typed : `https://${typed}`;
+        toggleLinkBar(false);
+        backToNote();
         const chain = editor.chain().focus().extendMarkRange('link');
         (href === '' ? chain.unsetLink() : chain.setLink({ href })).run();
-        toggleLinkBar(false);
     }
     linkBar.querySelector('[data-link-apply]').addEventListener('click', applyLink);
     linkBar.querySelector('[data-link-remove]').addEventListener('click', () => {
-        editor.chain().focus().extendMarkRange('link').unsetLink().run();
         toggleLinkBar(false);
+        backToNote();
+        editor.chain().focus().extendMarkRange('link').unsetLink().run();
     });
     linkInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
@@ -412,7 +423,7 @@ export async function mount(host) {
         } else if (event.key === 'Escape') {
             event.preventDefault();
             toggleLinkBar(false);
-            editor.commands.focus();
+            backToNote();
         }
     });
     host.querySelector('[data-note-body]').addEventListener('keydown', (event) => {
