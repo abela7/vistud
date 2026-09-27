@@ -293,6 +293,8 @@ test('a draft of a note deleted elsewhere is removed before it could be sent', a
     await other.locator('main').getByRole('link', { name: 'Week 2: Cell division' }).click();
     await other.getByRole('button', { name: 'Actions for Mitosis vs meiosis' }).click();
     await other.getByRole('button', { name: 'Move to trash' }).click();
+    // Leaving before the trash is saved would cancel it.
+    await expect(other.getByRole('status').filter({ hasText: 'is in the trash.' })).toBeVisible();
     await other.goto(`/workspaces/${note.workspace}/notes`);
     await other.getByRole('button', { name: 'Trash (1)' }).click();
     await other.getByRole('button', { name: 'Delete for good: Mitosis vs meiosis' }).click();
