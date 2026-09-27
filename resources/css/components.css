@@ -466,13 +466,10 @@
     /* ---------- Dialogs ---------- */
 
     /*
-    | A native modal <dialog> (focus trap, Esc, focus return). A bottom sheet
-    | on phones, a centred panel from 640 px.
-    */
-    /*
-    | Every dialog is a panel that slides in from the right (the owner's
-    | review, 2026-09-27): the page stays in view beside it, the form scrolls
-    | inside it, and its buttons stay at the bottom. Full width on phones.
+    | A native modal <dialog> (focus trap, Esc, focus return). Every dialog is
+    | a panel that slides in from the right (the owner's review, 2026-09-27):
+    | the page stays in view beside it, the form scrolls inside it, and its
+    | buttons stay at the bottom. Full width on phones.
     */
     .modal {
         position: fixed;
@@ -530,10 +527,11 @@
         min-height: 100%;
     }
 
+    /*
+    | The head scrolls away with the form: pinned too, with the buttons, a
+    | small phone at 200% text would have no room left between them.
+    */
     .modal-head {
-        position: sticky;
-        top: 0;
-        z-index: 1;
         display: flex;
         align-items: flex-start;
         gap: 0.75rem;
