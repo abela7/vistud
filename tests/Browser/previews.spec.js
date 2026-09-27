@@ -759,7 +759,7 @@ test('briefing: the dialog, how the AI teaches, and the start options', async ({
 
     await page.goto(`/workspaces/${student.workspace}`);
     await page.waitForLoadState('load');
-    await page.getByRole('button', { name: 'Log time' }).waitFor();
+    await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
     await page.locator('.session-pill').getByRole('link').click();
     await page.getByRole('button', { name: 'End session' }).click();
     await page.locator('#session-dialog').getByRole('button', { name: 'End session' }).click();
