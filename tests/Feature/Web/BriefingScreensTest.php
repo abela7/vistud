@@ -95,7 +95,7 @@ class BriefingScreensTest extends TestCase
 
         $this->page($session->id)->assertSee('Briefing')
             ->call('showBriefing')->assertDispatched('session-dialog-open')
-            ->assertSee('Briefing for the AI')->assertSee('About 1,')
+            ->assertSee('Briefing for the AI')->assertSeeText('tokens.')
             ->assertSee('# You are the student&#039;s tutor', false)->assertSee('## This session')->assertSee('- Topic: Joins.')
             ->assertSee('Copy')->assertSee(route('workspaces.sessions.briefing', [$this->databases->id, $session->id]), false);
 

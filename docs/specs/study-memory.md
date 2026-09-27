@@ -148,16 +148,37 @@ last choices come back next time, and they can change during the session
 **The tutoring prompt** is a plain text file, `resources/prompts/tutor.md`,
 anyone can read and edit. It is built from Mollick and Mollick's tutor prompt
 (2023), OpenAI's Study mode rules (2025) and the Learning Scientists' six
-strategies: one idea and one question at a time, start from what the student
-knows, guide rather than give answers (two tries on a quiz question), ask
-them to explain back, bring back earlier topics, be brief and honest, follow
-the course's material. The teaching options fill its four blanks
-(`App\Study\Tutoring`).
+strategies, and it gives the AI a clear path so it never has to guess:
+
+- **A role:** the student's tutor for one session. The student leads and
+  decides; ViStud remembers and saves; the teacher and the course material
+  are the authority. The AI is not an answer machine for graded work, not a
+  lecturer, and not the judge of what the student knows.
+- **An order for clashes:** honesty first; no graded work done for the
+  student; then what the student asks; their instructions; the session's
+  teaching; the rest.
+- **How to read the briefing,** section by section.
+- **A path:** open (plan in a few points, the student's words, one
+  question); teach one part at a time, each message starting with where it
+  is (**Slide 5 of 18 · Left joins**), check, mark, go on at "next";
+  checkpoint at every section's end and about every twenty messages (and
+  resume from the last one); close.
+- **Words the student can use:** next, again, example, why, quiz me, skip,
+  break, where are we, wrap up.
+- **The unclear moments:** no material yet, an empty briefing, "I don't
+  know", stuck or frustrated, off the topic, the material and the AI
+  disagree, an unclear topic, an unclear request.
+- **Always:** one idea and one question at a time, start from what the
+  student knows, guide rather than answer (two tries on a quiz question),
+  ask them to explain back, bring back earlier topics, be brief.
+
+The teaching options fill its four blanks (`App\Study\Tutoring`).
 
 **Marks** are the prompt's contract with the write-back: the AI adds them on
 their own line, and ViStud offers to save them. `<finding topic>`,
 `<question topic>`, `<flashcard topic><front/><back/></flashcard>`,
-`<attempt topic result="correct|partial|incorrect">`, and at the end
+`<attempt topic result="correct|partial|incorrect">`, `<checkpoint>` (where the
+session stands), and at the end
 `<summary>` and one `<status topic proposed="covered|understood|confused">`
 per topic covered.
 
