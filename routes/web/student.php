@@ -52,6 +52,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspaces/{workspace}/modules/{module}', [PlacePageController::class, 'module'])
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'module' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.modules.show');
+    Route::get('/workspaces/{workspace}/modules/{module}/questions', [PlacePageController::class, 'questions'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'module' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.modules.questions');
     Route::get('/workspaces/{workspace}/folders/{folder}', [PlacePageController::class, 'folder'])
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'folder' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.folders.show');

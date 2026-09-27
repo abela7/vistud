@@ -27,7 +27,17 @@ async function ask(page, text) {
     await panel(page).getByLabel('Question', { exact: true }).fill(text);
     await panel(page).getByRole('button', { name: 'Save' }).click();
     await panel(page).waitFor({ state: 'hidden' });
-    await expect(page.getByRole('list', { name: 'Questions' })).toContainText(text);
+    // Folded away until opened, but there.
+    await expect(page.locator('ul[aria-label="Questions"]')).toContainText(text);
+}
+
+/** In a session the questions are folded under their heading until opened. */
+async function unfold(page) {
+    const toggle = page.getByRole('button', { name: /^Questions/ });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('list', { name: 'Questions' })).toBeHidden();
+    await toggle.click();
+    await expect(page.getByRole('list', { name: 'Questions' })).toBeVisible();
 }
 
 async function withQuestions(page) {
@@ -35,6 +45,7 @@ async function withQuestions(page) {
     await ask(page, 'Why does a left join keep rows with no match?');
     await ask(page, 'What is the difference between a key and an index?');
     await expect(page.getByRole('button', { name: 'Ask a question', exact: true })).toHaveAccessibleDescription('3 questions open');
+    await unfold(page);
     return student;
 }
 
@@ -49,8 +60,17 @@ test('a question written in a session is in its module, and gets answered there'
     await page.goto(`/workspaces/${student.workspace}/modules`);
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
+    // The module's page links to its questions; they have their own page.
+    await expect(page.getByRole('list', { name: 'Questions' })).toHaveCount(0);
+    await page.locator('main').getByRole('link', { name: /^Questions 3 open, 1 stuck/ }).click();
+    await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
+    await page.waitForLoadState('load');
     const onModule = page.getByRole('list', { name: 'Questions' });
     await expect(onModule).toContainText('Why does a left join keep rows with no match?');
+    await page.getByLabel('Sort').selectOption({ label: 'Newest first' });
+    await expect(onModule.getByRole('listitem').first()).toContainText('What is the difference between a key and an index?');
+    await page.getByRole('searchbox', { name: 'Search the questions' }).fill('no match');
+    await expect(onModule.getByRole('listitem')).toHaveCount(1);
 
     await page.getByRole('button', { name: 'Actions for Why does a left join keep rows with no match?' }).click();
     await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Answered' }).click();
@@ -99,7 +119,7 @@ test('questions never scroll sideways at 320 px, even with 200% text', async ({ 
     expect(await panel(page).evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
 });
 
-test("a module page's New adds a question, in the side panel", async ({ page }) => {
+test("a module page's New adds a question, on the module's questions page", async ({ page }) => {
     await page.setViewportSize(desktop);
     const student = await openSession(page);
     await page.goto(`/workspaces/${student.workspace}/modules`);
@@ -108,7 +128,8 @@ test("a module page's New adds a question, in the side panel", async ({ page }) 
     await page.waitForLoadState('load');
     await expect(page.getByPlaceholder("What don't you get? Write it down…")).toHaveCount(0);
     await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
-    await page.locator('#new-menu').getByRole('button', { name: 'Question' }).click();
+    await page.locator('#new-menu').getByRole('link', { name: 'Question' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
     await panel(page).getByLabel('Question', { exact: true }).fill('When is a view better than a table?');
     await panel(page).getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('list', { name: 'Questions' })).toContainText('When is a view better than a table?');

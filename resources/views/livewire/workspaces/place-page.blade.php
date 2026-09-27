@@ -1,7 +1,8 @@
 {{--
     A module's or a folder's own page (App\Livewire\Workspaces\Contents,
     view `module` or `folder`): the path to it, its folders, its notes,
-    files and links, and for a module its study sessions.
+    files and links, and for a module a link to its questions (their own
+    page) and its study sessions.
 --}}
 @php
     use App\Study\Folders;
@@ -38,7 +39,15 @@
                 </div>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                @include('livewire.workspaces.partials.new-menu', ['placeId' => $place->id, 'folders' => $isModule || $place->depth < Folders::MAX_DEPTH, 'question' => $isModule])
+                @include('livewire.workspaces.partials.new-menu', ['placeId' => $place->id, 'folders' => $isModule || $place->depth < Folders::MAX_DEPTH, 'questionUrl' => $isModule ? route('workspaces.modules.questions', [$workspaceId, $place->id, 'ask' => 1]) : null])
+                @if ($isModule)
+                    <a href="{{ route('workspaces.modules.questions', [$workspaceId, $place->id]) }}" class="btn btn-secondary">
+                        <x-icon name="circle-help" class="size-4" />Questions
+                        @if ($questions['open'] > 0)
+                            <span class="tab-count">{{ $questions['open'] }}<span class="sr-only"> open{{ $questions['stuck'] > 0 ? ', '.$questions['stuck'].' stuck' : '' }}</span></span>
+                        @endif
+                    </a>
+                @endif
                 @if ($isModule || $place->moduleId !== null)
                     <x-button variant="primary" icon="play" wire:click="studyHere">Study this</x-button>
                 @endif
@@ -60,10 +69,6 @@
     </div>
 
     @include('livewire.workspaces.partials.place', ['key' => $key, 'placeId' => $place->id])
-
-    @if ($isModule)
-        <livewire:workspaces.question-board :workspace-id="$workspaceId" :module-id="$place->id" :quiet="true" :key="'questions-'.$place->id" />
-    @endif
 
     @if ($studied !== [])
         <section aria-labelledby="studied-heading" class="space-y-2">

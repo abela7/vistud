@@ -18,6 +18,7 @@ use App\Study\Links;
 use App\Study\Modules;
 use App\Study\NoteDetails;
 use App\Study\Notes;
+use App\Study\Questions;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\Topics;
@@ -111,13 +112,16 @@ final class Contents extends Component
 
     private Topics $topics;
 
+    private Questions $questions;
+
     private Sessions $sessions;
 
     private PrincipalFactory $principals;
 
-    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, PrincipalFactory $principals): void
+    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, Questions $questions, PrincipalFactory $principals): void
     {
         $this->topics = $topics;
+        $this->questions = $questions;
         $this->sessions = $sessions;
         $this->links = $links;
         $this->instructionTexts = $instructions;
@@ -500,9 +504,16 @@ final class Contents extends Component
 
             $topicNames = collect($this->topics->list($by, $this->workspaceId))->pluck('name', 'id')->all();
 
+            // The module's questions have their own page; here, how many are open and stuck.
+            $asked = $this->questions->list($by, $this->workspaceId, $module->id);
+            $questions = [
+                'open' => count(array_filter($asked, fn ($q) => $q->status !== 'answered')),
+                'stuck' => count(array_filter($asked, fn ($q) => $q->status === 'stuck')),
+            ];
+
             return [
                 'place' => $module, 'placeName' => $module->title, 'key' => "module:{$module->id}", 'trail' => $trail,
-                'studied' => $this->moduleSessions($by, $module->id), 'topicNames' => $topicNames,
+                'studied' => $this->moduleSessions($by, $module->id), 'topicNames' => $topicNames, 'questions' => $questions,
             ];
         }
 
@@ -516,7 +527,7 @@ final class Contents extends Component
             ? [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])], [$module->title, route('workspaces.modules.show', [$this->workspaceId, $module->id])]]
             : [[__('Notes & files'), route('workspaces.show', [$this->workspaceId, 'notes'])]]));
 
-        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'studied' => [], 'topicNames' => []];
+        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'studied' => [], 'topicNames' => [], 'questions' => null];
     }
 
     /** @return list<SessionDetails> the module's latest study sessions: in it, or on one of its topics */

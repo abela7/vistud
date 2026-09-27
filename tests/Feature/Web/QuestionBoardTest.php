@@ -86,9 +86,60 @@ class QuestionBoardTest extends TestCase
         $asked = collect($this->questions())->firstWhere('text', 'What is a composite key?');
         $this->assertSame([$this->week1->id, $session->id], [$asked->moduleId, $asked->sessionId]);
 
-        // And they're on the module's page.
+        // The module's page links to them, with how many are open; they're on the module's questions page.
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->databases->id, $this->week1->id]))
-            ->assertSeeInOrder(['Questions', 'What is a composite key?']);
+            ->assertSee(route('workspaces.modules.questions', [$this->databases->id, $this->week1->id]), false)
+            ->assertSeeInOrder(['Questions', '2', 'open'])->assertDontSee('What is a composite key?');
+        $this->actingAs($this->ada)->get(route('workspaces.modules.questions', [$this->databases->id, $this->week1->id]))
+            ->assertOk()->assertSeeInOrder(['Modules', 'Week 1', 'Questions', 'What is a composite key?', 'Asked earlier, in the module']);
+    }
+
+    public function test_a_modules_questions_page_filters_searches_and_sorts(): void
+    {
+        $by = $this->principal($this->ada);
+        $questions = app(Questions::class);
+        $first = $questions->ask($by, $this->databases->id, 'What is a foreign key?', null, $this->week1->id);
+        $this->travel(1)->minutes();
+        $second = $questions->ask($by, $this->databases->id, 'Why normalise a table?', null, $this->week1->id);
+        $this->travel(1)->minutes();
+        $third = $questions->ask($by, $this->databases->id, 'When is a key composite?', null, $this->week1->id);
+        $questions->setStatus($by, $second->id, 'stuck');
+        $questions->setStatus($by, $third->id, 'answered', 'When one column is not enough to tell rows apart.');
+
+        $board = $this->board(['moduleId' => $this->week1->id])
+            ->assertSeeInOrder(['Why normalise a table?', 'What is a foreign key?', 'When is a key composite?'])
+            ->set('sort', 'newest')->assertSeeInOrder(['When is a key composite?', 'Why normalise a table?', 'What is a foreign key?'])
+            ->set('sort', 'oldest')->assertSeeInOrder(['What is a foreign key?', 'Why normalise a table?', 'When is a key composite?'])
+            ->set('search', 'KEY')->assertSee('What is a foreign key?')->assertSee('When is a key composite?')->assertDontSee('Why normalise a table?')
+            // The answer is searched too.
+            ->set('search', 'rows apart')->assertSee('When is a key composite?')->assertDontSee('What is a foreign key?')
+            ->set('search', 'nothing like this')->assertSee('No question matches.')
+            ->set('search', '')->call('show', 'stuck')->assertSee('Why normalise a table?')->assertDontSee('What is a foreign key?');
+
+        // ?ask=1 opens the panel for a new one straight away.
+        $this->board(['moduleId' => $this->week1->id, 'ask' => true])->assertSet('editing', 'new')->assertSee('New question');
+        $this->actingAs($this->ada)->get(route('workspaces.modules.questions', [$this->databases->id, $this->week1->id, 'ask' => 1]))
+            ->assertOk()->assertSee('New question');
+    }
+
+    public function test_in_a_session_the_questions_are_folded_until_opened(): void
+    {
+        $by = $this->principal($this->ada);
+        $session = app(Sessions::class)->start($by, $this->databases->id, null, $this->week1->id);
+        $this->board(['moduleId' => $this->week1->id, 'sessionId' => $session->id, 'folded' => true])
+            ->assertDontSee('Questions')->assertDontSee("What don't you get?", false);
+        app(Questions::class)->ask($by, $this->databases->id, 'What is a view?', null, $this->week1->id, $session->id);
+        $this->board(['moduleId' => $this->week1->id, 'sessionId' => $session->id, 'folded' => true])
+            ->assertSeeInOrder(['Questions', '1 open', 'All questions', 'What is a view?'])
+            ->assertSee('aria-expanded', false)->assertSee(route('workspaces.modules.questions', [$this->databases->id, $this->week1->id]), false)
+            ->assertDontSee("What don't you get?", false)->assertDontSee('Search the questions');
+    }
+
+    public function test_another_students_module_has_no_questions_page(): void
+    {
+        $bob = $this->student();
+        $theirs = app(Modules::class)->create($this->principal($bob), app(Workspaces::class)->create($this->principal($bob), ['name' => 'Theirs'])->id, ['title' => 'Theirs']);
+        $this->actingAs($this->ada)->get(route('workspaces.modules.questions', [$this->databases->id, $theirs->id]))->assertNotFound();
     }
 
     public function test_progress_holds_every_question_and_a_topics_menu_starts_one(): void

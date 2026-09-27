@@ -669,8 +669,12 @@ test('questions: the board in a session and the side panel', async ({ page }) =>
         await page.getByRole('button', { name: 'Ask a question', exact: true }).click();
         await page.locator('#question-dialog').getByLabel('Question', { exact: true }).fill(text);
         await page.locator('#question-dialog').getByRole('button', { name: 'Save' }).click();
-        await questions.getByRole('button', { name: text, exact: true }).waitFor();
+        await page.locator('#question-dialog').waitFor({ state: 'hidden' });
     }
+    // In a session they're folded until opened.
+    await page.screenshot({ path: out('questions-session-desktop-vistud-light-folded') });
+    await page.getByRole('button', { name: /^Questions/ }).click();
+    await questions.getByRole('button', { name: 'When would I use a full outer join?', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Actions for What is the difference between a key and an index?' }).click();
     await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Stuck' }).click();
     await questions.getByRole('listitem').first().filter({ hasText: 'Stuck' }).waitFor();
@@ -695,6 +699,23 @@ test('questions: the board in a session and the side panel', async ({ page }) =>
     await questions.getByRole('button', { name: 'What is the difference between a key and an index?', exact: true }).click();
     await panel.getByLabel('Question', { exact: true }).waitFor();
     await page.screenshot({ path: out('questions-mobile-vistud-light-panel') });
+    await page.keyboard.press('Escape');
+
+    // A module's questions on their own page.
+    await page.goto(`/workspaces/${student.workspace}/modules`);
+    await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
+    await page.locator('main').getByRole('link', { name: /^Questions/ }).click();
+    await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
+    await page.waitForLoadState('load');
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`questions-page-${size}-${theme}`), fullPage: size === 'mobile' });
+        }
+    }
 });
 
 test('toast: a passing notice on a desktop and a phone', async ({ page }) => {

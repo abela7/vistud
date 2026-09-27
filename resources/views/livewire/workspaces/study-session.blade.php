@@ -132,7 +132,7 @@
         </ul>
     </section>
 
-    <livewire:workspaces.question-board :workspace-id="$workspaceId" :module-id="$module?->id" :session-id="$session->id" :quiet="true" :key="'questions-'.$session->id" />
+    <livewire:workspaces.question-board :workspace-id="$workspaceId" :module-id="$module?->id" :session-id="$session->id" :folded="true" :key="'questions-'.$session->id" />
 
     @if ($session->summary || $session->checkpoint)
         <section aria-labelledby="tutor-heading" class="overview-card space-y-3">

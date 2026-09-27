@@ -11,6 +11,7 @@ use App\Study\QuestionDetails;
 use App\Study\Questions;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -22,8 +23,10 @@ use Livewire\Component;
  * the answer. On a module's page it holds the module's questions; in a
  * study session, the session's module's (or, with none, the session's);
  * in Progress, all of them. `question-new` (optionally with a topic) opens
- * the panel for a new one. Quiet, it has no line and shows nothing until
- * there is a question: the page has its own button for a new one.
+ * the panel for a new one. A module's questions have their own page, with
+ * a search and a sort as well as the filter (the owner's review,
+ * 2026-09-27). Folded (a study session): no line, nothing until there is a
+ * question, then the list closed under its heading until opened.
  */
 final class QuestionBoard extends Component
 {
@@ -44,15 +47,24 @@ final class QuestionBoard extends Component
     #[Locked]
     public int $level = 2;
 
-    /** No line to write one down, and nothing shown until there is a question. */
+    /** The board is the page (a module's questions): the page's own title names it. */
     #[Locked]
-    public bool $quiet = false;
+    public bool $page = false;
+
+    /** No line to write one down, nothing until there is a question, then the list folded away until opened. */
+    #[Locked]
+    public bool $folded = false;
 
     /** The question open in the panel, 'new' for a new one, or null when it's closed. */
     #[Locked]
     public ?string $editing = null;
 
     public string $filter = 'all';
+
+    /** status (stuck first), newest or oldest. */
+    public string $sort = 'status';
+
+    public string $search = '';
 
     /** The one-line question at the top. */
     public string $text = '';
@@ -80,9 +92,15 @@ final class QuestionBoard extends Component
         $this->principals = $principals;
     }
 
-    public function mount(string $workspaceId, ?string $moduleId = null, ?string $sessionId = null, int $level = 2, bool $quiet = false): void
+    public const SORTS = ['status' => 'Stuck first', 'newest' => 'Newest first', 'oldest' => 'Oldest first'];
+
+    /** With $ask, the panel for a new question is open from the start. */
+    public function mount(string $workspaceId, ?string $moduleId = null, ?string $sessionId = null, int $level = 2, bool $folded = false, bool $page = false, bool $ask = false): void
     {
-        [$this->workspaceId, $this->moduleId, $this->sessionId, $this->level, $this->quiet] = [$workspaceId, $moduleId, $sessionId, in_array($level, [2, 3], true) ? $level : 2, $quiet];
+        [$this->workspaceId, $this->moduleId, $this->sessionId, $this->level, $this->folded, $this->page] = [$workspaceId, $moduleId, $sessionId, in_array($level, [2, 3], true) ? $level : 2, $folded, $page];
+        if ($ask) {
+            $this->editing = 'new';
+        }
     }
 
     /** Writes the one-line question down, pending. */
@@ -202,10 +220,16 @@ final class QuestionBoard extends Component
         foreach ($all as $question) {
             $counts[$question->status]++;
         }
-        // Stuck first, then pending, then answered; newest first within each.
+        $search = Str::lower(trim($this->search));
+        $shown = array_values(array_filter($all, fn ($q) => ($this->filter === 'all' || $q->status === $this->filter)
+            && ($search === '' || Str::contains(Str::lower($q->text.' '.$q->answer), $search))));
+        // Stuck first, then pending, then answered, newest first within each; or by when they were asked.
         $order = ['stuck' => 0, 'pending' => 1, 'answered' => 2];
-        $shown = array_values(array_filter($all, fn ($q) => $this->filter === 'all' || $q->status === $this->filter));
-        usort($shown, fn ($a, $b) => [$order[$a->status], $b->askedAt] <=> [$order[$b->status], $a->askedAt]);
+        usort($shown, match ($this->sort) {
+            'newest' => fn ($a, $b) => $b->askedAt <=> $a->askedAt,
+            'oldest' => fn ($a, $b) => $a->askedAt <=> $b->askedAt,
+            default => fn ($a, $b) => [$order[$a->status], $b->askedAt] <=> [$order[$b->status], $a->askedAt],
+        });
         $topics = $this->topics->list($by, $this->workspaceId);
 
         return view('livewire.workspaces.question-board', [
