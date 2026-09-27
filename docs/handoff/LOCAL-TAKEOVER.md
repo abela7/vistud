@@ -93,7 +93,7 @@ In this order; each step is small and reviewable. Every screen gets the DESIGN.m
 
 - **The logo decision is not implemented yet** (§4, step 0).
 - **The concurrency test needs Unix** `pcntl` and `posix`. On Windows it is skipped, and a skip does not satisfy the M1 gate. CI runs it.
-- **Windows setup is unverified.**
+- **Windows setup is partly verified** (§9): PHP 8.4, MySQL 8.4, the build and the PHP tests run on the owner's machine. Still unverified:
   - The database-user step is documented for Unix shells only; PowerShell rejects `<`.
   - XAMPP's PHP 8.0 and MariaDB 10.4 are below the baseline. MariaDB's `REVOKE` also lacks the clauses our grants statement uses (DOC1 checked this against the documentation; it was not executed).
   - See DOC1's notes in [setup.md](../development/setup.md).
@@ -133,7 +133,7 @@ Each package's files are listed in [m1-work-packages.md](m1-work-packages.md), a
 
 | Tool | Version |
 |---|---|
-| PHP | 8.4, with `pdo_mysql`, `mbstring`, `intl`, `sodium` (and `pcntl`, `posix` on Unix for the concurrency test) |
+| PHP | 8.4, with `pdo_mysql`, `mbstring`, `intl`, `sodium`, `zip`, and `gd` for the tests (and `pcntl`, `posix` on Unix for the concurrency test) |
 | Composer | 2.x |
 | MySQL | 8.4 LTS. Not MariaDB |
 | Node | 22 LTS, with npm 10. Needed on the WP6 branch only |
@@ -191,19 +191,19 @@ The password for all three is `local-password-only`. It is a local development v
 
 ## 9. What was verified where
 
-The cloud check (2026-09-25) was a fresh clone of `m1/wp6-web-adapters` at `8ac9f03` in an Ubuntu 24.04 container. The handover merge after it adds documentation only.
+The cloud check (2026-09-25) was a fresh clone of `m1/wp6-web-adapters` at `8ac9f03` in an Ubuntu 24.04 container. The handover merge after it adds documentation only. The Windows column is the local team's check on the owner's machine (2026-09-27, Gemini), with its own PHP, MySQL and Node in the ignored `.tools/` folder; rows it didn't cover still say so.
 
 | Step | Cloud container | GitHub CI (ubuntu-24.04) | Windows |
 |---|---|---|---|
-| PHP 8.4 | 8.4.19 | 8.4 | Not verified |
-| MySQL | **8.0.46**, not 8.4 | 8.4 | Not verified. XAMPP MariaDB 10.4 doesn't qualify (DOC1) |
-| Node and npm | 22.22.2 and 10.9.7 | Node 22 | Not verified |
+| PHP 8.4 | 8.4.19 | 8.4 | 8.4.26 (NTS, x64), from `.tools/` (2026-09-27). php.ini needed `extension=zip`, `extension=gd` (the file tests make images) and the upload limits |
+| MySQL | **8.0.46**, not 8.4 | 8.4 | 8.4.11, from `.tools/`, on port 3307 (`DB_PORT=3307` in `.env`). XAMPP's MariaDB 10.4 doesn't qualify (DOC1) |
+| Node and npm | 22.22.2 and 10.9.7 | Node 22 | 22.23.3 and 10.9.9. PowerShell needed `Set-ExecutionPolicy RemoteSigned -Scope CurrentUser` to run npm |
 | Database-user script | Ran (as root, `mysql < …`) | Ran | **No verified procedure** |
 | `composer setup` | Ran, with two workarounds specific to this container:<br>• `COMPOSER_ALLOW_SUPERUSER=1`, because it runs as root<br>• `COMPOSER_PROCESS_TIMEOUT=0`, because downloads through its proxy are slow. The first attempt timed out at 300 s | `composer install` ran | Not verified |
-| `npm ci`, `npm run build` | Ran | Ran | Not verified |
+| `npm ci`, `npm run build` | Ran | Ran | `npm run build` ran |
 | `vistud:themes:build --check` | Passed | Passed (Architecture suite) | Not verified |
 | `migrate:fresh --seed` | Ran; three accounts | — | Not verified |
-| `composer lint`, `composer test` | Passed, 145 tests | Passed | Not verified. Expect the concurrency test to skip |
+| `composer lint`, `composer test` | Passed, 145 tests | Passed | Passed at `35679ec` plus the Windows path fix `06d3e08`: 370 passed, the concurrency test skipped (no `pcntl` on Windows) |
 | Browser tests | 14 passed, using the container's Chromium (`PLAYWRIGHT_CHROMIUM_PATH`). `npx playwright install` was not run | 14 passed after `npx playwright install --with-deps chromium` | Not verified |
 | Browser login, end to end | The seeded student logged in, saw the home placeholder and logged out; the seeded admin got 403 at `/admin` | — | Not verified |
 | `npm run dev` | Not run | — | Not verified |

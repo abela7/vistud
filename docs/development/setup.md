@@ -13,7 +13,7 @@ XAMPP's existing PHP 8.0 and MariaDB installation does not meet this baseline. O
 
 | Tool | Version |
 |---|---|
-| PHP | 8.4, with `pdo_mysql`, `mbstring`, `intl` and `sodium` |
+| PHP | 8.4, with `pdo_mysql`, `mbstring`, `intl`, `sodium` and `zip` (Word and PowerPoint files), and `gd` for the tests (they make small images) |
 | Composer | 2.x |
 | MySQL | 8.4 LTS. This is the supported and tested database. CI runs MySQL 8.4 |
 | Node | 22 LTS, with npm 10 (for the front-end build and the browser tests) |
