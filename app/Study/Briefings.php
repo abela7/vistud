@@ -90,10 +90,14 @@ final class Briefings
         }
         $confused = array_values(array_filter($topics, fn (TopicDetails $t) => $t->shown() === 'confused'));
         $add(60, 2, 'Still confusing', array_map(fn (TopicDetails $t) => '- '.$t->name.($t->moduleId !== null && isset($moduleTitles[$t->moduleId]) ? " ({$moduleTitles[$t->moduleId]})" : ''), $confused));
-        $open = array_values(array_filter($this->questions->list($by, $workspace->id), fn (QuestionDetails $q) => $q->shown() === 'open'));
-        usort($open, fn ($a, $b) => ($b->topicId === $session->topicId && $session->topicId !== null) <=> ($a->topicId === $session->topicId && $session->topicId !== null));
+        // Stuck first, then the ones about this session's topic or module.
+        $open = array_values(array_filter($this->questions->list($by, $workspace->id), fn (QuestionDetails $q) => $q->status !== 'answered'));
+        $here = fn (QuestionDetails $q) => ($session->topicId !== null && $q->topicId === $session->topicId) || ($moduleId !== null && $q->moduleId === $moduleId);
+        usort($open, fn ($a, $b) => [$b->status === 'stuck', $here($b)] <=> [$a->status === 'stuck', $here($a)]);
         $add(70, 2, 'Open questions', array_map(fn (QuestionDetails $q) => '- '.$q->text.$this->bracket([
+            $q->status === 'stuck' ? 'stuck: tried and still unclear' : null,
             $q->topicId !== null ? ($topicsById[$q->topicId]->name ?? null) : null,
+            $q->topicId === null && $q->moduleId !== null ? ($moduleTitles[$q->moduleId] ?? null) : null,
             $q->askTeacher ? 'for the teacher' : null,
         ]), $open));
 

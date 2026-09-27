@@ -749,12 +749,12 @@
     /* The briefing: the text any AI receives, to read, copy or download. */
     @media (min-width: 640px) {
         .modal:has(.modal-panel-wide) {
-            width: min(56rem, calc(100vw - 3rem));
+            width: min(52rem, calc(100vw - 2rem));
         }
     }
 
     .briefing-text {
-        max-height: 55dvh;
+        max-height: 60dvh;
         overflow: auto;
         padding: 0.875rem 1rem;
         border: 1px solid var(--border);

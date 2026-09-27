@@ -11,6 +11,7 @@ use App\Platform\Errors\Unprocessable;
 use App\Study\ModuleDetails;
 use App\Study\Modules;
 use App\Study\Questions;
+use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
@@ -147,6 +148,35 @@ class TopicsTest extends TestCase
         $this->questions->retire($this->by, $question->id);
         $this->assertSame([], $this->questions->list($this->by, $this->databases->id));
         $this->assertThrows(fn () => $this->questions->ask($this->by, $this->databases->id, ''), Unprocessable::class);
+    }
+
+    public function test_a_question_is_pending_stuck_or_answered_in_its_module_and_session(): void
+    {
+        $week1 = app(Modules::class)->create($this->by, $this->databases->id, ['title' => 'Week 1']);
+        $joins = $this->topics->create($this->by, $this->databases->id, 'Joins', $week1->id);
+        $session = app(Sessions::class)->start($this->by, $this->databases->id);
+
+        // Its module is the topic's, and it belongs to the open session.
+        $question = $this->questions->ask($this->by, $this->databases->id, 'What does NULL mean in a join?', $joins->id);
+        $this->assertSame([$week1->id, 'pending', $session->id], [$question->moduleId, $question->status, $question->sessionId]);
+        $loose = $this->questions->ask($this->by, $this->databases->id, 'What is a key?', null, $week1->id);
+        $this->assertSame([$week1->id, null], [$loose->moduleId, $loose->topicId]);
+        $this->assertCount(2, $this->questions->list($this->by, $this->databases->id, $week1->id));
+        $this->assertCount(2, $this->questions->list($this->by, $this->databases->id, null, $session->id));
+
+        $stuck = $this->questions->setStatus($this->by, $question->id, 'stuck');
+        $this->assertSame(['stuck', 'open'], [$stuck->status, $stuck->shown()]);
+        $answered = $this->questions->setStatus($this->by, $question->id, 'answered', '  No value: the row had no match.  ');
+        $this->assertSame(['answered', 'No value: the row had no match.', 'understood'], [$answered->status, $answered->answer, $answered->shown()]);
+        $this->assertStringStartsWith('resolved', $answered->state);
+        $again = $this->questions->setStatus($this->by, $question->id, 'pending');
+        $this->assertSame(['pending', 'No value: the row had no match.'], [$again->status, $again->answer]);
+        $this->assertContains('reopened', $again->flags);
+
+        $this->assertSame('What does NULL mean in a left join?', $this->questions->update($this->by, $question->id, 'What does NULL mean in a left join?')->text);
+        $this->assertThrows(fn () => $this->questions->setStatus($this->by, $question->id, 'maybe'), Unprocessable::class);
+        $this->assertThrows(fn () => $this->questions->setStatus($this->by, $question->id, 'answered', str_repeat('a', 2001)), Unprocessable::class);
+        $this->assertThrows(fn () => $this->questions->ask($this->by, $this->databases->id, 'Q', null, 'no-such-module'), NotFound::class);
     }
 
     public function test_another_students_topics_and_questions_are_missing(): void

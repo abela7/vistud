@@ -63,6 +63,10 @@
 
     @include('livewire.workspaces.partials.place', ['key' => $key, 'placeId' => $place->id])
 
+    @if ($isModule)
+        <livewire:workspaces.question-board :workspace-id="$workspaceId" :module-id="$place->id" :key="'questions-'.$place->id" />
+    @endif
+
     @if ($studied !== [])
         <section aria-labelledby="studied-heading" class="space-y-2">
             <h2 id="studied-heading" class="section-title">Study sessions</h2>

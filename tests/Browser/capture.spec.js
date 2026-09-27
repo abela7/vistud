@@ -68,7 +68,7 @@ test('the tutor\'s marks are pasted, reviewed and saved where they belong', asyn
     await expect(joins).toContainText('3 findings');
     // The answer is evidence: the rules no longer say "not practised yet".
     await expect(joins).not.toContainText('not practised yet');
-    await expect(page.getByRole('list', { name: 'Open questions' })).toContainText('Why are unmatched columns NULL rather than empty?');
+    await expect(page.getByRole('list', { name: 'Questions' })).toContainText('Why are unmatched columns NULL rather than empty?');
 });
 
 for (const [name, viewport] of Object.entries({ desktop, phone })) {

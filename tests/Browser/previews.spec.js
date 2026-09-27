@@ -586,8 +586,9 @@ test('progress: topics with statuses and evidence, questions, the topic dialog',
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
     await page.getByRole('button', { name: 'New question' }).click();
-    await page.locator('#progress-dialog').getByLabel('Question').fill('When is a table in third normal form?');
-    await page.locator('#progress-dialog').getByLabel('About (optional)').selectOption({ label: 'Normalisation' });
+    await page.locator('#question-dialog').getByLabel('Question', { exact: true }).fill('When is a table in third normal form?');
+    await page.locator('#question-dialog').getByLabel(/^Topic/).selectOption({ label: 'Normalisation' });
+    await page.locator('#question-dialog').getByText('Stuck', { exact: true }).click();
     await page.screenshot({ path: out('progress-desktop-vistud-light-question') });
 });
 

@@ -10,8 +10,8 @@
 
     $statusWords = ['not_started' => 'Not started', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Confused', 'mastered' => 'Mastered'];
     $statusIcons = ['not_started' => 'circle-dot', 'covered' => 'check', 'understood' => 'circle-check', 'confused' => 'circle-alert', 'mastered' => 'shield-check'];
-    $headings = ['topic' => $targetId === null ? 'New topic' : 'Rename topic', 'move' => 'Move “'.$target.'”', 'question' => 'New question', 'finding' => ($findingId === null ? 'New finding' : 'Edit finding').' · '.$target];
-    $submit = ['topic' => $targetId === null ? 'Add topic' : 'Rename', 'move' => 'Move', 'question' => 'Add question', 'finding' => $findingId === null ? 'Add finding' : 'Save'];
+    $headings = ['topic' => $targetId === null ? 'New topic' : 'Rename topic', 'move' => 'Move “'.$target.'”', 'finding' => ($findingId === null ? 'New finding' : 'Edit finding').' · '.$target];
+    $submit = ['topic' => $targetId === null ? 'Add topic' : 'Rename', 'move' => 'Move', 'finding' => $findingId === null ? 'Add finding' : 'Save'];
     $groups = [...array_map(fn ($m) => [$m->id, $m->title], $modules), ['', $modules === [] ? '' : 'Not in a module']];
 @endphp
 <div class="space-y-8">
@@ -22,7 +22,7 @@
             @endforeach
         </ul>
         <div class="flex flex-wrap gap-2">
-            <x-button icon="circle-help" wire:click="newQuestion">New question</x-button>
+            <x-button icon="circle-help" x-data x-on:click="Livewire.dispatch('question-new')">New question</x-button>
             <x-button variant="primary" icon="plus" wire:click="newTopic">New topic</x-button>
         </div>
     </div>
@@ -129,34 +129,7 @@
         @endif
     </section>
 
-    <section aria-labelledby="questions-heading" class="space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="questions-heading" class="text-lg font-semibold">Questions <span class="font-normal text-fg-muted">({{ count($open) }} open)</span></h2>
-            @if ($understood !== [])
-                <x-button variant="ghost" wire:click="toggleUnderstood" aria-expanded="{{ $showUnderstood ? 'true' : 'false' }}" aria-controls="understood-questions">
-                    {{ $showUnderstood ? 'Hide' : 'Show' }} {{ count($understood) }} understood
-                </x-button>
-            @endif
-        </div>
-        @if ($open === [] && $understood === [])
-            <p class="rounded-xl border border-dashed border-border-strong px-6 py-6 text-center text-fg-muted">Nothing registered yet. When something isn't clear, write it here: you'll go through the open ones later, or take them to your teacher.</p>
-        @else
-            <ul class="module-card divide-y divide-divider" role="list" aria-label="Open questions">
-                @forelse ($open as $question)
-                    @include('livewire.workspaces.partials.question-row')
-                @empty
-                    <li class="px-4 py-3 text-sm text-fg-muted">No open questions.</li>
-                @endforelse
-            </ul>
-            @if ($showUnderstood && $understood !== [])
-                <ul id="understood-questions" class="module-card divide-y divide-divider" role="list" aria-label="Understood questions">
-                    @foreach ($understood as $question)
-                        @include('livewire.workspaces.partials.question-row')
-                    @endforeach
-                </ul>
-            @endif
-        @endif
-    </section>
+    <livewire:workspaces.question-board :workspace-id="$workspaceId" />
 
     <dialog id="progress-dialog" class="modal" aria-labelledby="progress-dialog-title"
         wire:ignore.self
@@ -215,25 +188,6 @@
                                 @error('source') <p class="field-error">{{ $message }}</p> @enderror
                             </div>
                             <x-field name="locator" label="Where in it (optional)" wire:model="locator" maxlength="60" autocomplete="off" hint="Like “slide 12” or “p. 4”." />
-                        @endif
-                    @endif
-                    @if ($mode === 'question')
-                        <div class="field">
-                            <label for="question-text" class="field-label">Question</label>
-                            <textarea id="question-text" class="input" rows="3" maxlength="1000" wire:model="text" autofocus placeholder="What isn't clear?"></textarea>
-                            @error('text') <p class="field-error">{{ $message }}</p> @enderror
-                        </div>
-                        @if ($topics !== [])
-                            <div class="field">
-                                <label for="question-topic" class="field-label">About (optional)</label>
-                                <select id="question-topic" class="input" wire:model="topicId">
-                                    <option value="">No particular topic</option>
-                                    @foreach ($topics as $topic)
-                                        <option value="{{ $topic->id }}">{{ $topic->name }}</option>
-                                    @endforeach
-                                </select>
-                                @error('topicId') <p class="field-error">{{ $message }}</p> @enderror
-                            </div>
                         @endif
                     @endif
                 </div>

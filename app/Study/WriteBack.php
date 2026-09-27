@@ -122,7 +122,7 @@ final class WriteBack
                 $topicName = $topicId !== null ? $topics[$topicId]->name : null;
                 match ($item['kind']) {
                     'finding' => $this->findings->add($by, $topicId, ['text' => (string) ($item['text'] ?? '')], 'ai'),
-                    'question' => $this->questions->ask($by, $session->workspaceId, (string) ($item['text'] ?? ''), $topicId),
+                    'question' => $this->questions->ask($by, $session->workspaceId, (string) ($item['text'] ?? ''), $topicId, $topics[$topicId]->moduleId ?? $moduleId, $session->id),
                     'flashcard' => $this->flashcards->add($by, $session->workspaceId, $topicId, $item['front'] ?? '', $item['back'] ?? '', 'ai', $session->id),
                     'attempt' => $this->attempt($scope, $by, $session, $topicId, $item, $at, $quiz),
                     'status' => $this->topics->report($by, $topicId, (string) ($item['proposed'] ?? '')),

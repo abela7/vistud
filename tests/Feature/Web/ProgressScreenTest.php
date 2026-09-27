@@ -3,6 +3,7 @@
 namespace Tests\Feature\Web;
 
 use App\Livewire\Workspaces\Progress;
+use App\Livewire\Workspaces\QuestionBoard;
 use App\Models\User;
 use App\Study\Modules;
 use App\Study\Questions;
@@ -46,7 +47,7 @@ class ProgressScreenTest extends TestCase
             ->assertSee('<title>Progress · Databases', false)
             ->assertSeeInOrder(['1 not started', '0 covered', '1 understood', '0 confused', '0 mastered'])
             ->assertSeeInOrder(['Week 1: Relational model', 'Joins', 'Understood', 'Evidence: no contact yet · not practised yet', 'Not in a module', 'Normalisation', 'Not started', 'Evidence: no contact yet'])
-            ->assertSeeInOrder(['Questions', '(1 open)', 'Why does a left join keep unmatched rows?', 'Joins', 'Understood'])
+            ->assertSeeInOrder(['Questions', 'Why does a left join keep unmatched rows?', 'Pending', 'Joins'])
             ->assertDontSee('is coming next');
     }
 
@@ -73,24 +74,12 @@ class ProgressScreenTest extends TestCase
         $page->call('retireTopic', $joins->id)->assertSee('SQL joins is removed.')->assertSee('No topics yet');
     }
 
-    public function test_questions_are_registered_understood_reopened_and_flagged_for_the_teacher(): void
+    public function test_new_questions_open_the_questions_panel_about_a_topic(): void
     {
-        $by = $this->principal($this->ada);
-        $joins = app(Topics::class)->create($by, $this->databases->id, 'Joins');
+        $joins = app(Topics::class)->create($this->principal($this->ada), $this->databases->id, 'Joins');
 
-        $page = $this->page()
-            ->call('newQuestion', $joins->id)->assertSet('topicId', $joins->id)
-            ->call('save')->assertHasErrors('text')
-            ->set('text', 'Why does a left join keep unmatched rows?')->call('save')
-            ->assertSee('Your question is registered.')->assertSee('(1 open)');
-        $question = app(Questions::class)->list($by, $this->databases->id)[0];
-
-        $page->call('toggleAskTeacher', $question->id)->assertSee('Ask the teacher')
-            ->call('resolveQuestion', $question->id)->assertSee('(0 open)')->assertSee('Show 1 understood')
-            ->call('toggleUnderstood')->assertSee('Still not clear')
-            ->call('reopenQuestion', $question->id)->assertSee('(1 open)')->assertSee('Came back')
-            ->call('retireQuestion', $question->id)->assertSee('The question is removed.');
-        $this->assertSame([], app(Questions::class)->list($by, $this->databases->id));
+        $this->page()->assertSee('New question')
+            ->call('newQuestion', $joins->id)->assertDispatched('question-new', topicId: $joins->id);
     }
 
     public function test_the_browser_cannot_change_the_workspace_or_the_dialogs_target(): void
@@ -108,7 +97,9 @@ class ProgressScreenTest extends TestCase
         $topic = app(Topics::class)->create($this->principal($bob), $theirs->id, 'Secret');
 
         $this->actingAs($this->ada)->get(route('workspaces.show', [$theirs->id, 'progress']))->assertNotFound();
-        $this->page()->call('newQuestion', $topic->id)->set('text', 'Mine')->call('save')->assertHasErrors('topicId');
+        $this->actingAs($this->ada);
+        Livewire::test(QuestionBoard::class, ['workspaceId' => $this->databases->id])
+            ->call('create', $topic->id)->set('question', 'Mine')->call('save')->assertHasErrors('question');
         $this->assertSame([], app(Questions::class)->list($this->principal($bob), $theirs->id));
     }
 

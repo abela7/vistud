@@ -140,8 +140,9 @@ for (const theme of THEMES) {
         const student = await open(page);
         await useTheme(page, theme);
         expect(await analyse(page)).toEqual([]);
-        await page.getByRole('button', { name: 'Edit: This course' }).click();
-        await page.locator('#instructions-dialog').getByRole('textbox').waitFor();
+        await page.getByRole('button', { name: 'More for Databases' }).click();
+        await page.getByRole('button', { name: 'Instructions for the AI' }).click();
+        await page.locator('#instructions-dialog').getByLabel('This course').waitFor();
         expect(await analyse(page)).toEqual([]);
 
         await page.goto(`/workspaces/${student.workspace}/progress`);

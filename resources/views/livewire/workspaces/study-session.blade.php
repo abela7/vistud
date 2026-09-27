@@ -110,6 +110,8 @@
                 </section>
             @endif
 
+            <livewire:workspaces.question-board :workspace-id="$workspaceId" :module-id="$module?->id" :session-id="$session->id" :key="'questions-'.$session->id" />
+
             <section aria-labelledby="timeline-heading" class="overview-card space-y-3">
                 <h2 id="timeline-heading" class="font-semibold">What happened</h2>
                 <ol class="divide-y divide-divider" role="list">
