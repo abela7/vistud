@@ -657,6 +657,46 @@ test('session: the clock, what happened, the end dialog, and starting one', asyn
     await page.screenshot({ path: out('session-desktop-vistud-light-start') });
 });
 
+test('questions: the board in a session and the side panel', async ({ page }) => {
+    const student = makeStudentWithSession();
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
+    await page.waitForLoadState('load');
+    const line = page.getByPlaceholder("What don't you get? Write it down…");
+    const questions = page.getByRole('list', { name: 'Questions' });
+    for (const text of ['Why does a left join keep rows with no match?', 'What is the difference between a key and an index?', 'When would I use a full outer join?']) {
+        await line.fill(text);
+        await line.press('Enter');
+        await questions.getByRole('button', { name: text, exact: true }).waitFor();
+    }
+    await page.getByRole('button', { name: 'Actions for What is the difference between a key and an index?' }).click();
+    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Stuck' }).click();
+    await questions.getByRole('listitem').first().filter({ hasText: 'Stuck' }).waitFor();
+    await page.getByRole('button', { name: 'Actions for Why does a left join keep rows with no match?' }).click();
+    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Answered' }).click();
+    const panel = page.locator('#question-dialog');
+    await panel.getByRole('textbox', { name: /^Answer/ }).fill('A LEFT JOIN keeps every row on the left and fills the columns from the right with NULL where nothing matches.');
+    await page.screenshot({ path: out('questions-desktop-vistud-light-answer') });
+    await panel.getByRole('button', { name: 'Save' }).click();
+    await panel.waitFor({ state: 'hidden' });
+    const board = page.locator('section').filter({ has: questions });
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await board.screenshot({ path: out(`questions-${size}-${theme}`) });
+        }
+    }
+    await page.setViewportSize(sizes.mobile);
+    await useTheme(page, 'vistud-light');
+    await questions.getByRole('button', { name: 'What is the difference between a key and an index?', exact: true }).click();
+    await panel.getByLabel('Question', { exact: true }).waitFor();
+    await page.screenshot({ path: out('questions-mobile-vistud-light-panel') });
+});
+
 test('pomodoro: the countdown ring, a break, and the clock choice', async ({ page }) => {
     const student = makeStudentWithPomodoro(118);
     await page.setViewportSize(sizes.desktop);
