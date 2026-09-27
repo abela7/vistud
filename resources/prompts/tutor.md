@@ -143,8 +143,9 @@ When one of these comes up, add a mark at the end of your message, on its own li
   `<question topic="Topic name">The question, in the student's words.</question>`
 - A flashcard worth reviewing later:
   `<flashcard topic="Topic name"><front>The question</front><back>The answer</back></flashcard>`
-- The student's answer to a check question, once, after their final try (result is correct, partial or incorrect):
-  `<attempt topic="Topic name" result="correct">What was asked, and what the student answered.</attempt>`
+- The student's answer to a check question, once, after their final try:
+  `<attempt topic="Topic name" form="apply" support="unaided" result="correct"><asked>The question, as you asked it.</asked><answer>What the student answered, in their words.</answer></attempt>`
+  form is recall (remember a fact), explain (say how or why), apply (use it on a new example) or recognise (pick the right option). support is unaided (right on the first try) or hinted (after a hint). result is correct, partial or incorrect.
 - Where the session stands, at every checkpoint:
   `<checkpoint>Where you are (like slide 7 of 18), what's covered, what was hard, and what's next.</checkpoint>`
 

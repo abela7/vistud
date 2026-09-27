@@ -263,6 +263,56 @@ final class Sessions
         });
     }
 
+    /** The tutor's summary for the next session (the write-back), open or ended. */
+    public function setSummary(Principal $by, string $id, string $summary): void
+    {
+        $this->setText($by, $id, 'summary', $summary, 2000);
+    }
+
+    /** Where the session last stood (the tutor's latest checkpoint), open or ended. */
+    public function setCheckpoint(Principal $by, string $id, string $checkpoint): void
+    {
+        $this->setText($by, $id, 'checkpoint', $checkpoint, 1000);
+    }
+
+    /** @return list<string> fingerprints of the marks already saved from this session's chat */
+    public function captured(Principal $by, string $id): array
+    {
+        $row = LearnerTables::query(Guard::learner($by), 'study_sessions')->where('id', $id)->first() ?? throw new NotFound;
+
+        return json_decode((string) $row->captured, true) ?: [];
+    }
+
+    /** Remembers marks as saved, and (given one) the session note they went into. */
+    public function remember(Principal $by, string $id, array $fingerprints, ?string $noteId = null): void
+    {
+        $scope = Guard::learner($by);
+        DB::transaction(function () use ($scope, $id, $fingerprints, $noteId) {
+            $row = $this->lock($scope, $id);
+            $captured = array_values(array_unique([...(json_decode((string) $row->captured, true) ?: []), ...$fingerprints]));
+            LearnerTables::query($scope, 'study_sessions')->where('id', $id)->update(array_filter([
+                'captured' => json_encode($captured), 'note_id' => $noteId, 'updated_at' => self::now(),
+            ], fn ($v) => $v !== null));
+        });
+    }
+
+    /** The session note's id, if the write-back made one. */
+    public function noteId(Principal $by, string $id): ?string
+    {
+        $row = LearnerTables::query(Guard::learner($by), 'study_sessions')->where('id', $id)->first() ?? throw new NotFound;
+
+        return $row->note_id;
+    }
+
+    private function setText(Principal $by, string $id, string $column, string $text, int $limit): void
+    {
+        $scope = Guard::learner($by);
+        $text = trim($text);
+        Input::refuse($text === '' ? [$column => 'Write something.'] : (mb_strlen($text) > $limit ? [$column => "Keep it to {$limit} characters."] : []));
+        $this->lock($scope, $id);
+        LearnerTables::query($scope, 'study_sessions')->where('id', $id)->update([$column => $text, 'updated_at' => self::now()]);
+    }
+
     /**
      * The clock and teaching the student chose last (in this workspace, or
      * any), to offer again: a new session starts the way the last one did.
@@ -741,6 +791,7 @@ final class Sessions
             (int) $row->pomodoros, (int) $row->pomodoros_skipped,
             Tutoring::normalised($row->tutoring === null ? null : json_decode((string) $row->tutoring, true)),
             $row->material === null ? [] : array_values(json_decode((string) $row->material, true) ?: []),
+            $row->summary, $row->checkpoint,
         );
     }
 

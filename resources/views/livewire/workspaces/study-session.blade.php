@@ -30,6 +30,7 @@
         </div>
         <div class="flex min-w-0 flex-wrap items-center gap-2">
             <x-button icon="scroll-text" wire:click="showBriefing">Briefing</x-button>
+            <x-button icon="clipboard-paste" x-data x-on:click="Livewire.dispatch('capture-open')">Save from the chat</x-button>
             @include('livewire.workspaces.partials.row-menu', ['id' => 'session-'.$session->id, 'label' => 'this session', 'items' => array_values(array_filter([
                 $open ? ['How the AI teaches', 'message-square-text', 'editTeaching', false] : null,
                 $open ? [$session->usesPomodoro() ? 'Pomodoro settings' : 'Use the Pomodoro clock', 'timer', 'editPomodoro', false] : null,
@@ -37,6 +38,8 @@
             ]))])
         </div>
     </div>
+
+    <livewire:workspaces.session-capture :workspace-id="$workspaceId" :session-id="$session->id" :key="'capture-'.$session->id" />
 
     <div role="status" aria-live="polite">
         @if ($notice)
@@ -119,6 +122,25 @@
                     <p class="border-t border-divider pt-3 font-medium">Studied {{ $studied }}</p>
                 @endunless
             </section>
+
+            @if ($session->summary || $session->checkpoint)
+                <section aria-labelledby="tutor-heading" class="overview-card space-y-3">
+                    <h2 id="tutor-heading" class="font-semibold">From the tutor</h2>
+                    @if ($session->summary)
+                        <div class="space-y-1">
+                            <h3 class="text-sm font-semibold text-fg-muted">Summary</h3>
+                            <p class="break-words">{{ $session->summary }}</p>
+                        </div>
+                    @endif
+                    @if ($session->checkpoint)
+                        <div class="space-y-1">
+                            <h3 class="text-sm font-semibold text-fg-muted">Where it stands</h3>
+                            <p class="break-words">{{ $session->checkpoint }}</p>
+                        </div>
+                    @endif
+                    <p class="text-sm text-fg-muted">The next briefing carries these, so the next tutor picks up from here.</p>
+                </section>
+            @endif
         </div>
 
         <div class="min-w-0 space-y-4">

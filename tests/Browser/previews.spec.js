@@ -699,3 +699,41 @@ test('briefing: the dialog, how the AI teaches, and the start options', async ({
     await page.locator('#study-dialog').getByLabel('How to teach').waitFor();
     await page.screenshot({ path: out('briefing-start-desktop-vistud-light') });
 });
+
+test('save from the chat: paste, review, and the session afterwards', async ({ page }) => {
+    const student = makeStudentWithSession();
+    const chat = `Tutor: **Slide 3 of 12 · Left joins**
+<finding topic="Joins">A LEFT JOIN keeps every row of the left table.</finding>
+<question topic="Joins">Why are unmatched columns NULL rather than empty?</question>
+<flashcard topic="Joins"><front>What does a LEFT JOIN keep?</front><back>Every row of the left table.</back></flashcard>
+<attempt topic="Joins" form="apply" support="unaided" result="correct"><asked>Which rows does customers LEFT JOIN orders return?</asked><answer>All customers, with NULLs where there are no orders.</answer></attempt>
+<attempt topic="Keys" form="recall" support="hinted" result="partial"><asked>What makes a column a foreign key?</asked><answer>It points to another table.</answer></attempt>
+<checkpoint>Slide 7 of 12. Covered left joins; next is self joins.</checkpoint>
+<summary>We covered inner and left joins. Left joins went well; NULLs were confusing at first.</summary>
+<status topic="Joins" proposed="understood">Answered the apply question right, unaided.</status>`;
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
+    await page.waitForLoadState('load');
+    await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'Save from the chat' }).click();
+    await page.locator('#capture-dialog').getByLabel("The tutor's replies").fill(chat);
+    await page.screenshot({ path: out('capture-desktop-vistud-light-paste') });
+    await page.locator('#capture-dialog').getByRole('button', { name: 'Find the marks' }).click();
+    await page.locator('#capture-dialog').getByRole('heading', { name: /Statuses: you decide/ }).waitFor();
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.screenshot({ path: out(`capture-${size}-${theme}-review`) });
+        }
+    }
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.locator('#capture-dialog').getByRole('checkbox', { name: /^Set Joins to understood/ }).check();
+    await page.locator('#capture-dialog').getByRole('button', { name: /^Save \d+$/ }).click();
+    await page.getByRole('region', { name: 'From the tutor' }).waitFor();
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.screenshot({ path: out('capture-desktop-vistud-light-saved'), fullPage: true });
+});

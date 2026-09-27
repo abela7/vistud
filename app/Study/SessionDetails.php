@@ -35,6 +35,8 @@ final readonly class SessionDetails
         public int $pomodorosSkipped = 0,
         public array $tutoring = Tutoring::DEFAULTS,
         public array $material = [],
+        public ?string $summary = null,
+        public ?string $checkpoint = null,
     ) {}
 
     /** Whether a note or file (`note:{id}`, `file:{id}`) is in the session's material. */

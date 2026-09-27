@@ -697,6 +697,41 @@
         outline-offset: 2px;
     }
 
+    /* Save from the chat: the paste box, and each mark to keep or not. */
+    .capture-paste {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.8125rem;
+    }
+
+    .capture-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+    }
+
+    .capture-keep {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        cursor: pointer;
+    }
+
+    .capture-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.5rem;
+        padding-left: 1.5rem;
+    }
+
+    .capture-topic {
+        width: auto;
+        min-width: 0;
+        max-width: 100%;
+        padding-block: 0.25rem;
+    }
+
     /* The briefing: the text any AI receives, to read, copy or download. */
     @media (min-width: 640px) {
         .modal:has(.modal-panel-wide) {

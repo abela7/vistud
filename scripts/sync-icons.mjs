@@ -28,6 +28,7 @@ const icons = [
     'circle-check',
     'circle-dot',
     'circle-help',
+    'clipboard-paste',
     'clock',
     'cloud-off',
     'code',

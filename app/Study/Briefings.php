@@ -111,7 +111,7 @@ final class Briefings
             $s->topicId !== null ? ($topicsById[$s->topicId]->name ?? 'a removed topic') : 'no particular topic',
             SessionDetails::duration($s->studySeconds),
             $s->pomodoros > 0 ? $s->pomodoros.' '.($s->pomodoros === 1 ? 'pomodoro' : 'pomodoros') : null,
-        ])), array_slice($earlier, 0, 5)));
+        ])).'.'.($s->summary !== null ? ' The tutor\'s summary: '.$s->summary : ($s->checkpoint !== null ? ' It stopped at: '.$s->checkpoint : '')), array_slice($earlier, 0, 5)));
 
         [$materialLines, $noteBlocks] = $this->material($by, $session, $moduleId, $moduleTitles);
         $add(100, 3, $session->material === [] ? 'Material in ViStud' : 'Material for this session', $materialLines);
@@ -147,6 +147,12 @@ final class Briefings
             $lines[] = '- Clock: free. The student pauses and takes breaks when they like.';
         }
         $lines[] = '- Teaching: '.Tutoring::summary($session->tutoring).'.';
+        if ($session->checkpoint !== null) {
+            $lines[] = '- Where this session last stood (your last checkpoint): '.$session->checkpoint.' Pick up from here.';
+        }
+        if ($session->summary !== null) {
+            $lines[] = '- Summary so far: '.$session->summary;
+        }
         if ($session->studySeconds >= 60) {
             $lines[] = ($session->isOpen() ? '- Studied so far in this session: ' : '- Studied in this session: ').SessionDetails::duration($session->studySeconds).'.';
         }

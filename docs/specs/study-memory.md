@@ -4,8 +4,8 @@
 topics, statuses and questions (1a); findings, web links, assignments and
 tasks, instructions and the Overview (1b). Step 2 has begun: the study
 session, its clock (§4.1), the Pomodoro clock (§4.2), and the teaching
-options, tutoring prompt and briefing (§4.3) are built; the write-back and
-the MCP server are next (§5).
+options, tutoring prompt and briefing (§4.3), and the write-back (§4.4) are
+built; the MCP server is next (§5).
 
 **The idea in one line.** ViStud is the body; the language model is the engine.
 The body keeps a living copy of what the student understands about each
@@ -189,7 +189,7 @@ The teaching options fill its four blanks (`App\Study\Tutoring`).
 **Marks** are the prompt's contract with the write-back: the AI adds them on
 their own line, and ViStud offers to save them. `<finding topic>`,
 `<question topic>`, `<flashcard topic><front/><back/></flashcard>`,
-`<attempt topic result="correct|partial|incorrect">`, `<checkpoint>` (where the
+`<attempt topic form support result><asked/><answer/></attempt>`, `<checkpoint>` (where the
 session stands), and at the end
 `<summary>` and one `<status topic proposed="covered|understood|confused">`
 per topic covered.
@@ -216,11 +216,40 @@ session's module holds.
 receives, with *Copy* and *Download* (a `.md` file to attach). Until the
 engine and the MCP server exist, pasting it into any AI starts the tutor warm.
 
+### 4.4 The write-back (built)
+
+**Save from the chat** on a session's page: the student pastes the tutor's
+replies (or the whole chat), ViStud reads the marks (`App\Study\Capture`:
+it copes with backticks, code blocks, escaped `&lt;`, curly quotes and
+repeats, and removes only the marks' own tags, so "age<18" stays), and
+shows them to review, grouped: the summary, key points, questions,
+flashcards, answers, where the session stands, and statuses. Each has a
+tick, the topic it goes to (matched by name; an unknown name becomes a new
+topic in the session's module when saved), and editable words where that
+makes sense. Statuses are never ticked for the student (S3). Only the last
+summary and checkpoint are kept. `App\Study\WriteBack` saves:
+
+| Mark | Goes to |
+|---|---|
+| finding | a finding on the topic, written by *a study session* |
+| question | a registered question on the topic |
+| flashcard | a flashcard on the topic (`flashcards` table; review comes later) |
+| attempt | evidence in the journal: the question is a **task** (its id comes from its words, so the same question in a later session is the same task, as §4 of ADR 0002 asks), a `relates` claim that the task **exercises** the topic (once), and an **attempt** with the AI's result (`judged_by: ai`, `setting: chat`, the form and support the tutor gave), carrying the session's id and dated at the session's end. The rules then count it: a correct *apply* answer moves a topic past "not practised yet" |
+| status | the student's word on the topic, only if ticked |
+| summary, checkpoint | kept on the session; the next briefing carries the last sessions' summaries, and a resumed session's briefing says where it last stood |
+
+A **session note** (on by default) gathers what was kept, readable in the
+module (or the course's top level), and later pastes add to it. Each saved
+mark's fingerprint is kept on the session, so pasting the same chat again
+shows *Saved before*. What can't be saved (an emptied text, a topic gone)
+is listed; the rest is saved.
+
 ## 5. Build order
 
 1. **Tracker:** topics, statuses, questions (1a); findings, links, assignments,
    instructions, Overview (1b). Useful before any engine is connected.
-2. **Session engine:** the session, its clock and the Pomodoro clock (built); start options
+2. **Session engine:** the session, its clock and the Pomodoro clock, the
+   teaching options, prompt and briefing, and the write-back (built); start options
    (how to teach, check-ins, quiz level) and the tutoring prompt; the briefing
    builder; the write-back (session note, findings, questions, flashcards,
    attempts, proposed statuses); the MCP server, so any AI client works with

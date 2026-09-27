@@ -63,7 +63,7 @@ class BriefingsTest extends TestCase
             '## The path of a session', '1. **Open**', '2. **Teach**', '3. **Checkpoint**', '4. **Close**',
             '## Words the student can use', '**next**', '**save that**', '**wrap up**', '## When things are unclear', '## Always', '## Marks', 'not in a code block', '## Ending'], $prompt);
         // The marks ViStud reads back are in the prompt.
-        foreach (['<finding topic=', '<question topic=', '<flashcard topic=', '<attempt topic=', '<checkpoint>', '<summary>', '<status topic='] as $mark) {
+        foreach (['<finding topic=', '<question topic=', '<flashcard topic=', '<attempt topic=', '<asked>', '<answer>', '<checkpoint>', '<summary>', '<status topic='] as $mark) {
             $this->assertStringContainsString($mark, $prompt);
         }
 
