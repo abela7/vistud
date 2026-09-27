@@ -85,10 +85,12 @@ class LearnerIsolationTest extends TestCase
     private function phpFiles(string $directory): array
     {
         $files = [];
+        $root = rtrim(str_replace('\\', '/', base_path()), '/').'/';
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(base_path($directory), RecursiveDirectoryIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
             if ($file->getExtension() === 'php') {
-                $files[] = ltrim(str_replace(base_path(), '', $file->getPathname()), '/');
+                $pathname = str_replace('\\', '/', $file->getPathname());
+                $files[] = str_starts_with($pathname, $root) ? substr($pathname, strlen($root)) : $pathname;
             }
         }
         sort($files);
