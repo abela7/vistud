@@ -20,10 +20,12 @@ class SessionPageController
     {
         $by = $principals->fromRequest($request);
         $details = $workspaces->find($by, $workspace);
-        if ($sessions->find($by, $session)->workspaceId !== $details->id) {
+        $found = $sessions->find($by, $session);
+        if ($found->workspaceId !== $details->id) {
             throw new NotFound;
         }
 
-        return view('workspaces.session', ['workspace' => $details, 'sessionId' => $session]);
+        // A session in a module belongs to Modules in the navigation.
+        return view('workspaces.session', ['workspace' => $details, 'sessionId' => $session, 'section' => $found->moduleId !== null ? 'modules' : 'overview']);
     }
 }

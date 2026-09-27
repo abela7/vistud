@@ -206,3 +206,36 @@ test('a session page never scrolls sideways at 320 px, even with 200% text', asy
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
+
+test('starting while a session is open says so, and it can be ended first', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const student = await openSession(page);
+    await page.goto(`/workspaces/${student.workspace}/modules`);
+    await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
+    await page.waitForLoadState('load');
+    await page.getByRole('button', { name: 'Study this' }).click();
+    const panel = page.locator('#study-dialog');
+    await expect(panel.getByRole('heading', { name: "You're already studying" })).toBeVisible();
+    await expect(panel).toContainText('Joins');
+    await expect(panel.getByRole('link', { name: 'Go to the session' })).toHaveAttribute('href', new RegExp(`/sessions/${student.session}$`));
+    await panel.getByRole('button', { name: 'End it' }).click();
+    await expect(panel.getByRole('heading', { name: 'Start studying' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Session ended.' })).toBeVisible();
+    await expect(pill(page)).toHaveCount(0);
+});
+
+test('the top-bar timer hides to a pulsing dot, and stays hidden until shown again', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const student = await openSession(page);
+    await pill(page).getByRole('button', { name: 'Hide the timer' }).click();
+    await expect(pill(page)).toBeHidden();
+    const dot = page.getByRole('button', { name: 'Show the study timer' });
+    await expect(dot).toBeVisible();
+    await page.goto(`/workspaces/${student.workspace}`);
+    await expect(dot).toBeVisible();
+    await expect(pill(page)).toBeHidden();
+    await dot.click();
+    await expect(pill(page)).toBeVisible();
+    await expect(pill(page).getByRole('button', { name: 'Pause the session' })).toBeVisible();
+});

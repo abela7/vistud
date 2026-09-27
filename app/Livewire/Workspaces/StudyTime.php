@@ -15,6 +15,7 @@ use App\Study\Modules;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\Topics;
+use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
@@ -25,6 +26,8 @@ use Livewire\Component;
  * Starting a study session and logging time studied without the clock
  * (docs/specs/study-memory.md §4), from anywhere in a workspace: the
  * `study-start` event (optionally with a module or topic) and `study-log`.
+ * One session at a time: with one open, starting says so and offers to go
+ * back to it or end it first; the two never mix.
  * With $stats, as on the Overview, it also shows the student's rhythm: the
  * streak, this week day by day, and the flashcards due. The service checks
  * everything.
@@ -36,9 +39,13 @@ final class StudyTime extends Component
     #[Locked]
     public string $workspaceId;
 
-    /** start or log: the dialog that's open, or null. */
+    /** start, busy (another session is open) or log: the dialog that's open, or null. */
     #[Locked]
     public ?string $mode = null;
+
+    /** The open session that has to end before a new one starts. */
+    #[Locked]
+    public ?string $busyId = null;
 
     /** The Overview's tiles: the streak, this week, the cards due. */
     #[Locked]
@@ -62,10 +69,13 @@ final class StudyTime extends Component
 
     private Flashcards $flashcards;
 
+    private Workspaces $workspaces;
+
     private PrincipalFactory $principals;
 
-    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Flashcards $flashcards, PrincipalFactory $principals): void
+    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Flashcards $flashcards, Workspaces $workspaces, PrincipalFactory $principals): void
     {
+        $this->workspaces = $workspaces;
         $this->flashcards = $flashcards;
         $this->sessions = $sessions;
         $this->topics = $topics;
@@ -84,10 +94,32 @@ final class StudyTime extends Component
     {
         $this->open('start');
         [$this->moduleId, $this->topicId] = [$moduleId ?? '', $topicId ?? ''];
+        $open = $this->sessions->current($this->principal());
+        if ($open !== null) {
+            [$this->mode, $this->busyId] = ['busy', $open->id];
+
+            return;
+        }
         // The clock and teaching the student chose last, ready again.
         $last = $this->sessions->lastChoices($this->principal(), $this->workspaceId);
         $this->fillPomodoro($last['pomodoro']);
         $this->fillTeaching($last['tutoring']);
+    }
+
+    /** Ends the open session, then goes on to start the new one. */
+    public function endOpen(): void
+    {
+        if ($this->mode !== 'busy' || $this->busyId === null) {
+            return;
+        }
+        try {
+            $ended = $this->sessions->end($this->principal(), $this->busyId);
+            $this->notice = 'Session ended. You studied '.SessionDetails::duration($ended->studySeconds).'.';
+        } catch (Conflict|NotFound) {
+            // It ended meanwhile.
+        }
+        $this->dispatch('session-changed');
+        $this->newSession($this->moduleId ?: null, $this->topicId ?: null);
     }
 
     #[On('study-log')]
@@ -100,6 +132,9 @@ final class StudyTime extends Component
 
     public function save(): void
     {
+        if ($this->mode === 'busy') {
+            return;
+        }
         $by = $this->principal();
         $this->resetErrorBag();
 
@@ -123,6 +158,12 @@ final class StudyTime extends Component
 
             return;
         } catch (Conflict $e) {
+            if ($e->errorCode === 'session_open') {
+                // Started elsewhere meanwhile, in another tab.
+                $this->newSession($this->moduleId ?: null, $this->topicId ?: null);
+
+                return;
+            }
             $this->addError('topicId', $e->getMessage());
 
             return;
@@ -138,7 +179,7 @@ final class StudyTime extends Component
 
     public function close(): void
     {
-        $this->reset('mode', 'topicId', 'moduleId', 'date', 'time', 'minutes', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto', 'method', 'checkIns', 'quiz', 'pace');
+        $this->reset('mode', 'busyId', 'topicId', 'moduleId', 'date', 'time', 'minutes', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto', 'method', 'checkIns', 'quiz', 'pace');
         $this->resetErrorBag();
     }
 
@@ -151,6 +192,7 @@ final class StudyTime extends Component
         $data = [
             'topics' => $this->mode === null ? [] : $this->topics->list($by, $this->workspaceId),
             'modules' => $this->mode === 'start' ? $this->modules->list($by, $this->workspaceId) : [],
+            'busy' => $this->mode === 'busy' ? $this->busy($by) : null,
         ];
         if ($this->stats) {
             $zone = $this->zone();
@@ -162,6 +204,26 @@ final class StudyTime extends Component
         }
 
         return view('livewire.workspaces.study-time', $data);
+    }
+
+    /** @return ?array{session: SessionDetails, title: string, where: ?string} the open session, as the busy panel shows it */
+    private function busy(Principal $by): ?array
+    {
+        try {
+            $session = $this->sessions->find($by, (string) $this->busyId);
+        } catch (NotFound) {
+            return null;
+        }
+        $title = null;
+        try {
+            $title = $session->topicId !== null ? $this->topics->find($by, $session->topicId)->name : null;
+            $title ??= $session->moduleId !== null ? $this->modules->find($by, $session->moduleId)->title : null;
+        } catch (NotFound) {
+            // Removed since.
+        }
+        $where = $session->workspaceId === $this->workspaceId ? null : $this->workspaces->find($by, $session->workspaceId)->name;
+
+        return ['session' => $session, 'title' => $title ?? 'Study session', 'where' => $where];
     }
 
     private function open(string $mode): void

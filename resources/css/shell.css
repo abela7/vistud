@@ -127,15 +127,37 @@
         border: 2px solid currentColor;
     }
 
-    .session-pill.is-running .session-dot {
+    :is(.session-pill, .session-mini).is-running .session-dot {
         background-color: currentColor;
         animation: session-pulse 2s ease-in-out infinite;
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .session-pill.is-running .session-dot {
+        :is(.session-pill, .session-mini).is-running .session-dot {
             animation: none;
         }
+    }
+
+    /* The timer, hidden: only a dot that pulses while the clock runs. */
+    .session-mini {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border: 1px solid var(--text-muted);
+        border-radius: 9999px;
+        color: var(--text);
+        cursor: pointer;
+    }
+
+    .session-mini:hover {
+        background-color: var(--hover);
+    }
+
+    .session-mini:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 1px;
     }
 
     .account-button {

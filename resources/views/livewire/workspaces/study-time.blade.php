@@ -66,11 +66,32 @@
         @if ($mode)
             <form wire:submit="save" novalidate class="modal-panel" wire:key="study-dialog-{{ $mode }}">
                 <div class="modal-head">
-                    <h2 id="study-dialog-title" class="min-w-0 flex-1 text-lg font-semibold">{{ $mode === 'start' ? 'Start studying' : 'Log time you studied' }}</h2>
+                    <h2 id="study-dialog-title" class="min-w-0 flex-1 text-lg font-semibold">{{ ['start' => 'Start studying', 'busy' => 'You\'re already studying', 'log' => 'Log time you studied'][$mode] }}</h2>
                     <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
                         <x-icon name="x" />
                     </button>
                 </div>
+                @if ($mode === 'busy')
+                    <div class="space-y-4 px-5 pt-2">
+                        <p>One session at a time, so your study time never mixes. Go back to it, or end it to start a new one.</p>
+                        @if ($busy)
+                            @php $open = $busy['session']; @endphp
+                            <div class="busy-session">
+                                <span class="item-icon ws-colour-green" aria-hidden="true"><x-icon :name="$open->state === 'break' ? 'coffee' : ($open->state === 'running' ? 'timer' : 'pause')" class="size-5" /></span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block font-semibold break-words">{{ $busy['title'] }}</span>
+                                    <span class="item-meta">{{ $open->stateWords() }} · {{ SessionDetails::duration($open->studySeconds) }} studied{{ $busy['where'] ? ' · in '.$busy['where'] : '' }}</span>
+                                </span>
+                            </div>
+                        @endif
+                    </div>
+                    <div class="modal-actions">
+                        <x-button wire:click="endOpen" icon="square" wire:loading.attr="aria-busy" wire:target="endOpen" busy-label="Ending…">End it</x-button>
+                        @if ($busy)
+                            <a href="{{ route('workspaces.sessions.show', [$busy['session']->workspaceId, $busy['session']->id]) }}" class="btn btn-primary"><x-icon name="arrow-right" class="size-4" />Go to the session</a>
+                        @endif
+                    </div>
+                @else
                 <div class="space-y-4 px-5 pt-2">
                     @if ($mode === 'log')
                         <div class="grid gap-4 sm:grid-cols-2">
@@ -118,6 +139,7 @@
                     <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
                     <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ $mode === 'start' ? 'Start' : 'Log time' }}</x-button>
                 </div>
+                @endif
             </form>
         @endif
     </dialog>

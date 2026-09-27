@@ -925,6 +925,17 @@
         background-color: var(--accent);
     }
 
+    /* The open session, in the panel that says one is already running. */
+    .busy-session {
+        display: flex;
+        align-items: center;
+        gap: 0.875rem;
+        padding: 0.875rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface);
+    }
+
     /* What to do next in a session: big, friendly tiles (buttons). */
     .action-grid {
         display: grid;

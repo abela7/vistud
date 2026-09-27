@@ -8,12 +8,16 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Platform\Ids;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Tests\Concerns\BuildsJournalEntries;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
@@ -78,6 +82,10 @@ class SessionsTest extends TestCase
 
         $this->assertThrows(fn () => $this->sessions->start($this->by, $maths->id), Conflict::class);
         $this->assertThrows(fn () => $this->sessions->resume($this->by, $session->id), Conflict::class);
+
+        // The database keeps it too: a second open session can't be written even past the service's check (two tabs at once).
+        $row = (array) DB::table('study_sessions')->where('id', $session->id)->first();
+        $this->assertThrows(fn () => DB::table('study_sessions')->insert(['id' => Ids::new()] + Arr::except($row, ['id', 'open_learner'])), UniqueConstraintViolationException::class);
 
         $this->sessions->end($this->by, $session->id);
         $this->assertSame('running', $this->sessions->start($this->by, $maths->id)->state);

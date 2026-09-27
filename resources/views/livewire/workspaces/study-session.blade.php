@@ -33,9 +33,11 @@
         <div class="min-w-0 flex-1">
             <nav aria-label="Path" class="crumbs">
                 <ol role="list">
-                    <li><a href="{{ route('workspaces.show', $workspaceId) }}">Overview</a></li>
                     @if ($module)
+                        <li><a href="{{ route('workspaces.show', [$workspaceId, 'modules']) }}">Modules</a></li>
                         <li><a href="{{ route('workspaces.modules.show', [$workspaceId, $module->id]) }}">{{ $module->title }}</a></li>
+                    @else
+                        <li><a href="{{ route('workspaces.show', $workspaceId) }}">Overview</a></li>
                     @endif
                     <li>Study session</li>
                 </ol>

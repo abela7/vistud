@@ -151,7 +151,43 @@ class SessionScreensTest extends TestCase
             ->assertRedirect(route('workspaces.sessions.show', [$this->databases->id, $this->current()->id]));
         $this->assertSame($joins->id, $this->current()->topicId);
 
-        $this->livewire(Progress::class)->call('study', $joins->id)->assertSee('Another study session is still open.');
+        // A second one isn't started: the start panel says one is open.
+        $this->livewire(Progress::class)->call('study', $joins->id)->assertDispatched('study-start', topicId: $joins->id)->assertNoRedirect();
+        $this->assertCount(1, app(Sessions::class)->list($this->principal($this->ada), $this->databases->id));
+    }
+
+    public function test_starting_while_a_session_is_open_offers_to_go_back_to_it_or_end_it_first(): void
+    {
+        $by = $this->principal($this->ada);
+        $week1 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 1']);
+        $open = app(Sessions::class)->start($by, $this->databases->id, null, $week1->id);
+        $this->travel(20)->minutes();
+
+        $panel = $this->livewire(StudyTime::class)->call('newSession', $week1->id)
+            ->assertSet('mode', 'busy')->assertDispatched('study-dialog-open')
+            ->assertSee('You&#039;re already studying', false)->assertSeeInOrder(['Week 1', 'Studying', '20 min studied', 'End it', 'Go to the session'])
+            ->assertSee(route('workspaces.sessions.show', [$this->databases->id, $open->id]), false)
+            ->assertDontSee('Topic (optional)');
+        // Start can't be forced past it.
+        $panel->call('save');
+        $this->assertSame($open->id, $this->current()->id);
+
+        $panel->call('endOpen')->assertSet('mode', 'start')->assertSet('moduleId', $week1->id)
+            ->assertSee('Session ended. You studied 20 min.')->assertSee('Topic (optional)');
+        $this->assertNull($this->current());
+    }
+
+    public function test_a_session_in_a_module_sits_under_modules(): void
+    {
+        $by = $this->principal($this->ada);
+        $week1 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 1']);
+        $session = app(Sessions::class)->start($by, $this->databases->id, null, $week1->id);
+
+        $page = $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$this->databases->id, $session->id]))
+            ->assertOk()->assertSeeInOrder(['Modules', 'Week 1', 'Study session'])
+            ->assertSee('Hide the timer')->assertSee('Show the study timer');
+        $this->assertMatchesRegularExpression('/title="Modules"\s+aria-current="page"/', $page->getContent());
+        $this->assertDoesNotMatchRegularExpression('/title="Overview"\s+aria-current="page"/', $page->getContent());
     }
 
     public function test_a_pomodoro_session_is_started_counts_down_and_moves_through_its_phases(): void

@@ -52,8 +52,8 @@
                     </div>
                     @if ($openSession === null)
                         <x-button variant="primary" size="lg" icon="play" x-data x-on:click="Livewire.dispatch('study-start')">Start studying</x-button>
-                    @elseif ($openSession->workspaceId === $workspace->id)
-                        <a href="{{ route('workspaces.sessions.show', [$workspace->id, $openSession->id]) }}" class="btn btn-primary btn-lg"><x-icon name="timer" class="size-4" />Back to your session</a>
+                    @else
+                        <a href="{{ route('workspaces.sessions.show', [$openSession->workspaceId, $openSession->id]) }}" class="btn btn-primary btn-lg"><x-icon name="timer" class="size-4" />Back to your session</a>
                     @endif
                 </div>
             @endif
@@ -111,6 +111,7 @@
             <livewire:workspaces.contents :workspace-id="$workspace->id" :view="$section" :key="$section" />
         @elseif ($section === 'progress')
             <livewire:workspaces.progress :workspace-id="$workspace->id" />
+            <livewire:workspaces.study-time :workspace-id="$workspace->id" />
         @elseif ($section === 'flashcards')
             <livewire:workspaces.deck :workspace-id="$workspace->id" />
         @else

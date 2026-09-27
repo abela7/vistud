@@ -1,8 +1,11 @@
 {{--
     The open study session in the top bar (App\Livewire\Study\SessionBar):
-    a link to it with its clock, and pause or resume. Empty without one.
+    a link to it with its clock, pause or resume, and Hide the timer (the
+    owner's review, 2026-09-27: watching the time can be too much). Hidden,
+    it's a small pulsing dot that brings it back; the choice is remembered
+    on this device. Empty without a session.
 --}}
-<div class="session-bar">
+<div class="session-bar" x-data="{ hidden: $persist(false).as('vistud.timer.hidden') }">
     @if ($session)
         @php
             $running = $session->state === 'running';
@@ -10,7 +13,10 @@
             $words = match ($session->state) { 'running' => 'studying', 'break' => 'on a break', default => 'paused' };
         @endphp
         @php $pomodoro = $session->usesPomodoro() && ! $session->waitingForFocus(); @endphp
-        <div @class(['session-pill', "is-{$session->state}"]) x-data x-on:vistud-heartbeat="$wire.heartbeat()" x-on:vistud-phase-end="$wire.$refresh()" @if ($running) data-session-heartbeat @endif>
+        <button type="button" @class(['session-mini', "is-{$session->state}"]) x-show="hidden" x-cloak x-on:click="hidden = false" aria-label="Show the study timer" title="Show the study timer">
+            <span class="session-dot" aria-hidden="true"></span>
+        </button>
+        <div @class(['session-pill', "is-{$session->state}"]) x-show="! hidden" x-on:vistud-heartbeat="$wire.heartbeat()" x-on:vistud-phase-end="$wire.$refresh()" @if ($running) data-session-heartbeat @endif>
             <a href="{{ $url }}" class="session-pill-link">
                 @if ($pomodoro)
                     <x-icon :name="$session->phase === 'focus' ? 'timer' : 'coffee'" class="size-4" />
@@ -35,6 +41,9 @@
                     <x-icon name="play" class="size-5" />
                 </button>
             @endif
+            <button type="button" class="topbar-button" x-on:click="hidden = true" aria-label="Hide the timer" title="Hide the timer">
+                <x-icon name="minus" class="size-5" />
+            </button>
         </div>
     @endif
 </div>

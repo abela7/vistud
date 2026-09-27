@@ -11,6 +11,7 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Ids;
 use Carbon\CarbonImmutable;
 use DateTimeZone;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -180,13 +181,18 @@ final class Sessions
             Input::workspace($scope, $workspaceId, lock: true);
             [$topicId, $moduleId] = $this->place($scope, $workspaceId, $topicId, $moduleId);
             $now = self::now();
-            LearnerTables::insert($scope, 'study_sessions', [
-                'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'topic_id' => $topicId,
-                'pomodoro' => $pomodoro === null ? null : json_encode($pomodoro), 'phase' => $pomodoro === null ? null : 'focus',
-                'phase_started_at' => $pomodoro === null ? null : $now, 'tutoring' => json_encode($tutoring),
-                'state' => 'running', 'started_at' => $now, 'last_activity_at' => $now, 'revision' => 1,
-                'created_at' => $now, 'updated_at' => $now,
-            ]);
+            // The database keeps one open session per student (open_learner is unique): a start in another tab at the same moment loses.
+            try {
+                LearnerTables::insert($scope, 'study_sessions', [
+                    'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'topic_id' => $topicId,
+                    'pomodoro' => $pomodoro === null ? null : json_encode($pomodoro), 'phase' => $pomodoro === null ? null : 'focus',
+                    'phase_started_at' => $pomodoro === null ? null : $now, 'tutoring' => json_encode($tutoring),
+                    'state' => 'running', 'started_at' => $now, 'last_activity_at' => $now, 'revision' => 1,
+                    'created_at' => $now, 'updated_at' => $now,
+                ]);
+            } catch (UniqueConstraintViolationException) {
+                throw new Conflict('session_open', 'Another session is still open. End it first.');
+            }
             $this->openSegment($scope, $id, 'study', $now);
             $this->record($scope, $by, $this->lock($scope, $id));
         });

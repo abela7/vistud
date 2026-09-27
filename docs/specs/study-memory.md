@@ -62,8 +62,15 @@ the journal, and the AI proposes topic status changes the student confirms.
 ### 4.1 The session and its clock (built)
 
 A session belongs to a workspace, and optionally to a topic and a module. A
-student has **one open session at a time**; starting another asks to end it
-first. Time is kept in **segments**, each a stretch of study or of a break,
+student has **one open session at a time**, whatever its state (studying,
+paused or on a break), in any workspace. Starting another (Start studying,
+a module's *Study this*, a topic's *Study this now*) starts nothing: a panel
+says which session is open, with *Go to the session* and *End it* (then the
+new one can start). The database keeps it too, so two tabs starting at once
+can't both succeed. A session in a module sits under Modules: its path is
+Modules › the module › Study session. The top bar's timer can be hidden
+(*Hide the timer*): it becomes a small dot, pulsing while the clock runs,
+that shows it again; the choice stays on that device. Time is kept in **segments**, each a stretch of study or of a break,
 so pauses are exact and nothing is guessed from one start and one end.
 
 | State | The clock counts | From here |
