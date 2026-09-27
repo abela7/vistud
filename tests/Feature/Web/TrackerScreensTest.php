@@ -13,7 +13,6 @@ use App\Study\Instructions as InstructionTexts;
 use App\Study\Links;
 use App\Study\Modules;
 use App\Study\Notes;
-use App\Study\Questions;
 use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
@@ -41,37 +40,33 @@ class TrackerScreensTest extends TestCase
         $this->databases = app(Workspaces::class)->create($this->principal($this->ada), ['name' => 'Databases']);
     }
 
-    public function test_the_overview_says_where_the_student_is(): void
+    public function test_the_overview_is_short_what_to_pick_up_and_whats_coming(): void
     {
         $by = $this->principal($this->ada);
         $keys = app(Topics::class)->create($by, $this->databases->id, 'Primary and foreign keys');
-        $joins = app(Topics::class)->create($by, $this->databases->id, 'Joins');
         app(Topics::class)->report($by, $keys->id, 'confused');
-        app(Topics::class)->report($by, $joins->id, 'understood');
-        $question = app(Questions::class)->ask($by, $this->databases->id, 'Why does a left join keep unmatched rows?');
-        app(Questions::class)->setAskTeacher($by, $question->id, true);
         app(Notes::class)->create($by, 'workspace', $this->databases->id, 'Lecture 3: joins');
         app(Activities::class)->create($by, $this->databases->id, ['title' => 'ER diagram', 'due_on' => now()->addDay()->toDateString()]);
         app(InstructionTexts::class)->set($by, "workspace:{$this->databases->id}", 'Teach slide by slide.');
 
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))
             ->assertOk()
-            ->assertSeeInOrder(['Where you are', 'Open Progress', '0 not started', '0 covered', '1 understood', '1 confused', '0 mastered'])
-            ->assertSeeInOrder(['Still confusing', 'Primary and foreign keys', 'Open questions', '(1)', 'Why does a left join keep unmatched rows?', 'for the teacher'])
-            ->assertSeeInOrder(['Assignments and tasks', '(1 to do)', 'ER diagram', 'Assignment', 'Due tomorrow'])
-            ->assertSeeInOrder(['Instructions for the assistant', 'About you', 'Not written yet', 'This course', 'Teach slide by slide.'])
-            ->assertSeeInOrder(['Pick up where you left off', 'Lecture 3: joins'])
-            ->assertSeeInOrder(['About', 'Modules', 'Calendar', 'Coming next']);
+            ->assertSeeInOrder(['Databases', 'Edit workspace', 'Instructions for the AI', 'Log time', 'Start studying'])
+            ->assertSeeInOrder(['Streak', 'Last 7 days', 'Cards to review'])
+            ->assertSeeInOrder(['Continue', 'Lecture 3: joins'])
+            ->assertSeeInOrder(['Coming up', 'ER diagram', 'Assignment', 'Due tomorrow'])
+            // Topics live in Progress, and the instructions in their dialog.
+            ->assertDontSee('Primary and foreign keys')
+            ->assertDontSee('Teach slide by slide.');
     }
 
-    public function test_a_new_course_overview_invites_the_first_topics_and_tasks(): void
+    public function test_a_new_course_overview_points_to_the_first_module_and_tasks(): void
     {
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))
             ->assertOk()
-            ->assertSee('No topics yet.')
-            ->assertSee('Nothing yet. Add assignments')
-            ->assertDontSee('Pick up where you left off')
-            ->assertDontSee('Still confusing');
+            ->assertSee('Add your first module, like “Week 1”', false)
+            ->assertSee(route('workspaces.show', [$this->databases->id, 'modules']), false)
+            ->assertSee('Nothing due.');
     }
 
     public function test_assignments_and_tasks_are_added_edited_ticked_and_deleted(): void
@@ -90,21 +85,21 @@ class TrackerScreensTest extends TestCase
         $page->call('setStatus', $task->id, 'doing')->assertSee('In progress')
             ->call('editTask', $task->id)->assertSet('title', 'ER diagram')->assertSet('dueOn', '2026-10-03')
             ->set('dueOn', '2026-09-30')->call('save')->assertSee('Was due 30 Sep')
-            ->call('setStatus', $task->id, 'done')->assertSee('(0 to do)')->assertSee('All done.')->assertSee('Show 1 done')
+            ->call('setStatus', $task->id, 'done')->assertSee('All done.')->assertSee('Show 1 done')
             ->call('toggleDone')->assertSee('aria-pressed="true"', false)
             ->call('confirmDelete', $task->id)->assertSee('Delete “ER diagram”?')
             ->call('save')->assertSee('ER diagram is deleted.');
         $this->assertSame([], app(Activities::class)->list($this->principal($this->ada), $this->databases->id));
     }
 
-    public function test_instructions_are_written_on_the_overview(): void
+    public function test_instructions_are_written_in_one_dialog(): void
     {
         $this->livewire(Instructions::class)
-            ->call('edit', 'me')->assertDispatched('instructions-dialog-open')->assertSee('What should the assistant know about you')
-            ->set('text', "Second-year nursing student.\nUse everyday examples.")->call('save')
-            ->assertSee('What the assistant knows about you is saved.')->assertSee('Second-year nursing student.')
-            ->call('edit', 'workspace')->assertSet('text', '')->set('text', str_repeat('a', 2001))->call('save')->assertHasErrors('text')
-            ->set('text', 'Go slide by slide.')->call('save')->assertSee('The instructions for this course are saved.');
+            ->call('edit')->assertDispatched('instructions-dialog-open')->assertSeeInOrder(['Instructions for the AI', 'About you', 'This course'])
+            ->set('me', "Second-year nursing student.\nUse everyday examples.")->set('course', str_repeat('a', 2001))
+            ->call('save')->assertHasErrors('course')
+            ->set('course', 'Go slide by slide.')->call('save')->assertDispatched('instructions-dialog-close')->assertSee('Instructions saved.')
+            ->call('edit')->assertSet('course', 'Go slide by slide.');
 
         $this->assertSame(
             ['me' => "Second-year nursing student.\nUse everyday examples.", 'workspace' => 'Go slide by slide.', 'module' => ''],
@@ -146,7 +141,8 @@ class TrackerScreensTest extends TestCase
             ->call('newLink', 'module', $module->id)->assertDispatched('structure-dialog-open')->assertSee('Add a link to Week 1')
             ->set('url', 'javascript:alert(1)')->call('save')->assertHasErrors('url')
             ->set('url', 'www.youtube.com/watch?v=joins')->call('save')->assertSee('“youtube.com” is added.')
-            ->assertSeeInOrder(['Week 1', '1 link', 'youtube.com', 'Link', 'youtube.com'])
+            ->assertSeeInOrder(['Week 1', '1 link']);
+        $this->contents('module', $module->id)->assertSeeInOrder(['Week 1', 'youtube.com', 'youtube.com'])
             ->assertSee('target="_blank" rel="noopener noreferrer"', false);
         $link = app(Links::class)->list($by, $this->databases->id)[0];
 
@@ -157,7 +153,7 @@ class TrackerScreensTest extends TestCase
         $this->assertNull(app(Links::class)->find($by, $link->id)->moduleId);
 
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->databases->id, 'notes']))
-            ->assertSeeInOrder(['0 notes · 0 files · 1 link', 'Add link', 'Not in a module', 'Joins explained']);
+            ->assertSeeInOrder(['New', 'Joins explained', 'youtube.com']);
 
         $this->contents('notes')->call('confirmDelete', 'link', $link->id)->assertSee('Delete “Joins explained”?')
             ->call('save')->assertSee('“Joins explained” is deleted.');
@@ -183,7 +179,7 @@ class TrackerScreensTest extends TestCase
 
         $this->assertThrows(fn () => $this->livewire(Tasks::class)->set('workspaceId', 'other'), CannotUpdateLockedPropertyException::class);
         $this->assertThrows(fn () => $this->livewire(Tasks::class)->call('editTask', $task->id)->set('targetId', 'other'), CannotUpdateLockedPropertyException::class);
-        $this->assertThrows(fn () => $this->livewire(Instructions::class)->call('edit', 'me')->set('editing', 'workspace'), CannotUpdateLockedPropertyException::class);
+        $this->assertThrows(fn () => $this->livewire(Instructions::class)->call('edit')->set('editing', false), CannotUpdateLockedPropertyException::class);
         $this->assertThrows(fn () => $this->livewire(Progress::class)->set('findingId', 'other'), CannotUpdateLockedPropertyException::class);
     }
 
@@ -198,9 +194,9 @@ class TrackerScreensTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.show', $theirs->id))->assertNotFound();
     }
 
-    private function contents(string $view)
+    private function contents(string $view, ?string $placeId = null)
     {
-        return $this->livewire(Contents::class, ['view' => $view]);
+        return $this->livewire(Contents::class, ['view' => $view, 'placeId' => $placeId]);
     }
 
     private function livewire(string $class, array $params = [])

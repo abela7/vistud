@@ -1,83 +1,93 @@
 {{--
     What one place ($key: a module, a folder, or the top level) holds: its
-    notes, its files, its web links, then its folders, each folder with what
-    it holds below it.
+    folders as tiles to open, then its notes, files and web links as rows.
+    Each row is one link; its menu sits above it.
 --}}
 @php
+    use Illuminate\Support\Carbon;
+
     $placeNotes = $notesIn[$key] ?? [];
     $placeFiles = $filesIn[$key] ?? [];
     $placeLinks = $linksIn[$key] ?? [];
     $placeFolders = $children[$key] ?? [];
+    $fileColours = ['pdf' => 'red', 'document' => 'blue', 'slides' => 'orange', 'spreadsheet' => 'green', 'text' => 'pink', 'image' => 'purple'];
 @endphp
-@if ($placeNotes !== [] || $placeFiles !== [] || $placeLinks !== [] || $placeFolders !== [])
-    <ul class="folder-list" role="list">
-        @foreach ($placeNotes as $note)
-            <li wire:key="note-{{ $note->id }}">
-                <div class="folder-row">
-                    <x-icon name="file-text" class="size-5 shrink-0 text-fg-muted" />
-                    <span class="min-w-0 flex-1 py-1">
-                        <a href="{{ route('workspaces.notes.show', [$note->workspaceId, $note->id]) }}" class="item-link">{{ $note->displayTitle() }}</a>
-                        <span class="block text-sm text-fg-muted">Note · edited {{ \Illuminate\Support\Carbon::parse($note->updatedAt)->diffForHumans() }}</span>
-                    </span>
-                    @include('livewire.workspaces.partials.row-menu', ['id' => $note->id, 'label' => $note->displayTitle(), 'items' => [
-                        ['Move to…', 'folder-input', "moveNote('{$note->id}')", false],
-                        ['Move to trash', 'trash-2', "trashNote('{$note->id}')", false],
-                    ]])
-                </div>
-            </li>
-        @endforeach
-        @foreach ($placeFiles as $file)
-            <li wire:key="file-{{ $file->id }}">
-                <div class="folder-row">
-                    <x-icon :name="$file->icon()" class="size-5 shrink-0 text-fg-muted" />
-                    <span class="min-w-0 flex-1 py-1">
-                        <a href="{{ route('workspaces.files.show', [$file->workspaceId, $file->id]) }}" class="item-link">{{ $file->fileName() }}</a>
-                        <span class="block text-sm text-fg-muted">{{ $file->typeLabel() }} · {{ $file->humanSize() }}</span>
-                    </span>
-                    @include('livewire.workspaces.partials.row-menu', ['id' => $file->id, 'label' => $file->fileName(), 'items' => [
-                        ['Download', 'download', null, false, route('files.content', [$file->id, 'download' => 1])],
-                        ['Rename', 'pencil', "renameFile('{$file->id}')", false],
-                        ['Move to…', 'folder-input', "moveFile('{$file->id}')", false],
-                        ['Move to trash', 'trash-2', "trashFile('{$file->id}')", false],
-                    ]])
-                </div>
-            </li>
-        @endforeach
-        @foreach ($placeLinks as $link)
-            <li wire:key="link-{{ $link->id }}">
-                <div class="folder-row">
-                    <x-icon name="link" class="size-5 shrink-0 text-fg-muted" />
-                    <span class="min-w-0 flex-1 py-1">
-                        <a href="{{ $link->url }}" target="_blank" rel="noopener noreferrer" class="item-link">{{ $link->title }}<span class="sr-only"> (opens in a new tab)</span></a>
-                        <span class="block text-sm text-fg-muted">Link · {{ $link->site() }}</span>
-                    </span>
-                    @include('livewire.workspaces.partials.row-menu', ['id' => $link->id, 'label' => $link->title, 'items' => [
-                        ['Edit', 'pencil', "editLink('{$link->id}')", false],
-                        ['Move to…', 'folder-input', "moveLink('{$link->id}')", false],
-                        ['Delete', 'trash-2', "confirmDelete('link', '{$link->id}')", false],
-                    ]])
-                </div>
-            </li>
-        @endforeach
+@if ($placeFolders !== [])
+    <ul class="folder-grid" role="list" aria-label="Folders">
         @foreach ($placeFolders as $i => $folder)
-            <li wire:key="folder-{{ $folder->id }}">
-                <div class="folder-row">
-                    <x-icon name="folder" class="size-5 shrink-0 text-fg-muted" />
-                    <span class="min-w-0 flex-1 break-words">{{ $folder->name }}</span>
-                    @include('livewire.workspaces.partials.row-menu', ['id' => $folder->id, 'label' => $folder->name, 'items' => [
-                        ['New note inside', 'file-plus', "newNote('folder', '{$folder->id}')", false],
-                        ['Upload files here', 'upload', "uploadFiles('folder', '{$folder->id}')", false],
-                        ['Add a link here', 'link', "newLink('folder', '{$folder->id}')", false],
-                        ['New folder inside', 'folder-plus', "newFolder('folder', '{$folder->id}')", $folder->depth >= \App\Study\Folders::MAX_DEPTH],
-                        ['Rename', 'pencil', "renameFolder('{$folder->id}')", false],
-                        ['Move to…', 'folder-input', "moveFolder('{$folder->id}')", false],
-                        ['Move up', 'arrow-up', "moveFolderBy('{$folder->id}', -1)", $i === 0],
-                        ['Move down', 'arrow-down', "moveFolderBy('{$folder->id}', 1)", $i === count($placeFolders) - 1],
-                        ['Delete', 'trash-2', "confirmDelete('folder', '{$folder->id}')", false],
-                    ]])
-                </div>
-                @include('livewire.workspaces.partials.place', ['key' => "folder:{$folder->id}"])
+            @php $inside = $itemCounts[$folder->id] ?? 0; @endphp
+            <li class="folder-tile" wire:key="folder-{{ $folder->id }}">
+                <span class="item-icon ws-colour-amber" aria-hidden="true"><x-icon name="folder" class="size-5" /></span>
+                <span class="min-w-0 flex-1">
+                    <a href="{{ route('workspaces.folders.show', [$workspaceId, $folder->id]) }}" class="tile-link">{{ $folder->name }}</a>
+                    <span class="item-meta">{{ $inside === 0 ? 'Empty' : ($inside === 1 ? '1 item' : $inside.' items') }}</span>
+                </span>
+                @include('livewire.workspaces.partials.row-menu', ['id' => $folder->id, 'label' => $folder->name, 'items' => [
+                    ['Rename', 'pencil', "renameFolder('{$folder->id}')", false],
+                    ['Move to…', 'folder-input', "moveFolder('{$folder->id}')", false],
+                    ['Move up', 'arrow-up', "moveFolderBy('{$folder->id}', -1)", $i === 0],
+                    ['Move down', 'arrow-down', "moveFolderBy('{$folder->id}', 1)", $i === count($placeFolders) - 1],
+                    ['Delete', 'trash-2', "confirmDelete('folder', '{$folder->id}')", false],
+                ]])
             </li>
         @endforeach
     </ul>
+@endif
+
+@if ($placeNotes !== [] || $placeFiles !== [] || $placeLinks !== [])
+    <ul class="item-list" role="list" aria-label="Notes, files and links">
+        @foreach ($placeNotes as $note)
+            <li class="item-row" wire:key="note-{{ $note->id }}">
+                <span class="item-icon" aria-hidden="true"><x-icon name="file-text" class="size-5" /></span>
+                <span class="min-w-0 flex-1">
+                    <a href="{{ route('workspaces.notes.show', [$note->workspaceId, $note->id]) }}" class="tile-link">{{ $note->displayTitle() }}</a>
+                    <span class="item-meta">Note · {{ Carbon::parse($note->updatedAt)->diffForHumans() }}</span>
+                </span>
+                @include('livewire.workspaces.partials.row-menu', ['id' => $note->id, 'label' => $note->displayTitle(), 'items' => [
+                    ['Move to…', 'folder-input', "moveNote('{$note->id}')", false],
+                    ['Move to trash', 'trash-2', "trashNote('{$note->id}')", false],
+                ]])
+            </li>
+        @endforeach
+        @foreach ($placeFiles as $file)
+            <li class="item-row" wire:key="file-{{ $file->id }}">
+                <span class="item-icon ws-colour-{{ $fileColours[$file->kind] ?? 'teal' }}" aria-hidden="true"><x-icon :name="$file->icon()" class="size-5" /></span>
+                <span class="min-w-0 flex-1">
+                    <a href="{{ route('workspaces.files.show', [$file->workspaceId, $file->id]) }}" class="tile-link">{{ $file->fileName() }}</a>
+                    <span class="item-meta">{{ $file->typeLabel() }} · {{ $file->humanSize() }}</span>
+                </span>
+                @include('livewire.workspaces.partials.row-menu', ['id' => $file->id, 'label' => $file->fileName(), 'items' => [
+                    ['Download', 'download', null, false, route('files.content', [$file->id, 'download' => 1])],
+                    ['Rename', 'pencil', "renameFile('{$file->id}')", false],
+                    ['Move to…', 'folder-input', "moveFile('{$file->id}')", false],
+                    ['Move to trash', 'trash-2', "trashFile('{$file->id}')", false],
+                ]])
+            </li>
+        @endforeach
+        @foreach ($placeLinks as $link)
+            <li class="item-row" wire:key="link-{{ $link->id }}">
+                <span class="item-icon ws-colour-teal" aria-hidden="true"><x-icon name="link" class="size-5" /></span>
+                <span class="min-w-0 flex-1">
+                    <a href="{{ $link->url }}" target="_blank" rel="noopener noreferrer" class="tile-link">{{ $link->title }}<span class="sr-only"> (opens in a new tab)</span></a>
+                    <span class="item-meta">{{ $link->site() }}</span>
+                </span>
+                @include('livewire.workspaces.partials.row-menu', ['id' => $link->id, 'label' => $link->title, 'items' => [
+                    ['Edit', 'pencil', "editLink('{$link->id}')", false],
+                    ['Move to…', 'folder-input', "moveLink('{$link->id}')", false],
+                    ['Delete', 'trash-2', "confirmDelete('link', '{$link->id}')", false],
+                ]])
+            </li>
+        @endforeach
+    </ul>
+@endif
+
+@if ($placeFolders === [] && $placeNotes === [] && $placeFiles === [] && $placeLinks === [])
+    <div class="empty-place">
+        <span class="item-icon" aria-hidden="true"><x-icon name="folder-open" class="size-5" /></span>
+        <p class="font-medium">Nothing here yet</p>
+        <div class="flex flex-wrap justify-center gap-2">
+            <x-button icon="file-plus" wire:click="newNote('{{ $placeType }}', '{{ $placeId }}')">New note</x-button>
+            <x-button icon="upload" wire:click="uploadFiles('{{ $placeType }}', '{{ $placeId }}')">Upload files</x-button>
+        </div>
+    </div>
 @endif

@@ -44,7 +44,8 @@ class NotesScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.notes.show', [$this->biology->id, $note->id]))
             ->assertOk()
             ->assertSee('<title>Lab 1 &lt;/script&gt;&lt;b&gt; · Biology', false)
-            ->assertSeeInOrder(['Where this note is', 'Biology', 'Cells', 'Labs'])
+            ->assertSeeInOrder(['Where this note is', 'Modules', 'Cells', 'Labs'])
+            ->assertSee(route('workspaces.folders.show', [$this->biology->id, $labs->id]), false)
             ->assertSee('data-account="'.$this->ada->id.'"', false)
             ->assertSee('data-save-url="'.route('api.v1.notes.update', $note->id).'"', false)
             ->assertSee('role="toolbar" aria-label="Formatting"', false)
@@ -89,10 +90,13 @@ class NotesScreenTest extends TestCase
         $this->assertSame([$cells->id, null], [$inModule->moduleId, $topLevel->moduleId]);
 
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
-            ->assertSeeInOrder(['Cells', '1 note', 'Untitled note', 'New note', 'New folder']);
+            ->assertSeeInOrder(['Cells', '1 note']);
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
+            ->assertOk()->assertSee('<title>Cells · Biology', false)
+            ->assertSeeInOrder(['Modules', 'Cells', 'New', 'Study this', 'Untitled note', 'Note · ']);
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'notes']))
             ->assertOk()->assertSee('<title>Notes &amp; files · Biology', false)
-            ->assertSeeInOrder(['2 notes', 'Recently edited', 'Not in a module', 'Untitled note', 'Trash (0)']);
+            ->assertSeeInOrder(['New', 'Untitled note', 'Trash (0)']);
     }
 
     public function test_the_trash_restores_and_deletes_for_good(): void

@@ -62,12 +62,10 @@
                                             <span class="font-semibold break-words">{{ $topic->name }}</span>
                                             <span @class(['status-chip', "status-{$shown}"])><x-icon :name="$statusIcons[$shown]" class="size-3.5" />{{ $statusWords[$shown] }}</span>
                                         </p>
-                                        <p class="text-sm text-fg-muted">
-                                            Evidence: {{ $topic->evidence() }}
-                                            @if (isset($cards[$topic->id]))
-                                                · <a href="{{ route('workspaces.show', [$workspaceId, 'flashcards']) }}?topic={{ $topic->id }}" class="item-link font-normal">{{ Str::plural('flashcard', $cards[$topic->id]['total'], prependCount: true) }}{{ $cards[$topic->id]['due'] > 0 ? ', '.$cards[$topic->id]['due'].' due' : '' }}</a>
-                                            @endif
-                                        </p>
+                                        <p class="text-sm text-fg-muted">Evidence: {{ $topic->evidence() }}</p>
+                                        @if (isset($cards[$topic->id]))
+                                            <a href="{{ route('workspaces.show', [$workspaceId, 'flashcards']) }}?topic={{ $topic->id }}" class="item-link text-sm">{{ Str::plural('flashcard', $cards[$topic->id]['total'], prependCount: true) }}{{ $cards[$topic->id]['due'] > 0 ? ', '.$cards[$topic->id]['due'].' due' : '' }}</a>
+                                        @endif
                                         @if ($topicFindings !== [])
                                             <button type="button" class="disclosure" wire:click="toggleFindings('{{ $topic->id }}')" aria-expanded="{{ $showFindings ? 'true' : 'false' }}" @if ($showFindings) aria-controls="findings-{{ $topic->id }}" @endif>
                                                 <x-icon name="chevron-right" @class(['size-4 transition-transform', 'rotate-90' => $showFindings]) />
@@ -104,7 +102,7 @@
                                                             @if ($finding->sourceName !== null || $finding->author === 'ai')
                                                                 <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-fg-muted">
                                                                     @if ($finding->sourceName !== null)
-                                                                        <span>From <a href="{{ $finding->sourceUrl() }}" class="item-link">{{ $finding->sourceName }}</a>{{ $finding->locator ? ', '.$finding->locator : '' }}</span>
+                                                                        <span>From <a href="{{ $finding->sourceUrl() }}" class="inline-link">{{ $finding->sourceName }}</a>{{ $finding->locator ? ', '.$finding->locator : '' }}</span>
                                                                     @endif
                                                                     @if ($finding->author === 'ai')
                                                                         <span class="status-chip"><x-icon name="sparkles" class="size-3.5" />From a study session</span>

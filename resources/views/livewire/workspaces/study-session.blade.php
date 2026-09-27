@@ -16,9 +16,15 @@
 <div class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="min-w-0">
-            <p class="text-sm break-words text-fg-muted">
-                <a href="{{ route('workspaces.show', $workspaceId) }}" class="item-link font-normal">Overview</a> · Study session
-            </p>
+            <nav aria-label="Path" class="crumbs">
+                <ol role="list">
+                    <li><a href="{{ route('workspaces.show', $workspaceId) }}">Overview</a></li>
+                    @if ($module)
+                        <li><a href="{{ route('workspaces.modules.show', [$workspaceId, $module->id]) }}">{{ $module->title }}</a></li>
+                    @endif
+                    <li>Study session</li>
+                </ol>
+            </nav>
             <h1 class="text-2xl font-semibold tracking-tight break-words sm:text-3xl">{{ $topic?->name ?? 'Study session' }}</h1>
             <p class="text-fg-muted">
                 {{ implode(' · ', array_filter([

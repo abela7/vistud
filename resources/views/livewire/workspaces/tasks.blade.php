@@ -9,18 +9,18 @@
 @endphp
 <section aria-labelledby="tasks-heading" class="overview-card space-y-3">
     <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="tasks-heading" class="font-semibold">Assignments and tasks <span class="font-normal text-fg-muted">({{ count($open) }} to do)</span></h2>
-        <x-button icon="plus" wire:click="newTask">New</x-button>
+        <h2 id="tasks-heading" class="font-semibold">Coming up</h2>
+        <x-button variant="ghost" icon="plus" wire:click="newTask" aria-label="Add a task">Add</x-button>
     </div>
 
-    <div role="status" aria-live="polite">
+    <div role="status" aria-live="polite" class="empty:hidden">
         @if ($notice)
             <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
         @endif
     </div>
 
     @if ($open === [] && $done === [])
-        <p class="text-sm text-fg-muted">Nothing yet. Add assignments, quizzes, exams and anything else you need to do, with the date it's due.</p>
+        <p class="text-sm text-fg-muted">Nothing due. Add assignments, quizzes and exams here.</p>
     @else
         <ul class="divide-y divide-divider" role="list" aria-label="To do">
             @forelse ($open as $task)

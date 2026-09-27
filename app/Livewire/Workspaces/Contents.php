@@ -17,6 +17,9 @@ use App\Study\Links;
 use App\Study\Modules;
 use App\Study\NoteDetails;
 use App\Study\Notes;
+use App\Study\SessionDetails;
+use App\Study\Sessions;
+use App\Study\Topics;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
@@ -25,11 +28,12 @@ use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
 
 /**
- * What a workspace holds (docs/specs/workspaces.md, steps 2 and 3), for two
- * of its sections: `modules` (its modules, with the folders and notes inside
- * each) and `notes` (Notes & files: recent notes, what sits outside every
- * module, and the trash). Web links sit beside notes and files. One dialog serves every form. The services check
- * everything; the IDs the dialog acts on are locked.
+ * What a workspace holds (docs/specs/workspaces.md, steps 2 and 3), as places
+ * you open: `modules` (the modules as cards), `module` and `folder` (one
+ * place: its folders, then its notes, files and links; a module also lists
+ * its study sessions) and `notes` (Notes & files: what sits outside every
+ * module, and the trash). One dialog serves every form. The services check
+ * everything; the place and the IDs the dialog acts on are locked.
  */
 final class Contents extends Component
 {
@@ -38,9 +42,13 @@ final class Contents extends Component
     #[Locked]
     public string $workspaceId;
 
-    /** modules or notes: which section this is. */
+    /** modules, notes, module or folder: which page this is. */
     #[Locked]
     public string $view = 'modules';
+
+    /** The module or folder a `module` or `folder` page shows. */
+    #[Locked]
+    public ?string $placeId = null;
 
     /** module · folder · file (renaming) · link · instructions · upload · move · delete, or null when the dialog is closed. */
     #[Locked]
@@ -103,10 +111,16 @@ final class Contents extends Component
 
     private Workspaces $workspaces;
 
+    private Topics $topics;
+
+    private Sessions $sessions;
+
     private PrincipalFactory $principals;
 
-    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, PrincipalFactory $principals): void
+    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, PrincipalFactory $principals): void
     {
+        $this->topics = $topics;
+        $this->sessions = $sessions;
         $this->links = $links;
         $this->instructionTexts = $instructions;
         $this->modules = $modules;
@@ -117,10 +131,21 @@ final class Contents extends Component
         $this->principals = $principals;
     }
 
-    public function mount(string $workspaceId, string $view = 'modules'): void
+    public function mount(string $workspaceId, string $view = 'modules', ?string $placeId = null): void
     {
         $this->workspaceId = $workspaceId;
-        $this->view = $view === 'notes' ? 'notes' : 'modules';
+        $this->view = in_array($view, ['notes', 'module', 'folder'], true) ? $view : 'modules';
+        if (in_array($this->view, ['module', 'folder'], true)) {
+            $place = $this->view === 'module' ? $this->modules->find($this->principal(), (string) $placeId) : $this->folders->find($this->principal(), (string) $placeId);
+            $place->workspaceId === $workspaceId || throw new NotFound;
+            $this->placeId = $place->id;
+        }
+    }
+
+    /** "Study this": the start dialog (App\Livewire\Workspaces\StudyTime), in this module. */
+    public function studyHere(): void
+    {
+        $this->dispatch('study-start', moduleId: $this->placeModuleId());
     }
 
     // ---------- Opening the dialog ----------
@@ -267,6 +292,8 @@ final class Contents extends Component
         $by = $this->principal();
         $this->resetErrorBag();
         $this->error = null;
+        // Deleting the page's own module or folder leaves for the place around it.
+        $leaving = $this->mode === 'delete' && $this->placeId !== null && $this->targetId === $this->placeId ? $this->parentUrl() : null;
 
         try {
             $this->notice = match ([$this->mode, $this->creating]) {
@@ -300,6 +327,13 @@ final class Contents extends Component
         }
         // Some files failed, or none was chosen: the dialog stays open to say which.
         if ($this->uploadErrors !== [] || $this->getErrorBag()->isNotEmpty()) {
+            return;
+        }
+
+        if ($leaving !== null) {
+            session()->flash('workspace-notice', $this->notice);
+            $this->redirect($leaving);
+
             return;
         }
 
@@ -401,6 +435,16 @@ final class Contents extends Component
             'moveOptions' => $this->mode === 'move' ? $this->moveOptions($workspace->name, $modules, $folders) : [],
         ];
 
+        if ($this->view === 'modules') {
+            $data += ['progress' => $this->moduleProgress($by)];
+        }
+        if (in_array($this->view, ['module', 'folder'], true)) {
+            $data += $this->placeData($by, $modules, $folders);
+        }
+        if (in_array($this->view, ['module', 'folder', 'notes'], true)) {
+            $data['itemCounts'] = $this->itemCounts($folders, $notes, $files, $links);
+        }
+
         if ($this->view === 'notes') {
             $recent = $notes;
             usort($recent, fn ($a, $b) => $b->updatedAt <=> $a->updatedAt);
@@ -415,10 +459,112 @@ final class Contents extends Component
             ];
         }
 
-        return view("livewire.workspaces.{$this->view}", $data);
+        return view(in_array($this->view, ['module', 'folder'], true) ? 'livewire.workspaces.place-page' : "livewire.workspaces.{$this->view}", $data);
     }
 
     // ---------- Helpers ----------
+
+    /** The module this page is in: the module itself, or the folder's. */
+    private function placeModuleId(): ?string
+    {
+        return match ($this->view) {
+            'module' => $this->placeId,
+            'folder' => $this->folders->find($this->principal(), (string) $this->placeId)->moduleId,
+            default => null,
+        };
+    }
+
+    /** Where to go when this page's own module or folder is deleted. */
+    private function parentUrl(): string
+    {
+        if ($this->view === 'module') {
+            return route('workspaces.show', [$this->workspaceId, 'modules']);
+        }
+        $folder = $this->folders->find($this->principal(), (string) $this->placeId);
+
+        return match (true) {
+            $folder->parentId !== null => route('workspaces.folders.show', [$this->workspaceId, $folder->parentId]),
+            $folder->moduleId !== null => route('workspaces.modules.show', [$this->workspaceId, $folder->moduleId]),
+            default => route('workspaces.show', [$this->workspaceId, 'notes']),
+        };
+    }
+
+    /**
+     * A module or folder page: the place, the path to it (each [label, url]),
+     * its key, and for a module its study sessions.
+     */
+    private function placeData(Principal $by, array $modules, array $folders): array
+    {
+        $byId = collect($folders)->keyBy('id');
+        if ($this->view === 'module') {
+            $module = collect($modules)->firstWhere('id', $this->placeId) ?? throw new NotFound;
+            $trail = [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])]];
+
+            $topicNames = collect($this->topics->list($by, $this->workspaceId))->pluck('name', 'id')->all();
+
+            return [
+                'place' => $module, 'placeName' => $module->title, 'key' => "module:{$module->id}", 'trail' => $trail,
+                'studied' => $this->moduleSessions($by, $module->id), 'topicNames' => $topicNames,
+            ];
+        }
+
+        $folder = $byId[$this->placeId] ?? throw new NotFound;
+        $trail = [];
+        for ($parent = $folder->parentId; $parent !== null && isset($byId[$parent]); $parent = $byId[$parent]->parentId) {
+            array_unshift($trail, [$byId[$parent]->name, route('workspaces.folders.show', [$this->workspaceId, $parent])]);
+        }
+        $module = $folder->moduleId !== null ? collect($modules)->firstWhere('id', $folder->moduleId) : null;
+        array_unshift($trail, ...($module !== null
+            ? [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])], [$module->title, route('workspaces.modules.show', [$this->workspaceId, $module->id])]]
+            : [[__('Notes & files'), route('workspaces.show', [$this->workspaceId, 'notes'])]]));
+
+        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'studied' => [], 'topicNames' => []];
+    }
+
+    /** @return list<SessionDetails> the module's latest study sessions: in it, or on one of its topics */
+    private function moduleSessions(Principal $by, string $moduleId): array
+    {
+        $inModule = [];
+        foreach ($this->topics->list($by, $this->workspaceId) as $topic) {
+            $inModule[$topic->id] = $topic->moduleId === $moduleId;
+        }
+        $sessions = array_filter($this->sessions->list($by, $this->workspaceId, 50),
+            fn ($s) => $s->moduleId === $moduleId || ($s->moduleId === null && ($inModule[$s->topicId] ?? false)));
+
+        return array_slice(array_values($sessions), 0, 5);
+    }
+
+    /** @return array<string, array{done: int, total: int}> module id => its topics understood (or mastered), of all */
+    private function moduleProgress(Principal $by): array
+    {
+        $progress = [];
+        foreach ($this->topics->list($by, $this->workspaceId) as $topic) {
+            if ($topic->moduleId !== null) {
+                $progress[$topic->moduleId]['total'] = ($progress[$topic->moduleId]['total'] ?? 0) + 1;
+                $progress[$topic->moduleId]['done'] = ($progress[$topic->moduleId]['done'] ?? 0) + (int) in_array($topic->shown(), ['understood', 'mastered'], true);
+            }
+        }
+
+        return $progress;
+    }
+
+    /** @return array<string, int> folder id => how many things are directly inside it */
+    private function itemCounts(array $folders, array $notes, array $files, array $links): array
+    {
+        $counts = [];
+        foreach ([...$notes, ...$files, ...$links] as $item) {
+            if ($item->folderId !== null) {
+                $counts[$item->folderId] = ($counts[$item->folderId] ?? 0) + 1;
+            }
+        }
+        foreach ($folders as $folder) {
+            if ($folder->parentId !== null) {
+                $counts[$folder->parentId] = ($counts[$folder->parentId] ?? 0) + 1;
+            }
+        }
+
+        return $counts;
+    }
 
     private function open(string $mode, bool $creating = false, ?string $targetType = null, ?string $targetId = null): void
     {

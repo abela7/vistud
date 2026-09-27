@@ -1,70 +1,60 @@
 {{--
-    Study time on a workspace's Overview (App\Livewire\Workspaces\StudyTime):
-    totals, the latest sessions, and the start and log dialogs.
+    Starting a study session and logging time (App\Livewire\Workspaces\StudyTime);
+    on the Overview ($stats), the tiles: the streak, the last 7 days, and the
+    flashcards to review.
 --}}
 @php
     use App\Study\SessionDetails;
-    use Illuminate\Support\Carbon;
+    use Carbon\CarbonImmutable;
 @endphp
-<section aria-labelledby="study-time-heading" class="overview-card space-y-4">
-    <h2 id="study-time-heading" class="font-semibold">Study time</h2>
-
-    <div role="status" aria-live="polite">
+<div @class(['contents' => ! $stats])>
+    <div role="status" aria-live="polite" class="empty:hidden">
         @if ($notice)
             <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
         @endif
     </div>
 
-    <dl class="grid grid-cols-2 gap-3">
-        <div>
-            <dt class="text-sm text-fg-muted">This week</dt>
-            <dd class="text-xl font-semibold">{{ SessionDetails::duration($totals['since']) }}</dd>
-        </div>
-        <div>
-            <dt class="text-sm text-fg-muted">In all</dt>
-            <dd class="text-xl font-semibold">{{ SessionDetails::duration($totals['all']) }}</dd>
-        </div>
-        @if ($totals['pomodoros'] > 0)
-            <div>
-                <dt class="text-sm text-fg-muted">Pomodoros this week</dt>
-                <dd class="text-xl font-semibold">{{ $totals['pomodoros_since'] }}</dd>
+    @if ($stats)
+        @php
+            $days = $rhythm['days'];
+            $total = array_sum($days);
+            $most = max(1, max($days));
+            $streak = $rhythm['streak'];
+        @endphp
+        <div class="stat-row">
+            <div class="stat-tile">
+                <span @class(['stat-icon', 'is-lit' => $streak > 0]) aria-hidden="true"><x-icon name="flame" class="size-5" /></span>
+                <div class="min-w-0">
+                    <p class="stat-label">Streak</p>
+                    <p class="stat-value">{{ $streak === 1 ? '1 day' : $streak.' days' }}</p>
+                </div>
             </div>
-            <div>
-                <dt class="text-sm text-fg-muted">Pomodoros in all</dt>
-                <dd class="text-xl font-semibold">{{ $totals['pomodoros'] }}</dd>
-            </div>
-        @endif
-    </dl>
 
-    @if ($openWorkspace)
-        <p class="text-sm text-fg-muted">A session is open in {{ $openWorkspace->name }}. End it to start one here.</p>
-    @endif
-    <div class="grid gap-2">
-        @if ($open)
-            <a href="{{ route('workspaces.sessions.show', [$open->workspaceId, $open->id]) }}" @class(['btn', 'btn-primary' => ! $openWorkspace, 'btn-secondary' => $openWorkspace])>
-                <x-icon name="timer" class="size-4" />{{ $openWorkspace ? 'Go to that session' : 'Back to your session' }}
+            <div class="stat-tile">
+                <div class="min-w-0 flex-1">
+                    <p class="stat-label">Last 7 days</p>
+                    <p class="stat-value">{{ SessionDetails::duration($total) }}</p>
+                </div>
+                <ol class="week-bars" role="list" aria-label="Study time by day">
+                    @foreach ($days as $date => $seconds)
+                        @php $day = CarbonImmutable::parse($date); @endphp
+                        <li @class(['is-today' => $date === $today]) title="{{ $day->format('D j M') }}: {{ SessionDetails::duration($seconds) }}">
+                            <span class="week-bar" style="--h: {{ $seconds > 0 ? max(12, round($seconds / $most * 100)) : 0 }}%"></span>
+                            <span class="week-day" aria-hidden="true">{{ $day->format('D')[0] }}</span>
+                            <span class="sr-only">{{ $day->format('l') }}: {{ SessionDetails::duration($seconds) }}</span>
+                        </li>
+                    @endforeach
+                </ol>
+            </div>
+
+            <a href="{{ $cards['due'] > 0 ? route('workspaces.flashcards.review', $workspaceId) : route('workspaces.show', [$workspaceId, 'flashcards']) }}" class="stat-tile is-link">
+                <span class="stat-icon" aria-hidden="true"><x-icon name="gallery-vertical-end" class="size-5" /></span>
+                <div class="min-w-0 flex-1">
+                    <p class="stat-label">Cards to review</p>
+                    <p class="stat-value">{{ $cards['due'] }}</p>
+                </div>
+                <x-icon name="chevron-right" class="size-5 shrink-0 text-fg-subtle" />
             </a>
-        @else
-            <x-button variant="primary" icon="play" wire:click="newSession">Start studying</x-button>
-        @endif
-        <x-button icon="history" wire:click="logTime">Log time</x-button>
-    </div>
-
-    @if ($recent !== [])
-        <div class="space-y-1.5">
-            <h3 class="text-sm font-semibold">Latest sessions</h3>
-            <ul class="space-y-2" role="list">
-                @foreach ($recent as $session)
-                    <li class="flex items-start gap-2">
-                        <x-icon :name="$session->manual ? 'history' : 'timer'" class="mt-0.5 size-4 shrink-0 text-fg-muted" />
-                        <span class="min-w-0 flex-1">
-                            <a href="{{ route('workspaces.sessions.show', [$session->workspaceId, $session->id]) }}" class="item-link">{{ $session->topicId !== null ? ($topicNames[$session->topicId] ?? 'A removed topic') : 'Study session' }}</a>
-                            <span class="block text-sm text-fg-muted">{{ Carbon::parse($session->startedAt)->setTimezone($zone)->format('D j M, H:i') }}</span>
-                        </span>
-                        <span class="shrink-0 text-sm font-medium">{{ SessionDetails::duration($session->studySeconds) }}</span>
-                    </li>
-                @endforeach
-            </ul>
         </div>
     @endif
 
@@ -85,17 +75,16 @@
                 </div>
                 <div class="space-y-4 px-5 pt-2">
                     @if ($mode === 'log')
-                        <p class="text-sm text-fg-muted">For time you studied without the clock, like a library afternoon.</p>
                         <div class="grid gap-4 sm:grid-cols-2">
                             <x-field name="date" label="Date" type="date" wire:model="date" />
                             <x-field name="time" label="Started at" type="time" wire:model="time" />
                         </div>
-                        <x-field name="minutes" label="Minutes" type="number" inputmode="numeric" min="1" max="720" wire:model="minutes" autofocus hint="Like 45, or 90 for an hour and a half." />
+                        <x-field name="minutes" label="Minutes" type="number" inputmode="numeric" min="1" max="720" wire:model="minutes" autofocus />
                     @endif
                     <div class="field">
-                        <label for="study-topic" class="field-label">{{ $mode === 'start' ? 'What are you studying? (optional)' : 'Topic (optional)' }}</label>
+                        <label for="study-topic" class="field-label">Topic (optional)</label>
                         <select id="study-topic" class="input" wire:model="topicId" @if ($mode === 'start') autofocus @endif>
-                            <option value="">No particular topic</option>
+                            <option value="">Any</option>
                             @foreach ($topics as $topic)
                                 <option value="{{ $topic->id }}">{{ $topic->name }}</option>
                             @endforeach
@@ -105,20 +94,19 @@
                     @if ($mode === 'start' && $modules !== [])
                         <div class="field">
                             <label for="study-module" class="field-label">Module (optional)</label>
-                            <select id="study-module" class="input" wire:model="moduleId" aria-describedby="study-module-hint">
-                                <option value="">The topic's, or none</option>
+                            <select id="study-module" class="input" wire:model="moduleId">
+                                <option value="">None</option>
                                 @foreach ($modules as $module)
                                     <option value="{{ $module->id }}">{{ $module->title }}</option>
                                 @endforeach
                             </select>
-                            <p id="study-module-hint" class="field-hint">Its notes and files show beside the clock.</p>
                         </div>
                     @endif
                     @if ($mode === 'start')
                         <div x-data="{ open: false }" class="space-y-3">
                             <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                                 <p class="field-label">How the AI teaches</p>
-                                <button type="button" class="item-link text-sm" x-on:click="open = ! open" x-bind:aria-expanded="open.toString()" aria-controls="start-teaching">Change</button>
+                                <button type="button" class="text-link text-sm" x-on:click="open = ! open" x-bind:aria-expanded="open.toString()" aria-controls="start-teaching">Change</button>
                             </div>
                             <p class="text-sm text-fg-muted" x-show="! open">{{ \App\Study\Tutoring::summary(['method' => $method, 'check_ins' => $checkIns, 'quiz' => $quiz, 'pace' => $pace]) }}</p>
                             <div id="start-teaching" x-show="open" x-cloak>
@@ -126,7 +114,6 @@
                             </div>
                         </div>
                         @include('livewire.workspaces.partials.pomodoro-fields')
-                        <p class="text-sm text-fg-muted">The clock starts now. Pause it whenever you stop.</p>
                     @endif
                 </div>
                 <div class="modal-actions">
@@ -136,4 +123,4 @@
             </form>
         @endif
     </dialog>
-</section>
+</div>

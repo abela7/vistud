@@ -9,11 +9,11 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\Flashcards;
 use App\Study\Modules;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\Topics;
-use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
@@ -21,9 +21,12 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
- * Study time on a workspace's Overview (docs/specs/study-memory.md §4):
- * this week and in all, the latest sessions, starting one, and logging time
- * studied without the clock. The service checks everything.
+ * Starting a study session and logging time studied without the clock
+ * (docs/specs/study-memory.md §4), from anywhere in a workspace: the
+ * `study-start` event (optionally with a module or topic) and `study-log`.
+ * With $stats, as on the Overview, it also shows the student's rhythm: the
+ * streak, this week day by day, and the flashcards due. The service checks
+ * everything.
  */
 final class StudyTime extends Component
 {
@@ -38,6 +41,10 @@ final class StudyTime extends Component
 
     #[Locked]
     public ?string $notice = null;
+
+    /** The Overview's tiles: the streak, this week, the cards due. */
+    #[Locked]
+    public bool $stats = false;
 
     public string $topicId = '';
 
@@ -55,35 +62,37 @@ final class StudyTime extends Component
 
     private Modules $modules;
 
-    private Workspaces $workspaces;
+    private Flashcards $flashcards;
 
     private PrincipalFactory $principals;
 
-    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Workspaces $workspaces, PrincipalFactory $principals): void
+    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Flashcards $flashcards, PrincipalFactory $principals): void
     {
+        $this->flashcards = $flashcards;
         $this->sessions = $sessions;
         $this->topics = $topics;
         $this->modules = $modules;
-        $this->workspaces = $workspaces;
         $this->principals = $principals;
     }
 
-    public function mount(string $workspaceId): void
+    public function mount(string $workspaceId, bool $stats = false): void
     {
-        $this->workspaceId = $workspaceId;
+        [$this->workspaceId, $this->stats] = [$workspaceId, $stats];
     }
 
-    /** From the Overview's header, or the card: what to study. */
+    /** What to study: from the Overview, or a module's page (in that module). */
     #[On('study-start')]
-    public function newSession(): void
+    public function newSession(?string $moduleId = null, ?string $topicId = null): void
     {
         $this->open('start');
+        [$this->moduleId, $this->topicId] = [$moduleId ?? '', $topicId ?? ''];
         // The clock and teaching the student chose last, ready again.
         $last = $this->sessions->lastChoices($this->principal(), $this->workspaceId);
         $this->fillPomodoro($last['pomodoro']);
         $this->fillTeaching($last['tutoring']);
     }
 
+    #[On('study-log')]
     public function logTime(): void
     {
         $this->open('log');
@@ -107,6 +116,7 @@ final class StudyTime extends Component
             if ($this->mode === 'log') {
                 $logged = $this->sessions->log($by, $this->workspaceId, ['date' => $this->date, 'time' => $this->time, 'minutes' => $this->minutes, 'topic_id' => $this->topicId], $this->zone());
                 $this->notice = SessionDetails::duration($logged->studySeconds).' logged.';
+                $this->dispatch('session-changed');
             }
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
@@ -140,25 +150,20 @@ final class StudyTime extends Component
     public function render(): View
     {
         $by = $this->principal();
-        $zone = $this->zone();
-        $weekStart = CarbonImmutable::now($zone)->startOfWeek()->utc();
-        $open = $this->sessions->current($by);
-        $topics = $this->topics->list($by, $this->workspaceId);
-        $topicNames = [];
-        foreach ($topics as $topic) {
-            $topicNames[$topic->id] = $topic->name;
+        $data = [
+            'topics' => $this->mode === null ? [] : $this->topics->list($by, $this->workspaceId),
+            'modules' => $this->mode === 'start' ? $this->modules->list($by, $this->workspaceId) : [],
+        ];
+        if ($this->stats) {
+            $zone = $this->zone();
+            $data += [
+                'rhythm' => $this->sessions->rhythm($by, $this->workspaceId),
+                'cards' => $this->flashcards->counts($by, $this->workspaceId),
+                'today' => CarbonImmutable::now($zone)->toDateString(),
+            ];
         }
 
-        return view('livewire.workspaces.study-time', [
-            'totals' => $this->sessions->totals($by, $this->workspaceId, $weekStart),
-            'recent' => array_slice(array_values(array_filter($this->sessions->list($by, $this->workspaceId, 6), fn ($s) => ! $s->isOpen())), 0, 4),
-            'open' => $open,
-            'openWorkspace' => $open !== null && $open->workspaceId !== $this->workspaceId ? $this->workspaces->find($by, $open->workspaceId) : null,
-            'topics' => $topics,
-            'topicNames' => $topicNames,
-            'modules' => $this->mode === 'start' ? $this->modules->list($by, $this->workspaceId) : [],
-            'zone' => $zone,
-        ]);
+        return view('livewire.workspaces.study-time', $data);
     }
 
     private function open(string $mode): void

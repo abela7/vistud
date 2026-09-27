@@ -25,12 +25,12 @@
         ['redo', 'redo-2', 'Redo (Ctrl+Shift+Z)', false],
     ];
 @endphp
-<x-layouts.app :title="$note->displayTitle().' · '.$workspace->name" :workspace="$workspace" section="notes">
+<x-layouts.app :title="$note->displayTitle().' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'">
     <div class="note-page" data-note-page>
         <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <nav aria-label="Where this note is" class="min-w-0">
                 <ol class="breadcrumbs">
-                    <li><a href="{{ route('workspaces.show', [$workspace->id, 'notes']) }}">{{ $workspace->name }}</a></li>
+                    <li><a href="{{ route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes']) }}">{{ $inModule ? 'Modules' : 'Notes & files' }}</a></li>
                     @foreach ($trail as [$label, $url])
                         <li>
                             <x-icon name="chevron-right" class="size-4 shrink-0 text-fg-subtle" />

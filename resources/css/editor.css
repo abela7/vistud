@@ -469,7 +469,21 @@
 
 @layer components {
     /* A note's title in a list: a link that reads as one. */
+    /* A link or small action that stands on its own: no underline until hovered. */
     .item-link {
+        color: var(--accent-contrast);
+        font-weight: 600;
+        text-decoration: none;
+        overflow-wrap: anywhere;
+    }
+
+    .item-link:hover {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+
+    /* A link inside a sentence keeps its underline, so it never relies on colour alone. */
+    .inline-link {
         color: var(--text);
         font-weight: 500;
         text-decoration: underline;
@@ -478,7 +492,7 @@
         overflow-wrap: anywhere;
     }
 
-    .item-link:hover {
+    .inline-link:hover {
         text-decoration-color: currentColor;
     }
 }

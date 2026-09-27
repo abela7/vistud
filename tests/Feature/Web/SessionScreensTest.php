@@ -43,10 +43,10 @@ class SessionScreensTest extends TestCase
         $joins = app(Topics::class)->create($this->principal($this->ada), $this->databases->id, 'Joins');
 
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))
-            ->assertOk()->assertSee('Start studying')->assertSeeInOrder(['Study time', 'This week', '0 min', 'In all', '0 min']);
+            ->assertOk()->assertSee('Start studying')->assertSeeInOrder(['Streak', '0 days', 'Last 7 days', '0 min', 'Cards to review', '0']);
 
         $this->livewire(StudyTime::class)
-            ->call('newSession')->assertDispatched('study-dialog-open')->assertSee('What are you studying?')
+            ->call('newSession')->assertDispatched('study-dialog-open')->assertSee('Topic (optional)')
             ->set('topicId', $joins->id)->call('save')
             ->assertRedirect(route('workspaces.sessions.show', [$this->databases->id, $this->current()->id]));
 
@@ -99,13 +99,13 @@ class SessionScreensTest extends TestCase
 
     public function test_time_is_logged_afterwards_and_shows_in_the_totals(): void
     {
-        $this->livewire(StudyTime::class)
+        $this->livewire(StudyTime::class, ['stats' => true])
             ->call('logTime')->assertSet('date', '2026-10-05')->assertSet('time', '08:00')
             ->set('minutes', '0')->call('save')->assertHasErrors('minutes')
             ->set('date', '2026-10-04')->set('time', '14:00')->set('minutes', '90')->call('save')
-            ->assertSee('1 h 30 min logged.')
-            // Sunday the 4th is last week: weeks start on Monday.
-            ->assertSeeInOrder(['This week', '0 min', 'In all', '1 h 30 min', 'Latest sessions', 'Study session', 'Sun 4 Oct, 14:00', '1 h 30 min']);
+            ->assertSee('1 h 30 min logged.')->assertDispatched('session-changed')
+            // Yesterday counts: the streak is alive until today ends.
+            ->assertSeeInOrder(['Streak', '1 day', 'Last 7 days', '1 h 30 min', 'Sunday: 1 h 30 min', 'Monday: 0 min']);
     }
 
     public function test_the_top_bar_shows_the_open_session_on_every_page_and_pauses_it(): void

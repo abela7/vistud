@@ -182,6 +182,31 @@ class SessionsTest extends TestCase
         $this->assertNull($this->sessions->current($this->by));
     }
 
+    public function test_the_rhythm_is_the_last_7_days_and_the_streak_across_courses(): void
+    {
+        $biology = app(Workspaces::class)->create($this->by, ['name' => 'Biology']);
+        // Today is Monday 5 October (UTC). A gap on the 1st, then three days in a row.
+        $this->sessions->log($this->by, $this->databases->id, ['date' => '2026-09-30', 'time' => '10:00', 'minutes' => '20'], 'UTC');
+        $this->sessions->log($this->by, $this->databases->id, ['date' => '2026-10-02', 'time' => '10:00', 'minutes' => '30'], 'UTC');
+        $this->sessions->log($this->by, $biology->id, ['date' => '2026-10-03', 'time' => '10:00', 'minutes' => '15'], 'UTC');
+        $this->sessions->log($this->by, $this->databases->id, ['date' => '2026-10-04', 'time' => '10:00', 'minutes' => '45'], 'UTC');
+
+        $rhythm = $this->sessions->rhythm($this->by, $this->databases->id);
+        $this->assertSame(['2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05'], array_keys($rhythm['days']));
+        $this->assertSame([0, 1200, 0, 1800, 0, 2700, 0], array_values($rhythm['days']));
+        // Nothing yet today: the streak still counts up to yesterday, in any course.
+        $this->assertSame(3, $rhythm['streak']);
+        $this->assertSame(900, $this->sessions->rhythm($this->by)['days']['2026-10-03']);
+
+        $this->sessions->start($this->by, $this->databases->id);
+        $this->minutes(10);
+        $this->assertSame([4, 600], [$this->sessions->rhythm($this->by, $this->databases->id)['streak'], $this->sessions->rhythm($this->by, $this->databases->id)['days']['2026-10-05']]);
+
+        // Two days without study break it.
+        $this->travel(3)->days();
+        $this->assertSame(0, $this->sessions->rhythm($this->by)['streak']);
+    }
+
     public function test_another_students_sessions_are_missing(): void
     {
         $bob = $this->student();

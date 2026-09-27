@@ -45,9 +45,9 @@ still open. At exam time nothing has accumulated.
 | **Findings** | Short "must know" lines pinned to a topic, with their source (a note or file, and where in it) and who wrote them (the student, or a study session) | `findings` table; plain rows, since they are material, not learning state. Under each topic in Progress |
 | **Resources** | Files and web links, in the same places as notes | `files` and `links` tables. In Modules and Notes & files |
 | **Assignments and tasks** | Assignment, quiz, exam, lab, problem set or to-do, with *to do / in progress / done* and a due date; also what the calendar will show | `activities` table + an `activity` record revision in the journal for every change. On the Overview |
-| **Instructions** | *About you* (every course), this course, and each module: how to teach, what to focus on, the student's level | `instructions` table. On the Overview; a module's in its menu in Modules |
+| **Instructions** | *About you* (every course), this course, and each module: how to teach, what to focus on, the student's level | `instructions` table. One dialog from the Overview's ⋯ menu; a module's in its own menu |
 | **Flashcards** | A front and a back, on a topic, written by the student, made with an AI, or saved from a session; when each is next due (§4.5) | `flashcards` table + a `task` record and an `exercises` claim in the journal; every answer an `attempt`. The Flashcards section |
-| **Overview** | "Where am I": topics by status, what's still confusing, open questions, assignments and tasks soonest first, notes to pick up, instructions | The workspace's Overview page |
+| **Overview** | Short (the owner's review, 2026-09-27): the streak, the last 7 days, cards to review, what to continue (the last session and where it stopped, recent notes) and what's coming up. Topics and questions are in Progress; the instructions are a dialog in its ⋯ menu | The workspace's Overview page |
 
 ## 4. The session (step 2)
 

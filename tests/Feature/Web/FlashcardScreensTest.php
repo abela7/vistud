@@ -173,7 +173,8 @@ class FlashcardScreensTest extends TestCase
         $this->card($this->joins->id, 'What does an INNER JOIN keep?', 'Matching rows.');
 
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))
-            ->assertOk()->assertSee('2 cards to review today')->assertSee('Review now');
+            ->assertOk()->assertSeeInOrder(['Cards to review', '2'])
+            ->assertSee(route('workspaces.flashcards.review', $this->databases->id), false);
 
         $this->livewire(Progress::class)
             ->assertSee('2 flashcards, 2 due')->assertSee('New flashcard')

@@ -30,14 +30,15 @@ class FilePageController
         $trail = [];
         for ($folderId = $found->folderId; $folderId !== null; $folderId = $folder->parentId) {
             $folder = $folders->find($by, $folderId);
-            array_unshift($trail, [$folder->name, null]);
+            array_unshift($trail, [$folder->name, route('workspaces.folders.show', [$details->id, $folder->id])]);
         }
         if ($found->moduleId !== null) {
-            array_unshift($trail, [$modules->find($by, $found->moduleId)->title, route('workspaces.show', [$details->id, 'modules'])]);
+            array_unshift($trail, [$modules->find($by, $found->moduleId)->title, route('workspaces.modules.show', [$details->id, $found->moduleId])]);
         }
 
         return view('workspaces.file', [
             'workspace' => $details,
+            'inModule' => $found->moduleId !== null,
             'file' => $found,
             'trail' => $trail,
             'text' => $found->trashedAt === null ? $files->textPreview($by, $found->id) : null,

@@ -3,13 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Identity\PrincipalFactory;
-use App\Study\Flashcards;
 use App\Study\Modules;
 use App\Study\Notes;
-use App\Study\Questions;
 use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\Workspaces;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
@@ -17,37 +16,37 @@ use Illuminate\Http\Request;
  * A workspace's pages: /workspaces/{workspace}/{section?}. The service finds
  * the workspace first, so another student's ID answers 404 before anything
  * is drawn, exactly like one that doesn't exist. The Overview also gathers
- * "where am I" (docs/specs/study-memory.md §3): topics by status, what's
- * confusing, open questions, the notes to pick up again, the flashcards due,
- * and whether a study session is open.
+ * what to pick up again (docs/specs/study-memory.md §3): the latest study
+ * session, the notes edited last, and whether a session is open.
  */
 class WorkspacePageController
 {
-    public function __invoke(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, Topics $topics, Questions $questions, Notes $notes, Sessions $sessions, Flashcards $flashcards, string $workspace, string $section = 'overview'): View
+    public function __invoke(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, Topics $topics, Notes $notes, Sessions $sessions, string $workspace, string $section = 'overview'): View
     {
         $by = $principals->fromRequest($request);
         $details = $workspaces->find($by, $workspace);
-        $data = ['workspace' => $details, 'section' => $section, 'modules' => []];
+        $data = ['workspace' => $details, 'section' => $section];
 
         if ($section === 'overview') {
-            $topicList = $topics->list($by, $details->id);
-            $counts = array_fill_keys(['not_started', 'covered', 'understood', 'confused', 'mastered'], 0);
-            foreach ($topicList as $topic) {
-                $counts[$topic->shown()]++;
-            }
             $recent = $notes->list($by, $details->id);
             usort($recent, fn ($a, $b) => $b->updatedAt <=> $a->updatedAt);
+            $places = ["workspace:{$details->id}" => null];
+            $moduleList = $modules->list($by, $details->id);
+            foreach ($moduleList as $module) {
+                $places["module:{$module->id}"] = $module->title;
+            }
+            $hour = CarbonImmutable::now($sessions->timezone($by))->hour;
+            $name = trim(explode(' ', (string) $request->user()?->name)[0] ?? '');
 
-            $data = [
-                'modules' => $modules->list($by, $details->id),
-                'topicCount' => count($topicList),
-                'counts' => $counts,
-                'confused' => array_values(array_filter($topicList, fn ($t) => $t->shown() === 'confused')),
-                'openQuestions' => array_values(array_filter($questions->list($by, $details->id), fn ($q) => $q->shown() === 'open')),
+            $data += [
+                'greeting' => ($hour < 5 ? 'Good night' : ($hour < 12 ? 'Good morning' : ($hour < 18 ? 'Good afternoon' : 'Good evening'))).($name !== '' ? ", {$name}" : ''),
                 'recent' => array_slice($recent, 0, 3),
+                'places' => $places,
+                'moduleCount' => count($moduleList),
+                'lastSession' => $sessions->list($by, $details->id, 1)[0] ?? null,
+                'topicNames' => collect($topics->list($by, $details->id))->pluck('name', 'id')->all(),
                 'openSession' => $sessions->current($by),
-                'cards' => $flashcards->counts($by, $details->id),
-            ] + $data;
+            ];
         }
 
         return view('workspaces.show', $data);

@@ -26,9 +26,14 @@
 @endphp
 <div class="space-y-6">
     <div class="min-w-0">
-        <p class="text-sm break-words text-fg-muted">
-            <a href="{{ $back }}" class="item-link font-normal">Flashcards</a>{{ $roundTopic ? ' · '.$roundTopic : '' }}
-        </p>
+        <nav aria-label="Path" class="crumbs">
+            <ol role="list">
+                <li><a href="{{ $back }}">Flashcards</a></li>
+                @if ($roundTopic)
+                    <li>{{ $roundTopic }}</li>
+                @endif
+            </ol>
+        </nav>
         <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ $early ? 'Practise' : 'Review' }}</h1>
     </div>
 

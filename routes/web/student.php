@@ -5,6 +5,7 @@ use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
 use App\Http\Controllers\FlashcardReviewController;
 use App\Http\Controllers\NotePageController;
+use App\Http\Controllers\PlacePageController;
 use App\Http\Controllers\SessionBriefingController;
 use App\Http\Controllers\SessionPageController;
 use App\Http\Controllers\WorkspacePageController;
@@ -46,6 +47,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspaces/{workspace}/sessions/{session}/briefing', SessionBriefingController::class)
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'session' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.sessions.briefing');
+
+    // A module's or a folder's own page (docs/specs/workspaces.md).
+    Route::get('/workspaces/{workspace}/modules/{module}', [PlacePageController::class, 'module'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'module' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.modules.show');
+    Route::get('/workspaces/{workspace}/folders/{folder}', [PlacePageController::class, 'folder'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'folder' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.folders.show');
 
     // Reviewing a workspace's flashcards (docs/specs/study-memory.md §4.5).
     Route::get('/workspaces/{workspace}/flashcards/review', FlashcardReviewController::class)

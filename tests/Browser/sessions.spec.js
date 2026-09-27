@@ -34,7 +34,7 @@ test('a session is started from the Overview, and its clock runs, pauses, breaks
 
     await page.getByRole('button', { name: 'Start studying' }).first().click();
     const dialog = page.locator('#study-dialog');
-    await dialog.getByLabel('What are you studying? (optional)').selectOption({ label: 'Normalisation' });
+    await dialog.getByLabel('Topic (optional)').selectOption({ label: 'Normalisation' });
     await dialog.getByRole('button', { name: 'Start' }).click();
     await page.getByRole('heading', { level: 1, name: 'Normalisation' }).waitFor();
 

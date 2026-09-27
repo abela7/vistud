@@ -60,7 +60,9 @@ class FilesScreenTest extends TestCase
 
         $this->assertSame(['Lecture 2.pdf'], array_map(fn (FileDetails $f) => $f->fileName(), $this->files()));
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
-            ->assertSeeInOrder(['Cells', '1 file', 'Lecture 2.pdf', 'PDF · ', 'Upload files']);
+            ->assertSeeInOrder(['Cells', '1 file']);
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $this->cells->id]))
+            ->assertSeeInOrder(['Cells', 'Lecture 2.pdf', 'PDF · ']);
     }
 
     public function test_a_file_is_renamed_moved_trashed_restored_and_deleted_from_the_lists(): void
@@ -91,7 +93,8 @@ class FilesScreenTest extends TestCase
 
         $this->page($pdf)->assertOk()
             ->assertSee('<title>Lecture 2.pdf · Biology', false)
-            ->assertSeeInOrder(['Where this file is', 'Biology', 'Cells'])
+            ->assertSeeInOrder(['Where this file is', 'Modules', 'Cells'])
+            ->assertSee(route('workspaces.modules.show', [$this->biology->id, $this->cells->id]), false)
             ->assertSee('<iframe class="file-preview" src="'.route('files.content', $pdf->id).'"', false)
             ->assertSee(route('files.content', [$pdf->id, 'download' => 1]), false);
         $this->page($docx)->assertSee('No preview for Word document files yet')->assertDontSee('<iframe', false);

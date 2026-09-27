@@ -9,7 +9,8 @@ const desktop = { width: 1440, height: 900 };
 const phone = { width: 390, height: 844 };
 const fixture = (name) => fileURLToPath(new URL(`./fixtures/files/${name}`, import.meta.url));
 const dialog = (page) => page.locator('#structure-dialog');
-const week1 = (page) => page.locator('.module-card').filter({ has: page.getByText('Week 1: Cells', { exact: true }) });
+// Week 1's own page: its notes, files and links.
+const week1 = (page) => page.locator('main .item-list');
 const analyse = async (page) => (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
     .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
 
@@ -23,9 +24,12 @@ async function withFiles(page) {
     await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
     await page.goto(page.url().replace(/\/?$/, '/modules'));
     await page.getByRole('heading', { level: 1, name: 'Modules' }).waitFor();
+    await page.locator('main').getByRole('link', { name: 'Week 1: Cells' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 1: Cells' }).waitFor();
     await page.waitForLoadState('load');
 
-    await week1(page).getByRole('button', { name: 'Upload files' }).click();
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#new-menu').getByRole('button', { name: 'Upload files' }).click();
     await expect(dialog(page).getByRole('heading', { name: 'Upload files to Week 1: Cells' })).toBeVisible();
     await dialog(page).locator('input[type="file"]').setInputFiles([
         fixture('Lecture 2 - cell division.pdf'),
@@ -45,7 +49,7 @@ test('a student uploads files; the ones that aren\'t safe are refused with the r
     await expect(dialog(page)).toContainText('Homework with macros.docx: This file contains macros');
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toBeHidden();
-    await expect(week1(page)).toContainText('3 files');
+    await expect(week1(page).locator('.item-row')).toHaveCount(3);
     for (const name of ['Lecture 2 - cell division.pdf', 'Essay - why cells divide.docx', 'Onion cells.png']) {
         await expect(week1(page).getByRole('link', { name })).toBeVisible();
     }

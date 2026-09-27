@@ -33,7 +33,7 @@ test('a student writes a note: it saves by itself, and the title names the page'
     await page.setViewportSize(desktop);
     const note = await openNote(page, 'empty');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Untitled note');
-    await expect(page.getByRole('navigation', { name: 'Where this note is' })).toHaveText(/Biology\s*Week 1: Cells\s*Labs/);
+    await expect(page.getByRole('navigation', { name: 'Where this note is' })).toHaveText(/Modules\s*Week 1: Cells\s*Labs/);
 
     await page.getByLabel('Title').fill('Lab 1: what I saw');
     await page.keyboard.press('Enter');
@@ -290,6 +290,7 @@ test('a draft of a note deleted elsewhere is removed before it could be sent', a
     const other = await context.newPage();
     await other.setViewportSize(desktop);
     await other.goto(`/workspaces/${note.workspace}/modules`);
+    await other.locator('main').getByRole('link', { name: 'Week 2: Cell division' }).click();
     await other.getByRole('button', { name: 'Actions for Mitosis vs meiosis' }).click();
     await other.getByRole('button', { name: 'Move to trash' }).click();
     await other.goto(`/workspaces/${note.workspace}/notes`);
@@ -404,18 +405,18 @@ async function openNotesAndFiles(page) {
     return note;
 }
 
-test('Notes & files: a new note, the recent list, and the trash', async ({ page }) => {
+test('Notes & files: a new note, and the trash', async ({ page }) => {
     await page.setViewportSize(desktop);
     await openNotesAndFiles(page);
-    await expect(page.getByRole('region', { name: 'Recently edited' })).toContainText('Mitosis vs meiosis');
 
-    await page.getByRole('button', { name: 'New note' }).click();
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#new-menu').getByRole('button', { name: 'Note' }).click();
     await page.locator('[data-note-editor][data-ready]').waitFor();
     await page.getByLabel('Title').fill('Exam plan');
     await expect(status(page)).toHaveText('Saved');
-    await page.getByRole('link', { name: 'Biology' }).first().click();
+    await page.getByRole('navigation', { name: 'Where this note is' }).getByRole('link', { name: 'Notes & files' }).click();
 
-    const loose = page.getByRole('region', { name: 'Not in a module' });
+    const loose = page.getByRole('list', { name: 'Notes, files and links' });
     await expect(loose.getByRole('link', { name: 'Exam plan' })).toBeVisible();
     await loose.getByRole('button', { name: 'Actions for Exam plan' }).click();
     await loose.getByRole('button', { name: 'Move to trash' }).click();

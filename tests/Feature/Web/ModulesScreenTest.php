@@ -3,9 +3,12 @@
 namespace Tests\Feature\Web;
 
 use App\Livewire\Workspaces\Contents;
+use App\Livewire\Workspaces\StudyTime;
 use App\Models\User;
 use App\Study\Folders;
 use App\Study\Modules as ModuleService;
+use App\Study\Notes;
+use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
@@ -39,11 +42,12 @@ class ModulesScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
             ->assertOk()
             ->assertSee('<title>Modules · Biology', false)
-            ->assertSeeInOrder(['2 modules', 'New module', 'Cells', 'Cell division'])
+            ->assertSeeInOrder(['Cells', 'Cell division', 'New module'])
+            ->assertSee(route('workspaces.modules.show', [$this->biology->id, $this->modules()[0]->id]), false)
             ->assertSee('wire:sort="sortModules"', false);
 
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->biology->id))
-            ->assertSeeInOrder(['Modules', 'Cells', 'Cell division']);
+            ->assertSee('Open a module to begin');
     }
 
     public function test_adding_and_editing_a_module_through_the_dialog(): void
@@ -142,6 +146,80 @@ class ModulesScreenTest extends TestCase
         $this->page()->call('newFolder', 'module', $module->id)->set('name', 'Mine')->call('save')
             ->assertSee('That no longer exists.');
         $this->assertSame([], app(Folders::class)->tree($this->principal($bob), $theirs->id));
+    }
+
+    public function test_a_module_and_its_folders_have_their_own_pages(): void
+    {
+        $by = $this->principal($this->ada);
+        $cells = $this->module('Cells');
+        $labs = app(Folders::class)->create($by, 'module', $cells->id, 'Labs');
+        $week2 = app(Folders::class)->create($by, 'folder', $labs->id, 'Week 2');
+        app(Notes::class)->create($by, 'folder', $labs->id, 'Lab 1');
+        app(Topics::class)->create($by, $this->biology->id, 'Mitosis', $cells->id);
+
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
+            ->assertOk()->assertSee('<title>Cells · Biology', false)
+            ->assertSeeInOrder(['Modules', 'Cells', 'New', 'Study this', 'Labs', '2 items'])
+            ->assertSee(route('workspaces.folders.show', [$this->biology->id, $labs->id]), false);
+
+        $this->actingAs($this->ada)->get(route('workspaces.folders.show', [$this->biology->id, $labs->id]))
+            ->assertOk()->assertSee('<title>Labs · Biology', false)
+            ->assertSeeInOrder(['Modules', 'Cells', 'Labs', 'Week 2', 'Empty', 'Lab 1', 'Note · '])
+            ->assertSee(route('workspaces.modules.show', [$this->biology->id, $cells->id]), false);
+
+        $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
+            ->assertSeeInOrder(['Cells', '1 note · 2 folders', '0 of 1 topics understood']);
+
+        // "Study this" starts in the module; so does a folder inside it.
+        $this->place('module', $cells->id)->call('studyHere')->assertDispatched('study-start', moduleId: $cells->id);
+        $this->place('folder', $week2->id)->call('studyHere')->assertDispatched('study-start', moduleId: $cells->id);
+        $this->livewire(StudyTime::class)->call('newSession', $cells->id)->assertSet('moduleId', $cells->id)->assertSet('mode', 'start');
+    }
+
+    public function test_deleting_the_page_you_are_on_goes_up_a_level(): void
+    {
+        $by = $this->principal($this->ada);
+        $cells = $this->module('Cells');
+        $labs = app(Folders::class)->create($by, 'module', $cells->id, 'Labs');
+        $week2 = app(Folders::class)->create($by, 'folder', $labs->id, 'Week 2');
+
+        $this->place('folder', $week2->id)->call('confirmDelete', 'folder', $week2->id)->call('save')
+            ->assertRedirect(route('workspaces.folders.show', [$this->biology->id, $labs->id]));
+        $this->place('folder', $labs->id)->call('confirmDelete', 'folder', $labs->id)->call('save')
+            ->assertRedirect(route('workspaces.modules.show', [$this->biology->id, $cells->id]));
+        $this->place('module', $cells->id)->call('confirmDelete', 'module', $cells->id)->call('save')
+            ->assertRedirect(route('workspaces.show', [$this->biology->id, 'modules']));
+        $this->assertSame([], $this->modules());
+    }
+
+    public function test_another_students_module_or_folder_pages_are_missing(): void
+    {
+        $bob = $this->principal($this->student());
+        $theirs = app(Workspaces::class)->create($bob, ['name' => 'Private']);
+        $module = app(ModuleService::class)->create($bob, $theirs->id, ['title' => 'Secret']);
+        $folder = app(Folders::class)->create($bob, 'module', $module->id, 'Secret folder');
+        $mine = $this->module('Cells');
+        $maths = app(Workspaces::class)->create($this->principal($this->ada), ['name' => 'Maths']);
+
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$theirs->id, $module->id]))->assertNotFound();
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $module->id]))->assertNotFound();
+        $this->actingAs($this->ada)->get(route('workspaces.folders.show', [$this->biology->id, $folder->id]))->assertNotFound();
+        // Mine, but in another workspace.
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$maths->id, $mine->id]))->assertNotFound();
+        $this->assertThrows(fn () => $this->place('module', $mine->id)->set('placeId', $module->id), CannotUpdateLockedPropertyException::class);
+    }
+
+    private function place(string $view, string $id)
+    {
+        return $this->livewire(Contents::class, ['view' => $view, 'placeId' => $id]);
+    }
+
+    private function livewire(string $class, array $params = [])
+    {
+        $this->actingAs($this->ada);
+        $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
+
+        return Livewire::test($class, ['workspaceId' => $this->biology->id] + $params);
     }
 
     private function module(string $title)

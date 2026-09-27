@@ -114,6 +114,50 @@ final class Sessions
     }
 
     /**
+     * The student's rhythm: study time on each of the last $days days, by
+     * their own calendar (oldest first, today last), in one workspace or
+     * (null) in all; and the streak: days in a row with study time, in any
+     * workspace, up to today (or up to yesterday while today has none yet).
+     *
+     * @return array{days: array<string, int>, streak: int}
+     */
+    public function rhythm(Principal $by, ?string $workspaceId = null, int $days = 7): array
+    {
+        $scope = Guard::learner($by);
+        if ($workspaceId !== null) {
+            Input::workspace($scope, $workspaceId);
+        }
+        $zone = $this->timezone($by);
+        $today = CarbonImmutable::now($zone)->startOfDay();
+        $week = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $week[$today->subDays($i)->toDateString()] = 0;
+        }
+
+        $studied = [];
+        foreach (LearnerTables::query($scope, 'study_sessions')->get() as $row) {
+            $seconds = $row->state === 'ended' ? (int) $row->study_seconds : $this->details($scope, $row)->studySeconds;
+            if ($seconds <= 0) {
+                continue;
+            }
+            $date = CarbonImmutable::parse($row->started_at, 'UTC')->setTimezone($zone)->toDateString();
+            $studied[$date] = true;
+            if (isset($week[$date]) && ($workspaceId === null || $row->workspace_id === $workspaceId)) {
+                $week[$date] += $seconds;
+            }
+        }
+
+        $streak = 0;
+        $day = isset($studied[$today->toDateString()]) ? $today : $today->subDay();
+        while (isset($studied[$day->toDateString()])) {
+            $streak++;
+            $day = $day->subDay();
+        }
+
+        return ['days' => $week, 'streak' => $streak];
+    }
+
+    /**
      * Starts studying in a workspace, on a topic and in a module if given,
      * with the free clock or (given its settings) the Pomodoro clock.
      * Another open session is a conflict.

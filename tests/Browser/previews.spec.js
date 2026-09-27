@@ -409,14 +409,35 @@ test('modules: the list, a row menu, the move and module dialogs', async ({ page
 
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
-    const labs = page.locator('.folder-row').filter({ hasText: 'Labs' }).first();
-    await labs.getByRole('button', { name: 'Actions for Labs' }).click();
+    await page.locator('main').getByRole('link', { name: 'Week 1: Cells' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 1: Cells' }).waitFor();
+    await page.waitForLoadState('load');
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`module-page-${size}-${theme}`), fullPage: size === 'mobile' });
+        }
+    }
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.screenshot({ path: out('module-page-desktop-vistud-light-new') });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Actions for Labs' }).click();
     await page.screenshot({ path: out('modules-desktop-vistud-light-menu') });
-    await labs.getByRole('button', { name: 'Move to…' }).click();
+    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Move to…' }).click();
     await page.locator('#structure-dialog').getByLabel('Week 2: Cell division').check();
     await page.screenshot({ path: out('modules-desktop-vistud-light-move') });
     await page.keyboard.press('Escape');
+    await page.locator('main').getByRole('link', { name: 'Labs', exact: true }).click();
+    await page.getByRole('heading', { level: 1, name: 'Labs' }).waitFor();
+    await page.screenshot({ path: out('folder-page-desktop-vistud-light') });
 
+    await page.goBack();
+    await page.goBack();
+    await page.getByRole('heading', { level: 1, name: 'Modules' }).waitFor();
     await page.setViewportSize(sizes.mobile);
     await page.getByRole('button', { name: 'New module' }).click();
     await page.locator('#structure-dialog').getByLabel('Title').fill('Week 3: Genetics');
@@ -459,7 +480,8 @@ test('notes: the editor, Notes & files, and notes in a module', async ({ page })
     await page.unroute('**/api/v1/notes/*');
 
     await page.goto(`/workspaces/${note.workspace}/notes`);
-    await page.getByRole('button', { name: 'New folder' }).click();
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#new-menu').getByRole('button', { name: 'Folder' }).click();
     await page.locator('#structure-dialog').getByLabel('Name').fill('Exam revision');
     await page.locator('#structure-dialog').getByRole('button', { name: 'Add folder' }).click();
     await page.locator('#structure-dialog').waitFor({ state: 'hidden' });
@@ -473,6 +495,8 @@ test('notes: the editor, Notes & files, and notes in a module', async ({ page })
     await page.setViewportSize(sizes.desktop);
     await page.goto(`/workspaces/${note.workspace}/modules`);
     await page.getByRole('heading', { level: 1, name: 'Modules' }).waitFor();
+    await page.locator('main').getByRole('link', { name: 'Week 2: Cell division' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 2: Cell division' }).waitFor();
     await page.screenshot({ path: out('modules-desktop-vistud-light-notes') });
 
     // Logging out with a change that couldn't be sent.
@@ -499,10 +523,13 @@ test('files: the upload dialog, a module with files, and file pages', async ({ p
     await page.locator('main').getByRole('link', { name: 'Biology' }).click();
     await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
     await page.goto(page.url().replace(/\/?$/, '/modules'));
+    await page.locator('main').getByRole('link', { name: 'Week 1: Cells' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 1: Cells' }).waitFor();
     await page.waitForLoadState('load');
-    const week1 = page.locator('.module-card').filter({ has: page.getByText('Week 1: Cells', { exact: true }) });
+    const week1 = page.locator('main .item-list');
 
-    await week1.getByRole('button', { name: 'Upload files' }).click();
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#new-menu').getByRole('button', { name: 'Upload files' }).click();
     await page.locator('#structure-dialog input[type="file"]').setInputFiles(['Lecture 2 - cell division.pdf', 'Essay - why cells divide.docx', 'Onion cells.png', 'Homework with macros.docx'].map(fixture));
     await page.locator('#structure-dialog').getByRole('listitem').nth(3).waitFor();
     await page.screenshot({ path: out('files-upload-desktop-vistud-light') });
@@ -564,7 +591,7 @@ test('progress: topics with statuses and evidence, questions, the topic dialog',
     await page.screenshot({ path: out('progress-desktop-vistud-light-question') });
 });
 
-test('overview: where you are, assignments and tasks, instructions', async ({ page }) => {
+test('overview: the rhythm, what to continue, coming up, and its dialogs', async ({ page }) => {
     const student = makeStudentWithSession();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
@@ -581,17 +608,20 @@ test('overview: where you are, assignments and tasks, instructions', async ({ pa
     }
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'More for Databases' }).click();
+    await page.screenshot({ path: out('overview-desktop-vistud-light-menu') });
     await page.getByRole('button', { name: 'Log time' }).click();
     await page.locator('#study-dialog').getByLabel('Minutes').fill('45');
     await page.screenshot({ path: out('overview-desktop-vistud-light-log') });
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await page.getByRole('button', { name: 'Add a task' }).click();
     await page.locator('#tasks-dialog').getByLabel('What').fill('Normalisation problem sheet');
     await page.locator('#tasks-dialog').getByLabel('Kind').selectOption({ label: 'Problem set' });
     await page.screenshot({ path: out('overview-desktop-vistud-light-task') });
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Edit: About you' }).click();
-    await page.locator('#instructions-dialog').getByRole('textbox').fill("I'm in my second year. Explain with everyday examples, one step at a time, and check I follow before moving on.");
+    await page.getByRole('button', { name: 'More for Databases' }).click();
+    await page.getByRole('button', { name: 'Instructions for the AI' }).click();
+    await page.locator('#instructions-dialog').getByLabel(/About you/).fill("I'm in my second year. Explain with everyday examples, one step at a time, and check I follow before moving on.");
     await page.screenshot({ path: out('overview-desktop-vistud-light-instructions') });
 });
 
@@ -622,7 +652,7 @@ test('session: the clock, what happened, the end dialog, and starting one', asyn
 
     await page.goto(`/workspaces/${student.workspace}`);
     await page.getByRole('button', { name: 'Start studying' }).first().click();
-    await page.locator('#study-dialog').getByLabel('What are you studying? (optional)').selectOption({ label: 'Normalisation' });
+    await page.locator('#study-dialog').getByLabel('Topic (optional)').selectOption({ label: 'Normalisation' });
     await page.screenshot({ path: out('session-desktop-vistud-light-start') });
 });
 

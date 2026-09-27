@@ -67,10 +67,19 @@ The owner chose this design ("B: workspace spaces") over one big file tree.
 1. **My workspaces** (`workspace-home-*`): a card per workspace with its
    colour, what's next and what it holds, plus **New workspace**. The sidebar
    lists every workspace for quick access.
-2. **Overview** (`workspace-overview-*`): the workspace's switcher at the top
-   of the sidebar, its five sections below it.
-3. **Modules** (`workspace-modules-*`): each module opens to show its notes,
-   files and folders, with **Note**, **Folder** and **Upload file** buttons.
+2. **Overview**: short on purpose (the owner's review, 2026-09-27). A
+   greeting and **Start studying**; three tiles (the streak, the last 7 days
+   day by day, the cards to review); **Continue** (the last study session
+   and where it stopped, the notes edited last); **Coming up** (assignments
+   and tasks). Editing the workspace, the instructions for the AI and
+   logging time sit in its ⋯ menu; topics are in Progress.
+3. **Modules**: a card per module (its dates, what it holds, how many of
+   its topics are understood), and a **New module** card. A module is a
+   page (`/workspaces/{id}/modules/{module}`): its folders as tiles, then
+   its notes, files and links, **New** (note, files, link, folder), **Study
+   this** (a session in the module) and its study sessions. A folder is a
+   page too (`/workspaces/{id}/folders/{folder}`), with its path at the top.
+   **Notes & files** is the same, for what's in no module, with the trash.
 4. **A note** (`workspace-note-*`): the editor, where you are (Biology ›
    Week 2), the save status, and on wide screens the topics and versions.
 5. **Progress** (`workspace-progress-*`): topics with their state and the
@@ -160,7 +169,8 @@ V1 (journal replay) and V2 (security T1–T10) go to Grok or Gemini, and WP5
 | `activities` | `id`, `learner_id`, `workspace_id`, optional `module_id`, `kind`, `title`, `starts_at`, `ends_at`, `all_day` |
 
 **URLs:** `/workspaces` (My workspaces), `/workspaces/{id}` (Overview),
-`/workspaces/{id}/modules`, `/workspaces/{id}/notes/{note}`,
+`/workspaces/{id}/modules`, `/workspaces/{id}/modules/{module}`,
+`/workspaces/{id}/folders/{folder}`, `/workspaces/{id}/notes/{note}`,
 `/workspaces/{id}/files/{file}`, `/workspaces/{id}/calendar`,
 `/workspaces/{id}/progress`, `/personal`, `/calendar`. After step 1, `/`
 opens My workspaces.

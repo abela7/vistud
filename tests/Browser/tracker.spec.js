@@ -21,13 +21,15 @@ async function open(page, section = '') {
     return student;
 }
 
-test('the Overview says where the student is, and tasks are ticked off there', async ({ page }) => {
+test('the Overview is short: the rhythm, what to continue, what\'s coming up', async ({ page }) => {
     await page.setViewportSize(desktop);
     await open(page);
-    await expect(page.getByRole('list', { name: 'Topics by status' }).getByRole('listitem')).toHaveText(['1 not started', '0 covered', '1 understood', '1 confused', '0 mastered']);
-    await expect(page.getByRole('region', { name: 'Where you are' })).toContainText('Primary and foreign keys');
-    await expect(page.getByRole('region', { name: 'Where you are' })).toContainText('Why does a left join keep the unmatched rows?');
+    await expect(page.locator('.stat-row')).toContainText('Streak');
+    await expect(page.locator('.stat-row')).toContainText('Last 7 days');
+    await expect(page.locator('.stat-row')).toContainText('Cards to review');
     await expect(page.getByRole('link', { name: 'Lecture 3: joins' })).toBeVisible();
+    // Topics live in Progress now.
+    await expect(page.getByText('Primary and foreign keys')).toHaveCount(0);
 
     const todo = page.getByRole('list', { name: 'To do' });
     await expect(todo.getByRole('listitem')).toHaveCount(3);
@@ -35,11 +37,11 @@ test('the Overview says where the student is, and tasks are ticked off there', a
     await expect(todo.getByRole('listitem').first()).toContainText('In progress');
 
     await todo.getByRole('button', { name: 'Done: SQL lab 2' }).click();
-    await expect(page.getByRole('heading', { name: /Assignments and tasks/ })).toContainText('(2 to do)');
+    await expect(todo.getByRole('listitem')).toHaveCount(2);
     await page.getByRole('button', { name: 'Show 1 done' }).click();
     await expect(page.getByRole('list', { name: 'Done' }).getByRole('button', { name: 'Done: SQL lab 2' })).toHaveAttribute('aria-pressed', 'true');
 
-    await page.getByRole('button', { name: 'New', exact: true }).click();
+    await page.getByRole('button', { name: 'Add a task' }).click();
     const dialog = page.locator('#tasks-dialog');
     await expect(dialog.getByLabel('What')).toBeFocused();
     await dialog.getByLabel('What').fill('Normalisation problem sheet');
@@ -47,10 +49,14 @@ test('the Overview says where the student is, and tasks are ticked off there', a
     await dialog.getByRole('button', { name: 'Add' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Normalisation problem sheet is added.' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Edit: About you' }).click();
-    await page.locator('#instructions-dialog').getByRole('textbox').fill('Second-year student. Use everyday examples.');
-    await page.locator('#instructions-dialog').getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('region', { name: 'Instructions for the assistant' })).toContainText('Second-year student. Use everyday examples.');
+    // The instructions for the AI are one dialog, from the page's menu.
+    await page.getByRole('button', { name: 'More for Databases' }).click();
+    await page.getByRole('button', { name: 'Instructions for the AI' }).click();
+    const instructions = page.locator('#instructions-dialog');
+    await expect(instructions.getByLabel('This course')).toHaveValue('Go slide by slide. After each section, ask me two questions before moving on.');
+    await instructions.getByLabel(/About you/).fill('Second-year student. Use everyday examples.');
+    await instructions.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Instructions saved.' })).toBeVisible();
 });
 
 test('findings open under their topic and are added with their source', async ({ page }) => {
@@ -78,11 +84,15 @@ test('findings open under their topic and are added with their source', async ({
 test('a web link sits in its module and opens in a new tab', async ({ page }) => {
     await page.setViewportSize(desktop);
     await open(page, 'modules');
+    await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
+    await page.waitForLoadState('load');
     const link = page.getByRole('link', { name: /Joins explained \(video\)/ });
     await expect(link).toHaveAttribute('target', '_blank');
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
 
-    await page.getByRole('button', { name: 'Add link' }).click();
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#new-menu').getByRole('button', { name: 'Link' }).click();
     const dialog = page.locator('#structure-dialog');
     await expect(dialog.getByLabel('Address')).toBeFocused();
     await dialog.getByLabel('Address').fill('javascript:alert(1)');
@@ -98,7 +108,7 @@ const screens = {
         await open(page);
         await useSentinelTheme(page);
         const states = { overview: await foreignColours(page) };
-        await page.getByRole('button', { name: 'New', exact: true }).click();
+        await page.getByRole('button', { name: 'Add a task' }).click();
         await page.locator('#tasks-dialog').getByLabel('What').waitFor();
         states['task dialog'] = await foreignColours(page);
         return states;

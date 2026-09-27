@@ -31,12 +31,12 @@ class NotePageController
         $trail = [];
         for ($folderId = $opened->folderId; $folderId !== null; $folderId = $folder->parentId) {
             $folder = $folders->find($by, $folderId);
-            array_unshift($trail, [$folder->name, null]);
+            array_unshift($trail, [$folder->name, route('workspaces.folders.show', [$details->id, $folder->id])]);
         }
         if ($opened->moduleId !== null) {
-            array_unshift($trail, [$modules->find($by, $opened->moduleId)->title, route('workspaces.show', [$details->id, 'modules'])]);
+            array_unshift($trail, [$modules->find($by, $opened->moduleId)->title, route('workspaces.modules.show', [$details->id, $opened->moduleId])]);
         }
 
-        return view('workspaces.note', ['workspace' => $details, 'note' => $opened, 'trail' => $trail]);
+        return view('workspaces.note', ['workspace' => $details, 'note' => $opened, 'trail' => $trail, 'inModule' => $opened->moduleId !== null]);
     }
 }

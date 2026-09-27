@@ -17,6 +17,7 @@
 @import './shell.css';
 @import './editor.css';
 @import './flashcards.css';
+@import './places.css';
 
 @source '../views';
 @source '../js';

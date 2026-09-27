@@ -13,6 +13,7 @@ The shared UI and UX guide for everyone who builds a ViStud screen. It sets the 
 3. **Nothing is conveyed by colour alone.** Every state also has text, an icon, a shape or a position.
 4. **Instant and honest.** Local actions happen at once, the page never reloads in normal use, and the save state always tells the truth (ADR 0003 §3 and §5.3).
 5. **One product, two workspaces.** Students and admins share components and themes; navigation and the admin marker tell them apart.
+6. **Say less, show more (the owner's review, 2026-09-27).** A page doesn't explain itself: an empty place has one short line and one button, labels are a word or two, and help text goes only where a choice isn't obvious. Things you open are cards and rows you click, whole, not accordions or menus; every page has one main button. Links that stand on their own aren't underlined (`.tile-link`, `.item-link`); only a link inside a sentence is (`.inline-link`). Studying should feel good: a greeting, the streak, the week at a glance and colour on modules and files, all from the theme's tokens.
 
 ## 2. Brand
 
@@ -273,6 +274,8 @@ Shared components live in `resources/views/components/` and their state styles i
 ### 5.4 Cards, panels and headers
 
 Cards are `--surface-raised` with a 1 px `--border`, `xl` radius and `elevation-md`. On mobile a form card drops its frame and uses the full width. Featured summary panels use `surface-featured`; section headers use `surface-header`.
+
+**Places, tiles and rows** (`resources/css/places.css`). A module is a card (`.module-tile`, `2xl` radius) in a category colour chosen from its id, so it keeps its colour when modules are reordered; a folder is a tile (`.folder-tile`); notes, files and links are rows (`.item-row`) in one bordered list. Each is a single link: `.tile-link` stretches over it, and its ⋯ menu sits above. Hover changes the background or the border and shadow, never a transform (a transformed card would trap its open menu under the next one). An icon in a rounded square (`.item-icon`) takes a category colour by kind: amber folders, red PDFs, blue Word, orange slides, green spreadsheets, purple images, teal links, the accent for notes. A page inside a place shows its path (`.crumbs`). The Overview's tiles (`.stat-tile`) follow the stat-tile shape: a label, a value, and for the last 7 days a small bar per day, past days recessive and today in the accent.
 
 ### 5.5 Coming with M2
 
