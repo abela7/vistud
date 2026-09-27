@@ -429,6 +429,38 @@ test('Notes & files: a new note, and the trash', async ({ page }) => {
     await expect(loose.getByRole('link', { name: 'Exam plan' })).toBeVisible();
 });
 
+test('a new note is kept only once something is written in it', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = await openNotesAndFiles(page);
+    const loose = page.getByRole('list', { name: 'Notes, files and links' });
+    const before = await loose.getByRole('listitem').count();
+
+    // Opened and left empty: nothing is kept.
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#new-menu').getByRole('button', { name: 'Note' }).click();
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    expect(page.url()).toMatch(/\/notes\/new$/);
+    await expect(status(page)).toHaveText('Not saved yet');
+    await page.goto(`/workspaces/${note.workspace}/notes`);
+    await expect(loose.getByRole('listitem')).toHaveCount(before);
+
+    // The first words make it, and the address becomes the note's.
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#new-menu').getByRole('button', { name: 'Note' }).click();
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await page.locator('.note-prose').click();
+    await page.keyboard.type('Revise osmosis before Friday.');
+    await expect(status(page)).toHaveText('Saved');
+    await expect(page).toHaveURL(/\/notes\/[0-9a-f-]{36}$/);
+    await page.keyboard.type(' And diffusion.');
+    await expect(status(page)).toHaveText('Saved');
+    await page.reload();
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(page.locator('.note-prose')).toHaveText('Revise osmosis before Friday. And diffusion.');
+    await page.goto(`/workspaces/${note.workspace}/notes`);
+    await expect(loose.getByRole('listitem')).toHaveCount(before + 1);
+});
+
 for (const [name, viewport] of Object.entries({ desktop, phone })) {
     test(`every colour in Notes & files comes from a token: ${name}`, async ({ page }) => {
         await page.setViewportSize(viewport);

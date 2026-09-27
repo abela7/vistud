@@ -84,8 +84,20 @@ class NotesScreenTest extends TestCase
     {
         $cells = app(Modules::class)->create($this->principal($this->ada), $this->biology->id, ['title' => 'Cells']);
 
-        $this->contents('modules')->call('newNote', 'module', $cells->id)->assertRedirectContains("/workspaces/{$this->biology->id}/notes/");
-        $this->contents('notes')->call('newNote', 'workspace', $this->biology->id);
+        // New note opens an empty editor: nothing is made until something is written.
+        $this->contents('modules')->call('newNote', 'module', $cells->id)->assertRedirect(route('workspaces.notes.create', [$this->biology->id, 'in' => "module:{$cells->id}"]));
+        $this->contents('notes')->call('newNote', 'workspace', $this->biology->id)->assertRedirect(route('workspaces.notes.create', $this->biology->id));
+        $this->assertSame([], $this->notes());
+        $this->actingAs($this->ada)->get(route('workspaces.notes.create', [$this->biology->id, 'in' => "module:{$cells->id}"]))
+            ->assertOk()->assertSee('<title>New note · Biology', false)->assertSeeInOrder(['Modules', 'Cells'])
+            ->assertSee('data-create-url="'.route('api.v1.notes.store').'"', false)->assertSee('data-place-type="module"', false)
+            ->assertSee('Not saved yet')->assertDontSee('data-save-url', false);
+        $this->actingAs($this->ada)->get(route('workspaces.notes.create', [$this->biology->id, 'in' => 'module:nothing-here']))->assertNotFound();
+
+        // Its first words make it.
+        $by = $this->principal($this->ada);
+        app(Notes::class)->createWritten($by, 'module', $cells->id, ['create_id' => 'first-words-1', 'title' => '', 'doc' => ['type' => 'doc', 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Cells divide.']]]]]]);
+        app(Notes::class)->createWritten($by, 'workspace', $this->biology->id, ['create_id' => 'first-words-2', 'title' => '', 'doc' => ['type' => 'doc', 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Plan.']]]]]]);
         [$inModule, $topLevel] = $this->notes();
         $this->assertSame([$cells->id, null], [$inModule->moduleId, $topLevel->moduleId]);
 

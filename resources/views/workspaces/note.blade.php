@@ -1,10 +1,16 @@
 {{--
     A note (App\Http\Controllers\NotePageController). The editor host below is
     outside every Livewire component; resources/js/note/editor.js mounts
-    Tiptap on it and autosaves through the JSON API (ADR 0003 §5).
+    Tiptap on it and autosaves through the JSON API (ADR 0003 §5). Without a
+    $note it's a new one, in $place: nothing is kept until it has a title or
+    some text, and then it's made by its first save (POST /api/v1/notes).
 --}}
 @php
+    $new = $note === null;
+    $shownTitle = $new ? 'New note' : $note->displayTitle();
+    $payload = $new ? ['id' => null, 'version' => 0, 'doc' => \App\Study\NoteDoc::empty()] : ['id' => $note->id, 'version' => $note->version, 'doc' => $note->doc];
     $statusIcons = [
+        'pencil' => 'draft',
         'check' => 'saved',
         'loader-circle' => 'saving',
         'cloud-off' => 'local offline',
@@ -25,7 +31,7 @@
         ['redo', 'redo-2', 'Redo (Ctrl+Shift+Z)', false],
     ];
 @endphp
-<x-layouts.app :title="$note->displayTitle().' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'">
+<x-layouts.app :title="$shownTitle.' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'">
     <div class="note-page" data-note-page>
         <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <nav aria-label="Where this note is" class="min-w-0">
@@ -44,12 +50,12 @@
                 </ol>
             </nav>
             <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
-                @if ($note->trashedAt === null)
-                    <p class="save-status" data-save-status data-state="saved" role="status">
+                @if ($new || $note->trashedAt === null)
+                    <p class="save-status" data-save-status data-state="{{ $new ? 'draft' : 'saved' }}" role="status">
                         @foreach ($statusIcons as $icon => $states)
                             <x-icon :name="$icon" class="size-4" data-for="{{ $states }}" />
                         @endforeach
-                        <span data-save-label>Saved</span>
+                        <span data-save-label>{{ $new ? 'Not saved yet' : 'Saved' }}</span>
                     </p>
                     <button type="button" class="btn btn-ghost note-mode" data-note-read>
                         <span class="when-editing"><x-icon name="book-open-text" class="size-4" /><span class="max-sm:sr-only">Read</span></span>
@@ -60,13 +66,15 @@
                         <span class="when-focused"><x-icon name="minimize-2" class="size-4" /><span class="max-sm:sr-only">Exit full screen</span></span>
                     </button>
                 @endif
-                <livewire:workspaces.note-actions :note-id="$note->id" />
+                @unless ($new)
+                    <livewire:workspaces.note-actions :note-id="$note->id" />
+                @endunless
             </div>
         </div>
 
-        <h1 class="sr-only" data-note-heading>{{ $note->displayTitle() }}</h1>
+        <h1 class="sr-only" data-note-heading>{{ $shownTitle }}</h1>
 
-        @if ($note->trashedAt !== null)
+        @if (! $new && $note->trashedAt !== null)
             <x-alert tone="warning" title="This note is in the trash">
                 It can't be changed while it's there. Restore it to keep writing; otherwise it's deleted 30 days after it was trashed.
             </x-alert>
@@ -112,7 +120,8 @@
                 </x-alert>
             </div>
 
-            <article class="note-card" data-note-editor data-account="{{ auth()->id() }}" data-save-url="{{ route('api.v1.notes.update', $note->id) }}">
+            <article class="note-card" data-note-editor data-account="{{ auth()->id() }}"
+                @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" @endif>
                 <div class="note-toolbar" role="toolbar" aria-label="Formatting" aria-controls="note-body" data-note-toolbar>
                     @foreach ($tools as $i => [$command, $icon, $label, $toggle])
                         @if (in_array($command, ['bulletList', 'divider', 'undo'], true))
@@ -124,10 +133,10 @@
                     @endforeach
                 </div>
                 <div class="note-content">
-                    <textarea class="note-title" rows="1" maxlength="{{ \App\Study\Notes::MAX_TITLE }}" placeholder="Untitled note" aria-label="Title" data-note-title>{{ $note->title }}</textarea>
+                    <textarea class="note-title" rows="1" maxlength="{{ \App\Study\Notes::MAX_TITLE }}" placeholder="Untitled note" aria-label="Title" data-note-title>{{ $note?->title }}</textarea>
                     <div id="note-body" data-note-body></div>
                 </div>
-                <script type="application/json" data-note-doc>@json(['id' => $note->id, 'version' => $note->version, 'doc' => $note->doc])</script>
+                <script type="application/json" data-note-doc>@json($payload)</script>
             </article>
         @endif
     </div>

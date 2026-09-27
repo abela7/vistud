@@ -135,7 +135,7 @@ final class StudySession extends Component
         $this->open('material');
     }
 
-    /** A new, empty note in the session's module (or the workspace's top level), opened in the editor. */
+    /** The editor for a new note in the session's module (or the workspace's top level); nothing is kept until something is written. */
     public function newNote(): void
     {
         $by = $this->principal();
@@ -148,14 +148,7 @@ final class StudySession extends Component
                 // Removed since: the note goes to the top level.
             }
         }
-        try {
-            $note = $moduleId === null
-                ? $this->notes->create($by, 'workspace', $this->workspaceId)
-                : $this->notes->create($by, 'module', $moduleId);
-        } catch (NotFound) {
-            $note = $this->notes->create($by, 'workspace', $this->workspaceId);
-        }
-        $this->redirectRoute('workspaces.notes.show', [$note->workspaceId, $note->id]);
+        $this->redirectRoute('workspaces.notes.create', [$this->workspaceId] + ($moduleId === null ? [] : ['in' => "module:{$moduleId}"]));
     }
 
     public function editTeaching(): void

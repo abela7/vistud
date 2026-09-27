@@ -29,6 +29,10 @@ Route::middleware('auth')->group(function () {
         return view('journal.index', ['entries' => array_reverse($entries)]);
     })->name('journal.index');
 
+    // A new note: made by its first words (POST /api/v1/notes), never while empty.
+    Route::get('/workspaces/{workspace}/notes/new', [NotePageController::class, 'create'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.notes.create');
     // A note in a workspace; its editor saves through PUT /api/v1/notes/{id}.
     Route::get('/workspaces/{workspace}/notes/{note}', NotePageController::class)
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'note' => '[A-Za-z0-9-]{1,64}'])

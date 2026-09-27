@@ -10,6 +10,7 @@ use App\Platform\Errors\Conflict;
 use App\Platform\Errors\Gone;
 use App\Platform\Errors\NotFound;
 use App\Platform\Ids;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -82,6 +83,49 @@ final class Notes
             ]);
             $this->addVersion($scope, $id, 1, $title, NoteDoc::empty(), null, null, null, 'created');
         });
+
+        return $this->find($by, $id);
+    }
+
+    /**
+     * A note made by its first save in the editor: it only exists once it
+     * has a title or some text (the owner's review, 2026-09-27: an empty new
+     * note is never kept). The editor's own `create_id` makes a retry safe:
+     * the same ID answers with the note it already made.
+     *
+     * @param  array{create_id?: mixed, title?: mixed, doc?: mixed}  $input
+     */
+    public function createWritten(Principal $by, string $placeType, string $placeId, array $input): NoteDetails
+    {
+        $scope = Guard::learner($by);
+        $createId = is_string($input['create_id'] ?? null) && preg_match('/^[A-Za-z0-9_-]{8,64}$/', $input['create_id']) ? $input['create_id'] : null;
+        Input::refuse($createId === null ? ['create_id' => 'Send an ID for this note.'] : []);
+        $title = self::validatedTitle($input['title'] ?? '');
+        $doc = NoteDoc::clean($input['doc'] ?? null);
+        Input::refuse($title === '' && trim(NoteDoc::text($doc)) === '' ? ['doc' => 'Write a title or some text first.'] : []);
+
+        $make = fn () => DB::transaction(function () use ($scope, $placeType, $placeId, $createId, $title, $doc) {
+            $earlier = LearnerTables::query($scope, 'notes')->where('create_id', $createId)->value('id');
+            if ($earlier !== null) {
+                return $earlier;
+            }
+            [$workspaceId, $moduleId, $folderId] = Input::place($scope, $placeType, $placeId);
+            $id = Ids::new();
+            LearnerTables::insert($scope, 'notes', [
+                'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'folder_id' => $folderId, 'create_id' => $createId,
+                'title' => $title, 'current_version' => 1, 'position' => $this->nextPosition($scope, $workspaceId, $moduleId, $folderId),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $this->addVersion($scope, $id, 1, $title, $doc, null, null, null, 'created');
+
+            return $id;
+        });
+        try {
+            $id = $make();
+        } catch (UniqueConstraintViolationException) {
+            // The same first save, twice at once: the other one made it.
+            $id = LearnerTables::query($scope, 'notes')->where('create_id', $createId)->value('id') ?? throw new NotFound;
+        }
 
         return $this->find($by, $id);
     }

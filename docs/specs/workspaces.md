@@ -82,6 +82,9 @@ The owner chose this design ("B: workspace spaces") over one big file tree.
    **Notes & files** is the same, for what's in no module, with the trash.
 4. **A note** (`workspace-note-*`): the editor, where you are (Biology ›
    Week 2), the save status, and on wide screens the topics and versions.
+   *New note* opens an empty editor that keeps nothing until it has a title
+   or some text (the owner's review, 2026-09-27): its first words make the
+   note, and an empty new note is never saved.
 5. **Progress** (`workspace-progress-*`): topics with their state and the
    reason in plain words, then the journal as sentences ("You answered
    practice quiz question 3 correctly").

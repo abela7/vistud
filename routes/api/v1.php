@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth')->group(function () {
     Route::get('/me', [MeController::class, 'show'])->name('me');
     Route::get('/journal/entries/{id}', [JournalEntryController::class, 'show'])->name('journal.entries.show');
+    Route::post('/notes', [NoteController::class, 'store'])->name('notes.store');
     Route::get('/notes/{id}', [NoteController::class, 'show'])->name('notes.show');
     Route::put('/notes/{id}', [NoteController::class, 'update'])->name('notes.update');
     Route::get('/sync/tombstones', [TombstoneController::class, 'index'])->name('sync.tombstones');

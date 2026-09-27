@@ -115,10 +115,10 @@ class SessionScreensTest extends TestCase
         $week1 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 1']);
         $session = app(Sessions::class)->start($by, $this->databases->id, null, $week1->id);
 
-        $page = $this->page($session->id)->assertSee('In Week 1')->call('newNote');
-        $note = app(Notes::class)->list($by, $this->databases->id)[0];
-        $this->assertSame($week1->id, $note->moduleId);
-        $page->assertRedirect(route('workspaces.notes.show', [$this->databases->id, $note->id]));
+        // The editor for a new note in the module: nothing is made until something is written.
+        $this->page($session->id)->assertSee('In Week 1')->call('newNote')
+            ->assertRedirect(route('workspaces.notes.create', [$this->databases->id, 'in' => "module:{$week1->id}"]));
+        $this->assertSame([], app(Notes::class)->list($by, $this->databases->id));
     }
 
     public function test_the_page_says_when_the_clock_paused_itself_and_the_time_can_be_counted_back(): void

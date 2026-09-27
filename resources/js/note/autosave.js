@@ -16,7 +16,7 @@ const RETRY_S = [2, 5, 15, 30, 60];
 /** A random ID of 2 × bytes hex digits. Works on plain http too, unlike crypto.randomUUID. */
 export const randomId = (bytes = 16) => Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) => b.toString(16).padStart(2, '0')).join('');
 
-const xsrf = () => decodeURIComponent(document.cookie.split('; ').find((c) => c.startsWith('XSRF-TOKEN='))?.slice(11) ?? '');
+export const xsrf = () => decodeURIComponent(document.cookie.split('; ').find((c) => c.startsWith('XSRF-TOKEN='))?.slice(11) ?? '');
 
 /**
  * @param {object} o

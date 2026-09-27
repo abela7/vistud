@@ -69,6 +69,52 @@
         }
       }
     },
+    "/api/v1/notes": {
+      "post": {
+        "operationId": "createNote",
+        "summary": "Makes a new note with its first words: New note opens an empty editor and nothing is kept until there is a title or some text (the owner's review, 2026-09-27). create_id makes a retry safe: the same ID answers with the note already made",
+        "x-stability": "provisional",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Made, or already made under this create_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error",
+            "description": "The place isn't one of the learner's"
+          },
+          "419": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error",
+            "description": "validation_failed: no place, no create_id, a document the editor doesn't support, or neither a title nor any text"
+          }
+        }
+      }
+    },
     "/api/v1/notes/{id}": {
       "get": {
         "operationId": "getNote",
@@ -111,7 +157,7 @@
       },
       "put": {
         "operationId": "saveNote",
-        "summary": "Saves the editor's document as the note's next version (ADR 0003 section 5.3). Only updates: it never creates a note",
+        "summary": "Saves the editor's document as the note's next version (ADR 0003 section 5.3). Only updates: it never creates a note (POST /api/v1/notes does, with its first words)",
         "x-stability": "provisional",
         "parameters": [
           {
@@ -493,7 +539,7 @@
           },
           "body": {
             "type": "object",
-            "description": "Kind-specific fields, ADR 0002 \u00a74-5"
+            "description": "Kind-specific fields, ADR 0002 §4-5"
           },
           "content": {
             "type": "object",
@@ -623,6 +669,76 @@
               "autosave",
               "conflict_resolution"
             ]
+          }
+        }
+      },
+      "NoteCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "place",
+          "create_id",
+          "title",
+          "doc"
+        ],
+        "properties": {
+          "place": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "type",
+              "id"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "workspace",
+                  "module",
+                  "folder"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "description": "The workspace's, module's or folder's id"
+              }
+            }
+          },
+          "create_id": {
+            "type": "string",
+            "description": "8-64 letters, digits, - or _, made by the editor; a retry with the same create_id answers with the same note"
+          },
+          "title": {
+            "type": "string"
+          },
+          "doc": {
+            "type": "object"
+          }
+        }
+      },
+      "NoteCreated": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "version",
+          "url",
+          "save_url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "url": {
+            "type": "string",
+            "description": "The note's page"
+          },
+          "save_url": {
+            "type": "string",
+            "description": "Where its next saves go: PUT /api/v1/notes/{id}"
           }
         }
       },

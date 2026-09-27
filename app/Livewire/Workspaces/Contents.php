@@ -246,11 +246,11 @@ final class Contents extends Component
 
     // ---------- Notes, straight away ----------
 
-    /** A new, empty note, opened in the editor. */
+    /** The editor for a new note in this place: nothing is kept until it has a title or some text. */
     public function newNote(string $placeType, string $placeId): void
     {
-        $note = $this->notes->create($this->principal(), $placeType, $placeId);
-        $this->redirectRoute('workspaces.notes.show', [$note->workspaceId, $note->id]);
+        $placeType = in_array($placeType, ['module', 'folder'], true) ? $placeType : 'workspace';
+        $this->redirectRoute('workspaces.notes.create', [$this->workspaceId] + ($placeType === 'workspace' ? [] : ['in' => "{$placeType}:{$placeId}"]));
     }
 
     /** Into the trash: nothing to confirm, it can be restored. */

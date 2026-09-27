@@ -3,6 +3,11 @@
 | a page element that no Livewire component renders. It restores a draft left
 | in this browser, autosaves through PUT /api/v1/notes/{id}, and says honestly
 | where the text is: on the server, only on this device, or at risk.
+|
+| A new note (the page has data-create-url) doesn't exist until it has a
+| title or some text: its first save makes it (POST /api/v1/notes, with an ID
+| of the editor's own so a retry can't make two), then the address becomes
+| the note's and autosave takes over. Left empty, nothing is kept.
 */
 
 import { Editor } from '@tiptap/core';
@@ -11,11 +16,12 @@ import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { Placeholder } from '@tiptap/extensions';
 import { UniqueID } from '@tiptap/extension-unique-id';
 import { deleteDrafts, openDrafts } from './drafts.js';
-import { createAutosave, randomId } from './autosave.js';
+import { createAutosave, randomId, xsrf } from './autosave.js';
 
 const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'listItem', 'taskItem'];
 
 const LABELS = {
+    draft: 'Not saved yet',
     saved: 'Saved',
     local: 'Saved on this device',
     offline: 'Saved on this device',
@@ -110,40 +116,117 @@ export async function mount(host) {
         editorProps: {
             attributes: { class: 'note-prose', 'aria-label': 'Note', 'aria-multiline': 'true', role: 'textbox' },
         },
-        onUpdate: () => { if (!loading) autosave?.changed(); },
+        onUpdate: () => { if (!loading) changed(); },
         onTransaction: () => updateToolbar(),
     });
 
     // Tabs of this account tell each other what they saved (ADR 0003 §5.3). Other accounts' tabs never hear it.
     const channel = 'BroadcastChannel' in window ? new BroadcastChannel(`vistud-${accountId}`) : null;
 
-    autosave = createAutosave({
-        url: host.dataset.saveUrl,
-        noteId: note.id,
-        clientId,
-        accountId,
-        version: note.version,
-        drafts,
-        snapshot: () => ({ title: titleField.value, doc: editor.getJSON() }),
-        onState: (state) => {
-            status.dataset.state = state.status;
-            status.querySelector('[data-save-label]').textContent = LABELS[state.status].replace('{s}', state.retryIn);
-            if (['conflict', 'gone', 'session', 'blocked', 'deleted', 'rejected', 'offline', 'nostorage'].includes(state.status)) {
-                show(state.status);
-                if (state.status === 'rejected') alerts.querySelector('[data-rejected-message]').textContent = state.message;
-            } else if (alerts.querySelector('[data-alert]:not([hidden])')?.dataset.alert !== 'restored') {
-                show(null);
+    const setStatus = (state) => {
+        status.dataset.state = state;
+        status.querySelector('[data-save-label]').textContent = LABELS[state].replace('{s}', '');
+    };
+    function startAutosave() {
+        autosave = createAutosave({
+            url: host.dataset.saveUrl,
+            noteId: note.id,
+            clientId,
+            accountId,
+            version: note.version,
+            drafts,
+            snapshot: () => ({ title: titleField.value, doc: editor.getJSON() }),
+            onState: (state) => {
+                status.dataset.state = state.status;
+                status.querySelector('[data-save-label]').textContent = LABELS[state.status].replace('{s}', state.retryIn);
+                if (['conflict', 'gone', 'session', 'blocked', 'deleted', 'rejected', 'offline', 'nostorage'].includes(state.status)) {
+                    show(state.status);
+                    if (state.status === 'rejected') alerts.querySelector('[data-rejected-message]').textContent = state.message;
+                } else if (alerts.querySelector('[data-alert]:not([hidden])')?.dataset.alert !== 'restored') {
+                    show(null);
+                }
+                // A choice waits until no older save is still on its way.
+                alerts.querySelectorAll('[data-action="keep-mine"], [data-action="keep-theirs"]').forEach((b) => { b.disabled = state.busy; });
+                if (state.status === 'account') window.location.assign('/login');
+            },
+            onSaved: (saved) => channel?.postMessage({ type: 'note-saved', note: note.id, version: saved.version, client: clientId }),
+            onAccountDeleted: () => deleteDrafts(accountId).catch(() => {}),
+        });
+    }
+
+    // ---------- A new note: made by its first words ----------
+    const hasWords = () => titleField.value.trim() !== '' || editor.getText().trim() !== '';
+    const createId = randomId(16);
+    let creating = false;
+    let createTimer = null;
+    let createAttempt = 0;
+    function changed() {
+        if (autosave) {
+            autosave.changed();
+            return;
+        }
+        clearTimeout(createTimer);
+        if (!hasWords()) {
+            if (!creating) setStatus('draft');
+            return;
+        }
+        createTimer = setTimeout(createNote, 600);
+    }
+    async function createNote() {
+        clearTimeout(createTimer);
+        if (autosave || creating || !hasWords()) return;
+        creating = true;
+        setStatus('saving');
+        const sent = { title: titleField.value, doc: editor.getJSON() };
+        let response = null;
+        let data = null;
+        try {
+            response = await fetch(host.dataset.createUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf() },
+                body: JSON.stringify({ place: { type: host.dataset.placeType, id: host.dataset.placeId }, create_id: createId, ...sent }),
+            });
+            data = await response.json().catch(() => null);
+        } catch {
+            response = null;
+        }
+        creating = false;
+        if (response?.ok && data?.id) {
+            [note.id, note.version] = [data.id, data.version];
+            host.dataset.saveUrl = data.save_url;
+            delete host.dataset.createUrl;
+            history.replaceState(history.state, '', data.url);
+            startAutosave();
+            // Whatever was typed while it was being made is saved next.
+            if (JSON.stringify(sent) !== JSON.stringify({ title: titleField.value, doc: editor.getJSON() })) autosave.changed();
+            else autosave.emit();
+            return;
+        }
+        const code = response?.status;
+        if (code === 401 || code === 419) {
+            setStatus('session');
+            show('session');
+        } else if (code === 422 || code === 413 || code === 404) {
+            if (!hasWords()) {
+                setStatus('draft');
+                return;
             }
-            // A choice waits until no older save is still on its way.
-            alerts.querySelectorAll('[data-action="keep-mine"], [data-action="keep-theirs"]').forEach((b) => { b.disabled = state.busy; });
-            if (state.status === 'account') window.location.assign('/login');
-        },
-        onSaved: (saved) => channel?.postMessage({ type: 'note-saved', note: note.id, version: saved.version, client: clientId }),
-        onAccountDeleted: () => deleteDrafts(accountId).catch(() => {}),
-    });
+            setStatus('rejected');
+            alerts.querySelector('[data-rejected-message]').textContent = Object.values(data?.error?.details?.fields ?? {})[0]?.[0] ?? 'This note can\'t be saved as it is.';
+            show('rejected');
+        } else {
+            // Offline or the server didn't answer: the same first save again, a little later.
+            const wait = [2, 5, 15, 30, 60][Math.min(createAttempt++, 4)];
+            setStatus('retrying');
+            status.querySelector('[data-save-label]').textContent = LABELS.retrying.replace('{s}', wait);
+            createTimer = setTimeout(createNote, wait * 1000);
+        }
+    }
 
     // ---------- A draft left in this browser ----------
-    const [draft] = drafts ? await drafts.forNote(note.id).catch(() => []) : [];
+    if (note.id) startAutosave();
+    const [draft] = note.id && drafts ? await drafts.forNote(note.id).catch(() => []) : [];
     if (draft) {
         editor.commands.setContent(draft.doc, { emitUpdate: false });
         titleField.value = draft.title ?? '';
@@ -159,13 +242,14 @@ export async function mount(host) {
     setTitle();
     growTitle();
     loading = false;
-    autosave.emit();
+    if (autosave) autosave.emit();
+    else setStatus('draft');
 
     // ---------- Title ----------
     titleField.addEventListener('input', () => {
         growTitle();
         setTitle();
-        autosave.changed();
+        changed();
     });
     titleField.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
@@ -247,10 +331,10 @@ export async function mount(host) {
     }
     channel?.addEventListener('message', async ({ data }) => {
         if (data?.type === 'logout') {
-            autosave.stop('session');
+            autosave?.stop('session');
             return;
         }
-        if (data?.type !== 'note-saved' || data.note !== note.id || data.client === clientId || data.version <= autosave.version()) return;
+        if (!autosave || data?.type !== 'note-saved' || data.note !== note.id || data.client === clientId || data.version <= autosave.version()) return;
         if (!autosave.isClean()) {
             // Unsaved typing here: warn now, before this tab tries to save over it.
             autosave.conflict(data.version);
@@ -264,11 +348,12 @@ export async function mount(host) {
     });
 
     // Logging out asks the open note to store what it holds first.
-    window.addEventListener('vistud:store-drafts', (event) => event.detail.waitFor(autosave.storeNow()));
+    window.addEventListener('vistud:store-drafts', (event) => event.detail.waitFor(autosave ? autosave.storeNow() : Promise.resolve()));
 
     // ---------- Choices in the alerts ----------
     alerts.addEventListener('click', async (event) => {
         const action = event.target.closest('[data-action]')?.dataset.action;
+        if (!autosave && action !== 'dismiss') return;
         if (action === 'keep-mine') {
             autosave.keepMine();
         } else if (action === 'keep-theirs') {
@@ -283,9 +368,13 @@ export async function mount(host) {
     });
 
     // ---------- Leaving ----------
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') autosave.flush(); });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'hidden') return;
+        if (autosave) autosave.flush();
+        else if (hasWords()) createNote();
+    });
     window.addEventListener('beforeunload', (event) => {
-        if (autosave.atRisk()) event.preventDefault();
+        if (autosave ? autosave.atRisk() : hasWords()) event.preventDefault();
     });
 
     host.dataset.ready = 'true';

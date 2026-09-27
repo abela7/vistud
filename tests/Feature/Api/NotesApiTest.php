@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\User;
 use App\Platform\Http\Middleware\AddAccountHeader;
+use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Workspaces;
 use Tests\Concerns\CreatesAccounts;
@@ -20,12 +21,15 @@ class NotesApiTest extends TestCase
 
     private string $noteId;
 
+    private string $biologyId;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->ada = $this->student();
         $by = $this->principal($this->ada);
         $biology = app(Workspaces::class)->create($by, ['name' => 'Biology']);
+        $this->biologyId = $biology->id;
         $this->noteId = app(Notes::class)->create($by, 'workspace', $biology->id, 'Mitosis')->id;
     }
 
@@ -102,6 +106,43 @@ class NotesApiTest extends TestCase
         $this->getJson("/api/v1/sync/tombstones?since={$cursor}")->assertJsonCount(2, 'data')->assertJsonPath('next_since', $all->json('next_since'))->assertJsonPath('more', false);
         $this->getJson('/api/v1/sync/tombstones?since=-1')->assertStatus(422);
         $this->actingAs($this->admin(student: false))->getJson('/api/v1/sync/tombstones')->assertForbidden();
+    }
+
+    public function test_a_new_note_is_made_by_its_first_words_and_never_while_empty(): void
+    {
+        $spec = new OpenApi;
+        $by = $this->principal($this->ada);
+        $cells = app(Modules::class)->create($by, $this->biologyId, ['title' => 'Cells']);
+        $empty = ['type' => 'doc', 'content' => [['type' => 'paragraph']]];
+        $words = ['type' => 'doc', 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Cells divide.']]]]];
+        $before = count(app(Notes::class)->list($by, $this->biologyId));
+
+        // Nothing written: nothing kept.
+        $this->actingAs($this->ada)->postJson('/api/v1/notes', ['place' => ['type' => 'module', 'id' => $cells->id], 'create_id' => 'new-note-0001', 'title' => '   ', 'doc' => $empty])
+            ->assertStatus(422)->assertJsonPath('error.details.fields.doc.0', 'Write a title or some text first.');
+        $this->postJson('/api/v1/notes', ['place' => ['type' => 'module', 'id' => $cells->id], 'title' => 'Cells', 'doc' => $empty])->assertStatus(422);
+        $this->postJson('/api/v1/notes', ['create_id' => 'new-note-0001', 'title' => 'Cells', 'doc' => $empty])->assertStatus(422);
+        $this->assertCount($before, app(Notes::class)->list($by, $this->biologyId));
+
+        // A title alone is enough, and a retry of the same first save makes no second note.
+        $made = $this->postJson('/api/v1/notes', ['place' => ['type' => 'module', 'id' => $cells->id], 'create_id' => 'new-note-0002', 'title' => 'Cells', 'doc' => $empty])
+            ->assertCreated()->assertJsonPath('version', 1);
+        $this->assertSame([], $spec->validateResponse('POST', '/api/v1/notes', 201, $made->json()));
+        $this->assertSame(route('workspaces.notes.show', [$this->biologyId, $made->json('id')]), $made->json('url'));
+        $this->postJson('/api/v1/notes', ['place' => ['type' => 'module', 'id' => $cells->id], 'create_id' => 'new-note-0002', 'title' => 'Cells', 'doc' => $empty])
+            ->assertCreated()->assertJsonPath('id', $made->json('id'));
+        $this->assertCount($before + 1, app(Notes::class)->list($by, $this->biologyId));
+        $this->assertSame($cells->id, app(Notes::class)->find($by, $made->json('id'))->moduleId);
+
+        // Words alone too, with the words as the first version; then autosave goes on from it.
+        $second = $this->postJson('/api/v1/notes', ['place' => ['type' => 'workspace', 'id' => $this->biologyId], 'create_id' => 'new-note-0003', 'title' => '', 'doc' => $words])->assertCreated();
+        $this->getJson("/api/v1/notes/{$second->json('id')}")->assertJsonPath('doc', $words)->assertJsonPath('version', 1);
+        $this->putJson($second->json('save_url'), $this->save(1, null, 'save-0100'))->assertOk()->assertJsonPath('version', 2);
+
+        // Another student's place is missing.
+        $bob = $this->student();
+        $theirs = app(Workspaces::class)->create($this->principal($bob), ['name' => 'Theirs']);
+        $this->postJson('/api/v1/notes', ['place' => ['type' => 'workspace', 'id' => $theirs->id], 'create_id' => 'new-note-0004', 'title' => 'Mine?', 'doc' => $empty])->assertNotFound();
     }
 
     private function save(int $base, ?array $doc, string $saveId): array

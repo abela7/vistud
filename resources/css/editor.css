@@ -47,6 +47,7 @@
         display: none;
     }
 
+    .save-status[data-state='draft'] [data-for~='draft'],
     .save-status[data-state='saved'] [data-for~='saved'],
     .save-status[data-state='saving'] [data-for~='saving'],
     .save-status[data-state='local'] [data-for~='local'],

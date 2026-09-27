@@ -4,15 +4,17 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Identity\PrincipalFactory;
 use App\Platform\Errors\Gone;
+use App\Study\Input;
 use App\Study\Notes;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
  * GET and PUT /api/v1/notes/{id} (docs/api/openapi.json): the note editor
- * reads a note and autosaves it (ADR 0003 §5.3). PUT only updates: notes
- * are created on the workspace screens, so a save can never bring a
- * deleted note back.
+ * reads a note and autosaves it (ADR 0003 §5.3). POST /api/v1/notes makes a
+ * new note with its first words: New note opens an empty editor, and nothing
+ * is kept until there's a title or some text. PUT only updates, so a save
+ * can never bring a deleted note back.
  */
 class NoteController
 {
@@ -35,6 +37,25 @@ class NoteController
             'doc' => $note->doc,
             'updated_at' => $note->updatedAt,
         ]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        // The raw body, as for PUT: the text's spaces stay as they are.
+        $input = json_decode($request->getContent(), true);
+        $input = is_array($input) ? $input : [];
+        $place = is_array($input['place'] ?? null) ? $input['place'] : [];
+        $type = in_array($place['type'] ?? null, ['workspace', 'module', 'folder'], true) ? $place['type'] : null;
+        $placeId = is_string($place['id'] ?? null) && preg_match('/^[A-Za-z0-9-]{1,64}$/', $place['id']) ? $place['id'] : null;
+        Input::refuse($type === null || $placeId === null ? ['place' => 'Send where the note goes.'] : []);
+        $note = $this->notes->createWritten($this->principals->fromRequest($request), $type, $placeId, $input);
+
+        return response()->json([
+            'id' => $note->id,
+            'version' => $note->version,
+            'url' => route('workspaces.notes.show', [$note->workspaceId, $note->id]),
+            'save_url' => route('api.v1.notes.update', $note->id),
+        ], 201);
     }
 
     public function update(Request $request, string $id): JsonResponse
