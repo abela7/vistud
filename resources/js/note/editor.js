@@ -13,12 +13,31 @@
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
-import { Placeholder } from '@tiptap/extensions';
+import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import { UniqueID } from '@tiptap/extension-unique-id';
+import TextAlign from '@tiptap/extension-text-align';
+import Highlight from '@tiptap/extension-highlight';
+import Subscript from '@tiptap/extension-subscript';
+import Superscript from '@tiptap/extension-superscript';
+import { TableKit } from '@tiptap/extension-table';
 import { deleteDrafts, openDrafts } from './drafts.js';
 import { createAutosave, randomId, xsrf } from './autosave.js';
 
-const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'listItem', 'taskItem'];
+const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'listItem', 'taskItem', 'table', 'tableRow', 'tableHeader', 'tableCell'];
+
+/** A highlight keeps only a tone's name (app/Study/NoteDoc.php); the theme draws it. */
+const NoteHighlight = Highlight.extend({
+    addAttributes() {
+        return {
+            tone: {
+                default: null,
+                parseHTML: (el) => el.getAttribute('data-tone'),
+                renderHTML: (attrs) => (attrs.tone ? { 'data-tone': attrs.tone } : {}),
+            },
+        };
+    },
+});
+const HIGHLIGHT = NoteHighlight.name;
 
 const LABELS = {
     draft: 'Not saved yet',
@@ -41,8 +60,13 @@ const LABELS = {
 const COMMANDS = {
     bold: [(c) => c.toggleBold(), (e) => e.isActive('bold')],
     italic: [(c) => c.toggleItalic(), (e) => e.isActive('italic')],
-    heading2: [(c) => c.toggleHeading({ level: 2 }), (e) => e.isActive('heading', { level: 2 })],
-    heading3: [(c) => c.toggleHeading({ level: 3 }), (e) => e.isActive('heading', { level: 3 })],
+    underline: [(c) => c.toggleUnderline(), (e) => e.isActive('underline')],
+    strike: [(c) => c.toggleStrike(), (e) => e.isActive('strike')],
+    superscript: [(c) => c.toggleSuperscript(), (e) => e.isActive('superscript')],
+    subscript: [(c) => c.toggleSubscript(), (e) => e.isActive('subscript')],
+    code: [(c) => c.toggleCode(), (e) => e.isActive('code')],
+    table: [(c) => c.insertTable({ rows: 3, cols: 3, withHeaderRow: true }), (e) => e.isActive('table')],
+    clear: [(c) => c.unsetAllMarks().clearNodes(), null],
     bulletList: [(c) => c.toggleBulletList(), (e) => e.isActive('bulletList')],
     orderedList: [(c) => c.toggleOrderedList(), (e) => e.isActive('orderedList')],
     taskList: [(c) => c.toggleTaskList(), (e) => e.isActive('taskList')],
@@ -73,6 +97,7 @@ export async function mount(host) {
     const heading = document.querySelector('[data-note-heading]');
     const toolbar = host.querySelector('[data-note-toolbar]');
     const buttons = [...toolbar.querySelectorAll('button[data-command]')];
+    let toolbarReady = false;
     const clientId = tabId();
     let loading = true;
     let editor = null;
@@ -110,6 +135,12 @@ export async function mount(host) {
             }),
             TaskList,
             TaskItem.configure({ nested: true }),
+            TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
+            NoteHighlight,
+            Subscript,
+            Superscript,
+            TableKit.configure({ table: { resizable: false } }),
+            CharacterCount,
             Placeholder.configure({ placeholder: 'Start writing…' }),
             UniqueID.configure({ types: BLOCKS, generateID: () => randomId(8) }),
         ],
@@ -260,36 +291,151 @@ export async function mount(host) {
     window.addEventListener('resize', growTitle);
 
     // ---------- Toolbar: one tab stop, arrow keys move along it ----------
+    const page = document.querySelector('[data-note-page]');
+    const items = [...toolbar.querySelectorAll('button, select')];
+    const blockStyle = toolbar.querySelector('[data-block-style]');
+    const highlightMenu = host.querySelector('#note-highlight-menu');
+    const alignMenu = host.querySelector('#note-align-menu');
+    const linkBar = host.querySelector('[data-link-bar]');
+    const linkInput = linkBar.querySelector('[data-link-input]');
+    const tableBar = host.querySelector('[data-table-bar]');
+    const count = host.querySelector('[data-note-count]');
+    const alignOf = () => ['center', 'right', 'justify'].find((a) => editor.isActive({ textAlign: a })) ?? 'left';
+
     function updateToolbar() {
-        if (!editor) return;
+        if (!editor || !toolbarReady) return;
         for (const button of buttons) {
-            const isActive = COMMANDS[button.dataset.command][1];
+            const isActive = COMMANDS[button.dataset.command]?.[1];
             if (isActive) button.setAttribute('aria-pressed', String(isActive(editor)));
         }
+        toolbar.querySelector('[data-command=link]').setAttribute('aria-pressed', String(editor.isActive('link')));
         toolbar.querySelector('[data-command=undo]').disabled = !editor.can().undo();
         toolbar.querySelector('[data-command=redo]').disabled = !editor.can().redo();
+        const level = [1, 2, 3].find((l) => editor.isActive('heading', { level: l }));
+        blockStyle.value = level ? String(level) : 'paragraph';
+        const align = alignOf();
+        toolbar.querySelectorAll('[data-align-icon]').forEach((icon) => { icon.toggleAttribute('hidden', icon.dataset.alignIcon !== align); });
+        alignMenu.querySelectorAll('[data-align]').forEach((item) => item.setAttribute('aria-checked', String(item.dataset.align === align)));
+        const tone = editor.isActive(HIGHLIGHT) ? (editor.getAttributes(HIGHLIGHT).tone ?? highlightMenu.querySelector('[role=menuitemradio]').dataset.highlight) : null;
+        highlightMenu.querySelectorAll('[role=menuitemradio]').forEach((item) => item.setAttribute('aria-checked', String(item.dataset.highlight === tone)));
+        tableBar.hidden = !editor.isActive('table') || page.hasAttribute('data-reading');
+        const words = editor.storage.characterCount.words();
+        count.textContent = `${words} ${words === 1 ? 'word' : 'words'} · ${editor.storage.characterCount.characters()} characters`;
     }
     toolbar.addEventListener('click', (event) => {
         const button = event.target.closest('button[data-command]');
-        if (button) COMMANDS[button.dataset.command][0](editor.chain().focus()).run();
+        if (!button) return;
+        if (button.dataset.command === 'link') {
+            toggleLinkBar(linkBar.hidden);
+            return;
+        }
+        COMMANDS[button.dataset.command][0](editor.chain().focus()).run();
+    });
+    blockStyle.addEventListener('change', () => {
+        const chain = editor.chain().focus();
+        (blockStyle.value === 'paragraph' ? chain.setParagraph() : chain.setHeading({ level: Number(blockStyle.value) })).run();
     });
     toolbar.addEventListener('keydown', (event) => {
-        const enabled = buttons.filter((b) => !b.disabled);
+        const enabled = items.filter((b) => !b.disabled);
         const at = enabled.indexOf(document.activeElement);
         const step = { ArrowRight: 1, ArrowLeft: -1, Home: -Infinity, End: Infinity }[event.key];
         if (at < 0 || step === undefined) return;
+        // Left and right inside the select change nothing on most browsers; they move along the toolbar.
         event.preventDefault();
         const next = enabled[Math.max(0, Math.min(enabled.length - 1, Number.isFinite(step) ? (at + step + enabled.length) % enabled.length : (step < 0 ? 0 : enabled.length - 1)))];
-        buttons.forEach((b) => { b.tabIndex = b === next ? 0 : -1; });
+        items.forEach((b) => { b.tabIndex = b === next ? 0 : -1; });
         next.focus();
     });
+
+    // The menus (highlight colours, alignment) open under their button and give focus to their first choice.
+    for (const menu of [highlightMenu, alignMenu]) {
+        const opener = toolbar.querySelector(`[data-menu-for="${menu.id}"]`);
+        menu.addEventListener('toggle', (event) => {
+            opener.setAttribute('aria-expanded', String(event.newState === 'open'));
+            if (event.newState !== 'open') return;
+            const box = opener.getBoundingClientRect();
+            menu.style.top = `${box.bottom + 4}px`;
+            menu.style.left = `${Math.max(8, Math.min(box.left, window.innerWidth - menu.offsetWidth - 8))}px`;
+            (menu.querySelector('[aria-checked="true"]') ?? menu.querySelector('button'))?.focus();
+        });
+        menu.addEventListener('keydown', (event) => {
+            const choices = [...menu.querySelectorAll('button')];
+            const at = choices.indexOf(document.activeElement);
+            const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
+            if (step) {
+                event.preventDefault();
+                choices[(at + step + choices.length) % choices.length].focus();
+            }
+        });
+    }
+    highlightMenu.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-highlight]');
+        if (!item) return;
+        // Closed first: closing hands focus back to its button, and the writing goes on in the note.
+        highlightMenu.hidePopover();
+        const chain = editor.chain().focus();
+        (item.dataset.highlight === '' ? chain.unsetHighlight() : chain.setHighlight({ tone: item.dataset.highlight })).run();
+    });
+    alignMenu.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-align]');
+        if (!item) return;
+        alignMenu.hidePopover();
+        editor.chain().focus().setTextAlign(item.dataset.align).run();
+    });
+
+    // A link: its address in the bar under the toolbar. An address without a scheme gets https://.
+    function toggleLinkBar(open) {
+        linkBar.hidden = !open;
+        toolbar.querySelector('[data-command=link]').setAttribute('aria-expanded', String(open));
+        if (open) {
+            linkInput.value = editor.getAttributes('link').href ?? '';
+            linkInput.focus();
+            linkInput.select();
+        }
+    }
+    function applyLink() {
+        const typed = linkInput.value.trim();
+        const href = typed === '' || /^(https?:\/\/|mailto:)/i.test(typed) ? typed : `https://${typed}`;
+        const chain = editor.chain().focus().extendMarkRange('link');
+        (href === '' ? chain.unsetLink() : chain.setLink({ href })).run();
+        toggleLinkBar(false);
+    }
+    linkBar.querySelector('[data-link-apply]').addEventListener('click', applyLink);
+    linkBar.querySelector('[data-link-remove]').addEventListener('click', () => {
+        editor.chain().focus().extendMarkRange('link').unsetLink().run();
+        toggleLinkBar(false);
+    });
+    linkInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            applyLink();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            toggleLinkBar(false);
+            editor.commands.focus();
+        }
+    });
+    host.querySelector('[data-note-body]').addEventListener('keydown', (event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+            event.preventDefault();
+            toggleLinkBar(true);
+        }
+    });
+
+    // In a table: rows and columns.
+    tableBar.addEventListener('click', (event) => {
+        const command = event.target.closest('[data-table-command]')?.dataset.tableCommand;
+        if (command) editor.chain().focus()[command]().run();
+    });
+    toolbarReady = true;
     updateToolbar();
 
     // ---------- Reading, and full screen ----------
-    const page = document.querySelector('[data-note-page]');
     const focusButton = page.querySelector('[data-note-focus]');
     function setReading(on) {
         page.toggleAttribute('data-reading', on);
+        if (on) toggleLinkBar(false);
+        updateToolbar();
         editor.setEditable(!on, false);
         editor.view.dom.setAttribute('aria-readonly', String(on));
         titleField.readOnly = on;

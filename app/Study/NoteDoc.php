@@ -17,7 +17,7 @@ final class NoteDoc
 
     private const MAX_NODES = 100_000;
 
-    private const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule'];
+    private const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table'];
 
     private const INLINE = ['text', 'hardBreak'];
 
@@ -34,11 +34,20 @@ final class NoteDoc
         'taskItem' => self::BLOCKS,
         'codeBlock' => ['text'],
         'horizontalRule' => [],
+        'table' => ['tableRow'],
+        'tableRow' => ['tableHeader', 'tableCell'],
+        'tableHeader' => self::BLOCKS,
+        'tableCell' => self::BLOCKS,
         'hardBreak' => [],
         'text' => [],
     ];
 
-    private const MARKS = ['bold', 'italic', 'underline', 'strike', 'code', 'link'];
+    private const MARKS = ['bold', 'italic', 'underline', 'strike', 'code', 'link', 'highlight', 'subscript', 'superscript'];
+
+    /** A highlight's tone: a name the themes draw, never a colour value. The first is the default. */
+    public const HIGHLIGHTS = ['yellow', 'green', 'blue', 'pink', 'purple'];
+
+    private const ALIGNMENTS = ['left', 'center', 'right', 'justify'];
 
     /** An empty note: one empty paragraph. */
     public static function empty(): array
@@ -156,6 +165,19 @@ final class NoteDoc
                     $lines[] = $indent.'---';
                     $lines[] = '';
                     break;
+                case 'table':
+                    foreach ($node['content'] ?? [] as $i => $row) {
+                        $cells = array_map(
+                            fn (array $cell) => str_replace(['|', "\n"], ['\\|', ' '], trim(implode(' ', array_filter(self::blocks($cell['content'] ?? [], ''), fn ($l) => $l !== '')))),
+                            $row['content'] ?? [],
+                        );
+                        $lines[] = $indent.'| '.implode(' | ', $cells).' |';
+                        if ($i === 0) {
+                            $lines[] = $indent.'|'.str_repeat(' --- |', max(1, count($cells)));
+                        }
+                    }
+                    $lines[] = '';
+                    break;
             }
         }
 
@@ -224,14 +246,27 @@ final class NoteDoc
     {
         $kept = [];
         $id = $attrs['id'] ?? null;
-        if (in_array($type, [...self::BLOCKS, 'listItem', 'taskItem'], true) && is_string($id) && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $id)) {
+        if (in_array($type, [...self::BLOCKS, 'listItem', 'taskItem', 'tableRow', 'tableHeader', 'tableCell'], true) && is_string($id) && preg_match('/^[A-Za-z0-9_-]{1,64}$/', $id)) {
             $kept['id'] = $id;
+        }
+        $align = $attrs['textAlign'] ?? null;
+        if (in_array($type, ['paragraph', 'heading'], true) && in_array($align, self::ALIGNMENTS, true) && $align !== 'left') {
+            $kept['textAlign'] = $align;
         }
 
         switch ($type) {
             case 'heading':
                 $level = $attrs['level'] ?? null;
                 $kept['level'] = is_int($level) && $level >= 1 && $level <= 3 ? $level : 2;
+                break;
+            case 'tableHeader':
+            case 'tableCell':
+                foreach (['colspan', 'rowspan'] as $span) {
+                    $value = $attrs[$span] ?? 1;
+                    $kept[$span] = is_int($value) && $value >= 1 && $value <= 100 ? $value : 1;
+                }
+                $widths = $attrs['colwidth'] ?? null;
+                $kept['colwidth'] = is_array($widths) && $widths !== [] && count($widths) <= 100 && array_filter($widths, fn ($w) => ! is_int($w) || $w < 1 || $w > 5000) === [] ? array_values($widths) : null;
                 break;
             case 'orderedList':
                 $start = $attrs['start'] ?? 1;
@@ -259,6 +294,12 @@ final class NoteDoc
             $type = is_array($mark) ? ($mark['type'] ?? null) : null;
             if (! in_array($type, self::MARKS, true)) {
                 Input::refuse(['doc' => 'This note has content the editor doesn\'t support.']);
+            }
+            if ($type === 'highlight') {
+                $tone = $mark['attrs']['tone'] ?? null;
+                $kept[] = ['type' => 'highlight', 'attrs' => ['tone' => in_array($tone, self::HIGHLIGHTS, true) ? $tone : self::HIGHLIGHTS[0]]];
+
+                continue;
             }
             if ($type === 'link') {
                 $href = $mark['attrs']['href'] ?? null;

@@ -56,30 +56,93 @@ test('formatting from the toolbar and the keyboard', async ({ page }) => {
     const tool = (name) => page.getByRole('toolbar', { name: 'Formatting' }).getByRole('button', { name, exact: true });
 
     await body(page).click();
-    await tool('Heading').click();
+    await page.getByLabel('Text style').selectOption('2');
     await page.keyboard.type('Microscopes');
     await expect(body(page).locator('h2')).toHaveText('Microscopes');
-    await expect(tool('Heading')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByLabel('Text style')).toHaveValue('2');
 
     await page.keyboard.press('Enter');
     await page.keyboard.press('Control+b');
     await page.keyboard.type('Focus');
     await expect(body(page).locator('strong')).toHaveText('Focus');
-    await expect(tool('Bold (Ctrl+B)')).toHaveAttribute('aria-pressed', 'true');
+    await expect(tool('Bold')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByLabel('Text style')).toHaveValue('paragraph');
 
     await page.keyboard.press('Enter');
-    await tool('To-do list').click();
+    await tool('Checklist').click();
     await page.keyboard.type('Draw what I see');
     await body(page).getByRole('checkbox').check();
     await expect(body(page).locator('li[data-checked="true"] > div')).toHaveText('Draw what I see');
 
     // One tab stop: the arrow keys move along the toolbar.
-    await tool('Bold (Ctrl+B)').focus();
+    await tool('Bold').focus();
     await page.keyboard.press('ArrowRight');
-    await expect(tool('Italic (Ctrl+I)')).toBeFocused();
+    await expect(tool('Italic')).toBeFocused();
     await page.keyboard.press('End');
-    await expect(tool('Undo (Ctrl+Z)')).toBeFocused();
+    await expect(tool('Clear formatting')).toBeFocused();
+    await page.keyboard.press('Home');
+    await expect(tool('Undo')).toBeFocused();
     await expect(status(page)).toHaveText('Saved');
+});
+
+test('the richer toolbar: underline, highlight, alignment, scripts, a table and a link, all kept', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = await openNote(page, 'empty');
+    const tool = (name) => page.getByRole('toolbar', { name: 'Formatting' }).getByRole('button', { name, exact: true });
+
+    await body(page).click();
+    await page.keyboard.type('Water is H');
+    await tool('Subscript').click();
+    await page.keyboard.type('2');
+    await tool('Subscript').click();
+    await page.keyboard.type('O, and x');
+    await tool('Superscript').click();
+    await page.keyboard.type('2');
+    await tool('Superscript').click();
+    await page.keyboard.press('Shift+Home');
+    await tool('Underline').click();
+    await tool('Highlight').click();
+    await page.getByRole('menuitemradio', { name: 'Green' }).click();
+    await tool('Align').click();
+    await page.getByRole('menuitemradio', { name: 'Centre' }).click();
+    await expect(body(page).locator('p').first()).toHaveCSS('text-align', 'center');
+    await expect(tool('Align').locator('[data-align-icon="center"]')).toBeVisible();
+
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await page.getByLabel('Text style').selectOption('paragraph');
+    await tool('Align').click();
+    await page.getByRole('menuitemradio', { name: 'Left' }).click();
+    await page.keyboard.type('See the lab sheet');
+    await page.keyboard.press('Shift+Home');
+    await tool('Link').click();
+    await page.getByRole('textbox', { name: 'Link address' }).fill('example.org/lab');
+    await page.getByRole('textbox', { name: 'Link address' }).press('Enter');
+    await expect(body(page).locator('a')).toHaveAttribute('href', 'https://example.org/lab');
+
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await tool('Table').click();
+    const tableBar = page.getByRole('toolbar', { name: 'Table' });
+    await expect(tableBar).toBeVisible();
+    await page.keyboard.type('Stage');
+    await tableBar.getByRole('button', { name: 'Row below' }).click();
+    await expect(body(page).locator('table tr')).toHaveCount(4);
+    await expect(page.locator('[data-note-count]')).toContainText('words');
+    await expect(status(page)).toHaveText('Saved');
+
+    // All of it comes back as it was.
+    await page.goto(note.empty);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    const first = body(page).locator('p').first();
+    await expect(first).toHaveCSS('text-align', 'center');
+    await expect(first.locator('mark[data-tone="green"]').first()).toBeVisible();
+    await expect(first.locator('sub')).toHaveText('2');
+    await expect(first.locator('sup')).toHaveText('2');
+    await expect(first.locator('u').first()).toBeVisible();
+    await expect(body(page).locator('a')).toHaveAttribute('href', 'https://example.org/lab');
+    await expect(body(page).locator('table th').first()).toHaveText('Stage');
+    await expect(body(page).locator('table tr')).toHaveCount(4);
 });
 
 test('read mode and full screen, for reading and for writing', async ({ page }) => {
@@ -484,3 +547,18 @@ for (const theme of THEMES) {
         expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`)).toEqual([]);
     });
 }
+
+test('the toolbar menus and the table bar: colours from tokens, and axe finds nothing', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openNote(page, 'empty');
+    const tool = (name) => page.getByRole('toolbar', { name: 'Formatting' }).getByRole('button', { name, exact: true });
+    await body(page).click();
+    await tool('Table').click();
+    await page.getByRole('toolbar', { name: 'Table' }).waitFor();
+    await tool('Highlight').click();
+    await page.getByRole('menu', { name: 'Highlight' }).waitFor();
+    const violations = (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations.map((v) => v.id);
+    expect(violations).toEqual([]);
+    await useSentinelTheme(page);
+    expect(await foreignColours(page)).toEqual([]);
+});

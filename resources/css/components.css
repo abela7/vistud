@@ -559,6 +559,13 @@
         background-color: var(--surface-raised);
     }
 
+    /* A small button, for a row of tools. */
+    .btn-sm {
+        min-height: 2rem;
+        padding: 0 0.75rem;
+        font-size: 0.875rem;
+    }
+
     .modal-actions > .btn {
         flex: 1 1 auto;
     }

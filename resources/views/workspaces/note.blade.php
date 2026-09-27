@@ -6,6 +6,8 @@
     some text, and then it's made by its first save (POST /api/v1/notes).
 --}}
 @php
+    use Illuminate\Support\Str;
+
     $new = $note === null;
     $shownTitle = $new ? 'New note' : $note->displayTitle();
     $payload = $new ? ['id' => null, 'version' => 0, 'doc' => \App\Study\NoteDoc::empty()] : ['id' => $note->id, 'version' => $note->version, 'doc' => $note->doc];
@@ -16,20 +18,31 @@
         'cloud-off' => 'local offline',
         'triangle-alert' => 'retrying nostorage conflict gone session blocked deleted rejected account',
     ];
-    $tools = [
+    // [command, icon, label, shows pressed]; null starts a new group.
+    $marks = [
         ['bold', 'bold', 'Bold (Ctrl+B)', true],
         ['italic', 'italic', 'Italic (Ctrl+I)', true],
-        ['heading2', 'heading-2', 'Heading', true],
-        ['heading3', 'heading-3', 'Subheading', true],
+        ['underline', 'underline', 'Underline (Ctrl+U)', true],
+        ['strike', 'strikethrough', 'Strikethrough', true],
+    ];
+    $scripts = [
+        ['superscript', 'superscript', 'Superscript', true],
+        ['subscript', 'subscript', 'Subscript', true],
+        ['code', 'code', 'Code in a line', true],
+    ];
+    $lists = [
         ['bulletList', 'list', 'Bulleted list', true],
         ['orderedList', 'list-ordered', 'Numbered list', true],
-        ['taskList', 'list-todo', 'To-do list', true],
-        ['blockquote', 'text-quote', 'Quote', true],
-        ['codeBlock', 'square-code', 'Code', true],
-        ['divider', 'minus', 'Divider', false],
-        ['undo', 'undo-2', 'Undo (Ctrl+Z)', false],
-        ['redo', 'redo-2', 'Redo (Ctrl+Shift+Z)', false],
+        ['taskList', 'list-todo', 'Checklist', true],
     ];
+    $blocks = [
+        ['blockquote', 'text-quote', 'Quote', true],
+        ['codeBlock', 'square-code', 'Code block', true],
+        ['table', 'table', 'Table', true],
+        ['divider', 'minus', 'Divider', false],
+    ];
+    $aligns = ['left' => ['align-left', 'Left'], 'center' => ['align-center', 'Centre'], 'right' => ['align-right', 'Right'], 'justify' => ['align-justify', 'Justify']];
+    $highlights = ['yellow' => 'Yellow', 'green' => 'Green', 'blue' => 'Blue', 'pink' => 'Pink', 'purple' => 'Purple'];
 @endphp
 <x-layouts.app :title="$shownTitle.' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'">
     <div class="note-page" data-note-page>
@@ -123,19 +136,85 @@
             <article class="note-card" data-note-editor data-account="{{ auth()->id() }}"
                 @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" @endif>
                 <div class="note-toolbar" role="toolbar" aria-label="Formatting" aria-controls="note-body" data-note-toolbar>
-                    @foreach ($tools as $i => [$command, $icon, $label, $toggle])
-                        @if (in_array($command, ['bulletList', 'divider', 'undo'], true))
-                            <span class="toolbar-separator" aria-hidden="true"></span>
-                        @endif
-                        <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="{{ $i === 0 ? 0 : -1 }}" @if ($toggle) aria-pressed="false" @endif>
-                            <x-icon :name="$icon" class="size-5" />
+                    <button type="button" class="toolbar-button" data-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo" tabindex="0"><x-icon name="undo-2" class="size-5" /></button>
+                    <button type="button" class="toolbar-button" data-command="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" tabindex="-1"><x-icon name="redo-2" class="size-5" /></button>
+                    <span class="toolbar-separator" aria-hidden="true"></span>
+                    <label for="note-block-style" class="sr-only">Text style</label>
+                    <select id="note-block-style" class="toolbar-select" data-block-style tabindex="-1">
+                        <option value="paragraph">Text</option>
+                        <option value="1">Heading 1</option>
+                        <option value="2">Heading 2</option>
+                        <option value="3">Heading 3</option>
+                    </select>
+                    <span class="toolbar-separator" aria-hidden="true"></span>
+                    @foreach ($marks as [$command, $icon, $label, $toggle])
+                        <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ Str::before($label, ' (') }}" tabindex="-1" aria-pressed="false"><x-icon :name="$icon" class="size-5" /></button>
+                    @endforeach
+                    <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-highlight-menu" popovertarget="note-highlight-menu" title="Highlight" aria-label="Highlight" aria-haspopup="menu" tabindex="-1">
+                        <x-icon name="highlighter" class="size-5" /><x-icon name="chevron-down" class="size-3" />
+                    </button>
+                    @foreach ($scripts as [$command, $icon, $label, $toggle])
+                        <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="-1" aria-pressed="false"><x-icon :name="$icon" class="size-5" /></button>
+                    @endforeach
+                    <span class="toolbar-separator" aria-hidden="true"></span>
+                    <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-align-menu" popovertarget="note-align-menu" title="Align" aria-label="Align" aria-haspopup="menu" tabindex="-1">
+                        @foreach ($aligns as $value => [$icon, $word])
+                            <x-icon :name="$icon" class="size-5" data-align-icon="{{ $value }}" :hidden="$value !== 'left'" />
+                        @endforeach
+                        <x-icon name="chevron-down" class="size-3" />
+                    </button>
+                    <span class="toolbar-separator" aria-hidden="true"></span>
+                    @foreach ($lists as [$command, $icon, $label, $toggle])
+                        <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="-1" aria-pressed="false"><x-icon :name="$icon" class="size-5" /></button>
+                    @endforeach
+                    <span class="toolbar-separator" aria-hidden="true"></span>
+                    @foreach ($blocks as [$command, $icon, $label, $toggle])
+                        <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="-1" @if ($toggle) aria-pressed="false" @endif><x-icon :name="$icon" class="size-5" /></button>
+                    @endforeach
+                    <button type="button" class="toolbar-button" data-command="link" title="Link (Ctrl+K)" aria-label="Link" tabindex="-1" aria-pressed="false" aria-expanded="false" aria-controls="note-link-bar"><x-icon name="link" class="size-5" /></button>
+                    <span class="toolbar-separator" aria-hidden="true"></span>
+                    <button type="button" class="toolbar-button" data-command="clear" title="Clear formatting" aria-label="Clear formatting" tabindex="-1"><x-icon name="remove-formatting" class="size-5" /></button>
+                </div>
+
+                {{-- The toolbar's menus: popovers, so a toolbar that scrolls sideways on a phone never cuts them off. --}}
+                <div id="note-highlight-menu" class="toolbar-menu" popover role="menu" aria-label="Highlight">
+                    @foreach ($highlights as $value => $word)
+                        <button type="button" class="toolbar-menu-item" role="menuitemradio" aria-checked="false" data-highlight="{{ $value }}">
+                            <span class="highlight-swatch" data-tone="{{ $value }}" aria-hidden="true"></span>{{ $word }}
+                        </button>
+                    @endforeach
+                    <button type="button" class="toolbar-menu-item" role="menuitem" data-highlight="">
+                        <x-icon name="x" class="size-4" />No highlight
+                    </button>
+                </div>
+                <div id="note-align-menu" class="toolbar-menu" popover role="menu" aria-label="Align">
+                    @foreach ($aligns as $value => [$icon, $word])
+                        <button type="button" class="toolbar-menu-item" role="menuitemradio" aria-checked="{{ $value === 'left' ? 'true' : 'false' }}" data-align="{{ $value }}">
+                            <x-icon :name="$icon" class="size-4" />{{ $word }}
                         </button>
                     @endforeach
                 </div>
+
+                {{-- A link: its address, for the selected words. --}}
+                <div id="note-link-bar" class="editor-bar" data-link-bar hidden>
+                    <label for="note-link" class="text-sm font-medium">Link address</label>
+                    <input id="note-link" type="url" class="input input-sm min-w-0 flex-1" placeholder="https://…" autocomplete="off" data-link-input>
+                    <button type="button" class="btn btn-primary btn-sm" data-link-apply>Apply</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-link-remove><x-icon name="unlink" class="size-4" />Remove</button>
+                </div>
+
+                {{-- In a table: its rows and columns. --}}
+                <div class="editor-bar" role="toolbar" aria-label="Table" data-table-bar hidden>
+                    @foreach (['addRowBefore' => 'Row above', 'addRowAfter' => 'Row below', 'addColumnBefore' => 'Column left', 'addColumnAfter' => 'Column right', 'toggleHeaderRow' => 'Header row', 'deleteRow' => 'Delete row', 'deleteColumn' => 'Delete column', 'deleteTable' => 'Delete table'] as $command => $word)
+                        <button type="button" @class(['btn btn-ghost btn-sm', 'text-danger' => $command === 'deleteTable']) data-table-command="{{ $command }}">{{ $word }}</button>
+                    @endforeach
+                </div>
+
                 <div class="note-content">
                     <textarea class="note-title" rows="1" maxlength="{{ \App\Study\Notes::MAX_TITLE }}" placeholder="Untitled note" aria-label="Title" data-note-title>{{ $note?->title }}</textarea>
                     <div id="note-body" data-note-body></div>
                 </div>
+                <p class="note-count" data-note-count aria-hidden="true"></p>
                 <script type="application/json" data-note-doc>@json($payload)</script>
             </article>
         @endif

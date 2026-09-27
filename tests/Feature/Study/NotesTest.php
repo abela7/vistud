@@ -136,6 +136,55 @@ class NotesTest extends TestCase
         }
     }
 
+    public function test_alignment_highlights_scripts_and_tables_are_kept_and_cleaned(): void
+    {
+        $note = $this->notes->create($this->by, 'module', $this->cells->id);
+        $cell = fn (string $type, string $text, array $attrs = []) => ['type' => $type, 'attrs' => $attrs + ['colspan' => 1, 'rowspan' => 1, 'colwidth' => null], 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => $text]]]]];
+        $doc = ['type' => 'doc', 'content' => [
+            ['type' => 'heading', 'attrs' => ['level' => 1, 'textAlign' => 'center'], 'content' => [['type' => 'text', 'text' => 'Cell division']]],
+            ['type' => 'paragraph', 'attrs' => ['textAlign' => 'left'], 'content' => [
+                ['type' => 'text', 'text' => 'H', 'marks' => [['type' => 'highlight', 'attrs' => ['tone' => 'green']]]],
+                ['type' => 'text', 'text' => '2', 'marks' => [['type' => 'subscript']]],
+                ['type' => 'text', 'text' => 'O and x'],
+                ['type' => 'text', 'text' => '2', 'marks' => [['type' => 'superscript']]],
+                ['type' => 'text', 'text' => ' ', 'marks' => [['type' => 'highlight', 'attrs' => ['tone' => '#ff0000']]]],
+                ['type' => 'text', 'text' => 'under', 'marks' => [['type' => 'underline']]],
+            ]],
+            ['type' => 'paragraph', 'attrs' => ['textAlign' => 'sideways'], 'content' => [['type' => 'text', 'text' => 'plain']]],
+            ['type' => 'table', 'content' => [
+                ['type' => 'tableRow', 'content' => [$cell('tableHeader', 'Stage'), $cell('tableHeader', 'Cells')]],
+                ['type' => 'tableRow', 'content' => [$cell('tableCell', 'Mitosis', ['colspan' => 0]), $cell('tableCell', '2 | copies', ['colwidth' => [120]])]],
+            ]],
+        ]];
+
+        $this->notes->save($this->by, $note->id, ['doc' => $doc] + $this->edit(1, '', '', 'rich-0001'));
+        $saved = $this->notes->open($this->by, $note->id)->doc;
+
+        $this->assertSame(['textAlign' => 'center', 'level' => 1], $saved['content'][0]['attrs']);
+        // Left is the default, so it isn't stored; an unknown alignment is dropped.
+        $this->assertArrayNotHasKey('attrs', $saved['content'][1]);
+        $this->assertArrayNotHasKey('attrs', $saved['content'][2]);
+        $this->assertSame([
+            [['type' => 'highlight', 'attrs' => ['tone' => 'green']]],
+            [['type' => 'subscript']],
+            null,
+            [['type' => 'superscript']],
+            // A colour that isn't one of the names becomes the default highlight.
+            [['type' => 'highlight', 'attrs' => ['tone' => 'yellow']]],
+            [['type' => 'underline']],
+        ], array_map(fn ($t) => $t['marks'] ?? null, $saved['content'][1]['content']));
+        $this->assertSame(['colspan' => 1, 'rowspan' => 1, 'colwidth' => null], $saved['content'][3]['content'][1]['content'][0]['attrs']);
+        $this->assertSame([120], $saved['content'][3]['content'][1]['content'][1]['attrs']['colwidth']);
+
+        // In a briefing a table stays a table.
+        $this->assertStringContainsString("| Stage | Cells |\n| --- | --- |\n| Mitosis | 2 \\| copies |", NoteDoc::markdown($saved));
+        $this->assertSame('Cell division H 2 O and x 2 under plain Stage Cells Mitosis 2 | copies', NoteDoc::text($saved));
+
+        // A cell holds blocks, and a row only cells.
+        $this->assertThrows(fn () => $this->notes->save($this->by, $note->id, ['doc' => ['type' => 'doc', 'content' => [['type' => 'table', 'content' => [['type' => 'paragraph']]]]]] + $this->edit(2, '', '', 'rich-0002')), Unprocessable::class);
+        $this->assertThrows(fn () => $this->notes->save($this->by, $note->id, ['doc' => ['type' => 'doc', 'content' => [['type' => 'table', 'content' => [['type' => 'tableRow', 'content' => [['type' => 'text', 'text' => 'x']]]]]]]] + $this->edit(2, '', '', 'rich-0003')), Unprocessable::class);
+    }
+
     public function test_notes_move_within_their_workspace_and_go_with_a_moved_folder(): void
     {
         $labs = app(Folders::class)->create($this->by, 'module', $this->cells->id, 'Labs');
