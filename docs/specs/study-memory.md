@@ -5,7 +5,8 @@ topics, statuses and questions (1a); findings, web links, assignments and
 tasks, instructions and the Overview (1b). Step 2 has begun: the study
 session, its clock (§4.1), the Pomodoro clock (§4.2), and the teaching
 options, tutoring prompt and briefing (§4.3), and the write-back (§4.4) are
-built; the MCP server is next (§5).
+built. The owner put the MCP server off on 2026-09-27: for now any AI works
+with ViStud through the briefing and Save from the chat (§5).
 
 **The idea in one line.** ViStud is the body; the language model is the engine.
 The body keeps a living copy of what the student understands about each
@@ -31,7 +32,7 @@ still open. At exam time nothing has accumulated.
 | S3 | **The student's word wins.** The AI proposes topic statuses and registers questions; the student confirms or fixes them | Auto-accepting the AI's judgement |
 | S4 | **Four statuses a student sets** — *not started, covered, understood, confused* — plus **mastered**, which is earned from evidence (rules label `secure` or `durable`), never claimed | A free-text status |
 | S5 | **Search runs over notes** (the student's and the AI's session notes) with MySQL full-text search. The meaning index of ADR 0001 (Qdrant) waits until the pilot shows keyword search isn't enough | Building the index first |
-| S6 | **The engine is a setting.** The built-in assistant calls the model through an API key the owner holds; Claude first, ChatGPT and Gemini behind the same interface after. The connector for a student's own subscription is the MCP server: any AI client that speaks MCP works with the same box | One hard-wired provider |
+| S6 | **The engine is a setting.** The built-in assistant calls the model through an API key the owner holds; Claude first, ChatGPT and Gemini behind the same interface after. A student's own subscription works today by pasting: the briefing in, Save from the chat out. An MCP server (the AI app calling ViStud directly) is planned but put off by the owner as extra for now | One hard-wired provider |
 | S7 | **Office files aren't converted on the server.** ViStud suggests uploading a Word or PowerPoint file's own PDF export beside it; when there is none, a session sends the slides' and pages' text (read from the file's XML, only when a session needs it) | Converting every upload with LibreOffice |
 
 ## 3. The box (per workspace)
@@ -249,11 +250,10 @@ is listed; the rest is saved.
 1. **Tracker:** topics, statuses, questions (1a); findings, links, assignments,
    instructions, Overview (1b). Useful before any engine is connected.
 2. **Session engine:** the session, its clock and the Pomodoro clock, the
-   teaching options, prompt and briefing, and the write-back (built); start options
-   (how to teach, check-ins, quiz level) and the tutoring prompt; the briefing
-   builder; the write-back (session note, findings, questions, flashcards,
-   attempts, proposed statuses); the MCP server, so any AI client works with
-   the same box; engine settings and the built-in chat; flashcard review;
-   Office files (S7): the PDF-export suggestion and slide text.
+   teaching options, prompt and briefing, and the write-back (built). Still
+   to come: flashcard review; engine settings and the built-in chat; Office
+   files (S7): the PDF-export suggestion and slide text.
 3. **Progress** over time from the journal.
-4. ChatGPT and Gemini engines; the connector (M6).
+4. ChatGPT and Gemini engines. The MCP server, when the owner wants it: the
+   same briefing and write-back as tools an AI app calls, starting local
+   (Claude Desktop), online once ViStud is hosted.
