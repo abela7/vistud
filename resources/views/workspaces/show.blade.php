@@ -1,9 +1,10 @@
 {{--
     A workspace's pages (App\Http\Controllers\WorkspacePageController).
     The Overview ("where am I": topics by status, what's confusing, open
-    questions, assignments and tasks, notes to pick up, instructions),
-    Modules, Notes & files and Progress are built; the Calendar says what it
-    will hold until its step arrives (docs/specs/workspaces.md §6).
+    questions, assignments and tasks, notes to pick up, flashcards due,
+    instructions), Modules, Notes & files, Flashcards and Progress are
+    built; the Calendar says what it will hold until its step arrives
+    (docs/specs/workspaces.md §6).
 --}}
 @php
     use App\Study\Workspaces;
@@ -120,6 +121,33 @@
                 <div class="min-w-0 space-y-4">
                     <livewire:workspaces.study-time :workspace-id="$workspace->id" />
 
+                    <section aria-labelledby="cards-heading" class="overview-card space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h2 id="cards-heading" class="font-semibold">Flashcards</h2>
+                            <a href="{{ route('workspaces.show', [$workspace->id, 'flashcards']) }}" class="item-link text-sm">Open Flashcards</a>
+                        </div>
+                        @if ($cards['total'] === 0)
+                            <p class="text-sm text-fg-muted">No cards yet. Write your own, or have an AI make them from your notes.</p>
+                        @else
+                            <div class="flex items-center gap-3">
+                                <span @class(['deck-due-number', 'is-clear' => $cards['due'] === 0]) aria-hidden="true">
+                                    @if ($cards['due'] === 0)
+                                        <x-icon name="check" class="size-6" />
+                                    @else
+                                        {{ $cards['due'] }}
+                                    @endif
+                                </span>
+                                <p class="min-w-0">
+                                    <span class="block font-medium">{{ $cards['due'] === 0 ? 'All caught up' : ($cards['due'] === 1 ? '1 card to review today' : $cards['due'].' cards to review today') }}</span>
+                                    <span class="block text-sm text-fg-muted">{{ $cards['total'] === 1 ? '1 card' : $cards['total'].' cards' }} in all</span>
+                                </p>
+                            </div>
+                            @if ($cards['due'] > 0)
+                                <a href="{{ route('workspaces.flashcards.review', $workspace->id) }}" class="btn btn-primary w-full"><x-icon name="play" class="size-4" />Review now</a>
+                            @endif
+                        @endif
+                    </section>
+
                     @if ($recent !== [])
                         <section aria-labelledby="continue-heading" class="overview-card space-y-2">
                             <h2 id="continue-heading" class="font-semibold">Pick up where you left off</h2>
@@ -188,6 +216,8 @@
             <livewire:workspaces.contents :workspace-id="$workspace->id" :view="$section" :key="$section" />
         @elseif ($section === 'progress')
             <livewire:workspaces.progress :workspace-id="$workspace->id" />
+        @elseif ($section === 'flashcards')
+            <livewire:workspaces.deck :workspace-id="$workspace->id" />
         @else
             <section class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border-strong px-6 py-12 text-center">
                 <x-workspace.chip :workspace="$workspace" size="lg" />

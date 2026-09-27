@@ -49,6 +49,7 @@ const icons = [
     'folder',
     'folder-input',
     'folder-plus',
+    'gallery-vertical-end',
     'globe',
     'grip-vertical',
     'heading-2',
@@ -59,6 +60,7 @@ const icons = [
     'info',
     'italic',
     'key-round',
+    'keyboard',
     'landmark',
     'languages',
     'layers',
@@ -84,6 +86,7 @@ const icons = [
     'notebook-text',
     'palette',
     'panel-left',
+    'party-popper',
     'pause',
     'pencil',
     'play',
@@ -112,6 +115,7 @@ const icons = [
     'user-check',
     'user-plus',
     'users',
+    'wand-sparkles',
     'x',
 ];
 

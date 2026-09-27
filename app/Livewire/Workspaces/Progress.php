@@ -8,6 +8,7 @@ use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Findings;
+use App\Study\Flashcards;
 use App\Study\Modules;
 use App\Study\Questions;
 use App\Study\Sessions;
@@ -15,6 +16,7 @@ use App\Study\TopicDetails;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -73,11 +75,14 @@ final class Progress extends Component
 
     private Sessions $sessions;
 
+    private Flashcards $flashcards;
+
     private PrincipalFactory $principals;
 
-    public function boot(Topics $topics, Questions $questions, Findings $findings, Modules $modules, Sessions $sessions, PrincipalFactory $principals): void
+    public function boot(Topics $topics, Questions $questions, Findings $findings, Modules $modules, Sessions $sessions, Flashcards $flashcards, PrincipalFactory $principals): void
     {
         $this->sessions = $sessions;
+        $this->flashcards = $flashcards;
         $this->topics = $topics;
         $this->questions = $questions;
         $this->findings = $findings;
@@ -159,6 +164,18 @@ final class Progress extends Component
         $this->expanded = in_array($topicId, $this->expanded, true)
             ? array_values(array_diff($this->expanded, [$topicId]))
             : [...$this->expanded, $topicId];
+    }
+
+    /** Opens App\Livewire\Workspaces\FlashcardEditor for a card on the topic. */
+    public function newFlashcard(string $topicId): void
+    {
+        $this->dispatch('flashcard-new', topicId: $topicId);
+    }
+
+    #[On('flashcards-changed')]
+    public function refreshCards(): void
+    {
+        // Drawing again updates each topic's count of cards.
     }
 
     public function newFinding(string $topicId): void
@@ -283,6 +300,7 @@ final class Progress extends Component
             'findings' => $this->findings->byTopic($by, $this->workspaceId),
             'sources' => $this->mode === 'finding' ? $this->findings->sources($by, $this->workspaceId) : [],
             'counts' => $counts,
+            'cards' => $this->flashcards->counts($by, $this->workspaceId)['topics'],
             'topicNames' => $topicNames,
             'open' => array_values(array_filter($questions, fn ($q) => $q->shown() === 'open')),
             'understood' => array_values(array_filter($questions, fn ($q) => $q->shown() === 'understood')),

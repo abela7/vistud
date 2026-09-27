@@ -3,6 +3,7 @@
 use App\Brain\Store\JournalReader;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
+use App\Http\Controllers\FlashcardReviewController;
 use App\Http\Controllers\NotePageController;
 use App\Http\Controllers\SessionBriefingController;
 use App\Http\Controllers\SessionPageController;
@@ -45,6 +46,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspaces/{workspace}/sessions/{session}/briefing', SessionBriefingController::class)
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'session' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.sessions.briefing');
+
+    // Reviewing a workspace's flashcards (docs/specs/study-memory.md §4.5).
+    Route::get('/workspaces/{workspace}/flashcards/review', FlashcardReviewController::class)
+        ->where('workspace', '[A-Za-z0-9-]{1,64}')
+        ->name('workspaces.flashcards.review');
 
     // A workspace and its sections (docs/specs/workspaces.md).
     Route::get('/workspaces/{workspace}/{section?}', WorkspacePageController::class)

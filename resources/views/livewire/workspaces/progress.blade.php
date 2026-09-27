@@ -62,7 +62,12 @@
                                             <span class="font-semibold break-words">{{ $topic->name }}</span>
                                             <span @class(['status-chip', "status-{$shown}"])><x-icon :name="$statusIcons[$shown]" class="size-3.5" />{{ $statusWords[$shown] }}</span>
                                         </p>
-                                        <p class="text-sm text-fg-muted">Evidence: {{ $topic->evidence() }}</p>
+                                        <p class="text-sm text-fg-muted">
+                                            Evidence: {{ $topic->evidence() }}
+                                            @if (isset($cards[$topic->id]))
+                                                · <a href="{{ route('workspaces.show', [$workspaceId, 'flashcards']) }}?topic={{ $topic->id }}" class="item-link font-normal">{{ Str::plural('flashcard', $cards[$topic->id]['total'], prependCount: true) }}{{ $cards[$topic->id]['due'] > 0 ? ', '.$cards[$topic->id]['due'].' due' : '' }}</a>
+                                            @endif
+                                        </p>
                                         @if ($topicFindings !== [])
                                             <button type="button" class="disclosure" wire:click="toggleFindings('{{ $topic->id }}')" aria-expanded="{{ $showFindings ? 'true' : 'false' }}" @if ($showFindings) aria-controls="findings-{{ $topic->id }}" @endif>
                                                 <x-icon name="chevron-right" @class(['size-4 transition-transform', 'rotate-90' => $showFindings]) />
@@ -80,6 +85,7 @@
                                     @include('livewire.workspaces.partials.row-menu', ['id' => $topic->id, 'label' => $topic->name, 'items' => [
                                         ['Study this now', 'play', "study('{$topic->id}')", false],
                                         ['Add a finding', 'lightbulb', "newFinding('{$topic->id}')", false],
+                                        ['New flashcard', 'gallery-vertical-end', "newFlashcard('{$topic->id}')", false],
                                         ['New question about it', 'circle-help', "newQuestion('{$topic->id}')", false],
                                         ['Rename', 'pencil', "renameTopic('{$topic->id}')", false],
                                         ['Move to module…', 'folder-input', "moveTopic('{$topic->id}')", $modules === []],
@@ -241,4 +247,6 @@
             </form>
         @endif
     </dialog>
+
+    <livewire:workspaces.flashcard-editor :workspace-id="$workspaceId" />
 </div>

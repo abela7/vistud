@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { makeNamedStudent, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithPomodoro, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { makeNamedStudent, makeStudentWithCards, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithPomodoro, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -736,4 +736,69 @@ test('save from the chat: paste, review, and the session afterwards', async ({ p
     await page.getByRole('region', { name: 'From the tutor' }).waitFor();
     await page.evaluate(() => document.activeElement?.blur());
     await page.screenshot({ path: out('capture-desktop-vistud-light-saved'), fullPage: true });
+});
+
+test('flashcards: the deck, writing a card, making cards with an AI, and a round of review', async ({ page }) => {
+    const student = makeStudentWithCards();
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/flashcards`);
+    await page.getByRole('heading', { level: 1, name: 'Flashcards' }).waitFor();
+    await page.waitForLoadState('load');
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`flashcards-${size}-${theme}`), fullPage: size === 'mobile' });
+        }
+    }
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'New card' }).click();
+    const editor = page.locator('#flashcard-dialog');
+    await editor.getByLabel('Front').fill('What does a self join do?');
+    await editor.getByLabel('Back').fill('It joins a table to itself, under two names.');
+    await editor.getByLabel('Topic').selectOption({ label: 'Joins' });
+    await page.screenshot({ path: out('flashcards-desktop-vistud-light-new') });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Make cards with an AI' }).click();
+    await page.locator('#card-maker-dialog').getByLabel('About').selectOption({ label: 'Joins' });
+    await page.locator('#card-maker-dialog').getByLabel('The prompt', { exact: true }).filter({ hasText: 'about Joins' }).waitFor();
+    await page.screenshot({ path: out('flashcards-desktop-vistud-light-ai') });
+    await page.locator('#card-maker-dialog').getByLabel("The AI's reply").fill(
+        '<flashcard topic="Joins"><front>What does a LEFT JOIN keep?</front><back>Every row of the left table, with NULLs where the right table has no match.</back></flashcard>'
+        + '<flashcard topic="Joins"><front>What does a CROSS JOIN make?</front><back>Every pair of rows from the two tables.</back></flashcard>',
+    );
+    await page.locator('#card-maker-dialog').getByRole('button', { name: 'Read the cards' }).click();
+    await page.locator('#card-maker-dialog').getByText('2 cards found.').waitFor();
+    await page.screenshot({ path: out('flashcards-desktop-vistud-light-ai-review') });
+
+    await page.goto(`/workspaces/${student.workspace}/flashcards/review`);
+    await page.getByText('Card 1 of 4').waitFor();
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.screenshot({ path: out(`flashcards-review-${size}-${theme}-front`), fullPage: size === 'mobile' });
+        }
+    }
+    await page.getByRole('button', { name: /Show the answer/ }).click();
+    await page.getByRole('group', { name: 'How did it go?' }).waitFor();
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.screenshot({ path: out(`flashcards-review-${size}-${theme}-back`), fullPage: size === 'mobile' });
+        }
+    }
+    await page.setViewportSize(sizes.desktop);
+    await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: /^Not yet/ }).click();
+    for (let n = 0; n < 4; n++) {
+        await page.getByRole('button', { name: /Show the answer/ }).click();
+        await page.getByRole('button', { name: /^Got it/ }).click();
+    }
+    await page.getByRole('heading', { name: 'Round done' }).waitFor();
+    await page.screenshot({ path: out('flashcards-review-desktop-vistud-light-done') });
 });

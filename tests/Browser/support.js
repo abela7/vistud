@@ -248,6 +248,27 @@ export function makeStudentWithPomodoro(secondsLeft = 4) {
     return { ...student, ...JSON.parse(out) };
 }
 
+/**
+ * makeStudentWithTopics(), plus flashcards: three on Joins (one made with an
+ * AI), one on keys, and one on keys already answered, due tomorrow.
+ */
+export function makeStudentWithCards() {
+    const student = makeStudentWithTopics();
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `$w = '${student.workspace}'; $topics = collect(app(\\App\\Study\\Topics::class)->list($p, $w))->keyBy('name'); $c = app(\\App\\Study\\Flashcards::class);`,
+        `$joins = $topics['Joins']->id; $keys = $topics['Primary and foreign keys']->id;`,
+        `$c->add($p, $w, $joins, 'What does a LEFT JOIN keep?', 'Every row of the left table, with NULLs where the right table has no match.');`,
+        `$c->add($p, $w, $joins, 'What does an INNER JOIN keep?', 'Only the rows that match on both sides.');`,
+        `$c->add($p, $w, $joins, 'When would you use a FULL OUTER JOIN?', 'To keep every row of both tables, matched or not.', 'ai');`,
+        `$c->add($p, $w, $keys, 'What makes a column a foreign key?', 'It refers to the primary key of another table.');`,
+        `$done = $c->add($p, $w, $keys, 'What must a primary key be?', 'Unique and never empty.'); $c->answer($p, $done, 'correct');`,
+        `echo json_encode(['cards' => 4]);`,
+    ].join(' ');
+    const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
+    return { ...student, ...JSON.parse(out) };
+}
+
 /** A student with no second factor, so login finishes on the home page. */
 export function makeStudentAccount() {
     return makeAccount(false);

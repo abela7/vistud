@@ -119,7 +119,11 @@ class WriteBackTest extends TestCase
             array_map(fn ($e) => [$e->body['form'], $e->body['support'], $e->body['outcome'], $e->body['judged_by'], $e->body['setting']], $attempts));
         $this->assertSame([$session->id, $session->id], array_map(fn ($e) => $e->sessionId, $attempts));
         $exercises = array_values(array_filter($entries, fn ($e) => $e->kind->value === 'claim' && $e->body['type'] === 'relates'));
-        $this->assertSame(['task:'.$attempts[0]->body['task'], 'topic:'.$this->joins->id], $exercises[0]->body['targets']);
+        $this->assertContains(['task:'.$attempts[0]->body['task'], 'topic:'.$this->joins->id], array_map(fn ($e) => $e->body['targets'], $exercises));
+        // The flashcard is a task of its own, exercising its topic too.
+        $card = app(Flashcards::class)->list($this->by, $this->databases->id)[0];
+        $this->assertContains(['task:card-'.$card->id, 'topic:'.$card->topicId], array_map(fn ($e) => $e->body['targets'], $exercises));
+        $this->assertSame([$session->id, 'ai'], [$card->sessionId, $card->author]);
         // The rules now see practice on Joins, not only the student's word.
         $this->assertNotContains('claimed_only', $topics['Joins']->flags);
         $this->assertNotSame('not_started', $topics['Joins']->label);

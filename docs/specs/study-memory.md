@@ -46,6 +46,7 @@ still open. At exam time nothing has accumulated.
 | **Resources** | Files and web links, in the same places as notes | `files` and `links` tables. In Modules and Notes & files |
 | **Assignments and tasks** | Assignment, quiz, exam, lab, problem set or to-do, with *to do / in progress / done* and a due date; also what the calendar will show | `activities` table + an `activity` record revision in the journal for every change. On the Overview |
 | **Instructions** | *About you* (every course), this course, and each module: how to teach, what to focus on, the student's level | `instructions` table. On the Overview; a module's in its menu in Modules |
+| **Flashcards** | A front and a back, on a topic, written by the student, made with an AI, or saved from a session; when each is next due (§4.5) | `flashcards` table + a `task` record and an `exercises` claim in the journal; every answer an `attempt`. The Flashcards section |
 | **Overview** | "Where am I": topics by status, what's still confusing, open questions, assignments and tasks soonest first, notes to pick up, instructions | The workspace's Overview page |
 
 ## 4. The session (step 2)
@@ -234,7 +235,7 @@ summary and checkpoint are kept. `App\Study\WriteBack` saves:
 |---|---|
 | finding | a finding on the topic, written by *a study session* |
 | question | a registered question on the topic |
-| flashcard | a flashcard on the topic (`flashcards` table; review comes later) |
+| flashcard | a flashcard on the topic, made by *a study session* (§4.5) |
 | attempt | evidence in the journal: the question is a **task** (its id comes from its words, so the same question in a later session is the same task, as §4 of ADR 0002 asks), a `relates` claim that the task **exercises** the topic (once), and an **attempt** with the AI's result (`judged_by: ai`, `setting: chat`, the form and support the tutor gave), carrying the session's id and dated at the session's end. The rules then count it: a correct *apply* answer moves a topic past "not practised yet" |
 | status | the student's word on the topic, only if ticked |
 | summary, checkpoint | kept on the session; the next briefing carries the last sessions' summaries, and a resumed session's briefing says where it last stood |
@@ -245,13 +246,66 @@ mark's fingerprint is kept on the session, so pasting the same chat again
 shows *Saved before*. What can't be saved (an emptied text, a topic gone)
 is listed; the rest is saved.
 
+### 4.5 Flashcards (built)
+
+A workspace's **Flashcards** section (*Cards* in the phone tab bar) shows
+what's due today with **Review now**, and every card by topic, each with
+when it's next due and who made it; a filter narrows it to a topic. Cards
+come three ways:
+
+- **By hand**: *New card* (also a topic's menu in Progress and the
+  session's menu) opens one dialog for the front, the back and the topic,
+  with *Save and add another* for writing several in a row.
+- **With any AI**: *Make cards with an AI* builds a prompt
+  (`resources/prompts/flashcards.md`, filled by `App\Study\CardMaker`)
+  from the topic (or all topics, for the AI to choose among), how many
+  (5 to 20), the topic's key points and, if chosen, one note's text (up to
+  12,000 characters), and lists the cards the student already has so the
+  AI doesn't repeat them. It says what makes a good card (one idea, one
+  answer, short backs, why and how as well as what; after Wozniak's twenty
+  rules and Matuschak's prompt-writing notes). The student copies it into
+  any AI, pastes the reply back, and reviews the `<flashcard>` marks
+  (read by `App\Study\Capture`, as after a session): cards they already
+  have are recognised and left unticked, and each keeps an editable front,
+  back and topic.
+- **From a study session**: the tutor's `<flashcard>` marks, saved with
+  the write-back (§4.4).
+
+**Reviewing** (`/workspaces/{w}/flashcards/review`, optionally one topic)
+takes up to 20 cards a round: those due, the longest waiting first, then
+new ones. A card shows its front; *Show the answer* (or Space, or a tap on
+the card) turns it over, showing the question again above the answer. The
+student says how it went: **Not yet**, **Partly** or **Got it** (or 1, 2,
+3), each saying when the card comes back. The first answer to a card in a
+round moves it on a **ladder** of gaps: *Got it* waits longer each time in
+a row (1, 3, 7, 14, 30, 60, 120 days); *Partly* waits the last gap again;
+*Not yet* starts it over from tomorrow and brings it back once at the end
+of the round, for another go that's recorded but moves nothing. Days are
+the student's own (their time zone). With nothing due, *Practise anyway*
+goes through the next cards without changing when they come back. The
+round ends with how many were *got*, *partly* and *not yet*, and what's
+due next. The Overview shows how many cards are due today.
+
+**Evidence** (ADR 0002): each card is a **task** (`card-{id}`, key
+`card/{id}`, the front as its prompt and the back as its answer), with a
+`relates` claim that it **exercises** its topic; new words make a new
+revision of the task (earlier answers keep the revision they answered), a
+new topic retires the old claim and writes a new one, and deleting a card
+retires its task. Every answer is an **attempt**: *recall*, *unaided*,
+*practice*, judged by the student (`judged_by: self`), with the task's
+revision, in the study session open in the workspace or, when none is,
+the day's review (so reviews on different days count as different
+sessions). The rules count a self-judged success as practice but never as
+proof, as ADR 0002 asks; a card missed after a topic was working marks it
+as slipped.
+
 ## 5. Build order
 
 1. **Tracker:** topics, statuses, questions (1a); findings, links, assignments,
    instructions, Overview (1b). Useful before any engine is connected.
 2. **Session engine:** the session, its clock and the Pomodoro clock, the
-   teaching options, prompt and briefing, and the write-back (built). Still
-   to come: flashcard review; engine settings and the built-in chat; Office
+   teaching options, prompt and briefing, the write-back, and flashcards
+   (built). Still to come: engine settings and the built-in chat; Office
    files (S7): the PDF-export suggestion and slide text.
 3. **Progress** over time from the journal.
 4. ChatGPT and Gemini engines. The MCP server, when the owner wants it: the

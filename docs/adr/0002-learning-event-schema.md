@@ -176,7 +176,7 @@ A **task** is the problem that was posed. An **attempt** is one try at it.
 | `source` | kind, title, storage key, hash |
 | `extraction` | source, extractor and its version, version number, segments with their locations |
 | `activity` | kind (lecture · lab · assignment · quiz · exam · problem_set · other), title, `starts_at?`, `ends_at?`; the tracker also records `workspace`, `module?`, `due_on?`, `progress` (todo · doing · done), `revision` and `status` (active · deleted) (docs/specs/study-memory.md) |
-| `task` | key, activity, title, `revision`, `content_hash`, `checker?`, `status` (active or retired), prompt as content |
+| `task` | key, activity, title, `revision`, `content_hash`, `checker?`, `status` (active or retired), prompt as content; the tracker's flashcards are tasks `card-{id}` with key `card/{id}` and the card's back as `answer` content, and questions answered in a study chat are tasks `chat-…` with key `chat/…` (docs/specs/study-memory.md §4.4, §4.5) |
 | `session` | channel, client (`vistud`, or `logged` for time logged afterwards), `started_at`, `ended_at`; the tracker also records `workspace`, `module?`, `topic?`, `revision`, `study_seconds`, `break_seconds`, (on the Pomodoro clock) `pomodoros` and the teaching options (`tutoring`) when it ends, and `status` (open · ended · deleted) (docs/specs/study-memory.md §4.1) |
 | `workspace` | title, code, term, dates, colour category (a student's space for one subject; docs/specs/workspaces.md) |
 | `module` | workspace, title, position, optional dates |

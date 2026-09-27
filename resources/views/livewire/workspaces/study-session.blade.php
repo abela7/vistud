@@ -32,6 +32,7 @@
             <x-button icon="scroll-text" wire:click="showBriefing">Briefing</x-button>
             <x-button icon="clipboard-paste" x-data x-on:click="Livewire.dispatch('capture-open')">Save from the chat</x-button>
             @include('livewire.workspaces.partials.row-menu', ['id' => 'session-'.$session->id, 'label' => 'this session', 'items' => array_values(array_filter([
+                ['New flashcard', 'gallery-vertical-end', 'newFlashcard', false],
                 $open ? ['How the AI teaches', 'message-square-text', 'editTeaching', false] : null,
                 $open ? [$session->usesPomodoro() ? 'Pomodoro settings' : 'Use the Pomodoro clock', 'timer', 'editPomodoro', false] : null,
                 ['Delete session', 'trash-2', 'confirmDelete', false],
@@ -40,6 +41,7 @@
     </div>
 
     <livewire:workspaces.session-capture :workspace-id="$workspaceId" :session-id="$session->id" :key="'capture-'.$session->id" />
+    <livewire:workspaces.flashcard-editor :workspace-id="$workspaceId" :key="'flashcard-editor-'.$session->id" />
 
     <div role="status" aria-live="polite">
         @if ($notice)

@@ -109,6 +109,12 @@ final class StudySession extends Component
         $this->dispatch('session-changed');
     }
 
+    /** Opens App\Livewire\Workspaces\FlashcardEditor for a card on the session's topic. */
+    public function newFlashcard(): void
+    {
+        $this->dispatch('flashcard-new', topicId: $this->sessions->find($this->principal(), $this->sessionId)->topicId);
+    }
+
     /** What the assistant would receive now: the tutoring prompt and the briefing. */
     public function showBriefing(): void
     {
