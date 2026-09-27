@@ -154,17 +154,29 @@ strategies, and it gives the AI a clear path so it never has to guess:
   decides; ViStud remembers and saves; the teacher and the course material
   are the authority. The AI is not an answer machine for graded work, not a
   lecturer, and not the judge of what the student knows.
-- **An order for clashes:** honesty first; no graded work done for the
-  student; then what the student asks; their instructions; the session's
-  teaching; the rest.
+- **Its words defined:** material, part (a slide or a section, as the pace
+  says), section, idea, check question (one the student must answer before
+  going on; Socratic teaching questions aren't), quiz. The teaching options
+  are written in these words, so they can't contradict each other: the
+  method says how to present, the check questions setting says how often to
+  test, the quiz level says how hard, the pace says how big a part is.
+- **An order for clashes:** honesty first; never writing the graded work the
+  student hands in (helping them prepare is the job); then what the student
+  asks; their instructions; the session's teaching; the rest.
 - **How to read the briefing,** section by section.
-- **A path:** open (plan in a few points, the student's words, one
-  question); teach one part at a time, each message starting with where it
-  is (**Slide 5 of 18 · Left joins**), check, mark, go on at "next";
-  checkpoint at every section's end and about every twenty messages (and
-  resume from the last one); close.
-- **Words the student can use:** next, again, example, why, quiz me, skip,
-  break, where are we, wrap up.
+- **A path:** open (a plan in a few points, the main words, and exactly one
+  question, chosen in a fixed order: no topic, nothing known about the
+  student, no material, something hard last time, else "begin?"); teach one
+  part at a time, each message starting with where it is (**Slide 5 of 18 ·
+  Left joins**, or without the total when unknown), a check question only
+  when one is due, a hint and a second try before the answer, one attempt
+  mark per question; checkpoint at every section's end and about every
+  twenty messages (and resume from the last one); close only when the
+  student says so.
+- **Words the student can use:** next, again, example, why, quiz me, save
+  that, flashcard, skip, break, where are we, wrap up.
+- **Marks as plain lines,** never in code blocks or backticks (the write-back
+  will strip them anyway).
 - **The unclear moments:** no material yet, an empty briefing, "I don't
   know", stuck or frustrated, off the topic, the material and the AI
   disagree, an unclear topic, an unclear request.

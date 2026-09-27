@@ -59,9 +59,9 @@ class BriefingsTest extends TestCase
             $this->assertStringContainsString(Tutoring::CHOICES[$key][$value][1], $prompt);
         }
         // A clear role and path: who is who, what wins, the steps, the student's words, the unclear moments.
-        $this->assertSeeInOrderText(['## Your role', '## When instructions clash', '## How to teach in this session', '## How to use the briefing',
+        $this->assertSeeInOrderText(['## Your role', '## Words used here', '## When instructions clash', '## How to teach in this session', '## How to use the briefing',
             '## The path of a session', '1. **Open**', '2. **Teach**', '3. **Checkpoint**', '4. **Close**',
-            '## Words the student can use', '**next**', '**wrap up**', '## When things are unclear', '## Always', '## Marks', '## Ending'], $prompt);
+            '## Words the student can use', '**next**', '**save that**', '**wrap up**', '## When things are unclear', '## Always', '## Marks', 'not in a code block', '## Ending'], $prompt);
         // The marks ViStud reads back are in the prompt.
         foreach (['<finding topic=', '<question topic=', '<flashcard topic=', '<attempt topic=', '<checkpoint>', '<summary>', '<status topic='] as $mark) {
             $this->assertStringContainsString($mark, $prompt);

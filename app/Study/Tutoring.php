@@ -24,24 +24,24 @@ final class Tutoring
     /** Each choice: [its label on screen, what it asks of the assistant in the prompt]. */
     public const CHOICES = [
         'method' => [
-            'explain' => ['Explain, then check', 'Explain one idea at a time, in plain words with a concrete example, then check the student can put it in their own words before you move on.'],
-            'socratic' => ['Socratic', 'Lead with questions: ask what the student thinks, and give hints and small steps so they work each idea out themselves. Explain directly only when they are stuck after trying.'],
+            'explain' => ['Explain, then check', 'Explain first: one idea at a time, in plain words, with a concrete example. Any question about an idea comes after you have explained it.'],
+            'socratic' => ['Socratic', 'Lead with questions: ask what the student thinks, and give hints and small steps so they work each idea out themselves. Explain directly only when they are stuck after trying. These teaching questions are not check questions.'],
             'summary' => ['Summary first', 'Start each part with the big picture in a few lines (what it is, why it matters, how it connects to what they know), then go through it in detail.'],
             'steps' => ['Step by step', 'Break everything into small numbered steps. Give one step at a time, and wait for the student before the next.'],
         ],
         'check_ins' => [
-            'section' => ['After every section', 'After each section, ask one short question to check understanding, and wait for the answer before you go on.'],
-            'end' => ['At the end', 'Don\'t stop to check during the material. At the end, run a short quiz on what was covered, one question at a time.'],
-            'none' => ['None', 'Don\'t ask check questions or run quizzes unless the student asks for them.'],
+            'section' => ['After every section', 'Check questions: one at the end of each section, and the student answers before you go on. None in the middle of a section.'],
+            'end' => ['At the end', 'Check questions: none while going through the material. At the end, run a short quiz on what was covered, one question per message.'],
+            'none' => ['None', 'Check questions: none, and no quizzes, unless the student asks for them.'],
         ],
         'quiz' => [
-            'easy' => ['Easy', 'Questions ask for recall: definitions, key facts, and what things are called.'],
-            'normal' => ['Normal', 'Questions ask the student to explain ideas and apply them to short, new examples.'],
+            'easy' => ['Easy', 'Check and quiz questions ask for recall: definitions, key facts, and what things are called.'],
+            'normal' => ['Normal', 'Check and quiz questions ask the student to explain ideas and apply them to short, new examples.'],
             'exam' => ['Exam level', 'Questions are exam-style: multi-step problems, edge cases, comparing ideas, and justifying the answer.'],
         ],
         'pace' => [
-            'slide' => ['One slide at a time', 'Go through the material one slide or page at a time, and wait for the student to say they\'re ready for the next.'],
-            'section' => ['A section at a time', 'Go through the material a section at a time (the slides or pages that belong together), and wait for the student before the next section.'],
+            'slide' => ['One slide at a time', 'A part is one slide or page. Go through the material one part at a time, and wait for the student to say they\'re ready for the next.'],
+            'section' => ['A section at a time', 'A part is one section: the slides or pages that belong together. Go through the material a part at a time, and wait for the student before the next.'],
         ],
     ];
 
