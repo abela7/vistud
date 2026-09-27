@@ -498,33 +498,99 @@
 }
 
 @layer components {
-    /* A short message from a page's scripts (resources/js/app.js), above the tab bar on phones. */
-    .app-notice {
+    /*
+    | Toasts (resources/js/toasts.js): passing notices at the bottom centre,
+    | clear of a side panel's buttons, newest last, above the tab bar on
+    | phones. Each closes itself.
+    */
+    .toast-stack {
         position: fixed;
         right: 1rem;
         bottom: 1rem;
         left: 1rem;
         z-index: 60;
         display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        pointer-events: none;
+    }
+
+    .toast {
+        display: flex;
         align-items: center;
         gap: 0.75rem;
-        max-width: 28rem;
-        margin-left: auto;
-        padding: 0.75rem 0.75rem 0.75rem 1rem;
+        width: 100%;
+        max-width: 26rem;
+        padding: 0.5rem 0.5rem 0.5rem 1rem;
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
         background-color: var(--surface-raised);
-        box-shadow: var(--elevation-md);
+        box-shadow: var(--elevation-lg);
         color: var(--text);
-        font-size: 0.875rem;
+        pointer-events: auto;
+        animation: toast-in 180ms ease-out;
+        transition:
+            opacity 150ms ease-in,
+            translate 150ms ease-in;
     }
 
-    .app-notice > svg {
+    .toast.is-leaving {
+        opacity: 0;
+        translate: 0 0.5rem;
+    }
+
+    .toast-icon {
+        display: flex;
+        flex-shrink: 0;
+    }
+
+    .toast[data-tone='success'] .toast-icon {
+        color: var(--success);
+    }
+
+    .toast[data-tone='info'] .toast-icon {
         color: var(--info);
     }
 
+    .toast-text {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .toast-close {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--radius-md);
+        color: var(--text-muted);
+    }
+
+    .toast-close:hover {
+        background-color: var(--surface-sunken);
+        color: var(--text);
+    }
+
+    @keyframes toast-in {
+        from {
+            opacity: 0;
+            translate: 0 0.5rem;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .toast {
+            animation: none;
+            transition: none;
+        }
+    }
+
     @media (max-width: 767.98px) {
-        :root:has(.app-tabbar) .app-notice {
+        :root:has(.app-tabbar) .toast-stack {
             bottom: 4.5rem;
         }
     }
@@ -773,42 +839,52 @@
         outline-offset: 2px;
     }
 
-    .session-clock {
+    /*
+    | A study session's clock as a slim bar (the owner's review, 2026-09-27):
+    | the state and the time on the left, the controls on the right, one
+    | under the other when there's no room. The top bar's pill
+    | (.session-bar) carries it on every other page.
+    */
+    .clock-bar {
         display: flex;
-        flex-direction: column;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem 1.5rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+    }
+
+    .clock-bar-main {
+        --progress: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.875rem;
+        min-width: 0;
+    }
+
+    .clock-bar-controls {
+        display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 0.5rem;
-        padding-block: 2rem;
-        text-align: center;
     }
 
-    /* The topic's status in a narrow card: one option per line. */
-    .segmented-stack {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        width: 100%;
+    .session-time {
+        font-size: 1.75rem;
+        font-weight: 600;
+        line-height: 1.1;
+        letter-spacing: -0.01em;
     }
 
-    .segmented-stack .segmented-option {
-        justify-content: flex-start;
-    }
-
-    /* The Pomodoro countdown in a ring that fills as the phase runs (an SVG stroke, in theme colours). */
+    /* The Pomodoro phase in a small ring that fills as it runs (an SVG stroke, in theme colours). */
     .pomodoro-ring {
-        --progress: 0;
-        position: relative;
-        display: grid;
-        place-items: center;
-        width: min(16rem, 70vw);
-        aspect-ratio: 1;
-    }
-
-    .pomodoro-ring > svg {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
+        flex: none;
+        width: 2.75rem;
+        height: 2.75rem;
         fill: none;
         transform: rotate(-90deg);
     }
@@ -816,7 +892,7 @@
     .pomodoro-track,
     .pomodoro-arc {
         fill: none;
-        stroke-width: 6;
+        stroke-width: 12;
     }
 
     .pomodoro-track {
@@ -829,15 +905,8 @@
         stroke-dasharray: calc(var(--progress) * 100) 100;
     }
 
-    .pomodoro-ring.is-break .pomodoro-arc {
+    .is-break .pomodoro-arc {
         stroke: var(--success);
-    }
-
-    .pomodoro-time {
-        position: relative;
-        font-size: clamp(2.5rem, 12vw, 3.75rem);
-        font-weight: 600;
-        letter-spacing: -0.02em;
     }
 
     .pomodoro-dots {
@@ -846,8 +915,8 @@
     }
 
     .pomodoro-dot {
-        width: 0.75rem;
-        height: 0.75rem;
+        width: 0.625rem;
+        height: 0.625rem;
         border-radius: 9999px;
         border: 2px solid var(--accent);
     }
@@ -856,11 +925,70 @@
         background-color: var(--accent);
     }
 
-    .session-time {
-        font-size: clamp(2.75rem, 10vw, 4.5rem);
+    /* What to do next in a session: big, friendly tiles (buttons). */
+    .action-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+    }
+
+    @media (min-width: 640px) {
+        .action-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 1rem;
+        }
+    }
+
+    .action-tile {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        padding: 1.125rem 1.125rem 1.25rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-2xl);
+        background-color: var(--surface-raised);
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+        transition:
+            border-color 0.15s ease,
+            box-shadow 0.15s ease,
+            translate 0.15s ease;
+    }
+
+    .action-tile:hover {
+        border-color: var(--border-strong);
+        box-shadow: var(--elevation-md);
+        translate: 0 -2px;
+    }
+
+    .action-tile .item-icon {
+        margin-bottom: 0.5rem;
+    }
+
+    .action-tile-name {
         font-weight: 600;
-        line-height: 1.1;
-        letter-spacing: -0.02em;
+        overflow-wrap: anywhere;
+    }
+
+    .action-tile .item-meta {
+        overflow-wrap: anywhere;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .action-tile:hover {
+            translate: none;
+        }
+    }
+
+    /* A material row's Use sits above the row's link. */
+    .item-row .material-toggle {
+        position: relative;
+        z-index: 1;
     }
 
     /* ---------- Progress: topics and their statuses (docs/specs/study-memory.md) ---------- */

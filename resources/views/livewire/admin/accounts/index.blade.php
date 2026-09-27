@@ -22,9 +22,7 @@
 @endphp
 <div class="space-y-6">
     <div role="status" aria-live="polite">
-        @if ($notice)
-            <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
-        @endif
+        <x-toast :message="$notice" />
     </div>
 
     <section aria-labelledby="accounts-heading" class="space-y-3">

@@ -27,9 +27,6 @@
                 From now on, log in with {{ $user->email }} and the password you just chose.
             </x-alert>
         @endif
-        @if (session('workspace-notice'))
-            <x-alert tone="success">{{ session('workspace-notice') }}</x-alert>
-        @endif
 
         <livewire:workspaces.index />
     </div>

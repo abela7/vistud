@@ -271,6 +271,8 @@ Shared components live in `resources/views/components/` and their state styles i
 
 `<x-alert tone="danger|warning|success|info" title="…">`: an icon, a title and a message on the tone's subtle background. Danger and warning use `role="alert"`; success and info use `role="status"`.
 
+**Toasts** (the owner's review, 2026-09-27): a passing notice after an action ("Instructions saved.", "Session ended. You studied 45 min.") is a toast at the bottom centre, above the tab bar on phones, clear of a side panel's buttons. It closes itself after 6 seconds, waits while the pointer or keyboard focus is on it, and has a × to close it sooner; at most three stack. `<x-toast :message="…">` renders one (`resources/js/toasts.js` shows it once); a Livewire component's `$notice` comes from `App\Livewire\Concerns\Notices` and lasts one request, so drawing the component again never shows it twice. Errors and warnings stay inline alerts: they wait for the student.
+
 ### 5.4 Cards, panels and headers
 
 Cards are `--surface-raised` with a 1 px `--border`, `xl` radius and `elevation-md`. On mobile a form card drops its frame and uses the full width. Featured summary panels use `surface-featured`; section headers use `surface-header`.

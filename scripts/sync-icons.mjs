@@ -13,6 +13,7 @@ const icons = [
     'arrow-right',
     'arrow-up',
     'ban',
+    'bell',
     'bold',
     'book-open',
     'book-open-text',
@@ -118,6 +119,8 @@ const icons = [
     'user-check',
     'user-plus',
     'users',
+    'volume-2',
+    'volume-x',
     'wand-sparkles',
     'x',
 ];

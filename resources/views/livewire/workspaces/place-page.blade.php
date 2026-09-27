@@ -38,7 +38,7 @@
                 </div>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                @include('livewire.workspaces.partials.new-menu', ['placeId' => $place->id, 'folders' => $isModule || $place->depth < Folders::MAX_DEPTH])
+                @include('livewire.workspaces.partials.new-menu', ['placeId' => $place->id, 'folders' => $isModule || $place->depth < Folders::MAX_DEPTH, 'question' => $isModule])
                 @if ($isModule || $place->moduleId !== null)
                     <x-button variant="primary" icon="play" wire:click="studyHere">Study this</x-button>
                 @endif
@@ -56,15 +56,13 @@
     </div>
 
     <div role="status" aria-live="polite" class="empty:hidden">
-        @if ($notice)
-            <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
-        @endif
+        <x-toast :message="$notice" />
     </div>
 
     @include('livewire.workspaces.partials.place', ['key' => $key, 'placeId' => $place->id])
 
     @if ($isModule)
-        <livewire:workspaces.question-board :workspace-id="$workspaceId" :module-id="$place->id" :key="'questions-'.$place->id" />
+        <livewire:workspaces.question-board :workspace-id="$workspaceId" :module-id="$place->id" :quiet="true" :key="'questions-'.$place->id" />
     @endif
 
     @if ($studied !== [])

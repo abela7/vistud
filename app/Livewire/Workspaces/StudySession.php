@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Livewire\Concerns\PomodoroForm;
 use App\Livewire\Concerns\TeachingForm;
 use App\Platform\Access\Principal;
@@ -13,6 +14,7 @@ use App\Study\Briefings;
 use App\Study\Files;
 use App\Study\Modules;
 use App\Study\Notes;
+use App\Study\Questions;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\SessionSegment;
@@ -25,13 +27,14 @@ use Livewire\Component;
 
 /**
  * A study session's page (docs/specs/study-memory.md §4): the clock and its
- * controls, what happened (study, pauses, breaks), the topic's status and
- * the module's material. The service applies the clock's rules; the IDs are
- * locked.
+ * controls, what to do next (study with an AI, save from the chat, ask a
+ * question, write a card or a note, the notes and files), the questions,
+ * and what happened once it has ended. The service applies the clock's
+ * rules; the IDs are locked.
  */
 final class StudySession extends Component
 {
-    use PomodoroForm, TeachingForm;
+    use Notices, PomodoroForm, TeachingForm;
 
     #[Locked]
     public string $workspaceId;
@@ -39,12 +42,9 @@ final class StudySession extends Component
     #[Locked]
     public string $sessionId;
 
-    /** end, delete, pomodoro, teaching or briefing: the dialog that's open, or null. */
+    /** end, delete, pomodoro, teaching, briefing or material: the side panel that's open, or null. */
     #[Locked]
     public ?string $mode = null;
-
-    #[Locked]
-    public ?string $notice = null;
 
     #[Locked]
     public ?string $error = null;
@@ -64,11 +64,14 @@ final class StudySession extends Component
 
     private Briefings $briefings;
 
+    private Questions $questions;
+
     private PrincipalFactory $principals;
 
-    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, PrincipalFactory $principals): void
+    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, Questions $questions, PrincipalFactory $principals): void
     {
         $this->briefings = $briefings;
+        $this->questions = $questions;
         $this->sessions = $sessions;
         $this->topics = $topics;
         $this->modules = $modules;
@@ -121,6 +124,35 @@ final class StudySession extends Component
         $this->open('briefing');
     }
 
+    /** The notes and files, to open or to Use in the briefing. */
+    public function openMaterial(): void
+    {
+        $this->open('material');
+    }
+
+    /** A new, empty note in the session's module (or the workspace's top level), opened in the editor. */
+    public function newNote(): void
+    {
+        $by = $this->principal();
+        $session = $this->sessions->find($by, $this->sessionId);
+        $moduleId = $session->moduleId;
+        if ($moduleId === null && $session->topicId !== null) {
+            try {
+                $moduleId = $this->topics->find($by, $session->topicId)->moduleId;
+            } catch (NotFound) {
+                // Removed since: the note goes to the top level.
+            }
+        }
+        try {
+            $note = $moduleId === null
+                ? $this->notes->create($by, 'workspace', $this->workspaceId)
+                : $this->notes->create($by, 'module', $moduleId);
+        } catch (NotFound) {
+            $note = $this->notes->create($by, 'workspace', $this->workspaceId);
+        }
+        $this->redirectRoute('workspaces.notes.show', [$note->workspaceId, $note->id]);
+    }
+
     public function editTeaching(): void
     {
         $this->open('teaching');
@@ -152,15 +184,6 @@ final class StudySession extends Component
         $this->act(fn () => $this->sessions->countAway($this->principal(), $this->sessionId), 'The time away is counted as study.');
     }
 
-    /** The topic's status, right from the session. */
-    public function report(string $status): void
-    {
-        $session = $this->sessions->find($this->principal(), $this->sessionId);
-        if ($session->topicId !== null) {
-            $this->topics->report($this->principal(), $session->topicId, $status);
-        }
-    }
-
     public function confirmEnd(): void
     {
         $this->open('end');
@@ -174,6 +197,12 @@ final class StudySession extends Component
     public function save(): void
     {
         $by = $this->principal();
+        if ($this->mode === 'material') {
+            $this->close();
+            $this->dispatch('session-dialog-close');
+
+            return;
+        }
         if ($this->mode === 'delete') {
             $this->sessions->delete($by, $this->sessionId);
             $this->dispatch('session-changed');
@@ -238,6 +267,7 @@ final class StudySession extends Component
     }
 
     #[On('session-changed')]
+    #[On('questions-changed')]
     public function refresh(): void {}
 
     public function render(): View
@@ -264,14 +294,15 @@ final class StudySession extends Component
                 // Deleted since.
             }
         }
-        // The module's notes and files, and any chosen from elsewhere in the course; the rest behind "Other notes and files".
+        // The module's notes and files, and any chosen from elsewhere in the course; the rest under "Elsewhere" in the panel.
         [$material, $other] = [[], []];
         $items = [];
+        $fileColours = ['pdf' => 'red', 'document' => 'blue', 'slides' => 'orange', 'spreadsheet' => 'green', 'text' => 'pink', 'image' => 'purple'];
         foreach ($this->notes->list($by, $this->workspaceId) as $note) {
-            $items[] = ['key' => "note:{$note->id}", 'icon' => 'file-text', 'name' => $note->displayTitle(), 'url' => route('workspaces.notes.show', [$this->workspaceId, $note->id]), 'type' => 'Note', 'module' => $note->moduleId];
+            $items[] = ['key' => "note:{$note->id}", 'icon' => 'file-text', 'colour' => 'blue', 'name' => $note->displayTitle(), 'url' => route('workspaces.notes.show', [$this->workspaceId, $note->id]), 'type' => 'Note', 'module' => $note->moduleId];
         }
         foreach ($this->files->list($by, $this->workspaceId) as $file) {
-            $items[] = ['key' => "file:{$file->id}", 'icon' => $file->icon(), 'name' => $file->fileName(), 'url' => route('workspaces.files.show', [$this->workspaceId, $file->id]), 'type' => $file->typeLabel(), 'module' => $file->moduleId];
+            $items[] = ['key' => "file:{$file->id}", 'icon' => $file->icon(), 'colour' => $fileColours[$file->kind] ?? 'teal', 'name' => $file->fileName(), 'url' => route('workspaces.files.show', [$this->workspaceId, $file->id]), 'type' => $file->typeLabel(), 'module' => $file->moduleId];
         }
         foreach ($items as $item) {
             if (($module !== null && $item['module'] === $module->id) || $session->uses($item['key'])) {
@@ -287,6 +318,10 @@ final class StudySession extends Component
             'module' => $module,
             'material' => $material,
             'otherMaterial' => $other,
+            'openQuestions' => count(array_filter(
+                $module !== null ? $this->questions->list($by, $this->workspaceId, $module->id) : $this->questions->list($by, $this->workspaceId, null, $this->sessionId),
+                fn ($question) => $question->status !== 'answered',
+            )),
             'briefing' => $this->mode === 'briefing' ? $this->briefings->forSession($by, $this->sessionId) : null,
             'timeline' => $this->timeline($session, $time),
             'started' => Carbon::parse($session->startedAt)->setTimezone($zone),

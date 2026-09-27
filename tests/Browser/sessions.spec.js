@@ -60,18 +60,24 @@ test('a session is started from the Overview, and its clock runs, pauses, breaks
     await end.getByRole('button', { name: 'End session' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Session ended.' })).toBeVisible();
     await expect(pill(page)).toHaveCount(0);
-    await expect(page.getByRole('group', { name: 'Status of Normalisation' }).getByRole('button', { name: 'Understood' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('h1 + .status-chip')).toHaveText('Understood');
+    await expect(page.getByRole('region', { name: 'What happened' })).toContainText('Studied');
 });
 
-test('the session page shows what happened, and the top bar follows it on every page', async ({ page }) => {
+test('the session page is an open space: a slim clock, what to do as tiles, and the top bar follows it on every page', async ({ page }) => {
     await page.setViewportSize(desktop);
     const student = await openSession(page);
-    const timeline = page.getByRole('region', { name: 'What happened' });
-    await expect(timeline.getByRole('listitem')).toHaveCount(3);
-    await expect(timeline.getByRole('listitem').nth(0)).toContainText('25 min');
-    await expect(timeline.getByRole('listitem').nth(1)).toContainText('Break');
-    await expect(timeline.getByRole('listitem').nth(2)).toContainText('now');
-    await expect(page.getByRole('region', { name: 'Material · Week 1: Relational model' })).toContainText('Lecture 3: joins');
+    const tiles = page.getByRole('region', { name: 'What to do' });
+    for (const name of ['Study with an AI', 'Save from the chat', 'Ask a question', 'New flashcard', 'Write a note', 'Notes & files']) {
+        await expect(tiles.getByRole('button', { name, exact: true })).toBeVisible();
+    }
+    await expect(page.getByRole('region', { name: 'What happened' })).toHaveCount(0);
+    expect((await page.locator('.clock-bar').boundingBox()).height).toBeLessThan(120);
+
+    await tiles.getByRole('button', { name: 'Notes & files', exact: true }).click();
+    await expect(page.locator('#session-dialog').getByRole('list', { name: 'In Week 1: Relational model' })).toContainText('Lecture 3: joins');
+    await page.locator('#session-dialog').getByRole('button', { name: 'Done' }).click();
+    await page.locator('#session-dialog').waitFor({ state: 'hidden' });
 
     await page.goto(`/workspaces/${student.workspace}/progress`);
     await expect(pill(page)).toBeVisible();

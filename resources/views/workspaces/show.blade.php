@@ -19,9 +19,6 @@
 @endphp
 <x-layouts.app :title="$section === 'overview' ? $workspace->name : $label.' · '.$workspace->name" :workspace="$workspace" :section="$section">
     <div class="mx-auto max-w-6xl space-y-6">
-        @if (session('workspace-notice'))
-            <x-alert tone="success">{{ session('workspace-notice') }}</x-alert>
-        @endif
         @if ($workspace->archived())
             <x-alert tone="warning" title="This workspace is archived">
                 <button type="button" class="font-semibold underline underline-offset-2" x-data x-on:click="Livewire.dispatch('workspace-restore')">Restore it</button>

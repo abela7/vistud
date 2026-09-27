@@ -300,7 +300,7 @@ test('a draft of a note deleted elsewhere is removed before it could be sent', a
     await expect(other.getByRole('status').filter({ hasText: 'is deleted.' })).toBeVisible();
 
     await page.goto(`/workspaces/${note.workspace}/notes`);
-    await expect(page.locator('[data-app-notice]')).toContainText('deleted on another device were removed from this one');
+    await expect(page.locator('[data-toasts]')).toContainText('deleted on another device were removed from this one');
     const left = await page.evaluate(async (account) => {
         const db = await new Promise((resolve) => { const r = indexedDB.open(`vistud-drafts-${account}`); r.onsuccess = () => resolve(r.result); });
         const all = await new Promise((resolve) => { const r = db.transaction('drafts').objectStore('drafts').getAll(); r.onsuccess = () => resolve(r.result); });

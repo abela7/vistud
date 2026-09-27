@@ -1,6 +1,8 @@
 {{--
     Questions (App\Livewire\Workspaces\QuestionBoard): one line to write one
     down, a filter by status, the list, and the side panel for one question.
+    Quiet (a module's page, a study session): no line, and nothing at all
+    until there is a question; the page's own button opens the panel.
 --}}
 @php
     use App\Study\Questions;
@@ -11,67 +13,73 @@
     $tabs = ['all' => 'All'] + Questions::STATUSES;
     $uid = $this->getId();
 @endphp
-<section class="space-y-3" aria-labelledby="questions-{{ $uid }}">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-        @if ($level === 3)
-            <h3 id="questions-{{ $uid }}" class="section-title">Questions</h3>
-        @else
-            <h2 id="questions-{{ $uid }}" class="section-title">Questions</h2>
-        @endif
-        @if ($counts['all'] > 0)
-            <div class="segmented segmented-sm" role="group" aria-label="Show questions">
-                @foreach ($tabs as $key => $word)
-                    <button type="button" @class(['segmented-option', 'is-current' => $filter === $key]) wire:click="show('{{ $key }}')" aria-pressed="{{ $filter === $key ? 'true' : 'false' }}">
-                        {{ $word }} <span class="tab-count">{{ $counts[$key] }}</span>
-                    </button>
-                @endforeach
+<div>
+    <x-toast :message="$notice" />
+    @if (! $quiet || $counts['all'] > 0)
+        <section class="space-y-3" aria-labelledby="questions-{{ $uid }}">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    @if ($level === 3)
+                        <h3 id="questions-{{ $uid }}" class="section-title">Questions</h3>
+                    @else
+                        <h2 id="questions-{{ $uid }}" class="section-title">Questions</h2>
+                    @endif
+                    @if ($quiet)
+                        <button type="button" class="text-link text-sm" wire:click="create">Ask another</button>
+                    @endif
+                </div>
+                @if ($counts['all'] > 0)
+                    <div class="segmented segmented-sm" role="group" aria-label="Show questions">
+                        @foreach ($tabs as $key => $word)
+                            <button type="button" @class(['segmented-option', 'is-current' => $filter === $key]) wire:click="show('{{ $key }}')" aria-pressed="{{ $filter === $key ? 'true' : 'false' }}">
+                                {{ $word }} <span class="tab-count">{{ $counts[$key] }}</span>
+                            </button>
+                        @endforeach
+                    </div>
+                @endif
             </div>
-        @endif
-    </div>
 
-    <form wire:submit="add" class="question-add" novalidate>
-        <label for="question-add-{{ $uid }}" class="sr-only">A question you don't get yet</label>
-        <span class="item-icon ws-colour-blue" aria-hidden="true"><x-icon name="circle-help" class="size-5" /></span>
-        <input id="question-add-{{ $uid }}" type="text" class="question-add-input" wire:model="text" maxlength="{{ Questions::MAX_TEXT }}" placeholder="What don't you get? Write it down…" autocomplete="off">
-        <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="add" busy-label="Adding…">Add</x-button>
-    </form>
-    @error('text') <p class="field-error">{{ $message }}</p> @enderror
+            @unless ($quiet)
+                <form wire:submit="add" class="question-add" novalidate>
+                    <label for="question-add-{{ $uid }}" class="sr-only">A question you don't get yet</label>
+                    <span class="item-icon ws-colour-blue" aria-hidden="true"><x-icon name="circle-help" class="size-5" /></span>
+                    <input id="question-add-{{ $uid }}" type="text" class="question-add-input" wire:model="text" maxlength="{{ Questions::MAX_TEXT }}" placeholder="What don't you get? Write it down…" autocomplete="off">
+                    <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="add" busy-label="Adding…">Add</x-button>
+                </form>
+                @error('text') <p class="field-error">{{ $message }}</p> @enderror
+            @endunless
 
-    <div role="status" aria-live="polite" class="empty:hidden">
-        @if ($notice)
-            <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
-        @endif
-    </div>
-
-    @if ($shown !== [])
-        <ul class="item-list" role="list" aria-label="Questions">
-            @foreach ($shown as $q)
-                @php [$icon, $colour] = $look[$q->status]; @endphp
-                <li class="item-row" wire:key="question-{{ $q->id }}">
-                    <span class="item-icon ws-colour-{{ $colour }}" aria-hidden="true"><x-icon :name="$icon" class="size-5" /></span>
-                    <span class="min-w-0 flex-1">
-                        <button type="button" class="tile-link question-text" wire:click="open('{{ $q->id }}')">{{ $q->text }}</button>
-                        <span class="item-meta">{{ implode(' · ', array_filter([
-                            $q->statusLabel(),
-                            $q->topicId !== null ? ($topicNames[$q->topicId] ?? null) : null,
-                            $q->askTeacher ? 'for the teacher' : null,
-                            Carbon::parse($q->askedAt)->diffForHumans(),
-                        ])) }}</span>
-                        @if ($q->status === 'answered' && $q->answer)
-                            <span class="question-answer">{{ Str::limit($q->answer, 160) }}</span>
-                        @endif
-                    </span>
-                    @include('livewire.workspaces.partials.row-menu', ['id' => 'q-'.$q->id, 'label' => Str::limit($q->text, 60), 'items' => array_values(array_filter([
-                        $q->status !== 'answered' ? ['Answered', 'circle-check', "open('{$q->id}', 'answered')", false] : null,
-                        $q->status !== 'stuck' ? ['Stuck', 'circle-alert', "mark('{$q->id}', 'stuck')", false] : null,
-                        $q->status !== 'pending' ? ['Pending', 'circle-dot', "mark('{$q->id}', 'pending')", false] : null,
-                        ['Open', 'pencil', "open('{$q->id}')", false],
-                    ]))])
-                </li>
-            @endforeach
-        </ul>
-    @elseif ($counts['all'] > 0)
-        <p class="text-sm text-fg-muted">None {{ Str::lower($tabs[$filter]) }}.</p>
+            @if ($shown !== [])
+                <ul class="item-list" role="list" aria-label="Questions">
+                    @foreach ($shown as $q)
+                        @php [$icon, $colour] = $look[$q->status]; @endphp
+                        <li class="item-row" wire:key="question-{{ $q->id }}">
+                            <span class="item-icon ws-colour-{{ $colour }}" aria-hidden="true"><x-icon :name="$icon" class="size-5" /></span>
+                            <span class="min-w-0 flex-1">
+                                <button type="button" class="tile-link question-text" wire:click="open('{{ $q->id }}')">{{ $q->text }}</button>
+                                <span class="item-meta">{{ implode(' · ', array_filter([
+                                    $q->statusLabel(),
+                                    $q->topicId !== null ? ($topicNames[$q->topicId] ?? null) : null,
+                                    $q->askTeacher ? 'for the teacher' : null,
+                                    Carbon::parse($q->askedAt)->diffForHumans(),
+                                ])) }}</span>
+                                @if ($q->status === 'answered' && $q->answer)
+                                    <span class="question-answer">{{ Str::limit($q->answer, 160) }}</span>
+                                @endif
+                            </span>
+                            @include('livewire.workspaces.partials.row-menu', ['id' => 'q-'.$q->id, 'label' => Str::limit($q->text, 60), 'items' => array_values(array_filter([
+                                $q->status !== 'answered' ? ['Answered', 'circle-check', "open('{$q->id}', 'answered')", false] : null,
+                                $q->status !== 'stuck' ? ['Stuck', 'circle-alert', "mark('{$q->id}', 'stuck')", false] : null,
+                                $q->status !== 'pending' ? ['Pending', 'circle-dot', "mark('{$q->id}', 'pending')", false] : null,
+                                ['Open', 'pencil', "open('{$q->id}')", false],
+                            ]))])
+                        </li>
+                    @endforeach
+                </ul>
+            @elseif ($counts['all'] > 0)
+                <p class="text-sm text-fg-muted">None {{ Str::lower($tabs[$filter]) }}.</p>
+            @endif
+        </section>
     @endif
 
     <dialog id="question-dialog" class="modal" aria-labelledby="question-dialog-title"
@@ -141,4 +149,4 @@
             </form>
         @endif
     </dialog>
-</section>
+</div>

@@ -23,8 +23,14 @@ async function openSession(page) {
 }
 
 async function openBriefing(page) {
-    await page.getByRole('button', { name: 'Briefing', exact: true }).click();
-    await dialog(page).getByRole('heading', { name: 'Briefing for the AI' }).waitFor();
+    await page.getByRole('button', { name: 'Study with an AI', exact: true }).click();
+    await dialog(page).getByRole('heading', { name: 'Study with an AI' }).waitFor();
+}
+
+async function openTeaching(page) {
+    await page.getByRole('button', { name: 'Actions for this session' }).click();
+    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'How the AI teaches' }).click();
+    await dialog(page).getByLabel('How to teach').waitFor();
 }
 
 test('the briefing is copied and downloaded, with the note the student chose', async ({ page, context }) => {
@@ -32,11 +38,14 @@ test('the briefing is copied and downloaded, with the note the student chose', a
     await page.setViewportSize(desktop);
     await openSession(page);
 
-    const material = page.getByRole('region', { name: 'Material · Week 1: Relational model' });
-    const use = material.getByRole('button', { name: 'Use Lecture 3: joins in the briefing' });
+    await page.getByRole('button', { name: 'Notes & files', exact: true }).click();
+    const use = dialog(page).getByRole('button', { name: 'Use Lecture 3: joins in the briefing' });
     await expect(use).toHaveAttribute('aria-pressed', 'false');
     await use.click();
     await expect(use).toHaveAttribute('aria-pressed', 'true');
+    await dialog(page).getByRole('button', { name: 'Done' }).click();
+    await dialog(page).waitFor({ state: 'hidden' });
+    await expect(page.getByRole('button', { name: 'Notes & files', exact: true })).toHaveAccessibleDescription('1 for the AI');
 
     await openBriefing(page);
     const text = dialog(page).getByLabel('Briefing text');
@@ -66,12 +75,12 @@ test('how the AI teaches is chosen at the start and changed during the session',
     await start.getByRole('button', { name: 'Start' }).click();
     await page.getByRole('heading', { level: 1, name: 'Study session' }).waitFor();
 
-    const card = page.getByRole('region', { name: 'How the AI teaches' });
-    await expect(card).toContainText('Socratic');
-    await card.getByRole('button', { name: 'Change how the AI teaches' }).click();
+    await openTeaching(page);
+    await expect(dialog(page).getByLabel('How to teach')).toHaveValue('socratic');
     await dialog(page).getByLabel('Quiz level').selectOption({ label: 'Exam level' });
     await dialog(page).getByRole('button', { name: 'Save' }).click();
-    await expect(card).toContainText('Exam level');
+    await expect(page.getByRole('status').filter({ hasText: 'The briefing now asks for this way of teaching.' })).toBeVisible();
+    await dialog(page).waitFor({ state: 'hidden' });
     await openBriefing(page);
     await expect(dialog(page).getByLabel('Briefing text')).toContainText('Questions are exam-style');
 });
@@ -85,8 +94,8 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await openBriefing(page);
         states['briefing dialog'] = await foreignColours(page);
         await page.keyboard.press('Escape');
-        await page.getByRole('button', { name: 'Change how the AI teaches' }).click();
-        await dialog(page).getByLabel('How to teach').waitFor();
+        await dialog(page).waitFor({ state: 'hidden' });
+        await openTeaching(page);
         states['teaching dialog'] = await foreignColours(page);
         for (const [state, colours] of Object.entries(states)) {
             expect(colours, `${state}: colours not from a token`).toEqual([]);
@@ -102,8 +111,8 @@ for (const theme of THEMES) {
         await openBriefing(page);
         expect(await analyse(page)).toEqual([]);
         await page.keyboard.press('Escape');
-        await page.getByRole('button', { name: 'Change how the AI teaches' }).click();
-        await dialog(page).getByLabel('How to teach').waitFor();
+        await dialog(page).waitFor({ state: 'hidden' });
+        await openTeaching(page);
         expect(await analyse(page)).toEqual([]);
     });
 }

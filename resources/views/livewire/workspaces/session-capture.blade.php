@@ -20,9 +20,7 @@
 @endphp
 <div>
     <div role="status" aria-live="polite" class="space-y-2">
-        @if ($notice)
-            <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
-        @endif
+        <x-toast :message="$notice" />
         @if ($problems !== [])
             <x-alert tone="warning" :live="false" title="Some things weren't saved">
                 <ul class="list-disc space-y-1 pl-5">

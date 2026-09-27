@@ -3,6 +3,7 @@ import './forms.js';
 import './shell.js';
 import './invitation.js';
 import './session.js';
+import { toast } from './toasts.js';
 
 // The note editor is only loaded on a note's page.
 const noteEditor = document.querySelector('[data-note-editor]');
@@ -29,16 +30,6 @@ if (account) {
         const { purgeGone } = await import('./note/sync.js');
         const purged = await purgeGone(account, drafts);
         drafts.close();
-        if (purged > 0) notice(`Unsaved changes to ${purged === 1 ? 'a note' : `${purged} notes`} deleted on another device were removed from this one.`);
+        if (purged > 0) toast(`Unsaved changes to ${purged === 1 ? 'a note' : `${purged} notes`} deleted on another device were removed from this one.`, 'info');
     }).catch(() => {});
-}
-
-/** A short message in the corner, read out by screen readers. */
-function notice(text) {
-    const box = document.querySelector('[data-app-notice]');
-    if (!box) return;
-    box.querySelector('[data-app-notice-text]').textContent = text;
-    document.querySelector('[data-app-notice-live]').textContent = text;
-    box.hidden = false;
-    box.querySelector('[data-app-notice-close]').onclick = () => { box.hidden = true; };
 }

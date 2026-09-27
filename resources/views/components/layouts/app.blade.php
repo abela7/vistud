@@ -172,14 +172,18 @@
                 </div>
             </div>
         </dialog>
-
-        {{-- A short message from the page's own scripts, like a draft removed because its note was deleted. --}}
-        <div class="app-notice" data-app-notice hidden>
-            <x-icon name="info" class="size-5 shrink-0" />
-            <p class="min-w-0 flex-1" data-app-notice-text></p>
-            <button type="button" class="topbar-button -my-1 shrink-0" aria-label="Dismiss" data-app-notice-close><x-icon name="x" class="size-4" /></button>
-        </div>
-        <p class="sr-only" role="status" data-app-notice-live></p>
     @endif
+
+    {{-- Passing notices (resources/js/toasts.js): each closes itself after a few seconds, or with its ×. --}}
+    <div class="toast-stack" data-toasts role="status" aria-live="polite"></div>
+    <template data-toast-template>
+        <div class="toast">
+            <span class="toast-icon" data-toast-icon="success"><x-icon name="circle-check" class="size-5" /></span>
+            <span class="toast-icon" data-toast-icon="info"><x-icon name="info" class="size-5" /></span>
+            <p class="toast-text" data-toast-text></p>
+            <button type="button" class="toast-close" aria-label="Dismiss" data-toast-close><x-icon name="x" class="size-4" /></button>
+        </div>
+    </template>
+    <x-toast :message="session('workspace-notice')" />
 </body>
 </html>

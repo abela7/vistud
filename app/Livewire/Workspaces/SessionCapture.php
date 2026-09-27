@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Study\Sessions;
 use App\Study\Topics;
@@ -21,6 +22,8 @@ use Livewire\Component;
  */
 final class SessionCapture extends Component
 {
+    use Notices;
+
     #[Locked]
     public string $workspaceId;
 
@@ -30,9 +33,6 @@ final class SessionCapture extends Component
     /** paste or review, or null when the dialog is closed. */
     #[Locked]
     public ?string $step = null;
-
-    #[Locked]
-    public ?string $notice = null;
 
     /** @var list<string> the items that couldn't be saved, and why */
     #[Locked]

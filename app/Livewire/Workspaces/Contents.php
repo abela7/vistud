@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
@@ -37,7 +38,7 @@ use Livewire\WithFileUploads;
  */
 final class Contents extends Component
 {
-    use WithFileUploads;
+    use Notices, WithFileUploads;
 
     #[Locked]
     public string $workspaceId;
@@ -90,9 +91,6 @@ final class Contents extends Component
     /** The files that couldn't be uploaded, and why: [name, reason]. */
     #[Locked]
     public array $uploadErrors = [];
-
-    #[Locked]
-    public ?string $notice = null;
 
     #[Locked]
     public ?string $error = null;

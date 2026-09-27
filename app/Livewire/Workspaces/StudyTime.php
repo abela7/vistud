@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Livewire\Concerns\PomodoroForm;
 use App\Livewire\Concerns\TeachingForm;
 use App\Platform\Access\Principal;
@@ -30,7 +31,7 @@ use Livewire\Component;
  */
 final class StudyTime extends Component
 {
-    use PomodoroForm, TeachingForm;
+    use Notices, PomodoroForm, TeachingForm;
 
     #[Locked]
     public string $workspaceId;
@@ -38,9 +39,6 @@ final class StudyTime extends Component
     /** start or log: the dialog that's open, or null. */
     #[Locked]
     public ?string $mode = null;
-
-    #[Locked]
-    public ?string $notice = null;
 
     /** The Overview's tiles: the streak, this week, the cards due. */
     #[Locked]

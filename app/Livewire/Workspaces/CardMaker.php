@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Study\CardMaker as Maker;
@@ -22,15 +23,14 @@ use Livewire\Component;
  */
 final class CardMaker extends Component
 {
+    use Notices;
+
     #[Locked]
     public string $workspaceId;
 
     /** prompt or review, or null when the dialog is closed. */
     #[Locked]
     public ?string $step = null;
-
-    #[Locked]
-    public ?string $notice = null;
 
     /** @var list<string> the cards that couldn't be saved, and why */
     #[Locked]

@@ -8,6 +8,7 @@ use App\Identity\AccountStatus;
 use App\Identity\PrincipalFactory;
 use App\Identity\Roles;
 use App\Identity\TwoFactorReset;
+use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Access\Role;
 use App\Platform\Errors\Conflict;
@@ -28,6 +29,8 @@ use Livewire\Component;
  */
 final class Index extends Component
 {
+    use Notices;
+
     public const ACTIONS = ['suspend', 'reactivate', 'grant-admin', 'revoke-admin', 'reset-two-factor'];
 
     private const PAGE_SIZE = 50;
@@ -45,9 +48,6 @@ final class Index extends Component
 
     #[Locked]
     public ?string $pendingAction = null;
-
-    #[Locked]
-    public ?string $notice = null;
 
     #[Locked]
     public ?string $error = null;

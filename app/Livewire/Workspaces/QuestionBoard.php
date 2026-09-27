@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
@@ -21,10 +22,13 @@ use Livewire\Component;
  * the answer. On a module's page it holds the module's questions; in a
  * study session, the session's module's (or, with none, the session's);
  * in Progress, all of them. `question-new` (optionally with a topic) opens
- * the panel for a new one.
+ * the panel for a new one. Quiet, it has no line and shows nothing until
+ * there is a question: the page has its own button for a new one.
  */
 final class QuestionBoard extends Component
 {
+    use Notices;
+
     #[Locked]
     public string $workspaceId;
 
@@ -40,12 +44,13 @@ final class QuestionBoard extends Component
     #[Locked]
     public int $level = 2;
 
+    /** No line to write one down, and nothing shown until there is a question. */
+    #[Locked]
+    public bool $quiet = false;
+
     /** The question open in the panel, 'new' for a new one, or null when it's closed. */
     #[Locked]
     public ?string $editing = null;
-
-    #[Locked]
-    public ?string $notice = null;
 
     public string $filter = 'all';
 
@@ -75,9 +80,9 @@ final class QuestionBoard extends Component
         $this->principals = $principals;
     }
 
-    public function mount(string $workspaceId, ?string $moduleId = null, ?string $sessionId = null, int $level = 2): void
+    public function mount(string $workspaceId, ?string $moduleId = null, ?string $sessionId = null, int $level = 2, bool $quiet = false): void
     {
-        [$this->workspaceId, $this->moduleId, $this->sessionId, $this->level] = [$workspaceId, $moduleId, $sessionId, in_array($level, [2, 3], true) ? $level : 2];
+        [$this->workspaceId, $this->moduleId, $this->sessionId, $this->level, $this->quiet] = [$workspaceId, $moduleId, $sessionId, in_array($level, [2, 3], true) ? $level : 2, $quiet];
     }
 
     /** Writes the one-line question down, pending. */

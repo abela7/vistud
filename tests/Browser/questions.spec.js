@@ -8,7 +8,6 @@ const desktop = { width: 1440, height: 900 };
 const phone = { width: 390, height: 844 };
 const analyse = async (page) => (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
     .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
-const line = (page) => page.getByPlaceholder("What don't you get? Write it down…");
 const panel = (page) => page.locator('#question-dialog');
 
 test.use({ reducedMotion: 'reduce' });
@@ -23,13 +22,19 @@ async function openSession(page) {
     return student;
 }
 
+async function ask(page, text) {
+    await page.getByRole('button', { name: 'Ask a question', exact: true }).click();
+    await panel(page).getByLabel('Question', { exact: true }).fill(text);
+    await panel(page).getByRole('button', { name: 'Save' }).click();
+    await panel(page).waitFor({ state: 'hidden' });
+    await expect(page.getByRole('list', { name: 'Questions' })).toContainText(text);
+}
+
 async function withQuestions(page) {
     const student = await openSession(page);
-    for (const text of ['Why does a left join keep rows with no match?', 'What is the difference between a key and an index?']) {
-        await line(page).fill(text);
-        await line(page).press('Enter');
-        await expect(page.getByRole('list', { name: 'Questions' })).toContainText(text);
-    }
+    await ask(page, 'Why does a left join keep rows with no match?');
+    await ask(page, 'What is the difference between a key and an index?');
+    await expect(page.getByRole('button', { name: 'Ask a question', exact: true })).toHaveAccessibleDescription('3 questions open');
     return student;
 }
 
@@ -92,4 +97,19 @@ test('questions never scroll sideways at 320 px, even with 200% text', async ({ 
     await page.getByRole('list', { name: 'Questions' }).getByRole('button', { name: 'Why does a left join keep rows with no match?', exact: true }).click();
     await panel(page).getByLabel('Question', { exact: true }).waitFor();
     expect(await panel(page).evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+});
+
+test("a module page's New adds a question, in the side panel", async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const student = await openSession(page);
+    await page.goto(`/workspaces/${student.workspace}/modules`);
+    await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
+    await page.waitForLoadState('load');
+    await expect(page.getByPlaceholder("What don't you get? Write it down…")).toHaveCount(0);
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#new-menu').getByRole('button', { name: 'Question' }).click();
+    await panel(page).getByLabel('Question', { exact: true }).fill('When is a view better than a table?');
+    await panel(page).getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('list', { name: 'Questions' })).toContainText('When is a view better than a table?');
 });

@@ -25,9 +25,7 @@
 @endphp
 <div class="space-y-4">
     <div role="status" aria-live="polite" class="empty:hidden">
-        @if ($notice)
-            <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
-        @endif
+        <x-toast :message="$notice" />
     </div>
 
     <ol class="module-grid" wire:sort="sortModules" role="list" aria-label="Modules">

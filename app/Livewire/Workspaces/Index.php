@@ -3,16 +3,15 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
-use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /** My workspaces: the student's workspaces as cards, and the archived ones to restore. */
 final class Index extends Component
 {
-    #[Locked]
-    public ?string $notice = null;
+    use Notices;
 
     private Workspaces $workspaces;
 

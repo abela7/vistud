@@ -626,7 +626,7 @@ test('overview: the rhythm, what to continue, coming up, and its dialogs', async
     await page.screenshot({ path: out('overview-desktop-vistud-light-instructions') });
 });
 
-test('session: the clock, what happened, the end dialog, and starting one', async ({ page }) => {
+test('session: an open space with a slim clock, what to do next, the end dialog, and starting one', async ({ page }) => {
     const student = makeStudentWithSession();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
@@ -664,11 +664,11 @@ test('questions: the board in a session and the side panel', async ({ page }) =>
     await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
-    const line = page.getByPlaceholder("What don't you get? Write it down…");
     const questions = page.getByRole('list', { name: 'Questions' });
     for (const text of ['Why does a left join keep rows with no match?', 'What is the difference between a key and an index?', 'When would I use a full outer join?']) {
-        await line.fill(text);
-        await line.press('Enter');
+        await page.getByRole('button', { name: 'Ask a question', exact: true }).click();
+        await page.locator('#question-dialog').getByLabel('Question', { exact: true }).fill(text);
+        await page.locator('#question-dialog').getByRole('button', { name: 'Save' }).click();
         await questions.getByRole('button', { name: text, exact: true }).waitFor();
     }
     await page.getByRole('button', { name: 'Actions for What is the difference between a key and an index?' }).click();
@@ -697,6 +697,29 @@ test('questions: the board in a session and the side panel', async ({ page }) =>
     await page.screenshot({ path: out('questions-mobile-vistud-light-panel') });
 });
 
+test('toast: a passing notice on a desktop and a phone', async ({ page }) => {
+    const student = makeStudentWithSession();
+    await page.setViewportSize(sizes.desktop);
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}`);
+    await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
+    await page.waitForLoadState('load');
+    for (const [size, viewport] of Object.entries(sizes)) {
+        for (const theme of ['vistud-light', 'vistud-dark']) {
+            await page.setViewportSize(viewport);
+            await useTheme(page, theme);
+            await page.evaluate(() => document.querySelectorAll('.toast').forEach((t) => t.remove()));
+            await page.getByRole('button', { name: 'More for Databases' }).click();
+            await page.getByRole('button', { name: 'Instructions for the AI' }).click();
+            await page.locator('#instructions-dialog').getByLabel(/About you/).fill(`Explain with everyday examples (${size}, ${theme}).`);
+            await page.locator('#instructions-dialog').getByRole('button', { name: 'Save' }).click();
+            await page.locator('.toast').hover();
+            await page.evaluate(() => document.activeElement?.blur());
+            await page.screenshot({ path: out(`toast-${size}-${theme}`) });
+        }
+    }
+});
+
 test('pomodoro: the countdown ring, a break, and the clock choice', async ({ page }) => {
     const student = makeStudentWithPomodoro(118);
     await page.setViewportSize(sizes.desktop);
@@ -719,7 +742,8 @@ test('pomodoro: the countdown ring, a break, and the clock choice', async ({ pag
     await page.evaluate(() => document.activeElement?.blur());
     await page.screenshot({ path: out('pomodoro-desktop-vistud-light-break') });
 
-    await page.getByRole('button', { name: 'Change the Pomodoro settings' }).click();
+    await page.getByRole('button', { name: 'Actions for this session' }).click();
+    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Pomodoro settings' }).click();
     await page.locator('#session-dialog').getByLabel('Rhythm').selectOption('custom');
     await page.locator('#session-dialog').getByLabel('Focus (min)').waitFor();
     await page.screenshot({ path: out('pomodoro-desktop-vistud-light-settings') });
@@ -733,26 +757,33 @@ test('briefing: the dialog, how the AI teaches, and the start options', async ({
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     await useTheme(page, 'vistud-light');
+    await page.getByRole('button', { name: 'Notes & files', exact: true }).click();
     await page.getByRole('button', { name: 'Use Lecture 3: joins in the briefing' }).click();
     await page.getByRole('button', { name: 'Use Lecture 3: joins in the briefing' }).and(page.locator('[aria-pressed="true"]')).waitFor();
     await page.evaluate(() => document.activeElement?.blur());
-    await page.screenshot({ path: out('briefing-session-desktop-vistud-light'), fullPage: true });
+    await page.screenshot({ path: out('briefing-material-desktop-vistud-light') });
+    await page.setViewportSize(sizes.mobile);
+    await page.screenshot({ path: out('briefing-material-mobile-vistud-light') });
+    await page.setViewportSize(sizes.desktop);
+    await page.locator('#session-dialog').getByRole('button', { name: 'Done' }).click();
+    await page.locator('#session-dialog').waitFor({ state: 'hidden' });
 
     for (const [size, viewport] of Object.entries(sizes)) {
         for (const theme of ['vistud-light', 'vistud-dark']) {
             await page.setViewportSize(viewport);
             await useTheme(page, theme);
-            await page.getByRole('button', { name: 'Briefing', exact: true }).click();
-            await page.locator('#session-dialog').getByRole('heading', { name: 'Briefing for the AI' }).waitFor();
+            await page.getByRole('button', { name: 'Study with an AI', exact: true }).click();
+            await page.locator('#session-dialog').getByRole('heading', { name: 'Study with an AI' }).waitFor();
             await page.screenshot({ path: out(`briefing-${size}-${theme}`) });
             await page.keyboard.press('Escape');
-            await page.locator('#session-dialog').getByRole('heading', { name: 'Briefing for the AI' }).waitFor({ state: 'detached' });
+            await page.locator('#session-dialog').getByRole('heading', { name: 'Study with an AI' }).waitFor({ state: 'detached' });
         }
     }
 
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
-    await page.getByRole('button', { name: 'Change how the AI teaches' }).click();
+    await page.getByRole('button', { name: 'Actions for this session' }).click();
+    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'How the AI teaches' }).click();
     await page.locator('#session-dialog').getByLabel('How to teach').selectOption({ label: 'Socratic' });
     await page.screenshot({ path: out('briefing-teaching-desktop-vistud-light') });
     await page.keyboard.press('Escape');

@@ -4,9 +4,7 @@
 --}}
 <div>
     <div role="status" aria-live="polite" class="empty:hidden">
-        @if ($notice)
-            <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
-        @endif
+        <x-toast :message="$notice" />
     </div>
 
     <dialog id="instructions-dialog" class="modal" aria-labelledby="instructions-dialog-title"

@@ -7,9 +7,7 @@
 @endphp
 <div class="space-y-8">
     <div role="status" aria-live="polite">
-        @if ($notice)
-            <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
-        @endif
+        <x-toast :message="$notice" />
     </div>
 
     @if ($active === [])

@@ -5,9 +5,7 @@
 @php use Illuminate\Support\Str; @endphp
 <div>
     <div role="status" aria-live="polite" class="space-y-2 empty:hidden">
-        @if ($notice)
-            <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
-        @endif
+        <x-toast :message="$notice" />
         @if ($problems !== [])
             <x-alert tone="warning" :live="false" title="Some cards weren't added">
                 <ul class="list-disc space-y-1 pl-5">

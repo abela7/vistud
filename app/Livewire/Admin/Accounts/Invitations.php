@@ -4,6 +4,7 @@ namespace App\Livewire\Admin\Accounts;
 
 use App\Identity\Invitations as InvitationService;
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
@@ -23,6 +24,8 @@ use Livewire\Component;
  */
 final class Invitations extends Component
 {
+    use Notices;
+
     public string $email = '';
 
     /** The new invitation's address, once one is issued. Never its token. */
@@ -31,9 +34,6 @@ final class Invitations extends Component
 
     #[Locked]
     public ?string $cancelling = null;
-
-    #[Locked]
-    public ?string $notice = null;
 
     /** The link, for the one render that shows it. */
     private ?string $link = null;

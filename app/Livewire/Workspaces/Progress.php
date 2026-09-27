@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
@@ -26,6 +27,8 @@ use Livewire\Component;
  */
 final class Progress extends Component
 {
+    use Notices;
+
     #[Locked]
     public string $workspaceId;
 
@@ -57,9 +60,6 @@ final class Progress extends Component
     public string $source = '';
 
     public string $locator = '';
-
-    #[Locked]
-    public ?string $notice = null;
 
     private Topics $topics;
 

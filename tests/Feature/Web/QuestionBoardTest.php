@@ -77,7 +77,8 @@ class QuestionBoardTest extends TestCase
         app(Questions::class)->ask($by, $this->databases->id, 'Asked earlier, in the module', null, $this->week1->id, 'an-earlier-session');
 
         $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$this->databases->id, $session->id]))
-            ->assertOk()->assertSee("What don't you get? Write it down…", false)->assertSee('Asked earlier, in the module');
+            ->assertOk()->assertSee('Ask a question')->assertSee('1 question open')->assertSee('Asked earlier, in the module')
+            ->assertDontSee("What don't you get? Write it down…", false);
 
         $this->board(['moduleId' => $this->week1->id, 'sessionId' => $session->id])
             ->set('text', 'What is a composite key?')->call('add')

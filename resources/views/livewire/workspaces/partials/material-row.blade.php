@@ -1,10 +1,10 @@
-{{-- A note or file ($item) of a session's material (App\Livewire\Workspaces\StudySession), with its Use toggle while the session is open. --}}
+{{-- A note or file ($item) in a session's Notes & files panel (App\Livewire\Workspaces\StudySession): open it, or Use it in the briefing while the session is open. --}}
 @php $used = $session->uses($item['key']); @endphp
-<li class="flex items-start gap-2" wire:key="material-{{ $item['key'] }}">
-    <x-icon :name="$item['icon']" class="mt-0.5 size-4 shrink-0 text-fg-muted" />
+<li class="item-row" wire:key="material-{{ $item['key'] }}">
+    <span class="item-icon ws-colour-{{ $item['colour'] }}" aria-hidden="true"><x-icon :name="$item['icon']" class="size-5" /></span>
     <span class="min-w-0 flex-1">
-        <a href="{{ $item['url'] }}" class="item-link">{{ $item['name'] }}</a>
-        <span class="block text-sm text-fg-muted">{{ $item['type'] }}</span>
+        <a href="{{ $item['url'] }}" class="tile-link">{{ $item['name'] }}</a>
+        <span class="item-meta">{{ $item['type'] }}</span>
     </span>
     @if ($open)
         <button type="button" class="material-toggle" wire:click="toggleMaterial('{{ $item['key'] }}')" aria-pressed="{{ $used ? 'true' : 'false' }}">

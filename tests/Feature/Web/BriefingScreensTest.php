@@ -58,12 +58,11 @@ class BriefingScreensTest extends TestCase
     {
         $session = app(Sessions::class)->start($this->principal($this->ada), $this->databases->id);
 
-        $this->page($session->id)
-            ->assertSeeInOrder(['How the AI teaches', 'How to teach', 'Explain, then check', 'Check questions', 'After every section', 'Quiz level', 'Normal', 'Pace', 'One slide at a time'])
+        $this->page($session->id)->assertSee('How the AI teaches')
             ->call('editTeaching')->assertDispatched('session-dialog-open')->assertSet('method', 'explain')
+            ->assertSeeInOrder(['How to teach', 'Check questions', 'Quiz level', 'Pace'])
             ->set('method', 'steps')->set('checkIns', 'none')->call('save')
-            ->assertSee('The briefing now asks for this way of teaching.')
-            ->assertSeeInOrder(['How to teach', 'Step by step', 'Check questions', 'None']);
+            ->assertSee('The briefing now asks for this way of teaching.');
         $this->assertSame('steps', $this->current()->tutoring['method']);
     }
 
@@ -75,14 +74,15 @@ class BriefingScreensTest extends TestCase
         $revision = app(Notes::class)->create($by, 'workspace', $this->databases->id, 'Exam revision');
         $session = app(Sessions::class)->start($by, $this->databases->id, $joins->id);
 
-        $page = $this->page($session->id)
-            ->assertSeeInOrder(['Material · Week 1', 'Lecture 3', 'Use', 'Other notes and files (1)', 'Exam revision'])
+        $page = $this->page($session->id)->assertSee('1 in Week 1')
+            ->call('openMaterial')
+            ->assertSeeInOrder(['Notes &amp; files', 'Lecture 3', 'Use', 'Elsewhere', 'Exam revision'], false)
             ->assertSee('aria-pressed="false"', false);
 
         $page->call('toggleMaterial', "note:{$lecture->id}")->call('toggleMaterial', "note:{$revision->id}");
         $this->assertSame(["note:{$lecture->id}", "note:{$revision->id}"], $this->current()->material);
         // A note chosen from elsewhere moves up with the module's material.
-        $page->assertDontSee('Other notes and files')->assertSeeInOrder(['Lecture 3', 'Exam revision']);
+        $page->assertDontSee('Elsewhere')->assertSeeInOrder(['Lecture 3', 'Exam revision'])->assertSee('2 for the AI');
 
         $page->call('toggleMaterial', 'note:not-mine')->assertSee('That note or file no longer exists.');
     }
@@ -95,7 +95,7 @@ class BriefingScreensTest extends TestCase
 
         $this->page($session->id)->assertSee('Briefing')
             ->call('showBriefing')->assertDispatched('session-dialog-open')
-            ->assertSee('Briefing for the AI')->assertSeeText('tokens.')
+            ->assertSee('Study with an AI')->assertSeeText('tokens')
             ->assertSee('# You are the student&#039;s tutor', false)->assertSee('## This session')->assertSee('- Topic: Joins.')
             ->assertSee('Copy')->assertSee(route('workspaces.sessions.briefing', [$this->databases->id, $session->id]), false);
 
@@ -116,7 +116,8 @@ class BriefingScreensTest extends TestCase
         app(Sessions::class)->toggleMaterial($by, $session->id, "note:{$lecture->id}");
         app(Sessions::class)->end($by, $session->id);
 
-        $this->page($session->id)->assertSeeInOrder(['Lecture 3', 'Used'])->assertDontSee('toggleMaterial', false)->assertDontSee('Change how the AI teaches');
+        $this->page($session->id)->assertDontSee('How the AI teaches')->assertDontSee('Study with an AI')
+            ->call('openMaterial')->assertSeeInOrder(['Lecture 3', 'Used'])->assertDontSee('toggleMaterial', false);
         $this->assertThrows(fn () => app(Sessions::class)->toggleMaterial($by, $session->id, "note:{$lecture->id}"));
     }
 

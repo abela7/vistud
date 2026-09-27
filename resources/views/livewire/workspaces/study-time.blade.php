@@ -9,9 +9,7 @@
 @endphp
 <div @class(['contents' => ! $stats])>
     <div role="status" aria-live="polite" class="empty:hidden">
-        @if ($notice)
-            <x-alert tone="success" :live="false">{{ $notice }}</x-alert>
-        @endif
+        <x-toast :message="$notice" />
     </div>
 
     @if ($stats)

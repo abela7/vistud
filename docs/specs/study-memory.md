@@ -91,7 +91,18 @@ The clock is honest by itself, and the student's word wins (S3):
 The rules run whenever a session is read or changed, and every 10 minutes
 from the scheduler (`vistud:sessions:settle`). Durations show as "1 h 25 min";
 the running clock ticks as 0:25:13 on the session page and in the top bar on
-every page, and other open tabs follow a change straight away. A week starts
+every page, and other open tabs follow a change straight away.
+
+**The session page** is an open space to study in (the owner's review,
+2026-09-27): a slim clock bar (the state, the time, Pause, Take a break, End
+session; the Pomodoro phase in a small ring), then what to do next as tiles:
+*Study with an AI* (the briefing), *Save from the chat*, *Ask a question*,
+*New flashcard*, *Write a note* (a new note in the session's module, opened
+in the editor) and *Notes & files* (a side panel to open them or *Use* them
+in the briefing). The topic's status shows beside its name and is asked when
+the session ends. The questions, the tutor's summary and, once it has ended,
+what happened show only when there are any. How the AI teaches and the
+Pomodoro settings are in its ⋯ menu. A week starts
 on Monday in the student's time zone. The Overview shows study time this week
 and in all, and the latest sessions.
 
@@ -138,7 +149,7 @@ break.
 
 **Teaching options.** Starting a session asks how the AI should teach; the
 last choices come back next time, and they can change during the session
-(the session page's *How the AI teaches* card).
+(*How the AI teaches* in the session page's ⋯ menu, or from the briefing).
 
 | Choice | Options (default first) |
 |---|---|
@@ -208,13 +219,13 @@ session are always whole, the rest fills in by relevance, and what doesn't
 fit is counted ("… and 12 more"). A note gives at most 8,000 characters.
 The student's name and email never go into it.
 
-**Material.** On the session page, *Use* puts a note or file of the course
+**Material.** In the session page's *Notes & files* panel, *Use* puts a note or file of the course
 into the session's material: a note's text goes into the briefing, a file
 goes in by name for the student to share (the MCP server and the built-in
 chat will send its pages). With nothing chosen, the briefing lists what the
 session's module holds.
 
-**Seeing it.** *Briefing* on the session page shows exactly what the AI
+**Seeing it.** *Study with an AI* on the session page shows exactly what the AI
 receives, with *Copy* and *Download* (a `.md` file to attach). Until the
 engine and the MCP server exist, pasting it into any AI starts the tutor warm.
 

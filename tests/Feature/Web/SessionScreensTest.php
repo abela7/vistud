@@ -54,7 +54,8 @@ class SessionScreensTest extends TestCase
             ->assertOk()
             ->assertSee('<title>Study session · Databases', false)
             ->assertSeeInOrder(['Joins', 'Started Mon 5 Oct, 09:00', 'Studying', '0:00:00', 'Pause', 'Take a break', 'End session'])
-            ->assertSeeInOrder(['What happened', 'Studied', '09:00–now'])
+            ->assertSeeInOrder(['Study with an AI', 'Save from the chat', 'Ask a question', 'New flashcard', 'Write a note', 'Notes &amp; files'], false)
+            ->assertDontSee('What happened')
             ->assertSee('data-session-heartbeat', false);
 
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))->assertSee('Back to your session')->assertDontSee('Start studying');
@@ -68,7 +69,9 @@ class SessionScreensTest extends TestCase
         app(Notes::class)->create($by, 'module', $week1->id, 'Lecture 3: joins');
         $session = app(Sessions::class)->start($by, $this->databases->id, $joins->id);
 
-        $page = $this->page($session->id)->assertSeeInOrder(['Material', 'Week 1', 'Lecture 3: joins']);
+        $page = $this->page($session->id)->assertSeeInOrder(['Notes &amp; files', '1 in Week 1'], false)->assertDontSee('Lecture 3: joins')
+            ->call('openMaterial')->assertDispatched('session-dialog-open')->assertSeeInOrder(['Notes &amp; files', 'Lecture 3: joins'], false)
+            ->call('close');
         $this->travel(25)->minutes();
         $page->call('pause')->assertDispatched('session-changed')->assertSee('Paused')->assertSee('Resume');
         $this->travel(5)->minutes();
@@ -84,6 +87,18 @@ class SessionScreensTest extends TestCase
             ->assertSee('Studied 45 min, with 10 min of breaks')
             ->assertDontSee('Take a break');
         $this->assertSame('understood', app(Topics::class)->find($by, $joins->id)->status);
+    }
+
+    public function test_a_note_written_from_a_session_goes_into_its_module_and_opens(): void
+    {
+        $by = $this->principal($this->ada);
+        $week1 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 1']);
+        $session = app(Sessions::class)->start($by, $this->databases->id, null, $week1->id);
+
+        $page = $this->page($session->id)->assertSee('In Week 1')->call('newNote');
+        $note = app(Notes::class)->list($by, $this->databases->id)[0];
+        $this->assertSame($week1->id, $note->moduleId);
+        $page->assertRedirect(route('workspaces.notes.show', [$this->databases->id, $note->id]));
     }
 
     public function test_the_page_says_when_the_clock_paused_itself_and_the_time_can_be_counted_back(): void
@@ -150,7 +165,7 @@ class SessionScreensTest extends TestCase
         $this->assertEquals(['focus' => 25, 'short' => 5, 'long' => 15, 'every' => 4, 'auto' => false], $session->pomodoro);
 
         $page = $this->page($session->id)
-            ->assertSeeInOrder(['Focus 1 of 4', '25:00', '0 pomodoros', 'Pause', 'Skip to break', 'End session', '25 min focus, 5 min breaks, 15 min after every 4; you start each focus', 'Sound'])
+            ->assertSeeInOrder(['Focus 1 of 4', '25:00', '0 pomodoros', 'Pause', 'Skip to break', 'End session', 'Sound'])
             ->assertSee('data-countdown', false);
 
         $this->travel(10)->minutes();

@@ -98,14 +98,6 @@ final readonly class SessionDetails
         };
     }
 
-    /** "25 / 5 / 15 min, long break every 4" */
-    public function pomodoroWords(): string
-    {
-        $p = $this->pomodoro;
-
-        return "{$p['focus']} min focus, {$p['short']} min breaks, {$p['long']} min after every {$p['every']}";
-    }
-
     /** mm:ss, or h:mm:ss for an hour or more. */
     public static function countdown(int $seconds): string
     {

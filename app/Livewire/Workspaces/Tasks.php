@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
@@ -20,6 +21,8 @@ use Livewire\Component;
  */
 final class Tasks extends Component
 {
+    use Notices;
+
     #[Locked]
     public string $workspaceId;
 
@@ -32,9 +35,6 @@ final class Tasks extends Component
 
     #[Locked]
     public bool $showDone = false;
-
-    #[Locked]
-    public ?string $notice = null;
 
     public string $kind = 'assignment';
 

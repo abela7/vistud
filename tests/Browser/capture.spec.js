@@ -54,7 +54,7 @@ test('the tutor\'s marks are pasted, reviewed and saved where they belong', asyn
     const tutor = page.getByRole('region', { name: 'From the tutor' });
     await expect(tutor).toContainText('We covered inner and left joins.');
     await expect(tutor).toContainText('Slide 7 of 12.');
-    await expect(page.getByRole('group', { name: 'Status of Joins' }).getByRole('button', { name: 'Understood' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('h1 + .status-chip')).toHaveText('Understood');
 
     // Pasted again, everything saved is recognised; the question can still be saved.
     await review(page);

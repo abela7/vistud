@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Instructions as InstructionTexts;
@@ -19,14 +20,13 @@ use Livewire\Component;
  */
 final class Instructions extends Component
 {
+    use Notices;
+
     #[Locked]
     public string $workspaceId;
 
     #[Locked]
     public bool $editing = false;
-
-    #[Locked]
-    public ?string $notice = null;
 
     public string $me = '';
 
