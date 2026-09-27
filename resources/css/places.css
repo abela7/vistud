@@ -26,6 +26,15 @@
         outline: none;
     }
 
+    /* A tile's own menu sits above its link, and an open menu above the tiles around it. */
+    :is(.module-tile, .folder-tile, .item-row) .relative:has(> [data-menu-button]) {
+        z-index: 1;
+    }
+
+    :is(.module-tile, .folder-tile, .item-row) .relative:has(> [data-menu-button][aria-expanded='true']) {
+        z-index: 30;
+    }
+
     .tile-link:focus-visible::after {
         outline: 2px solid var(--focus-ring);
         outline-offset: 2px;

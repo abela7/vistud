@@ -63,7 +63,7 @@ test('the file page previews a PDF or an image, and offers other files as a down
 
     await week1(page).getByRole('link', { name: 'Lecture 2 - cell division.pdf' }).click();
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Lecture 2 - cell division.pdf');
-    await expect(page.getByRole('navigation', { name: 'Where this file is' })).toHaveText(/Biology\s*Week 1: Cells/);
+    await expect(page.getByRole('navigation', { name: 'Where this file is' })).toHaveText(/Modules\s*Week 1: Cells/);
     const frame = page.locator('iframe.file-preview');
     await expect(frame).toBeVisible();
     const box = await frame.boundingBox();
