@@ -399,3 +399,7 @@ Every page but Home starts with `<x-back :href :to>`: a quiet pill (arrow and th
 
 A link inside ViStud swaps the next page in without reloading (Livewire's `wire:navigate`, set on links by `resources/js/page.js`): no white flash, the next page is fetched as soon as the pointer rests on its link, and the browser's Back and Forward stay in place too. A page that takes more than a moment shows a thin line along the top in the theme's accent (`.page-loading`), hidden from screen readers. Links to a file's bytes, downloads, `target` links and anything marked `data-no-navigate` load as before. A script that sets up a page registers with `onPage()`, which runs again for each page swapped in; the chosen theme and a collapsed sidebar are put back on the new page before it is painted, and toasts stay in view across the move. The note editor saves and stops when its page is left, asking first only when its changes exist nowhere but in memory.
 
+### Icons, once (the owner's review, 2026-09-28)
+
+`<x-icon>` no longer carries each icon's drawing: it names a `<symbol>` in `/icons.svg` (`App\Appearance\Icons`), a sprite built from `resources/icons` that the browser keeps for a year; its address carries a version, so an added or redrawn icon is fetched again. The outer `<svg>` keeps `fill="none"`, the class and the accessibility attributes; the drawing settings (stroke `currentColor`, width 2, round ends) sit once on each symbol. Pages are 25–30% smaller and build about twice as fast (Progress with 32 topics: 424 KB in 364 ms before, 308 KB in 174 ms after).
+
