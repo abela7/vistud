@@ -46,7 +46,7 @@
             <div class="flex flex-wrap items-center gap-2">
                 <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
                     <x-icon name="list-checks" class="size-4" />
-                    <span x-text="isSelecting ? 'Done' : 'Select'"></span>
+                    <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
                 </button>
                 @include('livewire.workspaces.partials.new-menu', ['placeId' => $place->id, 'folders' => $isModule || $place->depth < Folders::MAX_DEPTH, 'questionUrl' => $isModule ? route('workspaces.modules.questions', [$workspaceId, $place->id, 'ask' => 1]) : null])
                 @if ($isModule)
@@ -80,7 +80,7 @@
     </div>
 
     <div role="status" aria-live="polite" class="empty:hidden">
-        <x-toast :message="$notice" />
+        <x-toast :message="$notice" :action-label="$noticeActionLabel" :action-event="$noticeActionEvent" :action-payload="$noticeActionPayload" />
     </div>
 
     <x-selection-bar>

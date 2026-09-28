@@ -23,9 +23,9 @@
         </ul>
         <div class="flex flex-wrap gap-2">
             @if ($topics !== [])
-                <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" aria-label="Select topics" :aria-pressed="isSelecting ? 'true' : 'false'">
+                <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
                     <x-icon name="list-checks" class="size-4" />
-                    <span x-text="isSelecting ? 'Done' : 'Select'"></span>
+                    <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
                 </button>
             @endif
             <x-button icon="circle-help" x-data x-on:click="Livewire.dispatch('question-new')">New question</x-button>

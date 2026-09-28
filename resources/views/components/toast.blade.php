@@ -6,6 +6,12 @@
     (App\Livewire\Concerns\Notices).
 --}}
 @props(['message' => null, 'tone' => 'success', 'actionLabel' => null, 'actionEvent' => null, 'actionPayload' => null])
+@php
+    $tone = $tone !== 'success' ? $tone : ($noticeTone ?? 'success');
+    $actionLabel = $actionLabel ?? ($noticeActionLabel ?? null);
+    $actionEvent = $actionEvent ?? ($noticeActionEvent ?? null);
+    $actionPayload = $actionPayload ?? ($noticeActionPayload ?? null);
+@endphp
 @if (filled($message))
     @php $id = \Illuminate\Support\Str::random(16); @endphp
     <span hidden

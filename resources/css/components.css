@@ -1099,7 +1099,7 @@
     }
 
     /* Touch: every control is at least 44 px tall (DESIGN.md §6.2). */
-    @media (pointer: coarse) {
+    @media (pointer: coarse), (max-width: 767px) {
         .btn,
         .segmented-option {
             min-height: 2.75rem;

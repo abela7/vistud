@@ -715,8 +715,8 @@
     /* Selection mode in lists and tiles (DESIGN.md §5) */
     .is-selecting [data-row-menu],
     .is-selecting [data-drag-handle],
-    .is-selecting [wire\:sort\:item] > .module-actions,
-    .is-selecting [wire\:sort] {
+    .is-selecting [wire\:sort\:handle],
+    .is-selecting [wire\:sort\:item] > .module-actions {
         display: none !important;
     }
 

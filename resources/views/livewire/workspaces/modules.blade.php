@@ -38,10 +38,9 @@
                 <button type="button"
                     class="btn btn-sm btn-secondary"
                     x-on:click="toggleMode()"
-                    aria-label="Select modules"
                     :aria-pressed="isSelecting ? 'true' : 'false'">
                     <x-icon name="list-checks" class="size-4" />
-                    <span x-text="isSelecting ? 'Done' : 'Select'"></span>
+                    <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
                 </button>
 
                 <div class="inline-flex items-center rounded-lg border border-border bg-surface-raised p-0.5" role="group" aria-label="View mode">

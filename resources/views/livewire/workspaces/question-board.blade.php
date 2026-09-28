@@ -77,9 +77,9 @@
                                 </select>
                             </div>
                         @endunless
-                        <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" aria-label="Select questions" :aria-pressed="isSelecting ? 'true' : 'false'">
+                        <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
                             <x-icon name="list-checks" class="size-4" />
-                            <span x-text="isSelecting ? 'Done' : 'Select'"></span>
+                            <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
                         </button>
                     </div>
 

@@ -12,9 +12,9 @@
         <h2 id="tasks-heading" class="font-semibold">Coming up</h2>
         <div class="flex items-center gap-2">
             @if ($open !== [] || $done !== [])
-                <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" aria-label="Select tasks" :aria-pressed="isSelecting ? 'true' : 'false'">
+                <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
                     <x-icon name="list-checks" class="size-4" />
-                    <span x-text="isSelecting ? 'Done' : 'Select'"></span>
+                    <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
                 </button>
             @endif
             <x-button variant="ghost" icon="plus" wire:click="newTask" aria-label="Add a task">Add</x-button>

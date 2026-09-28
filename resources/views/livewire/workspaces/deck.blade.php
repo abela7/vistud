@@ -86,9 +86,9 @@
                 </select>
             </div>
             <div class="flex flex-wrap gap-2">
-                <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" aria-label="Select flashcards" :aria-pressed="isSelecting ? 'true' : 'false'">
+                <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
                     <x-icon name="list-checks" class="size-4" />
-                    <span x-text="isSelecting ? 'Done' : 'Select'"></span>
+                    <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
                 </button>
                 <x-button icon="plus" x-data x-on:click="Livewire.dispatch('flashcard-new', { topicId: {{ \Illuminate\Support\Js::from($chosen) }} })">New card</x-button>
                 <x-button icon="wand-sparkles" x-data x-on:click="Livewire.dispatch('card-maker-open', { topicId: {{ \Illuminate\Support\Js::from($chosen) }} })">Make cards with an AI</x-button>
