@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\BulkActions;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
@@ -27,10 +28,12 @@ use Livewire\Component;
  */
 final class Progress extends Component
 {
-    use Notices;
+    use BulkActions, Notices;
 
     #[Locked]
     public string $workspaceId;
+
+    public string $bulkModuleId = '';
 
     /** topic (new or rename), move, finding, or null when the dialog is closed. */
     #[Locked]
@@ -132,6 +135,98 @@ final class Progress extends Component
         $name = $this->topics->find($by, $id)->name;
         $this->topics->retire($by, $id);
         $this->notice = "{$name} is removed. What you did on it stays in your journal.";
+    }
+
+    public function openBulkMove(array $keys): void
+    {
+        $this->bulkKeys = $keys;
+        $this->bulkModuleId = '';
+        $this->dispatch('bulk-topic-move-open');
+    }
+
+    public function confirmBulkMove(): void
+    {
+        $this->bulk('move', $this->bulkKeys, ['moduleId' => $this->bulkModuleId ?: null]);
+        $this->bulkKeys = [];
+        $this->dispatch('bulk-topic-move-close');
+        $this->dispatch('selection-clear');
+    }
+
+    public function openBulkRemove(array $keys): void
+    {
+        $this->bulkKeys = $keys;
+        $this->dispatch('bulk-topic-remove-open');
+    }
+
+    public function confirmBulkRemove(): void
+    {
+        $this->bulk('remove', $this->bulkKeys);
+        $this->bulkKeys = [];
+        $this->dispatch('bulk-topic-remove-close');
+        $this->dispatch('selection-clear');
+    }
+
+    protected function allowedBulkTypes(): array
+    {
+        return ['topic'];
+    }
+
+    protected function performBulkAction(string $action, array $items, array $payload): void
+    {
+        $by = $this->principal();
+        $done = 0;
+
+        if ($action === 'status') {
+            $status = (string) ($payload['status'] ?? 'covered');
+            foreach ($items as [$type, $id]) {
+                try {
+                    $this->topics->report($by, $id, $status);
+                    $done++;
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $word = match ($status) {
+                'understood' => 'Understood',
+                'confused' => 'Confused',
+                default => 'Covered',
+            };
+            $this->notify($done === 1 ? "1 topic marked {$word}." : "{$done} topics marked {$word}.");
+            $this->dispatch('selection-clear');
+
+            return;
+        }
+
+        if ($action === 'move') {
+            $moduleId = $payload['moduleId'] ?? null;
+            foreach ($items as [$type, $id]) {
+                try {
+                    $this->topics->move($by, $id, $moduleId ?: null);
+                    $done++;
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $this->notify($done === 1 ? '1 topic moved.' : "{$done} topics moved.");
+            $this->dispatch('selection-clear');
+
+            return;
+        }
+
+        if (in_array($action, ['remove', 'delete'], true)) {
+            foreach ($items as [$type, $id]) {
+                try {
+                    $this->topics->retire($by, $id);
+                    $done++;
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $this->notify($done === 1 ? '1 topic removed.' : "{$done} topics removed.");
+            $this->dispatch('selection-clear');
+
+            return;
+        }
     }
 
     /** Starts a study session on the topic and opens it; another open session says so. */
