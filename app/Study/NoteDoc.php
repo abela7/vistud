@@ -17,9 +17,18 @@ final class NoteDoc
 
     private const MAX_NODES = 100_000;
 
-    private const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'callout', 'image', 'pageBreak'];
+    private const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'callout', 'image', 'pageBreak', 'blockMath'];
 
-    private const INLINE = ['text', 'hardBreak'];
+    private const INLINE = ['text', 'hardBreak', 'inlineMath'];
+
+    /** A formula's LaTeX, at most. */
+    public const MAX_FORMULA = 5_000;
+
+    /** How a text run's marks nest in Markdown: code innermost, the link round everything. */
+    private const MARK_ORDER = ['code' => 0, 'bold' => 1, 'italic' => 2, 'strike' => 3, 'highlight' => 4, 'underline' => 5, 'subscript' => 6, 'superscript' => 7, 'link' => 8];
+
+    /** Set while plain() runs: no Markdown marks, just the words. */
+    private static bool $plain = false;
 
     /** What each node may hold. */
     private const CHILDREN = [
@@ -30,6 +39,8 @@ final class NoteDoc
         'callout' => self::BLOCKS,
         'image' => [],
         'pageBreak' => [],
+        'inlineMath' => [],
+        'blockMath' => [],
         'bulletList' => ['listItem'],
         'orderedList' => ['listItem'],
         'listItem' => self::BLOCKS,
@@ -88,6 +99,8 @@ final class NoteDoc
         $walk = function (array $node) use (&$walk, &$words) {
             if (($node['type'] ?? null) === 'text') {
                 $words[] = $node['text'];
+            } elseif (in_array($node['type'] ?? null, ['inlineMath', 'blockMath'], true)) {
+                $words[] = $node['attrs']['latex'] ?? '';
             }
             foreach ($node['content'] ?? [] as $child) {
                 $walk($child);
@@ -99,15 +112,28 @@ final class NoteDoc
     }
 
     /**
-     * The note as Markdown-style text, for a study session's briefing:
-     * headings, paragraphs, lists (tasks ticked or not), quotes and code keep
-     * their shape; bold, italic and links become plain words.
+     * The note as Markdown (GitHub's flavour), for a study session's briefing
+     * and for a download other apps can read: headings, paragraphs, lists
+     * (tasks ticked or not), quotes, code, tables, callouts (> [!NOTE]),
+     * pictures and formulas ($…$) keep their shape, and bold, italic, links
+     * and the other marks keep their markers.
      */
     public static function markdown(array $doc): string
     {
         $lines = self::blocks($doc['content'] ?? [], '');
 
         return trim((string) preg_replace("/\n{3,}/", "\n\n", implode("\n", $lines)));
+    }
+
+    /** The note as plain text for a .txt file: the same shape, without Markdown's markers. */
+    public static function plain(array $doc): string
+    {
+        self::$plain = true;
+        try {
+            return self::markdown($doc);
+        } finally {
+            self::$plain = false;
+        }
     }
 
     /** @return list<string> */
@@ -119,7 +145,7 @@ final class NoteDoc
             $inline = fn (array $n) => self::inline($n['content'] ?? []);
             switch ($type) {
                 case 'heading':
-                    $lines[] = $indent.str_repeat('#', max(1, min(6, (int) ($node['attrs']['level'] ?? 2)))).' '.$inline($node);
+                    $lines[] = $indent.(self::$plain ? '' : str_repeat('#', max(1, min(6, (int) ($node['attrs']['level'] ?? 2)))).' ').$inline($node);
                     $lines[] = '';
                     break;
                 case 'paragraph':
@@ -157,12 +183,12 @@ final class NoteDoc
                     $lines[] = '';
                     break;
                 case 'codeBlock':
-                    $lines[] = $indent.'```';
+                    $fence = self::$plain ? [] : [$indent.'```'];
+                    $lines = [...$lines, ...$fence];
                     foreach (explode("\n", $inline($node)) as $line) {
                         $lines[] = $indent.$line;
                     }
-                    $lines[] = $indent.'```';
-                    $lines[] = '';
+                    $lines = [...$lines, ...$fence, ''];
                     break;
                 case 'horizontalRule':
                     $lines[] = $indent.'---';
@@ -187,6 +213,11 @@ final class NoteDoc
                     while ($inner !== [] && end($inner) === '') {
                         array_pop($inner);
                     }
+                    if (self::$plain) {
+                        $lines[] = $indent.ucfirst(strtolower($tone)).':';
+                        $lines = [...$lines, ...array_map(fn ($line) => $indent.$line, $inner), ''];
+                        break;
+                    }
                     $lines[] = $indent."> [!{$tone}]";
                     foreach ($inner as $line) {
                         $lines[] = $indent.($line === '' ? '>' : '> '.$line);
@@ -197,13 +228,20 @@ final class NoteDoc
                     $src = $node['attrs']['src'] ?? '';
                     $alt = $node['attrs']['alt'] ?? 'Image';
                     if ($src !== '') {
-                        $lines[] = $indent."![{$alt}]({$src})";
+                        $lines[] = $indent.(self::$plain ? "[Picture: {$alt}]" : "![{$alt}]({$src})");
                         $lines[] = '';
                     }
                     break;
                 case 'pageBreak':
                     $lines[] = $indent.'---';
                     $lines[] = '';
+                    break;
+                case 'blockMath':
+                    $latex = (string) ($node['attrs']['latex'] ?? '');
+                    if ($latex !== '') {
+                        $fence = self::$plain ? [] : [$indent.'$$'];
+                        $lines = [...$lines, ...$fence, ...array_map(fn ($line) => $indent.$line, explode("\n", $latex)), ...$fence, ''];
+                    }
                     break;
             }
         }
@@ -216,13 +254,49 @@ final class NoteDoc
         $text = '';
         foreach ($nodes as $node) {
             $text .= match ($node['type'] ?? null) {
-                'text' => (string) ($node['text'] ?? ''),
+                'text' => self::marked((string) ($node['text'] ?? ''), is_array($node['marks'] ?? null) ? $node['marks'] : []),
                 'hardBreak' => "\n",
+                'inlineMath' => self::$plain ? (string) ($node['attrs']['latex'] ?? '') : '$'.($node['attrs']['latex'] ?? '').'$',
                 default => '',
             };
         }
 
         return trim($text);
+    }
+
+    /**
+     * A run of text with its marks as Markdown: **bold**, *italic*, ~~struck~~,
+     * `code`, ==highlighted== and [words](address); underline, subscript and
+     * superscript as the HTML Markdown allows. Spaces at the ends stay outside
+     * the markers, or a reader wouldn't take them as markers.
+     */
+    private static function marked(string $text, array $marks): string
+    {
+        if (self::$plain || $text === '' || $marks === []) {
+            return $text;
+        }
+        preg_match('/^(\s*)(.*?)(\s*)$/su', $text, $m);
+        [$lead, $core, $tail] = [$m[1], $m[2], $m[3]];
+        if ($core === '') {
+            return $text;
+        }
+        usort($marks, fn ($a, $b) => (self::MARK_ORDER[$a['type'] ?? ''] ?? 9) <=> (self::MARK_ORDER[$b['type'] ?? ''] ?? 9));
+        foreach ($marks as $mark) {
+            $core = match ($mark['type'] ?? null) {
+                'code' => '`'.$core.'`',
+                'bold' => '**'.$core.'**',
+                'italic' => '*'.$core.'*',
+                'strike' => '~~'.$core.'~~',
+                'highlight' => '=='.$core.'==',
+                'underline' => '<u>'.$core.'</u>',
+                'subscript' => '<sub>'.$core.'</sub>',
+                'superscript' => '<sup>'.$core.'</sup>',
+                'link' => '['.$core.']('.($mark['attrs']['href'] ?? '').')',
+                default => $core,
+            };
+        }
+
+        return $lead.$core.$tail;
     }
 
     /** One node, cleaned; null when it has to be dropped (an empty text). Refuses what can't be cleaned. */
@@ -247,6 +321,10 @@ final class NoteDoc
         $attrs = self::attrs($type, is_array($node['attrs'] ?? null) ? $node['attrs'] : []);
         if ($type === 'image' && ! isset($attrs['src'])) {
             // A picture from somewhere a note can't keep (another app's clipboard, a data: address) is left out.
+            return null;
+        }
+        if (in_array($type, ['inlineMath', 'blockMath'], true) && ! isset($attrs['latex'])) {
+            // An empty formula shows nothing: it goes.
             return null;
         }
         if ($attrs !== []) {
@@ -315,6 +393,17 @@ final class NoteDoc
             case 'callout':
                 $tone = $attrs['tone'] ?? null;
                 $kept['tone'] = in_array($tone, ['theorem', 'definition', 'formula', 'example', 'note'], true) ? $tone : 'note';
+                break;
+            case 'inlineMath':
+            case 'blockMath':
+                // LaTeX, drawn by KaTeX in the browser; it is never run as anything.
+                $latex = $attrs['latex'] ?? null;
+                if (is_string($latex) && trim($latex) !== '') {
+                    if (mb_strlen($latex) > self::MAX_FORMULA) {
+                        Input::refuse(['doc' => 'A formula in this note is too long to save. Split it into smaller ones.']);
+                    }
+                    $kept['latex'] = trim($latex);
+                }
                 break;
             case 'image':
                 $src = $attrs['src'] ?? null;

@@ -130,3 +130,43 @@ test('a file page never scrolls sideways at 320 px, even with 200% text', async 
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
+
+test('a Markdown file is shown as it was meant to look, and opens as a note', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await withFiles(page);
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#new-menu').getByRole('button', { name: 'Upload files' }).click();
+    await dialog(page).locator('input[type="file"]').setInputFiles({
+        name: 'Cells.md',
+        mimeType: 'text/markdown',
+        buffer: Buffer.from('# Cells\n\nA **bold** claim: $E = mc^2$.\n\n| Part | Job |\n|---|---|\n| Nucleus | DNA |\n\n<script>alert(1)</script>\n'),
+    });
+    await dialog(page).getByRole('button', { name: 'Upload', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: '1 file uploaded.' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog(page)).toBeHidden();
+
+    // Headings, bold, a table and a formula as they were meant to look; the script tag is gone.
+    await week1(page).getByRole('link', { name: 'Cells.md' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Cells.md' })).toBeVisible();
+    const preview = page.locator('.file-markdown');
+    await expect(preview.locator('h1')).toHaveText('Cells');
+    await expect(preview.locator('strong')).toHaveText('bold');
+    await expect(preview.locator('table td').first()).toHaveText('Nucleus');
+    await expect(preview.locator('.katex')).toBeVisible();
+    await expect(preview).not.toContainText('alert');
+    expect(await analyse(page)).toEqual([]);
+    await useSentinelTheme(page);
+    expect(await foreignColours(page)).toEqual([]);
+
+    // Open as a note: a new note in Week 1 made from the file, which stays as it is.
+    await page.getByRole('link', { name: 'Open as a note' }).click();
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(page.getByLabel('Title')).toHaveValue('Cells');
+    await expect(page.locator('.note-prose strong')).toHaveText('bold');
+    await expect(page.locator('.note-prose .katex')).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Where this note is' })).toHaveText(/Modules\s*Week 1: Cells/);
+    await expect(page.locator('[data-save-status]')).toHaveText('Saved');
+});

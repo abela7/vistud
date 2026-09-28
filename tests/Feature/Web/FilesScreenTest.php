@@ -89,7 +89,7 @@ class FilesScreenTest extends TestCase
     {
         $pdf = $this->stored('Lecture 2.pdf', $this->pdf());
         $docx = $this->stored('Essay.docx', $this->ooxml('word/document.xml'));
-        $text = $this->stored('Reading.md', "# Reading\n<script>alert(1)</script>\n");
+        $text = $this->stored('Reading.txt', "<script>alert(1)</script>\n");
 
         $this->page($pdf)->assertOk()
             ->assertSee('<title>Lecture 2.pdf · Biology', false)
@@ -138,6 +138,34 @@ class FilesScreenTest extends TestCase
 
         app(Files::class)->trash($this->principal($this->ada), $file->id);
         $this->actingAs($this->ada)->get(route('files.content', $file->id))->assertStatus(410);
+    }
+
+    public function test_a_markdown_file_is_shown_as_it_was_meant_to_look_and_opens_as_a_note(): void
+    {
+        $file = $this->stored('Cells.md', implode("\n", [
+            '# Cells', '',
+            'A **bold** word, a [link](javascript:alert(1)) and $E = mc^2$.', '',
+            '| Phase | Order |', '|---|---|', '| Prophase | 1 |', '',
+            '- [x] Read chapter 3', '',
+            '<img src=x onerror=alert(1)>', '<script>alert(2)</script>', '',
+        ]));
+
+        $page = $this->page($file)->assertOk()
+            ->assertSee('<h1>Cells</h1>', false)
+            ->assertSee('<strong>bold</strong>', false)
+            ->assertSee('<table>', false)
+            ->assertSee('type="checkbox"', false)
+            ->assertSee('$E = mc^2$')
+            ->assertSee('data-formulas', false)
+            ->assertDontSee('onerror', false)
+            ->assertDontSee('alert(', false)
+            ->assertDontSee('javascript:', false)
+            ->assertDontSee('<pre class="file-preview file-text"', false);
+        // Open as a note: a new note in the same place, made from the file (App\Http\Controllers\NotePageController).
+        $page->assertSee(route('workspaces.notes.create', [$this->biology->id, 'from' => "file:{$file->id}", 'in' => "module:{$this->cells->id}"]));
+
+        $this->actions($file)->call('trash');
+        $this->page($file)->assertOk()->assertDontSee('Open as a note')->assertDontSee('<h1>Cells</h1>', false);
     }
 
     private function stored(string $name, string $bytes): FileDetails

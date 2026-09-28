@@ -2225,4 +2225,76 @@
             background: transparent !important;
         }
     }
+
+    /* ---------- Formulas (KaTeX) ---------- */
+    /* In the line or on a line of its own, drawn in the text's own colour; a click opens the panel to change one. */
+    .note-prose .tiptap-mathematics-render {
+        border-radius: var(--radius-sm);
+    }
+
+    .note-prose .tiptap-mathematics-render--editable {
+        cursor: pointer;
+    }
+
+    .note-prose .tiptap-mathematics-render--editable:hover {
+        background-color: var(--hover);
+    }
+
+    .note-prose .tiptap-mathematics-render.ProseMirror-selectednode {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .note-prose div[data-type='block-math'] {
+        margin: 1rem 0;
+        padding: 0.5rem 0.75rem;
+        overflow-x: auto;
+        text-align: center;
+    }
+
+    .note-prose span[data-type='inline-math'] {
+        padding: 0 0.125rem;
+    }
+
+    /* LaTeX that can't be drawn shows as it was typed, underlined, with the reason on hover. */
+    .note-prose .inline-math-error,
+    .katex-error {
+        text-decoration: underline wavy var(--danger);
+        text-decoration-skip-ink: none;
+    }
+
+    .formula-preview {
+        display: grid;
+        place-items: center;
+        min-height: 4.5rem;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+        overflow-x: auto;
+    }
+
+    .formula-preview:empty::before {
+        content: 'The formula shows here as you type it.';
+        color: var(--text-subtle);
+        font-size: 0.875rem;
+    }
+
+    /* A Markdown file on its page, read like a note. */
+    .file-markdown {
+        height: auto;
+        min-height: 0;
+        padding: 1.5rem;
+        overflow-x: auto;
+    }
+
+    @media (min-width: 640px) {
+        .file-markdown {
+            padding: 2rem 2.5rem;
+        }
+    }
+
+    .note-page[data-reading] [data-note-import] {
+        display: none;
+    }
 }
