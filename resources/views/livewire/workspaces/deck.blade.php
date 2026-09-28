@@ -21,7 +21,11 @@
     }
     $groups = [...array_map(fn ($t) => [$t->id, $t->name], $topics), ['', 'No topic']];
 @endphp
-<div class="space-y-6">
+<div class="space-y-6" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
+    <div role="status" aria-live="polite" class="empty:hidden">
+        <x-toast :message="$notice" />
+    </div>
+
     <livewire:workspaces.card-maker :workspace-id="$workspaceId" />
 
     @if ($all['total'] === 0)
@@ -82,10 +86,18 @@
                 </select>
             </div>
             <div class="flex flex-wrap gap-2">
+                <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" aria-label="Select flashcards" :aria-pressed="isSelecting ? 'true' : 'false'">
+                    <x-icon name="list-checks" class="size-4" />
+                    <span x-text="isSelecting ? 'Done' : 'Select'"></span>
+                </button>
                 <x-button icon="plus" x-data x-on:click="Livewire.dispatch('flashcard-new', { topicId: {{ \Illuminate\Support\Js::from($chosen) }} })">New card</x-button>
                 <x-button icon="wand-sparkles" x-data x-on:click="Livewire.dispatch('card-maker-open', { topicId: {{ \Illuminate\Support\Js::from($chosen) }} })">Make cards with an AI</x-button>
             </div>
         </div>
+
+        <x-selection-bar>
+            <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0" x-on:click="$wire.openBulkRemove(selectedKeys())">Remove</x-button>
+        </x-selection-bar>
 
         @if ($cards === [])
             <p class="rounded-xl border border-dashed border-border-strong px-6 py-8 text-center text-fg-muted">No cards {{ $chosen ? 'on '.$topicNames[$chosen] : 'without a topic' }} yet.</p>
@@ -107,7 +119,11 @@
                     </div>
                     <ul class="module-card divide-y divide-divider" role="list">
                         @foreach ($byTopic[$groupId] as $card)
-                            <li class="card-row" wire:key="card-{{ $card->id }}">
+                            <li class="card-row" wire:key="card-{{ $card->id }}"
+                                data-select-key="flashcard:{{ $card->id }}"
+                                :class="{ 'is-selected': isSelected('flashcard:{{ $card->id }}') }"
+                                x-on:click="handleRowClick($event, 'flashcard:{{ $card->id }}')">
+                                <x-selection-check key="flashcard:{{ $card->id }}" label="Select {{ $card->front }}" />
                                 <div class="min-w-0 flex-1 space-y-1">
                                     <p class="font-medium break-words">{{ $card->front }}</p>
                                     <p class="text-sm break-words text-fg-muted">{{ $card->back }}</p>
@@ -131,4 +147,30 @@
     @endif
 
     <livewire:workspaces.flashcard-editor :workspace-id="$workspaceId" />
+
+    <dialog id="bulk-flashcard-dialog" class="modal" aria-labelledby="bulk-flashcard-dialog-title"
+        wire:ignore.self
+        x-data
+        x-on:bulk-flashcard-dialog-open.window="$el.open || $el.showModal()"
+        x-on:bulk-flashcard-dialog-close.window="$el.open && $el.close()"
+        x-on:close="$wire.bulkKeys = []"
+        x-on:click="$event.target === $el && $el.close()">
+        <div class="modal-panel" role="document">
+            <div class="modal-head">
+                <h2 id="bulk-flashcard-dialog-title" class="min-w-0 flex-1 text-lg font-semibold">Remove cards?</h2>
+                <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
+                    <x-icon name="x" />
+                </button>
+            </div>
+            <div class="space-y-4 px-5 pt-2">
+                <p class="text-sm text-fg-muted">
+                    Remove {{ count($bulkKeys) }} selected {{ \Illuminate\Support\Str::plural('card', count($bulkKeys)) }} from your deck?
+                </p>
+            </div>
+            <div class="modal-actions">
+                <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
+                <x-button variant="danger" wire:click="confirmBulkRemove" wire:loading.attr="aria-busy" busy-label="Removing…">Remove</x-button>
+            </div>
+        </div>
+    </dialog>
 </div>
