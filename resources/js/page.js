@@ -64,6 +64,27 @@ new MutationObserver((changes) => {
     for (const change of changes) change.addedNodes.forEach((node) => markLinks(node));
 }).observe(document.documentElement, { childList: true, subtree: true });
 
+// ---------- Back and Forward ----------
+// The browser's Back shows Livewire's copy of that page at once, as it was when it was left. What changed
+// since (a note written there, a question answered) is fetched straight after, so the page is never stale.
+// A note is opened fresh instead: its editor must start from the latest saved version, never an old copy.
+const NOTE_PAGE = /\/workspaces\/[^/]+\/notes\/[^/]+$/;
+let refreshWhenBack = false;
+document.addEventListener('livewire:navigate', (event) => {
+    if (!event.detail?.history || !event.detail?.cached) return;
+    if (NOTE_PAGE.test(new URL(event.detail.url ?? window.location.href, window.location.href).pathname)) {
+        event.preventDefault();
+        window.location.reload();
+        return;
+    }
+    refreshWhenBack = true;
+});
+document.addEventListener('livewire:navigated', () => {
+    if (!refreshWhenBack) return;
+    refreshWhenBack = false;
+    window.Livewire?.all().forEach((component) => component.$wire.$refresh());
+});
+
 // ---------- While the next page loads ----------
 // A thin line at the top in the theme's accent, only once a page takes more than a moment. (Livewire's own
 // bar is off in config/livewire.php: its markup gives screen readers a role that doesn't exist.) Outside

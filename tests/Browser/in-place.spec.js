@@ -110,6 +110,33 @@ test('leaving a note without reloading saves what was written, and the editor st
     expect(errors).toEqual([]);
 });
 
+test('Back and Forward never show a stale page: a list catches up, and a note opens as last saved', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const errors = watchErrors(page);
+    const note = makeStudentWithNote();
+    await openStudentHome(page, note.email);
+    await page.goto(note.url);
+    const modulePage = await page.getByRole('link', { name: /^Back to / }).getAttribute('href');
+    await page.goto(modulePage);
+    await mark(page);
+
+    // Into the note, a change, and the browser's own Back: the note's row there says it was just edited.
+    await page.getByRole('link', { name: 'Mitosis vs meiosis' }).first().click();
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await page.getByLabel('Title').fill('Mitosis and meiosis');
+    await expect(page.locator('[data-save-status]')).toHaveText('Saved');
+    await page.goBack();
+    await expect(page).toHaveURL(modulePage);
+    await expect(page.getByRole('link', { name: 'Mitosis and meiosis' })).toBeVisible();
+    expect(await stayed(page)).toBe(true);
+
+    // Forward into the note: opened fresh, with the title just saved, never an old copy.
+    await page.goForward();
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(page.getByLabel('Title')).toHaveValue('Mitosis and meiosis');
+    expect(errors).toEqual([]);
+});
+
 test('a page that takes a moment shows a thin loading line, gone once it is in', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const note = makeStudentWithNote();
