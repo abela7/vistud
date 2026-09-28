@@ -12,6 +12,7 @@
 
 import { Editor, Extension, Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import Document from '@tiptap/extension-document';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import { UniqueID } from '@tiptap/extension-unique-id';
@@ -40,6 +41,42 @@ const KEEPABLE_PICTURE = /^(https?:\/\/|\/notes\/images\/)/i;
 
 /** What a formula's LaTeX is drawn with: never trusted with anything but drawing, and a mistake shows as the words. */
 const KATEX = { throwOnError: false, strict: 'ignore', trust: false, maxSize: 50, errorColor: 'currentColor' };
+
+/**
+ * The note itself: it keeps how it is shown (A4 pages or full width) with its words, so it opens the same way
+ * everywhere (app/Study/NoteDoc.php). Unset, the student's last choice on this device applies.
+ */
+const NoteDocument = Document.extend({
+    addAttributes() {
+        return { view: { default: null } };
+    },
+});
+
+/** An editor document without the empty attributes the server drops anyway: a big note's saves stay small. */
+function compact(node) {
+    const out = { type: node.type };
+    if (node.attrs) {
+        const attrs = Object.fromEntries(Object.entries(node.attrs).filter(([, value]) => value !== null && value !== undefined));
+        if (Object.keys(attrs).length) out.attrs = attrs;
+    }
+    if (node.text !== undefined) out.text = node.text;
+    if (node.marks?.length) out.marks = node.marks.map(compact);
+    if (node.content?.length) out.content = node.content.map(compact);
+    return out;
+}
+
+/**
+ * Blocks brought in all at once (an imported file, pasted Markdown) get their IDs here. Left to UniqueID, each
+ * block would be a step of its own, and a long file would take seconds to come in.
+ */
+function withIds(nodes) {
+    return nodes.map((node) => {
+        const out = { ...node };
+        if (BLOCKS.includes(node.type) && !node.attrs?.id) out.attrs = { ...node.attrs, id: randomId(8) };
+        if (node.content) out.content = withIds(node.content);
+        return out;
+    });
+}
 
 /** A highlight keeps only a tone's name (app/Study/NoteDoc.php); the theme draws it. */
 const NoteHighlight = Highlight.extend({
@@ -376,6 +413,11 @@ export async function mount(host) {
     const toolbar = host.querySelector('[data-note-toolbar]');
     const buttons = [...toolbar.querySelectorAll('button[data-command]')];
     let toolbarReady = false;
+    // Set up further down; the editor's callbacks wait for them.
+    let viewReady = false;
+    let shownView = null;
+    let importReady = false;
+    let countTimer = null;
     const clientId = tabId();
     let loading = true;
     let editor = null;
@@ -491,7 +533,9 @@ export async function mount(host) {
         injectCSS: false,
         content: note.doc,
         extensions: [
+            NoteDocument,
             StarterKit.configure({
+                document: false,
                 heading: { levels: [1, 2, 3, 4] },
                 dropcursor: { color: 'var(--drop-indicator)', width: 2 },
                 link: { openOnClick: false, autolink: true, protocols: [], defaultProtocol: 'https', isAllowedUri: (url) => /^(https?:\/\/|mailto:)/i.test(url) },
@@ -515,7 +559,8 @@ export async function mount(host) {
             }),
             CharacterCount,
             Placeholder.configure({ placeholder: 'Start writing…' }),
-            UniqueID.configure({ types: BLOCKS, generateID: () => randomId(8) }),
+            // An import replaces the whole note with blocks that have their IDs already (withIds): nothing to check.
+            UniqueID.configure({ types: BLOCKS, generateID: () => randomId(8), filterTransaction: (tr) => !tr.getMeta('idsGiven') }),
         ],
         editorProps: {
             attributes: { class: 'note-prose', 'aria-label': 'Note', 'aria-multiline': 'true', role: 'textbox' },
@@ -523,7 +568,8 @@ export async function mount(host) {
                 const plain = event.clipboardData?.getData('text/plain') ?? '';
                 if (plain && !event.clipboardData.getData('text/html') && !editor.isActive('codeBlock') && looksLikeMarkdown(plain)) {
                     event.preventDefault();
-                    editor.chain().focus().insertContent(plain, { contentType: 'markdown' }).run();
+                    const doc = editor.markdown.parse(plain);
+                    editor.chain().focus().insertContent({ ...doc, content: withIds(doc.content ?? []) }).run();
                     return true;
                 }
                 const items = Array.from(event.clipboardData?.items || []);
@@ -563,8 +609,15 @@ export async function mount(host) {
                 return false;
             },
         },
-        onUpdate: () => { if (!loading) changed(); },
-        onTransaction: () => updateToolbar(),
+        onUpdate: () => {
+            if (!loading) changed();
+            showImport();
+        },
+        onTransaction: () => {
+            updateToolbar();
+            // The note's own layout, when a change brings one (an import, Undo, another tab's version).
+            if (viewReady && editor.state.doc.attrs.view !== shownView) setPageViewMode(editor.state.doc.attrs.view);
+        },
     });
 
     // Tabs of this account tell each other what they saved (ADR 0003 §5.3). Other accounts' tabs never hear it.
@@ -582,7 +635,7 @@ export async function mount(host) {
             accountId,
             version: note.version,
             drafts,
-            snapshot: () => ({ title: titleField.value, doc: editor.getJSON() }),
+            snapshot: () => ({ title: titleField.value, doc: compact(editor.getJSON()) }),
             onState: (state) => {
                 status.dataset.state = state.status;
                 status.querySelector('[data-save-label]').textContent = LABELS[state.status].replace('{s}', state.retryIn);
@@ -624,7 +677,7 @@ export async function mount(host) {
         if (autosave || creating || !hasWords()) return;
         creating = true;
         setStatus('saving');
-        const sent = { title: titleField.value, doc: editor.getJSON() };
+        const sent = { title: titleField.value, doc: compact(editor.getJSON()) };
         let response = null;
         let data = null;
         try {
@@ -655,7 +708,7 @@ export async function mount(host) {
             history.replaceState(history.state, '', data.url);
             startAutosave();
             // Whatever was typed while it was being made is saved next.
-            if (JSON.stringify(sent) !== JSON.stringify({ title: titleField.value, doc: editor.getJSON() })) autosave.changed();
+            if (JSON.stringify(sent) !== JSON.stringify({ title: titleField.value, doc: compact(editor.getJSON()) })) autosave.changed();
             else autosave.emit();
             return;
         }
@@ -819,7 +872,6 @@ export async function mount(host) {
     const statsDialog = host.querySelector('[data-stats-dialog]');
     const shortcutsDialog = host.querySelector('[data-shortcuts-dialog]');
     const imageDialog = host.querySelector('#note-image-dialog');
-    const importDialog = host.querySelector('[data-import-dialog]');
     const formulaDialog = host.querySelector('[data-formula-dialog]');
     const imageToolbar = host.querySelector('#note-image-toolbar');
     const count = host.querySelector('[data-note-count]');
@@ -914,8 +966,19 @@ export async function mount(host) {
             items.forEach((b) => { b.tabIndex = b === first ? 0 : -1; });
         }
         tableBar.hidden = !editor.isActive('table') || page.hasAttribute('data-reading');
-        const { currentPage, totalPages, words, chars } = getPageStats();
-        count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
+        scheduleCount();
+    }
+    /**
+     * The status line counts every word and measures the note, so it waits for a pause in the typing: done on
+     * each key, a long note would lag.
+     */
+    function scheduleCount() {
+        clearTimeout(countTimer);
+        countTimer = setTimeout(() => {
+            if (left) return;
+            const { currentPage, totalPages, words, chars } = getPageStats();
+            count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
+        }, 250);
     }
     // A click on a tool leaves the focus (and the selection) in the note; the keyboard still reaches the toolbar.
     toolbar.addEventListener('mousedown', (event) => {
@@ -1336,7 +1399,7 @@ export async function mount(host) {
     }
     count?.addEventListener('click', openStats);
 
-    for (const dialog of [statsDialog, shortcutsDialog, imageDialog, importDialog, formulaDialog].filter(Boolean)) {
+    for (const dialog of [statsDialog, shortcutsDialog, imageDialog, formulaDialog].filter(Boolean)) {
         dialog.addEventListener('click', (event) => {
             if (event.target.closest('[data-dialog-close]') || event.target === dialog) {
                 dialog.close();
@@ -1449,22 +1512,46 @@ export async function mount(host) {
         }),
     });
     const wordsOf = (node) => (node.content ?? []).map((child) => (child.type === 'text' ? child.text : wordsOf(child))).join('');
+    /** Nothing written in the note yet (its title aside): a file comes in only then (the owner's review, 2026-09-28). */
+    const isBlank = () => {
+        const { doc } = editor.state;
+        return doc.childCount === 1 && doc.firstChild.isTextblock && doc.firstChild.content.size === 0;
+    };
+    /** Import is offered while the note is empty. */
+    function showImport() {
+        if (!importReady || !editor) return;
+        const button = document.querySelector('[data-note-import]');
+        if (button) button.hidden = !isBlank();
+    }
     /**
-     * The file's words into the note: a Markdown file as what it describes, a text file as paragraphs. A note
-     * without a title takes the file's first heading, else the file's name. Where the note already has words,
-     * `how` says whether they are replaced or the file goes after them.
+     * The file's words become the note: a Markdown file as what it describes, shown full width (it was never
+     * laid out for A4 pages), a text file as paragraphs. A note without a title takes the file's first heading,
+     * else the file's name.
      */
-    function importText(text, name, markdown, how) {
+    function importText(text, name, markdown) {
         if (left) return;
+        if (!isBlank()) {
+            toast('A file can only come into an empty note. Make a new note for it.', 'info');
+            return;
+        }
         const doc = markdown ? editor.markdown.parse(text) : textDoc(text);
         let content = doc.content ?? [];
+        let title = null;
         if (titleField.value.trim() === '') {
             const first = content[0];
-            let title = name.replace(/\.[^.]+$/, '');
+            title = name.replace(/\.[^.]+$/, '');
             if (first?.type === 'heading' && first.attrs?.level === 1 && wordsOf(first).trim()) {
                 title = wordsOf(first).trim();
                 content = content.slice(1);
             }
+        }
+        content = withIds(content);
+        // Over the most a note can hold (App\Study\NoteDoc::MAX_BYTES), it could never be saved: it doesn't come in.
+        if (new Blob([JSON.stringify(compact({ type: 'doc', content }))]).size > Number(host.dataset.maxBytes || Infinity)) {
+            toast('That file is too long for one note. Split it into two files, and import each into its own note.', 'info');
+            return;
+        }
+        if (title !== null) {
             titleField.value = title;
             growTitle();
             setTitle();
@@ -1474,42 +1561,32 @@ export async function mount(host) {
             changed();
             return;
         }
-        const chain = editor.chain().focus();
-        if (how === 'append') chain.insertContentAt(editor.state.doc.content.size, content);
-        else chain.insertContentAt({ from: 0, to: editor.state.doc.content.size }, content);
-        chain.run();
+        const chain = editor.chain().insertContentAt({ from: 0, to: editor.state.doc.content.size }, content);
+        chain.command(({ tr }) => {
+            tr.setMeta('idsGiven', true);
+            if (markdown) tr.setDocAttribute('view', 'continuous');
+            return true;
+        });
+        chain.focus('start').run();
         changed();
         toast(`${name || 'The file'} is in the note.`, 'success');
     }
     const importButton = document.querySelector('[data-note-import]');
     const importFile = document.querySelector('[data-import-file]');
-    let pendingImport = null;
     importButton?.addEventListener('click', () => importFile?.click());
     importFile?.addEventListener('change', async () => {
         const file = importFile.files?.[0];
         importFile.value = '';
         if (!file) return;
-        if (file.size > 2_000_000) {
-            toast('That file is too big for one note. Split it up first.', 'info');
+        if (file.size > Number(host.dataset.maxBytes || Infinity)) {
+            toast('That file is too long for one note. Split it into two files, and import each into its own note.', 'info');
             return;
         }
         const markdown = /\.(md|markdown)$/i.test(file.name) || file.type === 'text/markdown';
-        const text = await file.text();
-        if (!hasWords() || !editor.getText().trim()) {
-            importText(text, file.name, markdown, 'replace');
-            return;
-        }
-        pendingImport = { text, name: file.name, markdown };
-        importDialog.querySelector('[data-import-file-name]').textContent = file.name;
-        importDialog.showModal();
+        importText(await file.text(), file.name, markdown);
     });
-    importDialog?.addEventListener('click', (event) => {
-        const choice = event.target.closest('[data-import-choice]')?.dataset.importChoice;
-        if (!choice || !pendingImport) return;
-        importDialog.close();
-        importText(pendingImport.text, pendingImport.name, pendingImport.markdown, choice);
-        pendingImport = null;
-    });
+    importReady = true;
+    showImport();
 
     // ---------- Formulas ----------
     const formulaLatex = formulaDialog?.querySelector('[data-formula-latex]');
@@ -1709,10 +1786,7 @@ export async function mount(host) {
     const noteContentEl = host.querySelector('.note-content');
     noteContentEl?.addEventListener('scroll', () => {
         if (activeFigureEl) positionImageToolbar(activeFigureEl);
-        if (!editor.isFocused) {
-            const { currentPage, totalPages, words, chars } = getPageStats();
-            count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
-        }
+        if (!editor.isFocused) scheduleCount();
     }, { passive: true });
     noteContentEl?.addEventListener('click', (event) => {
         if (event.target === event.currentTarget) {
@@ -1802,6 +1876,8 @@ export async function mount(host) {
     }
     function setFocus(on) {
         page.toggleAttribute('data-focus', on);
+        // The page behind doesn't scroll (resources/css/editor.css). Livewire drops it with the next page.
+        document.documentElement.toggleAttribute('data-note-full', on);
         // The whole screen where the browser allows it; the whole window everywhere.
         const root = document.documentElement;
         if (on && root.requestFullscreen && !document.fullscreenElement) root.requestFullscreen().catch(() => {});
@@ -1812,27 +1888,31 @@ export async function mount(host) {
     focusButtons.forEach((btn) => btn.addEventListener('click', () => setFocus(!page.hasAttribute('data-focus'))));
 
     // ---------- Document View Mode: Pages (A4) vs Continuous ----------
+    // A note keeps its own (NoteDocument, saved with it); a note without one shows this device's last choice.
     const viewToggleButtons = page.querySelectorAll('[data-note-view-toggle]');
-    function setPageViewMode(mode) {
-        const activeMode = mode === 'continuous' ? 'continuous' : 'pages';
+    let deviceView = 'pages';
+    try {
+        deviceView = localStorage.getItem('vistud.note-view-mode') || 'pages';
+    } catch {}
+    function setPageViewMode(noteView) {
+        shownView = noteView ?? null;
+        const activeMode = (noteView ?? deviceView) === 'continuous' ? 'continuous' : 'pages';
         page.setAttribute('data-page-view', activeMode);
-        try {
-            localStorage.setItem('vistud.note-view-mode', activeMode);
-        } catch {}
         viewToggleButtons.forEach((btn) => {
             btn.title = activeMode === 'pages' ? 'Switch to Full Width view' : 'Switch to Pages (A4) view';
         });
-        updateToolbar();
     }
-    let savedViewMode = 'pages';
-    try {
-        savedViewMode = localStorage.getItem('vistud.note-view-mode') || 'pages';
-    } catch {}
-    setPageViewMode(savedViewMode);
+    setPageViewMode(editor.state.doc.attrs.view);
+    viewReady = true;
     viewToggleButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
-            const currentMode = page.getAttribute('data-page-view') || 'pages';
-            setPageViewMode(currentMode === 'pages' ? 'continuous' : 'pages');
+            const next = page.getAttribute('data-page-view') === 'pages' ? 'continuous' : 'pages';
+            deviceView = next;
+            try {
+                localStorage.setItem('vistud.note-view-mode', next);
+            } catch {}
+            // Saved with the note, like its words; not something Undo takes back.
+            editor.view.dispatch(editor.state.tr.setDocAttribute('view', next).setMeta('addToHistory', false));
         });
     });
 
@@ -1922,6 +2002,8 @@ export async function mount(host) {
         else if (hasWords()) createNote();
         left = true;
         leaving.abort();
+        clearTimeout(countTimer);
+        document.documentElement.removeAttribute('data-note-full');
         editor.destroy();
     });
 
@@ -1930,7 +2012,7 @@ export async function mount(host) {
         try {
             const response = await fetch(host.dataset.importUrl, { credentials: 'same-origin' });
             if (!response.ok) throw new Error(String(response.status));
-            importText(await response.text(), host.dataset.importName ?? '', host.dataset.importKind === 'markdown', 'replace');
+            importText(await response.text(), host.dataset.importName ?? '', host.dataset.importKind === 'markdown');
         } catch {
             toast('The file couldn\'t be read into the note. Open it again from its page.', 'info');
         }

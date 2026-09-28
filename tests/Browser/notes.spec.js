@@ -640,12 +640,16 @@ const markdownFile = [
     '$$', '\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}', '$$', '',
 ].join('\n');
 
-test('a Markdown file is imported into a note, and the note downloads as Markdown or as text', async ({ page }) => {
+test('a Markdown file is imported into an empty note, shown full width, and the note downloads as Markdown or as text', async ({ page }) => {
     await page.setViewportSize(desktop);
     const note = await openNote(page, 'empty');
+    const view = () => page.locator('[data-note-page]');
+    const importButton = page.getByRole('button', { name: 'Import' });
+    await expect(view(page)).toHaveAttribute('data-page-view', 'pages');
+    await expect(importButton).toBeVisible();
     await page.locator('[data-import-file]').setInputFiles({ name: 'Cell division.md', mimeType: 'text/markdown', buffer: Buffer.from(markdownFile) });
     await expect(page.getByRole('status').filter({ hasText: 'Cell division.md is in the note.' })).toBeVisible();
-    // The file's first heading names the note; the rest is what the Markdown describes.
+    // The file's first heading names the note; the rest is what the Markdown describes, full width rather than on A4 pages.
     await expect(page.getByLabel('Title')).toHaveValue('Cell division');
     await expect(body(page).locator('h1')).toHaveCount(0);
     await expect(body(page).locator('strong')).toHaveText('mitosis');
@@ -655,21 +659,22 @@ test('a Markdown file is imported into a note, and the note downloads as Markdow
     await expect(body(page).locator('li[data-checked="true"]')).toContainText('Read chapter 3');
     await expect(body(page).locator('table td').first()).toHaveText('Prophase');
     await expect(body(page).locator('[data-type="block-math"] .katex')).toBeVisible();
+    await expect(view(page)).toHaveAttribute('data-page-view', 'continuous');
+    // A file comes only into an empty note.
+    await expect(importButton).toBeHidden();
     await expect(status(page)).toHaveText('Saved');
 
+    // Full width is the note's own: kept with it, while other notes stay as they were.
     await page.reload();
     await page.locator('[data-note-editor][data-ready]').waitFor();
     await expect(page.getByLabel('Title')).toHaveValue('Cell division');
     await expect(body(page).locator('.katex')).toHaveCount(2);
-
-    // A file into a note that has words asks: replace them, or add to the end.
-    await page.locator('[data-import-file]').setInputFiles({ name: 'more.txt', mimeType: 'text/plain', buffer: Buffer.from('One more line.\n\nAnd a second paragraph.') });
-    const ask = page.getByRole('dialog', { name: 'Import more.txt' });
-    await expect(ask).toBeVisible();
-    await ask.getByRole('button', { name: 'Add to the end' }).click();
-    await expect(ask).toBeHidden();
-    await expect(body(page).locator('p').last()).toHaveText('And a second paragraph.');
-    await expect(status(page)).toHaveText('Saved');
+    await expect(view(page)).toHaveAttribute('data-page-view', 'continuous');
+    await expect(importButton).toBeHidden();
+    await page.goto(note.url);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(view(page)).toHaveAttribute('data-page-view', 'pages');
+    await expect(importButton).toBeHidden();
 
     // Out again: Markdown any reader shows, named after the title, and the same as plain text.
     const markdown = await page.request.get(`${note.empty}/export/md`);
@@ -677,7 +682,7 @@ test('a Markdown file is imported into a note, and the note downloads as Markdow
         .toEqual([200, 'text/markdown; charset=utf-8', 'attachment; filename="Cell division.md"']);
     const text = await markdown.text();
     expect(text.startsWith('# Cell division\n\n')).toBe(true);
-    for (const piece of ['**mitosis**', '[meiosis](https://example.org/meiosis)', '> [!THEOREM]', '$E = mc^2$', '- [x] Read chapter 3', '- [ ] Draw the phases', '| Prophase | 1 |', '$$\n\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}\n$$', 'And a second paragraph.']) {
+    for (const piece of ['**mitosis**', '[meiosis](https://example.org/meiosis)', '> [!THEOREM]', '$E = mc^2$', '- [x] Read chapter 3', '- [ ] Draw the phases', '| Prophase | 1 |', '$$\n\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}\n$$']) {
         expect(text).toContain(piece);
     }
     const plain = await (await page.request.get(`${note.empty}/export/txt`)).text();
@@ -740,4 +745,20 @@ test('Markdown pasted as plain text becomes what it describes', async ({ page })
     await expect(body(page).locator('ol > li')).toHaveText(['Prophase', 'Metaphase']);
     await expect(body(page).locator('strong')).toHaveText('pulls');
     await expect(status(page)).toHaveText('Saved');
+});
+
+test('A4 pages or full width is kept with each note, on every device', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = await openNote(page);
+    const view = page.locator('[data-note-page]');
+    await expect(view).toHaveAttribute('data-page-view', 'pages');
+    await page.getByRole('button', { name: 'Toggle document view mode' }).click();
+    await expect(view).toHaveAttribute('data-page-view', 'continuous');
+    await expect.poll(() => serverText(page, note)).toContain('"view":"continuous"');
+
+    // Another device, where nothing is remembered, opens it the same way.
+    await page.evaluate(() => localStorage.removeItem('vistud.note-view-mode'));
+    await page.reload();
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(view).toHaveAttribute('data-page-view', 'continuous');
 });

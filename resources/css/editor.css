@@ -140,7 +140,8 @@
         max-height: 100dvh;
     }
 
-    :root:has(.note-page[data-focus]) {
+    /* Set by the editor, not :root:has(): that made the browser restyle the whole page on every key. */
+    :root[data-note-full] {
         overflow: hidden;
     }
 
@@ -1287,7 +1288,7 @@
     }
 
     @media (max-width: 767.98px) {
-        :root:has(.app-tabbar) .toast-stack {
+        [data-tabbar] .toast-stack {
             bottom: 4.5rem;
         }
     }
