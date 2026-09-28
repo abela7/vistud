@@ -23,7 +23,7 @@
         return $parts === [] ? 'Empty' : implode(' · ', $parts);
     };
 @endphp
-<div class="space-y-4" x-data="{ ...selectable(), layout: $persist('grid').as('vistud.modules.layout') }" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
+<div class="space-y-4" x-data="selectable({ layout: $persist('grid').as('vistud.modules.layout') })" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     <div role="status" aria-live="polite" class="empty:hidden">
         <x-toast :message="$notice" />
     </div>

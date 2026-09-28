@@ -6,11 +6,12 @@
 */
 import { onPage } from './page.js';
 
-export function selectable() {
-    return {
+export function selectable(extra = {}) {
+    const base = {
         isSelecting: false,
         selected: {},
         lastToggled: null,
+        count: 0,
 
         init() {
             this.$watch('isSelecting', (val) => {
@@ -19,9 +20,18 @@ export function selectable() {
                 }
             });
 
+            this.$watch('selected', () => {
+                this.updateCount();
+            });
+
             document.addEventListener('livewire:navigating', () => {
                 this.exitMode();
             }, { once: true });
+        },
+
+        updateCount() {
+            const visible = new Set(this.visibleKeys());
+            this.count = Object.keys(this.selected).filter((k) => this.selected[k] && visible.has(k)).length;
         },
 
         toggleMode() {
@@ -38,13 +48,17 @@ export function selectable() {
 
         visibleKeys() {
             const root = this.$root || document;
-            const checkboxes = root.querySelectorAll('[data-select-key]');
-            return Array.from(checkboxes).map((el) => el.dataset.selectKey);
-        },
-
-        get count() {
-            const visible = new Set(this.visibleKeys());
-            return Object.keys(this.selected).filter((k) => this.selected[k] && visible.has(k)).length;
+            const items = root.querySelectorAll('[data-select-key]');
+            const unique = [];
+            const seen = new Set();
+            for (const el of items) {
+                const key = el.dataset.selectKey;
+                if (key && !seen.has(key)) {
+                    seen.add(key);
+                    unique.push(key);
+                }
+            }
+            return unique;
         },
 
         isSelected(key) {
@@ -75,11 +89,13 @@ export function selectable() {
                 next[k] = true;
             });
             this.selected = next;
+            this.updateCount();
         },
 
         clearSelection() {
             this.selected = {};
             this.lastToggled = null;
+            this.updateCount();
         },
 
         toggle(key, isRange = false) {
@@ -101,11 +117,12 @@ export function selectable() {
                 };
             }
             this.lastToggled = key;
+            this.updateCount();
         },
 
         handleRowClick(event, key) {
             if (!this.isSelecting) return;
-            if (event.target.closest('button, input, select, textarea, [data-no-select], dialog')) {
+            if (event.target.closest('button, input, select, textarea, [data-no-select], dialog, .selection-check')) {
                 return;
             }
             event.preventDefault();
@@ -140,6 +157,8 @@ export function selectable() {
             return counts;
         },
     };
+
+    return Object.defineProperties(base, Object.getOwnPropertyDescriptors(extra));
 }
 
 const register = () => {

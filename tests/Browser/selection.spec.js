@@ -207,3 +207,48 @@ test('selection bar and selected state pass accessibility checks across all them
     const foreign = await foreignColours(page);
     expect(foreign).toEqual([]);
 });
+
+test('selecting a module by clicking its checkbox enables bulk delete and opens confirmation dialog', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const { email } = makeStudentWithWorkspaceNotes();
+    await openStudentHome(page, email);
+    await page.locator('main').getByRole('link', { name: 'Biology' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
+    const nav = page.viewportSize().width < 768 ? '.app-tabbar' : '.app-sidebar';
+    await page.locator(nav).getByRole('link', { name: 'Modules' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Modules' }).waitFor();
+    await page.waitForLoadState('load');
+
+    // Enter selection mode
+    await page.getByRole('button', { name: 'Select' }).click();
+
+    // The selection bar appears with Delete disabled initially
+    const selectionBar = page.locator('.selection-bar');
+    await expect(selectionBar).toBeVisible();
+    const deleteBtn = selectionBar.getByRole('button', { name: 'Delete' });
+    await expect(deleteBtn).toBeDisabled();
+
+    // Click directly on the checkbox of the second module
+    const secondModule = page.locator('.module-tile').nth(1);
+    const secondModuleCheck = secondModule.locator('.selection-checkbox');
+    await secondModuleCheck.click();
+
+    // Selection count is now 1, the tile has .is-selected, and Delete button is enabled!
+    await expect(page.locator('.selection-count')).toContainText('1 selected');
+    await expect(secondModule).toHaveClass(/is-selected/);
+    await expect(deleteBtn).toBeEnabled();
+
+    // Click Delete button
+    await deleteBtn.click();
+
+    // Dialog opens confirming deletion of 1 item
+    const dialog = page.locator('#structure-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Delete 1 item?' })).toBeVisible();
+    await expect(dialog).toContainText('Only empty folders and modules can be deleted.');
+
+    // Confirm deletion
+    await dialog.getByRole('button', { name: 'Delete' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('.toast')).toContainText('1 item is deleted');
+});
