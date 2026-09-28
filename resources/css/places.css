@@ -27,11 +27,15 @@
     }
 
     /* A tile's own menu sits above its link, and an open menu above the tiles around it. */
-    :is(.module-tile, .folder-tile, .item-row) .relative:has(> [data-menu-button]) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row) .relative:has(> [data-menu-button]) {
         z-index: 1;
     }
 
-    :is(.module-tile, .folder-tile, .item-row) .relative:has(> [data-menu-button][aria-expanded='true']) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row) .relative:has(> [data-menu-button][aria-expanded='true']) {
+        z-index: 30;
+    }
+
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row):has([data-menu-button][aria-expanded='true']) {
         z-index: 30;
     }
 
@@ -87,7 +91,6 @@
     }
 
     .item-list {
-        overflow: hidden;
         border: 1px solid var(--border);
         border-radius: var(--radius-xl);
         background-color: var(--surface-raised);
@@ -100,6 +103,16 @@
         gap: 0.875rem;
         padding: 0.75rem 0.75rem 0.75rem 1rem;
         transition: background-color 0.15s ease;
+    }
+
+    .item-row:first-child {
+        border-top-left-radius: inherit;
+        border-top-right-radius: inherit;
+    }
+
+    .item-row:last-child {
+        border-bottom-left-radius: inherit;
+        border-bottom-right-radius: inherit;
     }
 
     .item-row + .item-row {
@@ -248,7 +261,16 @@
         border: 1px solid var(--border);
         border-radius: var(--radius-xl);
         background-color: var(--surface-raised);
-        overflow: hidden;
+    }
+
+    .module-grid.is-list-view > .module-tile:first-child {
+        border-top-left-radius: inherit;
+        border-top-right-radius: inherit;
+    }
+
+    .module-grid.is-list-view > .module-tile:last-child {
+        border-bottom-left-radius: inherit;
+        border-bottom-right-radius: inherit;
     }
 
     .module-grid.is-list-view .module-tile {

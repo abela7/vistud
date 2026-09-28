@@ -284,3 +284,47 @@ test('a module links to its study sessions page, and Back climbs back to the mod
     await expect(page.getByRole('heading', { level: 1, name: 'Week 1: Cells' })).toBeVisible();
     await expect(page).toHaveURL(/\/modules\/[^/]+$/);
 });
+
+test('a note inside a module has an action menu whose options are fully visible and not covered', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openModules(page, makeStudentWithModules());
+    await openPlace(page, 'Week 1: Cells');
+
+    // Create a new note inside Week 1: Cells
+    await newInPlace(page, 'Note');
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await page.getByLabel('Title').fill('Summary of Week 1');
+    await page.locator('[data-save-status][data-state="saved"]').waitFor();
+
+    // Navigate back to the module
+    await page.getByRole('link', { name: 'Back to Week 1: Cells' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 1: Cells' }).waitFor();
+
+    // Check that the note row is present in the item-list
+    const noteRow = page.locator('.item-row', { hasText: 'Summary of Week 1' });
+    await expect(noteRow).toBeVisible();
+
+    // Click the note's action menu button
+    const actionsBtn = noteRow.getByRole('button', { name: 'Actions for Summary of Week 1' });
+    await actionsBtn.click();
+
+    // The row-menu should be visible with its options
+    const rowMenu = noteRow.locator('.row-menu:not([hidden])');
+    await expect(rowMenu).toBeVisible();
+    await expect(rowMenu.getByRole('button', { name: 'Move to…' })).toBeVisible();
+    await expect(rowMenu.getByRole('button', { name: 'Move to trash' })).toBeVisible();
+
+    // Verify the menu items are not clipped: bounding box of menu items is within viewport and visible
+    const trashBtn = rowMenu.getByRole('button', { name: 'Move to trash' });
+    const trashBox = await trashBtn.boundingBox();
+    expect(trashBox).not.toBeNull();
+    expect(trashBox.height).toBeGreaterThan(0);
+
+    // Verify elementFromPoint hits the menu item, not something covering it
+    const hitElement = await page.evaluate((b) => {
+        const el = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+        return el ? el.innerText.trim() : null;
+    }, trashBox);
+    expect(hitElement).toContain('Move to trash');
+});
+
