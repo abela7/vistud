@@ -628,3 +628,116 @@ test('Word shortcuts act once, a picture is kept with the note, and the side pan
     await shortcuts.getByRole('button', { name: 'Close' }).click();
     await expect(shortcuts).toBeHidden();
 });
+
+/* Notes in and out (the owner's review, 2026-09-28): Markdown and text files in, Markdown and text out, formulas. */
+
+const markdownFile = [
+    '# Cell division', '',
+    'Both **mitosis** and [meiosis](https://example.org/meiosis) divide a cell.', '',
+    '> [!THEOREM]', '> Energy in a cell: $E = mc^2$.', '',
+    '- [x] Read chapter 3', '- [ ] Draw the phases', '',
+    '| Phase | Order |', '|---|---|', '| Prophase | 1 |', '',
+    '$$', '\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}', '$$', '',
+].join('\n');
+
+test('a Markdown file is imported into a note, and the note downloads as Markdown or as text', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = await openNote(page, 'empty');
+    await page.locator('[data-import-file]').setInputFiles({ name: 'Cell division.md', mimeType: 'text/markdown', buffer: Buffer.from(markdownFile) });
+    await expect(page.getByRole('status').filter({ hasText: 'Cell division.md is in the note.' })).toBeVisible();
+    // The file's first heading names the note; the rest is what the Markdown describes.
+    await expect(page.getByLabel('Title')).toHaveValue('Cell division');
+    await expect(body(page).locator('h1')).toHaveCount(0);
+    await expect(body(page).locator('strong')).toHaveText('mitosis');
+    await expect(body(page).locator('a[href="https://example.org/meiosis"]')).toHaveText('meiosis');
+    await expect(body(page).locator('[data-callout][data-tone="theorem"]')).toContainText('Energy in a cell');
+    await expect(body(page).locator('[data-callout] .katex')).toBeVisible();
+    await expect(body(page).locator('li[data-checked="true"]')).toContainText('Read chapter 3');
+    await expect(body(page).locator('table td').first()).toHaveText('Prophase');
+    await expect(body(page).locator('[data-type="block-math"] .katex')).toBeVisible();
+    await expect(status(page)).toHaveText('Saved');
+
+    await page.reload();
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(page.getByLabel('Title')).toHaveValue('Cell division');
+    await expect(body(page).locator('.katex')).toHaveCount(2);
+
+    // A file into a note that has words asks: replace them, or add to the end.
+    await page.locator('[data-import-file]').setInputFiles({ name: 'more.txt', mimeType: 'text/plain', buffer: Buffer.from('One more line.\n\nAnd a second paragraph.') });
+    const ask = page.getByRole('dialog', { name: 'Import more.txt' });
+    await expect(ask).toBeVisible();
+    await ask.getByRole('button', { name: 'Add to the end' }).click();
+    await expect(ask).toBeHidden();
+    await expect(body(page).locator('p').last()).toHaveText('And a second paragraph.');
+    await expect(status(page)).toHaveText('Saved');
+
+    // Out again: Markdown any reader shows, named after the title, and the same as plain text.
+    const markdown = await page.request.get(`${note.empty}/export/md`);
+    expect([markdown.status(), markdown.headers()['content-type'], markdown.headers()['content-disposition']])
+        .toEqual([200, 'text/markdown; charset=utf-8', 'attachment; filename="Cell division.md"']);
+    const text = await markdown.text();
+    expect(text.startsWith('# Cell division\n\n')).toBe(true);
+    for (const piece of ['**mitosis**', '[meiosis](https://example.org/meiosis)', '> [!THEOREM]', '$E = mc^2$', '- [x] Read chapter 3', '- [ ] Draw the phases', '| Prophase | 1 |', '$$\n\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}\n$$', 'And a second paragraph.']) {
+        expect(text).toContain(piece);
+    }
+    const plain = await (await page.request.get(`${note.empty}/export/txt`)).text();
+    expect(plain.startsWith('Cell division\n\n')).toBe(true);
+    expect(plain).toContain('Theorem:');
+    expect(plain).toContain('E = mc^2');
+    expect(plain).not.toContain('**');
+    expect(plain).not.toContain('$');
+});
+
+test('a formula from the Σ menu: written in LaTeX, drawn in the note, changed and removed', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openNote(page, 'empty');
+    const violations = async () => (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations.map((v) => v.id);
+
+    await body(page).click();
+    await page.keyboard.type('Area: ');
+    await page.getByRole('toolbar', { name: 'Formatting' }).getByRole('button', { name: 'Symbols', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Symbols' }).getByRole('button', { name: 'In the line' }).click();
+    const panel = page.getByRole('dialog', { name: 'Formula in the line' });
+    await expect(panel).toBeVisible();
+    await panel.locator('[data-formula-latex]').fill('\\pi r^2');
+    await expect(panel.locator('[data-formula-preview] .katex')).toBeVisible();
+    expect(await violations()).toEqual([]);
+    await panel.getByRole('button', { name: 'Apply' }).click();
+    await expect(panel).toBeHidden();
+    const formula = body(page).locator('span[data-type="inline-math"]');
+    await expect(formula).toHaveAttribute('data-latex', '\\pi r^2');
+    await expect(formula.locator('.katex')).toBeVisible();
+    await expect(status(page)).toHaveText('Saved');
+    await useSentinelTheme(page);
+    expect(await foreignColours(page)).toEqual([]);
+
+    // Clicking a formula opens the same panel to change it, or take it out.
+    await formula.click();
+    const edit = page.getByRole('dialog', { name: 'Edit the formula' });
+    await expect(edit).toBeVisible();
+    await expect(edit.locator('[data-formula-latex]')).toHaveValue('\\pi r^2');
+    await edit.locator('[data-formula-latex]').fill('2\\pi r');
+    await edit.locator('[data-formula-latex]').press('Control+Enter');
+    await expect(edit).toBeHidden();
+    await expect(formula).toHaveAttribute('data-latex', '2\\pi r');
+    await formula.click();
+    await edit.getByRole('button', { name: 'Remove' }).click();
+    await expect(formula).toHaveCount(0);
+    await expect(body(page)).toHaveText('Area: ');
+    await expect(status(page)).toHaveText('Saved');
+});
+
+test('Markdown pasted as plain text becomes what it describes', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openNote(page, 'empty');
+    await body(page).click();
+    await page.evaluate((markdown) => {
+        const data = new DataTransfer();
+        data.setData('text/plain', markdown);
+        document.querySelector('.ProseMirror').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    }, '## Phases\n\n1. Prophase\n2. Metaphase\n\nThe spindle **pulls** them apart.');
+    await expect(body(page).locator('h2')).toHaveText('Phases');
+    await expect(body(page).locator('ol > li')).toHaveText(['Prophase', 'Metaphase']);
+    await expect(body(page).locator('strong')).toHaveText('pulls');
+    await expect(status(page)).toHaveText('Saved');
+});

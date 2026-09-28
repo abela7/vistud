@@ -346,6 +346,55 @@ class NotesTest extends TestCase
         ], $this->notes->open($this->by, $note->id)->doc['content']);
     }
 
+    public function test_formulas_are_kept_cleaned_and_written_out_as_markdown_and_plain_text(): void
+    {
+        $note = $this->notes->create($this->by, 'module', $this->cells->id);
+        $doc = ['type' => 'doc', 'content' => [
+            ['type' => 'paragraph', 'content' => [
+                ['type' => 'text', 'text' => 'Energy: '],
+                ['type' => 'inlineMath', 'attrs' => ['latex' => ' E = mc^2 ', 'other' => 'dropped']],
+                ['type' => 'text', 'text' => ' as '],
+                ['type' => 'text', 'text' => 'Einstein', 'marks' => [['type' => 'bold'], ['type' => 'link', 'attrs' => ['href' => 'https://example.org/e']]]],
+                ['type' => 'text', 'text' => ' wrote.'],
+            ]],
+            ['type' => 'blockMath', 'attrs' => ['latex' => "\\sum_{i=1}^{n} i\n= \\frac{n(n+1)}{2}"]],
+            ['type' => 'paragraph', 'content' => [['type' => 'inlineMath', 'attrs' => ['latex' => '   ']]]],
+        ]];
+
+        $this->notes->save($this->by, $note->id, ['doc' => $doc] + $this->edit(1, 'Formulas', '', 'math-001'));
+        $saved = $this->notes->open($this->by, $note->id)->doc;
+
+        $this->assertSame(['latex' => 'E = mc^2'], $saved['content'][0]['content'][1]['attrs']);
+        $this->assertSame('blockMath', $saved['content'][1]['type']);
+        // An empty formula goes, leaving its paragraph empty.
+        $this->assertArrayNotHasKey('content', $saved['content'][2]);
+        $this->assertSame("Energy: \$E = mc^2\$ as [**Einstein**](https://example.org/e) wrote.\n\n\$\$\n\\sum_{i=1}^{n} i\n= \\frac{n(n+1)}{2}\n\$\$", NoteDoc::markdown($saved));
+        $this->assertSame("Energy: E = mc^2 as Einstein wrote.\n\n\\sum_{i=1}^{n} i\n= \\frac{n(n+1)}{2}", NoteDoc::plain($saved));
+        $this->assertStringContainsString('E = mc^2', NoteDoc::text($saved));
+
+        $this->expectException(Unprocessable::class);
+        $this->notes->save($this->by, $note->id, ['doc' => ['type' => 'doc', 'content' => [['type' => 'blockMath', 'attrs' => ['latex' => str_repeat('x', NoteDoc::MAX_FORMULA + 1)]]]]] + $this->edit(2, 'Formulas', '', 'math-002'));
+    }
+
+    public function test_marks_keep_their_markers_in_markdown_and_none_in_plain_text(): void
+    {
+        $doc = ['type' => 'doc', 'content' => [
+            ['type' => 'paragraph', 'content' => [
+                ['type' => 'text', 'text' => 'Water is H'],
+                ['type' => 'text', 'text' => '2', 'marks' => [['type' => 'subscript']]],
+                ['type' => 'text', 'text' => 'O, '],
+                ['type' => 'text', 'text' => 'key ', 'marks' => [['type' => 'highlight', 'attrs' => ['tone' => 'green']]]],
+                ['type' => 'text', 'text' => 'and ', 'marks' => [['type' => 'italic']]],
+                ['type' => 'text', 'text' => 'x = 1', 'marks' => [['type' => 'code']]],
+                ['type' => 'text', 'text' => ' ', 'marks' => [['type' => 'bold']]],
+                ['type' => 'text', 'text' => 'gone', 'marks' => [['type' => 'strike'], ['type' => 'underline']]],
+            ]],
+        ]];
+
+        $this->assertSame('Water is H<sub>2</sub>O, ==key== *and* `x = 1` <u>~~gone~~</u>', NoteDoc::markdown($doc));
+        $this->assertSame('Water is H2O, key and x = 1 gone', NoteDoc::plain($doc));
+    }
+
     private function edit(int $base, string $title, string $text, string $saveId): array
     {
         return [

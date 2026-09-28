@@ -4,6 +4,8 @@
         <x-button variant="primary" icon="rotate-ccw" wire:click="restore">Restore</x-button>
     @else
         @include('livewire.workspaces.partials.row-menu', ['id' => 'note-'.$note->id, 'label' => $note->displayTitle(), 'items' => [
+            ['Download as Markdown', 'download', null, false, route('workspaces.notes.export', [$note->workspaceId, $note->id, 'md'])],
+            ['Download as text', 'file-text', null, false, route('workspaces.notes.export', [$note->workspaceId, $note->id, 'txt'])],
             ['Move to trash', 'trash-2', 'trash', false],
         ]])
     @endif

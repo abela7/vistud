@@ -36,6 +36,9 @@
                     @if ($file->previewable())
                         <a class="btn btn-ghost" href="{{ $content }}" target="_blank" rel="noopener"><x-icon name="external-link" class="size-4" /><span class="max-sm:sr-only">Open in a new tab</span></a>
                     @endif
+                    @if ($openAsNote !== null)
+                        <a class="btn btn-secondary" href="{{ $openAsNote }}" title="A new note made from this file; the file stays as it is"><x-icon name="file-plus" class="size-4" />Open as a note</a>
+                    @endif
                     <a class="btn btn-secondary" href="{{ route('files.content', [$file->id, 'download' => 1]) }}"><x-icon name="download" class="size-4" />Download</a>
                 @endif
                 <livewire:workspaces.file-actions :file-id="$file->id" />
@@ -60,6 +63,9 @@
             <div class="file-preview file-preview-image">
                 <img src="{{ $content }}" alt="{{ $file->fileName() }}">
             </div>
+        @elseif ($markdown !== null)
+            {{-- App\Study\MarkdownPreview: raw HTML stripped, unsafe links dropped. Formulas are drawn by resources/js/formulas.js. --}}
+            <div class="file-preview file-markdown note-prose" data-formulas aria-label="{{ $file->fileName() }}">{!! $markdown !!}</div>
         @elseif ($file->kind === 'text')
             <pre class="file-preview file-text" tabindex="0" aria-label="{{ $file->fileName() }}">{{ $text }}</pre>
         @else

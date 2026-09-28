@@ -126,7 +126,7 @@ class BriefingsTest extends TestCase
             '## Material for this session', '- The student\'s note "Lecture 3: joins": its text follows.',
             '## All topics in this course', '### Week 1: Relational model', '- Joins: understood (evidence: no contact yet · not practised yet)', '### Not in a module', '- Normalisation: not started',
             '## Other things the student has recorded', '- Normalisation: 3NF: no non-key column depends on another non-key column.',
-            '## The student\'s note: Lecture 3: joins', '## Left join', 'Keeps every row of the left table.', '- Unmatched rows get NULLs',
+            '## The student\'s note: Lecture 3: joins', '## Left join', 'Keeps every row of the **left** table.', '- Unmatched rows get NULLs',
         ];
         $this->assertSeeInOrderText($order, $text);
         // Not due within two weeks.

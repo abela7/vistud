@@ -2,8 +2,11 @@
 | Moving between pages without reloading (the owner's review, 2026-09-28).
 | A link inside ViStud fetches the next page and swaps it in (Livewire's
 | wire:navigate): no white flash, and the page is fetched as soon as the
-| pointer rests on the link. Livewire replaces the <body>, so a script that
-| sets up the page registers with onPage() and runs again on each new one.
+| link is pressed, before the click lands. Never on hover: Livewire keeps a
+| page fetched on hover for 30 seconds and would show it after a change
+| (a folder deleted, a note written) as if nothing had happened. Livewire
+| replaces the <body>, so a script that sets up the page registers with
+| onPage() and runs again on each new one.
 |
 | A link is left to the browser when it leaves ViStud, opens elsewhere
 | (target, download), goes to a file's bytes, or says data-no-navigate.
@@ -27,7 +30,7 @@ document.addEventListener('livewire:navigated', () => {
 
 // ---------- Which links navigate in place ----------
 
-const NATIVE = /\/content$|\/notes\/images\/|\/logout$|\/export$/;
+const NATIVE = /\/content$|\/notes\/images\/|\/logout$|\/export(\/|$)/;
 
 function navigable(link) {
     if (link.hasAttribute('wire:navigate') || link.hasAttribute('wire:navigate.hover')) return false;
@@ -51,7 +54,7 @@ function markLinks(root) {
     if (!window.Livewire || !(root instanceof Element || root instanceof Document)) return;
     const links = root instanceof HTMLAnchorElement ? [root] : root.querySelectorAll('a[href]');
     for (const link of links) {
-        if (navigable(link)) link.setAttribute('wire:navigate.hover', '');
+        if (navigable(link)) link.setAttribute('wire:navigate', '');
     }
 }
 

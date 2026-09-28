@@ -6,6 +6,7 @@ use App\Identity\PrincipalFactory;
 use App\Platform\Errors\NotFound;
 use App\Study\Files;
 use App\Study\Folders;
+use App\Study\MarkdownPreview;
 use App\Study\Modules;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
@@ -36,12 +37,18 @@ class FilePageController
             array_unshift($trail, [$modules->find($by, $found->moduleId)->title, route('workspaces.modules.show', [$details->id, $found->moduleId])]);
         }
 
+        $text = $found->trashedAt === null ? $files->textPreview($by, $found->id) : null;
+        $place = $found->folderId !== null ? "folder:{$found->folderId}" : ($found->moduleId !== null ? "module:{$found->moduleId}" : null);
+
         return view('workspaces.file', [
             'workspace' => $details,
             'inModule' => $found->moduleId !== null,
             'file' => $found,
             'trail' => $trail,
-            'text' => $found->trashedAt === null ? $files->textPreview($by, $found->id) : null,
+            'text' => $text,
+            // A Markdown file is shown as it was meant to look; any text file can open as a new note in the same place.
+            'markdown' => $text !== null && in_array($found->extension, ['md', 'markdown'], true) ? MarkdownPreview::html($text) : null,
+            'openAsNote' => $text !== null ? route('workspaces.notes.create', [$details->id, 'from' => "file:{$found->id}"] + ($place === null ? [] : ['in' => $place])) : null,
         ]);
     }
 }

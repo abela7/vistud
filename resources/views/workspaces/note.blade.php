@@ -100,6 +100,10 @@
                     <button type="button" class="btn btn-ghost note-mode" onclick="window.print()" title="Print / Export PDF (Ctrl+P)" aria-label="Print or export PDF">
                         <x-icon name="printer" class="size-4" /><span class="max-sm:sr-only">Print</span>
                     </button>
+                    <button type="button" class="btn btn-ghost note-mode" data-note-import title="Import a Markdown (.md) or text (.txt) file into this note">
+                        <span><x-icon name="file-up" class="size-4" /><span class="max-sm:sr-only">Import</span></span>
+                    </button>
+                    <input type="file" hidden data-import-file accept=".md,.markdown,.txt,text/markdown,text/plain">
                 @endif
                 @unless ($new)
                     <livewire:workspaces.note-actions :note-id="$note->id" />
@@ -158,6 +162,7 @@
             </div>
 
             <article class="note-card" data-note-editor data-account="{{ auth()->id() }}" data-image-upload-url="{{ route('api.v1.notes.images.store') }}"
+                @if ($import ?? null) data-import-url="{{ $import['url'] }}" data-import-name="{{ $import['name'] }}" data-import-kind="{{ $import['markdown'] ? 'markdown' : 'text' }}" @endif
                 @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" @endif>
                 <div class="note-toolbar" role="toolbar" aria-label="Formatting" aria-controls="note-body" data-note-toolbar>
                     <button type="button" class="toolbar-button" data-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo" tabindex="0"><x-icon name="undo-2" class="size-5" /></button>
@@ -242,6 +247,13 @@
                     @endforeach
                 </div>
                 <div id="note-math-menu" class="toolbar-menu math-palette" popover role="dialog" aria-label="Symbols">
+                    <div class="math-palette-section">
+                        <p class="math-palette-title">Formulas (LaTeX)</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-secondary btn-sm" data-formula-new="inline"><x-icon name="sigma" class="size-4" />In the line</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-formula-new="block"><x-icon name="sigma" class="size-4" />On its own line</button>
+                        </div>
+                    </div>
                     <div class="math-palette-section">
                         <p class="math-palette-title">Physics & Math Variables</p>
                         <div class="math-palette-grid">
@@ -473,6 +485,46 @@
                         <div class="modal-actions">
                             <x-button data-dialog-close>Cancel</x-button>
                             <x-button variant="primary" data-insert-image-btn>Add</x-button>
+                        </div>
+                    </div>
+                </dialog>
+
+                {{-- Importing a file into a note that already has words: replace them, or add to the end. --}}
+                <dialog id="note-import-dialog" class="modal" aria-labelledby="note-import-title" data-import-dialog>
+                    <div class="modal-panel">
+                        <div class="modal-head">
+                            <h2 id="note-import-title" class="min-w-0 flex-1 text-lg font-semibold">Import <span class="break-words" data-import-file-name></span></h2>
+                            <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" data-dialog-close><x-icon name="x" /></button>
+                        </div>
+                        <div class="space-y-3 px-5">
+                            <p>This note already has some writing. Where should the file go?</p>
+                            <p class="text-sm text-fg-muted">Headings, lists, tables, quotes, code, pictures and formulas come across. Ctrl+Z takes an import back.</p>
+                        </div>
+                        <div class="modal-actions">
+                            <x-button data-dialog-close>Cancel</x-button>
+                            <x-button data-import-choice="replace">Replace everything</x-button>
+                            <x-button variant="primary" data-import-choice="append">Add to the end</x-button>
+                        </div>
+                    </div>
+                </dialog>
+
+                {{-- A formula: its LaTeX, shown as it will look. --}}
+                <dialog id="note-formula-dialog" class="modal" aria-labelledby="note-formula-title" data-formula-dialog>
+                    <div class="modal-panel">
+                        <div class="modal-head">
+                            <h2 id="note-formula-title" class="min-w-0 flex-1 text-lg font-semibold" data-formula-heading>Formula</h2>
+                            <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" data-dialog-close><x-icon name="x" /></button>
+                        </div>
+                        <div class="space-y-3 px-5">
+                            <label for="note-formula-latex" class="text-sm font-medium">LaTeX</label>
+                            <textarea id="note-formula-latex" class="input font-mono text-sm" rows="4" spellcheck="false" placeholder="\frac{a}{b} + \sqrt{x^2 + y^2}" data-formula-latex></textarea>
+                            <p class="text-sm text-fg-muted">Powers <code>x^2</code>, indexes <code>a_n</code>, fractions <code>\frac{a}{b}</code>, roots <code>\sqrt{x}</code>, sums <code>\sum_{i=1}^{n}</code>, Greek letters <code>\alpha</code>. An AI can write any formula in LaTeX for you.</p>
+                            <div class="formula-preview" data-formula-preview aria-live="polite"></div>
+                        </div>
+                        <div class="modal-actions">
+                            <x-button data-dialog-close>Cancel</x-button>
+                            <x-button variant="danger" data-formula-remove hidden>Remove</x-button>
+                            <x-button variant="primary" data-formula-apply>Apply</x-button>
                         </div>
                     </div>
                 </dialog>

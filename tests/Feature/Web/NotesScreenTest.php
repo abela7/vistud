@@ -5,22 +5,25 @@ namespace Tests\Feature\Web;
 use App\Livewire\Workspaces\Contents;
 use App\Livewire\Workspaces\NoteActions;
 use App\Models\User;
+use App\Study\Files;
 use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\NoteDetails;
 use App\Study\Notes;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
+use Tests\Concerns\MakesStudyFiles;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
 /** The note page, notes in Modules, and Notes & files with its trash (docs/specs/workspaces.md step 3). */
 class NotesScreenTest extends TestCase
 {
-    use CreatesAccounts, RefreshesDatabase;
+    use CreatesAccounts, MakesStudyFiles, RefreshesDatabase;
 
     private User $ada;
 
@@ -151,6 +154,92 @@ class NotesScreenTest extends TestCase
 
         $this->assertThrows(fn () => $this->contents('modules')->set('view', 'notes'), CannotUpdateLockedPropertyException::class);
         $this->assertThrows(fn () => $this->actions($note)->set('noteId', 'someone-elses'), CannotUpdateLockedPropertyException::class);
+    }
+
+    public function test_a_note_downloads_as_markdown_and_as_plain_text(): void
+    {
+        $by = $this->principal($this->ada);
+        $notes = app(Notes::class);
+        $note = $notes->create($by, 'workspace', $this->biology->id, 'Mitosis: a summary / notes');
+        $notes->save($by, $note->id, ['base_version' => 1, 'save_id' => 'export-save-1', 'client_id' => 'export-tab-1', 'title' => 'Mitosis: a summary / notes', 'doc' => ['type' => 'doc', 'content' => [
+            ['type' => 'heading', 'attrs' => ['level' => 2], 'content' => [['type' => 'text', 'text' => 'Phases']]],
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Energy '], ['type' => 'text', 'text' => 'matters', 'marks' => [['type' => 'bold']]], ['type' => 'text', 'text' => ': '], ['type' => 'inlineMath', 'attrs' => ['latex' => 'E = mc^2']], ['type' => 'text', 'text' => '.']]],
+            ['type' => 'taskList', 'content' => [['type' => 'taskItem', 'attrs' => ['checked' => true], 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Prophase']]]]]]],
+            ['type' => 'callout', 'attrs' => ['tone' => 'theorem'], 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Cells divide.']]]]],
+            ['type' => 'blockMath', 'attrs' => ['latex' => '\frac{n(n+1)}{2}']],
+        ]]]);
+
+        // Markdown: the title as the heading, then the note as any Markdown reader shows it. Named after the title.
+        $markdown = $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $note->id, 'md']))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'text/markdown; charset=utf-8')
+            ->assertHeader('Content-Disposition', 'attachment; filename="Mitosis a summary notes.md"')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+        $this->assertStringContainsString('no-store', (string) $markdown->headers->get('Cache-Control'));
+        $this->assertSame(
+            "# Mitosis: a summary / notes\n\n## Phases\n\nEnergy **matters**: \$E = mc^2\$.\n\n- [x] Prophase\n\n> [!THEOREM]\n> Cells divide.\n\n\$\$\n\\frac{n(n+1)}{2}\n\$\$\n",
+            $markdown->getContent(),
+        );
+
+        // Plain text: the same words for Notepad, without markers.
+        $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $note->id, 'txt']))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'text/plain; charset=utf-8')
+            ->assertHeader('Content-Disposition', 'attachment; filename="Mitosis a summary notes.txt"')
+            ->assertContent("Mitosis: a summary / notes\n\nPhases\n\nEnergy matters: E = mc^2.\n\n- [x] Prophase\n\nTheorem:\nCells divide.\n\n\\frac{n(n+1)}{2}\n");
+
+        // A title with letters outside ASCII is kept in the file name, with an ASCII one for older browsers; no title is "Untitled note".
+        $accents = $notes->create($by, 'workspace', $this->biology->id, 'Résumé — cellules');
+        $disposition = (string) $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $accents->id, 'md']))->assertOk()->headers->get('Content-Disposition');
+        $this->assertStringContainsString('filename="Resume', $disposition);
+        $this->assertStringContainsString("filename*=utf-8''R%C3%A9sum%C3%A9%20", $disposition);
+        $untitled = $notes->create($by, 'workspace', $this->biology->id);
+        $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $untitled->id, 'txt']))
+            ->assertOk()->assertHeader('Content-Disposition', 'attachment; filename="Untitled note.txt"')->assertContent("Untitled note\n");
+
+        // Only the owner's note, in that workspace, in one of the two formats.
+        $bob = $this->student();
+        $theirs = app(Workspaces::class)->create($this->principal($bob), ['name' => 'Private']);
+        $theirNote = $notes->create($this->principal($bob), 'workspace', $theirs->id, 'Secret');
+        $maths = app(Workspaces::class)->create($by, ['name' => 'Mathematics']);
+        $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$theirs->id, $theirNote->id, 'md']))->assertNotFound();
+        $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $theirNote->id, 'md']))->assertNotFound();
+        $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$maths->id, $note->id, 'md']))->assertNotFound();
+        $this->actingAs($this->ada)->get("/workspaces/{$this->biology->id}/notes/{$note->id}/export/pdf")->assertNotFound();
+        $this->actingAs($bob)->get(route('workspaces.notes.export', [$this->biology->id, $note->id, 'txt']))->assertNotFound();
+    }
+
+    public function test_a_new_note_can_start_from_a_markdown_or_text_file_in_the_workspace(): void
+    {
+        Storage::fake('local');
+        $by = $this->principal($this->ada);
+        $cells = app(Modules::class)->create($by, $this->biology->id, ['title' => 'Cells']);
+        $files = app(Files::class);
+        $reading = $files->upload($by, 'module', $cells->id, $this->temp("# Reading\n\nCells divide.\n"), 'Reading.md');
+        $plan = $files->upload($by, 'module', $cells->id, $this->temp("Plan\n"), 'Plan.txt');
+        $slides = $files->upload($by, 'module', $cells->id, $this->temp($this->pdf()), 'Slides.pdf');
+
+        // The editor is told where the file's words are and what they are; the browser brings them in.
+        $this->actingAs($this->ada)->get(route('workspaces.notes.create', [$this->biology->id, 'from' => "file:{$reading->id}", 'in' => "module:{$cells->id}"]))
+            ->assertOk()
+            ->assertSee('data-import-url="'.route('files.content', $reading->id).'"', false)
+            ->assertSee('data-import-name="Reading"', false)
+            ->assertSee('data-import-kind="markdown"', false)
+            ->assertSee('data-place-type="module"', false);
+        $this->actingAs($this->ada)->get(route('workspaces.notes.create', [$this->biology->id, 'from' => "file:{$plan->id}"]))
+            ->assertOk()->assertSee('data-import-kind="text"', false);
+        $this->actingAs($this->ada)->get(route('workspaces.notes.create', $this->biology->id))->assertOk()->assertDontSee('data-import-url', false);
+
+        // Only a Markdown or text file of the student's, in this workspace and not in the trash.
+        $this->actingAs($this->ada)->get(route('workspaces.notes.create', [$this->biology->id, 'from' => "file:{$slides->id}"]))->assertNotFound();
+        $this->actingAs($this->ada)->get(route('workspaces.notes.create', [$this->biology->id, 'from' => 'file:nothing-here']))->assertNotFound();
+        $maths = app(Workspaces::class)->create($by, ['name' => 'Mathematics']);
+        $this->actingAs($this->ada)->get(route('workspaces.notes.create', [$maths->id, 'from' => "file:{$reading->id}"]))->assertNotFound();
+        $bob = $this->student();
+        $theirs = app(Workspaces::class)->create($this->principal($bob), ['name' => 'Private']);
+        $this->actingAs($bob)->get(route('workspaces.notes.create', [$theirs->id, 'from' => "file:{$reading->id}"]))->assertNotFound();
+        $files->trash($by, $reading->id);
+        $this->actingAs($this->ada)->get(route('workspaces.notes.create', [$this->biology->id, 'from' => "file:{$reading->id}"]))->assertNotFound();
     }
 
     /** @return list<NoteDetails> */

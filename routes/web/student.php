@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\NoteImageController;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
 use App\Http\Controllers\FlashcardReviewController;
+use App\Http\Controllers\NoteExportController;
 use App\Http\Controllers\NotePageController;
 use App\Http\Controllers\PlacePageController;
 use App\Http\Controllers\SessionBriefingController;
@@ -34,6 +35,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspaces/{workspace}/notes/new', [NotePageController::class, 'create'])
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.notes.create');
+    // A note as a Markdown or text file to keep, or to open elsewhere.
+    Route::get('/workspaces/{workspace}/notes/{note}/export/{format}', NoteExportController::class)
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'note' => '[A-Za-z0-9-]{1,64}', 'format' => 'md|txt'])
+        ->name('workspaces.notes.export');
     // A note in a workspace; its editor saves through PUT /api/v1/notes/{id}.
     Route::get('/workspaces/{workspace}/notes/{note}', NotePageController::class)
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'note' => '[A-Za-z0-9-]{1,64}'])

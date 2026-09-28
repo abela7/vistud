@@ -20,13 +20,26 @@ import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { TableKit } from '@tiptap/extension-table';
+import { Markdown } from '@tiptap/markdown';
+import { Mathematics } from '@tiptap/extension-mathematics';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { canSplit } from '@tiptap/pm/transform';
 import { deleteDrafts, openDrafts } from './drafts.js';
 import { createAutosave, randomId, xsrf } from './autosave.js';
 import { toast } from '../toasts.js';
 
-const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'listItem', 'taskItem', 'table', 'tableRow', 'tableHeader', 'tableCell', 'callout', 'image', 'pageBreak'];
+const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'listItem', 'taskItem', 'table', 'tableRow', 'tableHeader', 'tableCell', 'callout', 'image', 'pageBreak', 'blockMath'];
+
+/** A Markdown alert (> [!THEOREM]) as one of the callout's tones; anything else is a note. */
+const CALLOUT_TONES = { theorem: 'theorem', law: 'theorem', definition: 'definition', formula: 'formula', equation: 'formula', example: 'example' };
+
+/** A picture's address a note can keep (app/Study/NoteDoc.php): the web, or one uploaded for a note. */
+const KEEPABLE_PICTURE = /^(https?:\/\/|\/notes\/images\/)/i;
+
+/** What a formula's LaTeX is drawn with: never trusted with anything but drawing, and a mistake shows as the words. */
+const KATEX = { throwOnError: false, strict: 'ignore', trust: false, maxSize: 50, errorColor: 'currentColor' };
 
 /** A highlight keeps only a tone's name (app/Study/NoteDoc.php); the theme draws it. */
 const NoteHighlight = Highlight.extend({
@@ -42,12 +55,27 @@ const NoteHighlight = Highlight.extend({
 });
 const HIGHLIGHT = NoteHighlight.name;
 
-/** A STEM callout card (Theorem, Definition, Key Formula, Example, Note). */
+/** A STEM callout card (Theorem, Definition, Key Formula, Example, Note). In Markdown it is an alert, > [!THEOREM] and so on. */
 const NoteCallout = Node.create({
     name: 'callout',
     group: 'block',
     content: 'block+',
     defining: true,
+    // Ahead of the quote, which takes the quotes that aren't alerts.
+    priority: 110,
+    markdownTokenName: 'blockquote',
+    parseMarkdown(token, helpers) {
+        const first = token.tokens?.[0];
+        const alert = first?.type === 'paragraph' ? /^\[!([A-Za-z]+)\][ \t]*(?:\r?\n|$)/.exec(first.text ?? '') : null;
+        if (!alert) return null;
+        const tone = CALLOUT_TONES[alert[1].toLowerCase()] ?? 'note';
+        const opening = (first.text ?? '').slice(alert[0].length).trim();
+        const content = [
+            ...(opening ? [helpers.createNode('paragraph', undefined, helpers.parseInline(helpers.tokenizeInline(opening)))] : []),
+            ...helpers.parseBlockChildren(token.tokens.slice(1)),
+        ];
+        return helpers.createNode('callout', { tone }, content.length ? content : [helpers.createNode('paragraph')]);
+    },
     addAttributes() {
         return {
             tone: {
@@ -72,6 +100,23 @@ const NoteImage = Node.create({
     defining: true,
     draggable: true,
     selectable: true,
+    // In Markdown, a picture on a line of its own is a block; one inside a sentence can only be words here.
+    markdownTokenizer: {
+        name: 'image',
+        level: 'block',
+        start: (src) => src.indexOf('!['),
+        tokenize: (src) => {
+            const m = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)[ \t]*(?:\n+|$)/.exec(src);
+            return m ? { type: 'image', raw: m[0], href: m[2], text: m[1], title: m[3] ?? '', block: true } : undefined;
+        },
+    },
+    parseMarkdown(token, helpers) {
+        const src = token.href ?? '';
+        const keepable = KEEPABLE_PICTURE.test(src);
+        if (token.block && keepable) return { type: 'image', attrs: { src, alt: token.text ?? '', title: token.title ?? '' } };
+        const words = token.text || token.title || 'picture';
+        return keepable ? helpers.createTextNode(words, [{ type: 'link', attrs: { href: src } }]) : helpers.createTextNode(`[${words}]`);
+    },
 
     addAttributes() {
         return {
@@ -265,6 +310,15 @@ function tabId() {
 }
 
 /**
+ * Pasted plain text that is written as Markdown: a heading, a list, a fence, a table, a quote, or bold or a
+ * formula in it. A formula is $…$ with no space just inside the dollars and no digit after the last (Pandoc's
+ * rule), so "$5 and $10" is money, not a formula.
+ */
+function looksLikeMarkdown(text) {
+    return /^(#{1,6} |[-*+] |\d+\. |> |```|\|.*\|)/m.test(text) || /\*\*[^*\n]+\*\*|(?<![$\w])\$(?=\S)[^$\n]+?(?<=\S)\$(?![$\d])|\$\$[^$]+\$\$/.test(text);
+}
+
+/**
  * When the user selects a partial substring inside a block and applies a block-level
  * formatting command (Title, Heading, Blockquote, CodeBlock, Lists, Clear formatting),
  * ProseMirror by default applies the block command to the whole enclosing parent block.
@@ -453,6 +507,12 @@ export async function mount(host) {
             Subscript,
             Superscript,
             TableKit.configure({ table: { resizable: false } }),
+            Markdown,
+            Mathematics.configure({
+                katexOptions: KATEX,
+                inlineOptions: { onClick: (node, pos) => openFormula('inline', node, pos) },
+                blockOptions: { onClick: (node, pos) => openFormula('block', node, pos) },
+            }),
             CharacterCount,
             Placeholder.configure({ placeholder: 'Start writing…' }),
             UniqueID.configure({ types: BLOCKS, generateID: () => randomId(8) }),
@@ -460,6 +520,12 @@ export async function mount(host) {
         editorProps: {
             attributes: { class: 'note-prose', 'aria-label': 'Note', 'aria-multiline': 'true', role: 'textbox' },
             handlePaste: (view, event) => {
+                const plain = event.clipboardData?.getData('text/plain') ?? '';
+                if (plain && !event.clipboardData.getData('text/html') && !editor.isActive('codeBlock') && looksLikeMarkdown(plain)) {
+                    event.preventDefault();
+                    editor.chain().focus().insertContent(plain, { contentType: 'markdown' }).run();
+                    return true;
+                }
                 const items = Array.from(event.clipboardData?.items || []);
                 const imageItem = items.find((item) => item.type.startsWith('image/'));
                 if (imageItem) {
@@ -753,6 +819,8 @@ export async function mount(host) {
     const statsDialog = host.querySelector('[data-stats-dialog]');
     const shortcutsDialog = host.querySelector('[data-shortcuts-dialog]');
     const imageDialog = host.querySelector('#note-image-dialog');
+    const importDialog = host.querySelector('[data-import-dialog]');
+    const formulaDialog = host.querySelector('[data-formula-dialog]');
     const imageToolbar = host.querySelector('#note-image-toolbar');
     const count = host.querySelector('[data-note-count]');
     const alignOf = () => ['center', 'right', 'justify'].find((a) => editor.isActive({ textAlign: a })) ?? 'left';
@@ -1268,7 +1336,7 @@ export async function mount(host) {
     }
     count?.addEventListener('click', openStats);
 
-    for (const dialog of [statsDialog, shortcutsDialog, imageDialog].filter(Boolean)) {
+    for (const dialog of [statsDialog, shortcutsDialog, imageDialog, importDialog, formulaDialog].filter(Boolean)) {
         dialog.addEventListener('click', (event) => {
             if (event.target.closest('[data-dialog-close]') || event.target === dialog) {
                 dialog.close();
@@ -1370,6 +1438,137 @@ export async function mount(host) {
             }
         });
     }
+
+    // ---------- Importing a Markdown or text file ----------
+    /** Plain text as a document: a paragraph per blank line, a line break per line. */
+    const textDoc = (text) => ({
+        type: 'doc',
+        content: text.replace(/\r\n?/g, '\n').split(/\n{2,}/).map((para) => {
+            const content = para.split('\n').flatMap((line, i) => [...(i ? [{ type: 'hardBreak' }] : []), ...(line ? [{ type: 'text', text: line }] : [])]);
+            return content.length ? { type: 'paragraph', content } : { type: 'paragraph' };
+        }),
+    });
+    const wordsOf = (node) => (node.content ?? []).map((child) => (child.type === 'text' ? child.text : wordsOf(child))).join('');
+    /**
+     * The file's words into the note: a Markdown file as what it describes, a text file as paragraphs. A note
+     * without a title takes the file's first heading, else the file's name. Where the note already has words,
+     * `how` says whether they are replaced or the file goes after them.
+     */
+    function importText(text, name, markdown, how) {
+        if (left) return;
+        const doc = markdown ? editor.markdown.parse(text) : textDoc(text);
+        let content = doc.content ?? [];
+        if (titleField.value.trim() === '') {
+            const first = content[0];
+            let title = name.replace(/\.[^.]+$/, '');
+            if (first?.type === 'heading' && first.attrs?.level === 1 && wordsOf(first).trim()) {
+                title = wordsOf(first).trim();
+                content = content.slice(1);
+            }
+            titleField.value = title;
+            growTitle();
+            setTitle();
+        }
+        if (content.length === 0) {
+            toast('There was nothing in the file to bring in.', 'info');
+            changed();
+            return;
+        }
+        const chain = editor.chain().focus();
+        if (how === 'append') chain.insertContentAt(editor.state.doc.content.size, content);
+        else chain.insertContentAt({ from: 0, to: editor.state.doc.content.size }, content);
+        chain.run();
+        changed();
+        toast(`${name || 'The file'} is in the note.`, 'success');
+    }
+    const importButton = document.querySelector('[data-note-import]');
+    const importFile = document.querySelector('[data-import-file]');
+    let pendingImport = null;
+    importButton?.addEventListener('click', () => importFile?.click());
+    importFile?.addEventListener('change', async () => {
+        const file = importFile.files?.[0];
+        importFile.value = '';
+        if (!file) return;
+        if (file.size > 2_000_000) {
+            toast('That file is too big for one note. Split it up first.', 'info');
+            return;
+        }
+        const markdown = /\.(md|markdown)$/i.test(file.name) || file.type === 'text/markdown';
+        const text = await file.text();
+        if (!hasWords() || !editor.getText().trim()) {
+            importText(text, file.name, markdown, 'replace');
+            return;
+        }
+        pendingImport = { text, name: file.name, markdown };
+        importDialog.querySelector('[data-import-file-name]').textContent = file.name;
+        importDialog.showModal();
+    });
+    importDialog?.addEventListener('click', (event) => {
+        const choice = event.target.closest('[data-import-choice]')?.dataset.importChoice;
+        if (!choice || !pendingImport) return;
+        importDialog.close();
+        importText(pendingImport.text, pendingImport.name, pendingImport.markdown, choice);
+        pendingImport = null;
+    });
+
+    // ---------- Formulas ----------
+    const formulaLatex = formulaDialog?.querySelector('[data-formula-latex]');
+    const formulaPreview = formulaDialog?.querySelector('[data-formula-preview]');
+    const formulaRemove = formulaDialog?.querySelector('[data-formula-remove]');
+    let formula = { kind: 'inline', pos: null };
+    const drawPreview = () => {
+        if (!formulaPreview) return;
+        const latex = formulaLatex.value.trim();
+        if (!latex) {
+            formulaPreview.textContent = '';
+            return;
+        }
+        katex.render(latex, formulaPreview, { ...KATEX, displayMode: formula.kind === 'block' });
+    };
+    /** The panel for a new formula (no position) or an existing one, at its position. */
+    function openFormula(kind, node = null, pos = null) {
+        if (!formulaDialog) return;
+        formula = { kind, pos };
+        formulaDialog.querySelector('[data-formula-heading]').textContent = pos === null ? (kind === 'block' ? 'Formula on its own line' : 'Formula in the line') : 'Edit the formula';
+        formulaLatex.value = node?.attrs?.latex ?? '';
+        formulaRemove.hidden = pos === null;
+        drawPreview();
+        formulaDialog.showModal();
+        formulaLatex.focus();
+    }
+    formulaLatex?.addEventListener('input', drawPreview);
+    formulaLatex?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            formulaDialog.querySelector('[data-formula-apply]').click();
+        }
+    });
+    formulaDialog?.querySelector('[data-formula-apply]').addEventListener('click', () => {
+        const latex = formulaLatex.value.trim();
+        const { kind, pos } = formula;
+        formulaDialog.close();
+        const chain = editor.chain().focus();
+        if (pos === null) {
+            if (latex) (kind === 'block' ? chain.insertBlockMath({ latex }) : chain.insertInlineMath({ latex })).run();
+        } else if (latex) {
+            (kind === 'block' ? chain.updateBlockMath({ latex, pos }) : chain.updateInlineMath({ latex, pos })).run();
+        } else {
+            (kind === 'block' ? chain.deleteBlockMath({ pos }) : chain.deleteInlineMath({ pos })).run();
+        }
+    });
+    formulaRemove?.addEventListener('click', () => {
+        const { kind, pos } = formula;
+        formulaDialog.close();
+        if (pos === null) return;
+        const chain = editor.chain().focus();
+        (kind === 'block' ? chain.deleteBlockMath({ pos }) : chain.deleteInlineMath({ pos })).run();
+    });
+    mathMenu?.addEventListener('click', (event) => {
+        const kind = event.target.closest('[data-formula-new]')?.dataset.formulaNew;
+        if (!kind) return;
+        mathMenu.hidePopover();
+        openFormula(kind);
+    });
 
     // ---------- Floating Image Controls & Selection ----------
     let activeFigureEl = null;
@@ -1725,6 +1924,17 @@ export async function mount(host) {
         leaving.abort();
         editor.destroy();
     });
+
+    // Opened from a Markdown or text file: its words become the note's, and its name the title, then the first save makes the note.
+    if (host.dataset.importUrl && !left) {
+        try {
+            const response = await fetch(host.dataset.importUrl, { credentials: 'same-origin' });
+            if (!response.ok) throw new Error(String(response.status));
+            importText(await response.text(), host.dataset.importName ?? '', host.dataset.importKind === 'markdown', 'replace');
+        } catch {
+            toast('The file couldn\'t be read into the note. Open it again from its page.', 'info');
+        }
+    }
 
     host.dataset.ready = 'true';
     return editor;

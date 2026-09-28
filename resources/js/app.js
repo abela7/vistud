@@ -14,6 +14,12 @@ onPage(() => {
     if (noteEditor) import('./note/editor.js').then(({ mount }) => mount(noteEditor));
 });
 
+// A Markdown file shown on its page: its formulas are drawn only when it has any.
+onPage(() => {
+    const preview = document.querySelector('[data-formulas]');
+    if (preview && preview.textContent.includes('$')) import('./formulas.js').then(({ drawFormulas }) => drawFormulas(preview));
+});
+
 // A student's note drafts on this device (resources/js/note/).
 const account = document.querySelector('meta[name="vistud-account"]')?.content;
 if (account) {
