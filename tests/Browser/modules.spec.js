@@ -144,6 +144,10 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await useSentinelTheme(page);
         const states = { modules: await foreignColours(page) };
 
+        await page.getByRole('button', { name: 'List view' }).click();
+        states['modules list view'] = await foreignColours(page);
+        await page.getByRole('button', { name: 'Grid view' }).click();
+
         await page.getByRole('button', { name: 'New module' }).click();
         await dialog(page).getByRole('button', { name: 'Add module' }).click();
         await dialog(page).getByText('Give the module a title.').waitFor();
@@ -209,4 +213,43 @@ test('modules never scroll sideways at 320 px, even with 200% text', async ({ pa
     await check('modules');
     await openPlace(page, 'Week 1: Cells');
     await check('module page');
+});
+
+test('modules can switch between grid and list view, persist preference, and pass axe checks', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openModules(page, makeStudentWithModules());
+
+    const grid = page.locator('ol.module-grid');
+    const listBtn = page.getByRole('button', { name: 'List view' });
+    const gridBtn = page.getByRole('button', { name: 'Grid view' });
+
+    // Defaults to grid view
+    await expect(grid).not.toHaveClass(/is-list-view/);
+    await expect(gridBtn).toHaveAttribute('aria-pressed', 'true');
+    await expect(listBtn).toHaveAttribute('aria-pressed', 'false');
+
+    // Switch to list view
+    await listBtn.click();
+    await expect(grid).toHaveClass(/is-list-view/);
+    await expect(listBtn).toHaveAttribute('aria-pressed', 'true');
+    await expect(gridBtn).toHaveAttribute('aria-pressed', 'false');
+    await expect(titles(page)).toHaveCount(2);
+
+    // List view passes axe accessibility checks
+    expect(await analyse(page), 'modules list view').toEqual([]);
+
+    // Persists across reloads
+    await page.reload();
+    await expect(grid).toHaveClass(/is-list-view/);
+
+    // Responsive on phone in list view without horizontal scroll
+    await page.setViewportSize(phone);
+    await expect(grid).toHaveClass(/is-list-view/);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+
+    // Switch back to grid view
+    await gridBtn.click();
+    await expect(grid).not.toHaveClass(/is-list-view/);
+    await expect(gridBtn).toHaveAttribute('aria-pressed', 'true');
 });

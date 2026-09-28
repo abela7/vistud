@@ -147,7 +147,7 @@
         text-align: center;
     }
 
-    /* ---------- Modules as cards ---------- */
+    /* ---------- Modules as cards & list ---------- */
 
     .module-grid {
         display: grid;
@@ -157,8 +157,13 @@
 
     .module-tile {
         position: relative;
-        display: flex;
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        grid-template-rows: auto 1fr auto;
+        grid-template-areas:
+            "badge menu"
+            "main main"
+            "progress progress";
         gap: 0.875rem;
         min-width: 0;
         min-height: 11rem;
@@ -176,7 +181,35 @@
         box-shadow: var(--elevation-md);
     }
 
+    .module-tile > .place-badge {
+        grid-area: badge;
+        justify-self: start;
+        align-self: start;
+    }
+
+    .module-tile > .module-actions {
+        grid-area: menu;
+        justify-self: end;
+        align-self: start;
+    }
+
+    .module-tile > .module-main {
+        grid-area: main;
+        align-self: start;
+    }
+
+    .module-tile > .module-topics-desktop {
+        grid-area: progress;
+        align-self: end;
+        display: block !important;
+    }
+
+    .module-grid:not(.is-list-view) .module-topics-inline {
+        display: none !important;
+    }
+
     .module-tile.is-new {
+        display: flex;
         padding: 0;
         border-style: dashed;
         border-color: var(--border-strong);
@@ -205,6 +238,95 @@
     .new-tile:focus-visible {
         outline: 2px solid var(--focus-ring);
         outline-offset: 2px;
+    }
+
+    /* List view for modules across all devices */
+    .module-grid.is-list-view {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+        overflow: hidden;
+    }
+
+    .module-grid.is-list-view .module-tile {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.875rem;
+        min-height: auto;
+        padding: 0.75rem 0.75rem 0.75rem 1rem;
+        border: none;
+        border-radius: 0;
+        background-color: transparent;
+        box-shadow: none;
+        transition: background-color 0.15s ease;
+    }
+
+    .module-grid.is-list-view .module-tile + .module-tile {
+        border-top: 1px solid var(--divider);
+    }
+
+    .module-grid.is-list-view .module-tile:not(.is-new):hover {
+        background-color: var(--hover);
+        border-color: transparent;
+        box-shadow: none;
+    }
+
+    .module-grid.is-list-view .module-tile > .place-badge {
+        flex: none;
+        width: 2.5rem;
+        height: 2.5rem;
+    }
+
+    .module-grid.is-list-view .module-tile > .module-main {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .module-grid.is-list-view .module-tile > .module-topics-desktop {
+        display: none !important;
+    }
+
+    @media (min-width: 640px) {
+        .module-grid.is-list-view .module-tile > .module-topics-desktop {
+            display: block !important;
+            flex: none;
+            width: 10rem;
+        }
+
+        .module-grid.is-list-view .module-topics-inline {
+            display: none !important;
+        }
+    }
+
+    .module-grid.is-list-view .module-tile > .module-actions {
+        flex: none;
+    }
+
+    .module-grid.is-list-view .module-tile.is-new {
+        display: block;
+        padding: 0;
+        border: none;
+        border-top: 1px dashed var(--divider);
+        background-color: transparent;
+    }
+
+    .module-grid.is-list-view .new-tile {
+        flex-direction: row;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 0.75rem;
+        min-height: 3.25rem;
+        padding: 0.625rem 1rem;
+        color: var(--text-muted);
+    }
+
+    .module-grid.is-list-view .new-tile .size-6 {
+        width: 1.25rem;
+        height: 1.25rem;
     }
 
     /* How much of a module is understood: the fill and a lighter track of the same colour. */
