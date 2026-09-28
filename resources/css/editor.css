@@ -1256,6 +1256,27 @@
         overflow-wrap: anywhere;
     }
 
+    .toast-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        border-radius: var(--radius-md);
+        color: var(--accent-contrast);
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    .toast-action:hover {
+        background-color: var(--surface-sunken);
+        color: var(--accent-hover);
+    }
+
     .toast-close {
         display: flex;
         flex-shrink: 0;

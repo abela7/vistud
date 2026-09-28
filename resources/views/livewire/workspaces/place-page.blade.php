@@ -14,7 +14,7 @@
         ? trim(($place->startsOn ? Carbon::parse($place->startsOn)->format('j M') : '').' – '.($place->endsOn ? Carbon::parse($place->endsOn)->format('j M') : ''), ' –')
         : null;
 @endphp
-<div class="space-y-6">
+<div class="space-y-6" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     <div class="space-y-3">
         @if ($trail !== [])
             <x-back :href="end($trail)[1]" :to="end($trail)[0]" />
@@ -44,6 +44,10 @@
                 </div>
             </div>
             <div class="flex flex-wrap items-center gap-2">
+                <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
+                    <x-icon name="list-checks" class="size-4" />
+                    <span x-text="isSelecting ? 'Done' : 'Select'"></span>
+                </button>
                 @include('livewire.workspaces.partials.new-menu', ['placeId' => $place->id, 'folders' => $isModule || $place->depth < Folders::MAX_DEPTH, 'questionUrl' => $isModule ? route('workspaces.modules.questions', [$workspaceId, $place->id, 'ask' => 1]) : null])
                 @if ($isModule)
                     <a href="{{ route('workspaces.modules.questions', [$workspaceId, $place->id]) }}" class="btn btn-secondary">
@@ -78,6 +82,12 @@
     <div role="status" aria-live="polite" class="empty:hidden">
         <x-toast :message="$notice" />
     </div>
+
+    <x-selection-bar>
+        <x-button variant="secondary" size="sm" icon="folder-input" :disabled="count === 0" x-on:click="$wire.openBulkMove(selectedKeys())">Move…</x-button>
+        <x-button variant="secondary" size="sm" icon="trash-2" :disabled="count === 0 || !selectedKeys().some(k => k.startsWith('note:') || k.startsWith('file:'))" title="Move selected notes and files to the trash" x-on:click="$wire.bulk('trash', selectedKeys().filter(k => k.startsWith('note:') || k.startsWith('file:')))">Move to trash</x-button>
+        <x-button variant="danger" size="sm" icon="trash-2" :disabled="count === 0 || !selectedKeys().some(k => k.startsWith('folder:') || k.startsWith('link:'))" title="Delete selected folders and links" x-on:click="$wire.openBulkDelete(selectedKeys().filter(k => k.startsWith('folder:') || k.startsWith('link:')))">Delete</x-button>
+    </x-selection-bar>
 
     @include('livewire.workspaces.partials.place', ['key' => $key, 'placeId' => $place->id])
 

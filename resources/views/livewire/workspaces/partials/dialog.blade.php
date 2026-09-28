@@ -1,5 +1,7 @@
 {{-- The one dialog of App\Livewire\Workspaces\Contents: a module, a folder, renaming a file, a web link, a module's instructions, uploading, a move, or deleting. --}}
 @php
+    $bulkCount = count($bulkKeys ?? []);
+    $bulkWord = $bulkCount === 1 ? 'item' : 'items';
     $headings = [
         'file' => 'Rename file',
         'upload' => 'Upload files'.($target ? ' to '.$target : ''),
@@ -9,8 +11,23 @@
         'instructions' => 'Instructions for '.$target,
         'move' => 'Move “'.$target.'”',
         'delete' => in_array($targetType, ['note', 'file'], true) ? 'Delete “'.$target.'” for good?' : 'Delete “'.$target.'”?',
+        'bulk-move' => "Move {$bulkCount} {$bulkWord}",
+        'bulk-delete' => "Delete {$bulkCount} {$bulkWord}?",
+        'bulk-destroy' => "Delete {$bulkCount} {$bulkWord} forever?",
     ];
-    $submit = ['module' => $creating ? 'Add module' : 'Save', 'folder' => $creating ? 'Add folder' : 'Rename', 'file' => 'Rename', 'link' => $creating ? 'Add link' : 'Save', 'instructions' => 'Save', 'upload' => 'Upload', 'move' => 'Move', 'delete' => in_array($targetType, ['note', 'file'], true) ? 'Delete for good' : 'Delete'];
+    $submit = [
+        'module' => $creating ? 'Add module' : 'Save',
+        'folder' => $creating ? 'Add folder' : 'Rename',
+        'file' => 'Rename',
+        'link' => $creating ? 'Add link' : 'Save',
+        'instructions' => 'Save',
+        'upload' => 'Upload',
+        'move' => 'Move',
+        'delete' => in_array($targetType, ['note', 'file'], true) ? 'Delete for good' : 'Delete',
+        'bulk-move' => 'Move',
+        'bulk-delete' => 'Delete',
+        'bulk-destroy' => 'Delete forever',
+    ];
 @endphp
 <dialog id="structure-dialog" class="modal" aria-labelledby="structure-dialog-title"
     wire:ignore.self
@@ -27,7 +44,7 @@
             x-on:livewire-upload-finish="progress = null"
             x-on:livewire-upload-error="progress = null; failed = true">
             <div class="modal-head">
-                <h2 id="structure-dialog-title" class="min-w-0 flex-1 text-lg font-semibold break-words" @if (in_array($mode, ['move', 'delete'], true)) tabindex="-1" autofocus @endif>{{ $headings[$mode] }}</h2>
+                <h2 id="structure-dialog-title" class="min-w-0 flex-1 text-lg font-semibold break-words" @if (in_array($mode, ['move', 'delete', 'bulk-move', 'bulk-delete', 'bulk-destroy'], true)) tabindex="-1" autofocus @endif>{{ $headings[$mode] ?? '' }}</h2>
                 <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
                     <x-icon name="x" />
                 </button>
@@ -91,7 +108,7 @@
                             </x-alert>
                         @endif
                     </div>
-                @elseif ($mode === 'move')
+                @elseif (in_array($mode, ['move', 'bulk-move'], true))
                     <fieldset class="space-y-1">
                         <legend class="field-label mb-2">Move to</legend>
                         @foreach ($moveOptions as $option)
@@ -102,6 +119,10 @@
                             </label>
                         @endforeach
                     </fieldset>
+                @elseif ($mode === 'bulk-delete')
+                    <p class="text-fg-muted">This can't be undone. Only empty folders and modules can be deleted.</p>
+                @elseif ($mode === 'bulk-destroy')
+                    <p class="text-fg-muted">The items will be permanently deleted from ViStud. This can't be undone.</p>
                 @elseif ($targetType === 'note')
                     <p class="text-fg-muted">The note and every saved version of it are deleted. This can't be undone.</p>
                 @elseif ($targetType === 'file')
@@ -119,7 +140,7 @@
 
             <div class="modal-actions">
                 <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
-                <x-button type="submit" :variant="$mode === 'delete' ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" :busy-label="$mode === 'upload' ? 'Checking…' : 'Saving…'" x-bind:disabled="progress !== null">{{ $submit[$mode] }}</x-button>
+                <x-button type="submit" :variant="in_array($mode, ['delete', 'bulk-delete', 'bulk-destroy'], true) ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" :busy-label="in_array($mode, ['delete', 'bulk-delete', 'bulk-destroy'], true) ? 'Deleting…' : ($mode === 'upload' ? 'Checking…' : 'Saving…')" x-bind:disabled="progress !== null">{{ $submit[$mode] ?? 'Save' }}</x-button>
             </div>
         </form>
     @endif
