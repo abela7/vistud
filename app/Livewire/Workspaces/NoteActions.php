@@ -31,14 +31,14 @@ final class NoteActions extends Component
         $this->notes->trash($by, $note->id);
 
         session()->flash('workspace-notice', "“{$note->displayTitle()}” is in the trash. You can restore it there for ".Notes::TRASH_DAYS.' days.');
-        $this->redirectRoute('workspaces.show', [$note->workspaceId, 'notes']);
+        $this->redirectRoute('workspaces.show', [$note->workspaceId, 'notes'], navigate: true);
     }
 
     public function restore(): void
     {
         $note = $this->notes->restore($this->principals->fromRequest(request()), $this->noteId);
 
-        $this->redirectRoute('workspaces.notes.show', [$note->workspaceId, $note->id]);
+        $this->redirectRoute('workspaces.notes.show', [$note->workspaceId, $note->id], navigate: true);
     }
 
     public function render(): View

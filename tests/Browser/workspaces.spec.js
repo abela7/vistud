@@ -172,7 +172,7 @@ test('workspaces never scroll sideways at 320 px, even with 200% text', async ({
 
     await check('my workspaces');
     await page.locator('main').getByRole('link', { name: /rather long/ }).click();
-    await page.getByRole('heading', { level: 1 }).waitFor();
+    await page.getByRole('heading', { level: 1, name: /rather long/ }).waitFor();
     await check('workspace overview');
     await page.getByRole('button', { name: /^More for/ }).click();
     await page.getByRole('button', { name: 'Edit workspace' }).click();

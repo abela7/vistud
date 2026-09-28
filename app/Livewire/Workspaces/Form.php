@@ -82,7 +82,7 @@ final class Form extends Component
             return null;
         }
 
-        return $this->redirectRoute('workspaces.show', $workspace->id);
+        return $this->redirectRoute('workspaces.show', $workspace->id, navigate: true);
     }
 
     public function archive(): mixed
@@ -93,7 +93,7 @@ final class Form extends Component
         $this->workspaces->archive($this->principal(), $this->workspaceId);
         session()->flash('workspace-notice', "{$this->name} is archived. You'll find it under Archived, where you can restore it.");
 
-        return $this->redirectRoute('home');
+        return $this->redirectRoute('home', navigate: true);
     }
 
     #[On('workspace-restore')]
@@ -105,7 +105,7 @@ final class Form extends Component
         $this->workspaces->restore($this->principal(), $this->workspaceId);
         session()->flash('workspace-notice', "{$this->name} is back in your workspaces.");
 
-        return $this->redirectRoute('workspaces.show', $this->workspaceId);
+        return $this->redirectRoute('workspaces.show', $this->workspaceId, navigate: true);
     }
 
     /** The dialog closed without saving: back to the stored details, or an empty form. */

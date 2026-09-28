@@ -228,6 +228,14 @@ export function createAutosave(o) {
         },
         /** Store the draft now; resolves when it is stored. */
         storeNow: () => storeDraft(),
+        /** The page is left without reloading: store and send what's there, and stop listening to this window. */
+        leave() {
+            window.removeEventListener('online', online);
+            window.removeEventListener('offline', offline);
+            clearInterval(ticker);
+            storeDraft();
+            save();
+        },
         /** Stop for good (the account logged out in another tab), keeping the draft. */
         stop(reason) {
             storeDraft().finally(() => halt(reason));

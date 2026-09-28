@@ -142,7 +142,7 @@ final class StudyTime extends Component
             if ($this->mode === 'start') {
                 $session = $this->sessions->start($by, $this->workspaceId, $this->topicId ?: null, $this->moduleId ?: null, $this->pomodoroInput(), $this->teachingInput());
                 $this->dispatch('session-changed');
-                $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id]);
+                $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id], navigate: true);
 
                 return;
             }

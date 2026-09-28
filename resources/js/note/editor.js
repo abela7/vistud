@@ -326,6 +326,10 @@ export async function mount(host) {
     let loading = true;
     let editor = null;
     let autosave = null;
+    // Listeners on the window last as long as this page: a page swapped in without reloading ends them (resources/js/page.js).
+    const leaving = new AbortController();
+    const on = (target, type, listener) => target.addEventListener(type, listener, { signal: leaving.signal });
+    let left = false;
 
     const show = (name) => alerts.querySelectorAll('[data-alert]').forEach((el) => { el.hidden = el.dataset.alert !== name; });
     const setTitle = () => {
@@ -345,6 +349,8 @@ export async function mount(host) {
     } catch {
         drafts = null;
     }
+    // Left for another page while the drafts were opening: nothing to set up.
+    if (!host.isConnected) return null;
 
     async function uploadImageFile(file) {
         if (!file) return null;
@@ -567,6 +573,8 @@ export async function mount(host) {
             response = null;
         }
         creating = false;
+        // The page was left meanwhile: the note is made (or not), and this page has nothing more to do.
+        if (left) return;
         if (response?.ok && data?.id) {
             [note.id, note.version] = [data.id, data.version];
             try {
@@ -718,7 +726,7 @@ export async function mount(host) {
             }
         }
     });
-    window.addEventListener('resize', growTitle);
+    on(window, 'resize', growTitle);
 
     // ---------- Toolbar: one tab stop, arrow keys move along it ----------
     const page = document.querySelector('[data-note-page]');
@@ -1498,7 +1506,7 @@ export async function mount(host) {
         document.addEventListener('mouseup', onMouseUp);
     });
 
-    window.addEventListener('resize', hideImageToolbar);
+    on(window, 'resize', hideImageToolbar);
     const noteContentEl = host.querySelector('.note-content');
     noteContentEl?.addEventListener('scroll', () => {
         if (activeFigureEl) positionImageToolbar(activeFigureEl);
@@ -1514,7 +1522,7 @@ export async function mount(host) {
     });
 
     // The page's shortcuts; the note's own are NoteKeys, and a key it used is done with.
-    document.addEventListener('keydown', (event) => {
+    on(document, 'keydown', (event) => {
         if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
         const isMod = event.ctrlKey || event.metaKey;
         const key = event.key.toLowerCase();
@@ -1629,10 +1637,10 @@ export async function mount(host) {
         });
     });
 
-    document.addEventListener('fullscreenchange', () => {
+    on(document, 'fullscreenchange', () => {
         if (!document.fullscreenElement && page.hasAttribute('data-focus')) setFocus(false);
     });
-    document.addEventListener('keydown', (event) => {
+    on(document, 'keydown', (event) => {
         const busy = document.querySelector('dialog[open], [data-menu-panel]:not([hidden])');
         if (event.key === 'Escape' && page.hasAttribute('data-focus') && !document.fullscreenElement && !busy) setFocus(false);
     });
@@ -1653,7 +1661,7 @@ export async function mount(host) {
         const response = await fetch(host.dataset.saveUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
         return response.ok ? response.json() : null;
     }
-    channel?.addEventListener('message', async ({ data }) => {
+    if (channel) on(channel, 'message', async ({ data }) => {
         if (data?.type === 'logout') {
             autosave?.stop('session');
             return;
@@ -1672,7 +1680,7 @@ export async function mount(host) {
     });
 
     // Logging out asks the open note to store what it holds first.
-    window.addEventListener('vistud:store-drafts', (event) => event.detail.waitFor(autosave ? autosave.storeNow() : Promise.resolve()));
+    on(window, 'vistud:store-drafts', (event) => event.detail.waitFor(autosave ? autosave.storeNow() : Promise.resolve()));
 
     // ---------- Choices in the alerts ----------
     alerts.addEventListener('click', async (event) => {
@@ -1692,13 +1700,30 @@ export async function mount(host) {
     });
 
     // ---------- Leaving ----------
-    document.addEventListener('visibilitychange', () => {
+    on(document, 'visibilitychange', () => {
         if (document.visibilityState !== 'hidden') return;
         if (autosave) autosave.flush();
         else if (hasWords()) createNote();
     });
-    window.addEventListener('beforeunload', (event) => {
+    on(window, 'beforeunload', (event) => {
         if (autosave ? autosave.atRisk() : hasWords()) event.preventDefault();
+    });
+
+    // Another page, without reloading (resources/js/page.js). Changes that live only in this tab's memory
+    // (the browser keeps nothing, or a new note while offline) are worth a question first.
+    on(document, 'livewire:navigate', (event) => {
+        if (event.detail?.history) return;
+        const atRisk = autosave ? autosave.atRisk() : hasWords() && !navigator.onLine;
+        if (atRisk && !window.confirm('This note has changes that aren\'t saved anywhere yet. Leave anyway?')) event.preventDefault();
+    });
+    // Leaving: what's written is stored and sent, then the editor stops.
+    on(document, 'livewire:navigating', () => {
+        clearTimeout(createTimer);
+        if (autosave) autosave.leave();
+        else if (hasWords()) createNote();
+        left = true;
+        leaving.abort();
+        editor.destroy();
     });
 
     host.dataset.ready = 'true';

@@ -92,7 +92,8 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await page.keyboard.press('Escape');
 
         await week1(page).getByRole('link', { name: 'Essay - why cells divide.docx' }).click();
-        await page.getByRole('heading', { level: 1 }).waitFor();
+        // The page moves in place: the test theme goes on once the file's own page has arrived.
+        await page.getByRole('heading', { level: 1, name: 'Essay - why cells divide.docx' }).waitFor();
         await useSentinelTheme(page);
         states['file page, no preview'] = await foreignColours(page);
 
@@ -124,7 +125,7 @@ test('a file page never scrolls sideways at 320 px, even with 200% text', async 
     await withFiles(page);
     await page.keyboard.press('Escape');
     await week1(page).getByRole('link', { name: 'Essay - why cells divide.docx' }).click();
-    await page.getByRole('heading', { level: 1 }).waitFor();
+    await page.getByRole('heading', { level: 1, name: 'Essay - why cells divide.docx' }).waitFor();
     await page.setViewportSize({ width: 320, height: 800 });
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);

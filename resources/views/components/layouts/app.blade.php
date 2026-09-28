@@ -174,8 +174,13 @@
         </dialog>
     @endif
 
-    {{-- Passing notices (resources/js/toasts.js): each closes itself after a few seconds, or with its ×. --}}
-    <div class="toast-stack" data-toasts role="status" aria-live="polite"></div>
+    {{--
+        Passing notices (resources/js/toasts.js): each closes itself after a few seconds, or with its ×.
+        The stack stays through a move to another page (resources/js/page.js), so a notice isn't cut short.
+    --}}
+    @persist('toasts')
+        <div class="toast-stack" data-toasts role="status" aria-live="polite"></div>
+    @endpersist
     <template data-toast-template>
         <div class="toast">
             <span class="toast-icon" data-toast-icon="success"><x-icon name="circle-check" class="size-5" /></span>
@@ -185,5 +190,7 @@
         </div>
     </template>
     <x-toast :message="session('workspace-notice')" />
+    {{-- On every page, even one without a component, so its links can move without reloading. --}}
+    @livewireScripts
 </body>
 </html>

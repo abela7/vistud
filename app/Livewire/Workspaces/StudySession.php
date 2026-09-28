@@ -148,7 +148,7 @@ final class StudySession extends Component
                 // Removed since: the note goes to the top level.
             }
         }
-        $this->redirectRoute('workspaces.notes.create', [$this->workspaceId] + ($moduleId === null ? [] : ['in' => "module:{$moduleId}"]));
+        $this->redirectRoute('workspaces.notes.create', [$this->workspaceId] + ($moduleId === null ? [] : ['in' => "module:{$moduleId}"]), navigate: true);
     }
 
     public function editTeaching(): void
@@ -205,7 +205,7 @@ final class StudySession extends Component
             $this->sessions->delete($by, $this->sessionId);
             $this->dispatch('session-changed');
             session()->flash('workspace-notice', 'The session is deleted.');
-            $this->redirectRoute('workspaces.show', $this->workspaceId);
+            $this->redirectRoute('workspaces.show', $this->workspaceId, navigate: true);
 
             return;
         }

@@ -31,14 +31,14 @@ final class FileActions extends Component
         $this->files->trash($by, $file->id);
 
         session()->flash('workspace-notice', "“{$file->fileName()}” is in the trash. You can restore it there for ".Files::TRASH_DAYS.' days.');
-        $this->redirectRoute('workspaces.show', [$file->workspaceId, 'notes']);
+        $this->redirectRoute('workspaces.show', [$file->workspaceId, 'notes'], navigate: true);
     }
 
     public function restore(): void
     {
         $file = $this->files->restore($this->principals->fromRequest(request()), $this->fileId);
 
-        $this->redirectRoute('workspaces.files.show', [$file->workspaceId, $file->id]);
+        $this->redirectRoute('workspaces.files.show', [$file->workspaceId, $file->id], navigate: true);
     }
 
     public function render(): View

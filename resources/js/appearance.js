@@ -61,4 +61,19 @@ window.addEventListener('storage', (event) => {
     if (event.key === STORAGE_KEY && MODES.includes(event.newValue)) applyAppearance(event.newValue);
 });
 
+// A page swapped in without reloading (resources/js/page.js) brings its own <html> attributes, the
+// default theme among them: the saved choice goes back on before the new page is painted.
+document.addEventListener('livewire:navigating', (event) => {
+    event.detail?.onSwap?.(() => {
+        let mode = 'system';
+        try {
+            mode = localStorage.getItem(STORAGE_KEY) ?? 'system';
+        } catch {
+            // Storage unavailable: the page's own choice stays.
+            mode = root.dataset.appearance;
+        }
+        applyAppearance(MODES.includes(mode) ? mode : 'system');
+    });
+});
+
 syncControls();

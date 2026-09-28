@@ -148,7 +148,7 @@ final class Progress extends Component
             return;
         }
         $this->dispatch('session-changed');
-        $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id]);
+        $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id], navigate: true);
     }
 
     // ---------- Findings ----------

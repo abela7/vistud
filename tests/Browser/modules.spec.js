@@ -171,6 +171,8 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
 
         await (viewport === phone ? page.getByRole('link', { name: 'Back to Week 1: Cells' }) : page.getByRole('navigation', { name: 'Path' }).getByRole('link', { name: 'Week 1: Cells' })).click();
         await page.getByRole('link', { name: 'Study sessions' }).click();
+        // The page moves in place (resources/js/page.js): the test theme goes on once it has arrived.
+        await page.getByRole('heading', { level: 1, name: 'Study sessions' }).waitFor();
         await useSentinelTheme(page);
         states['study sessions page'] = await foreignColours(page);
 

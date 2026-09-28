@@ -1,3 +1,4 @@
+import { onPage } from './page.js';
 import './appearance.js';
 import './forms.js';
 import './shell.js';
@@ -6,11 +7,11 @@ import './session.js';
 import './back.js';
 import { toast } from './toasts.js';
 
-// The note editor is only loaded on a note's page.
-const noteEditor = document.querySelector('[data-note-editor]');
-if (noteEditor) {
-    import('./note/editor.js').then(({ mount }) => mount(noteEditor));
-}
+// The note editor is only loaded on a note's page; it saves and stops by itself when the page is left.
+onPage(() => {
+    const noteEditor = document.querySelector('[data-note-editor]');
+    if (noteEditor) import('./note/editor.js').then(({ mount }) => mount(noteEditor));
+});
 
 // A student's note drafts on this device (resources/js/note/).
 const account = document.querySelector('meta[name="vistud-account"]')?.content;

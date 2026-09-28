@@ -9,6 +9,8 @@
 |   outside, or a second click.
 */
 
+import { onPage } from './page.js';
+
 const root = document.documentElement;
 const SIDEBAR_KEY = 'vistud.sidebar';
 const desktop = window.matchMedia('(min-width: 1280px)');
@@ -78,7 +80,16 @@ document.addEventListener('click', (event) => {
     syncSidebarToggle();
 });
 
-syncSidebarToggle();
+onPage(syncSidebarToggle);
+
+// A page swapped in without reloading (resources/js/page.js) brings the server's <html> attributes, which
+// don't know the sidebar is collapsed: it stays as it was.
+document.addEventListener('livewire:navigating', (event) => {
+    const sidebar = root.dataset.sidebar;
+    event.detail?.onSwap?.(() => {
+        if (sidebar) root.dataset.sidebar = sidebar;
+    });
+});
 
 // ---------- Account menu ----------
 
@@ -116,9 +127,12 @@ document.addEventListener('keydown', (event) => {
 });
 
 // A top bar that very large text has made tall stops sticking, so it never covers most of the page.
-const topbar = document.querySelector('.app-topbar');
-if (topbar && 'ResizeObserver' in window) {
-    const fit = () => topbar.classList.toggle('is-tall', topbar.offsetHeight > window.innerHeight * 0.25);
-    new ResizeObserver(fit).observe(topbar);
-    window.addEventListener('resize', fit);
-}
+let watchedTopbar = null;
+const fitTopbar = () => watchedTopbar?.classList.toggle('is-tall', watchedTopbar.offsetHeight > window.innerHeight * 0.25);
+const topbarSize = 'ResizeObserver' in window ? new ResizeObserver(fitTopbar) : null;
+window.addEventListener('resize', fitTopbar);
+onPage(() => {
+    if (watchedTopbar) topbarSize?.unobserve(watchedTopbar);
+    watchedTopbar = document.querySelector('.app-topbar');
+    if (watchedTopbar) topbarSize?.observe(watchedTopbar);
+});

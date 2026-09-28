@@ -66,4 +66,5 @@ function showNew() {
 }
 
 showNew();
-new MutationObserver(showNew).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-toast-id'] });
+// The whole document: a page swapped in without reloading brings a new <body> (resources/js/page.js).
+new MutationObserver(showNew).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-toast-id'] });

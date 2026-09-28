@@ -618,6 +618,42 @@
         }
     }
 
+    /*
+    | While the next page loads (resources/js/page.js): a thin line along the
+    | top that runs most of the way, then finishes and fades once the page
+    | is in. Only after a moment, so a quick page shows nothing.
+    */
+    .page-loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 100;
+        width: 0;
+        height: 3px;
+        background-color: var(--accent);
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .page-loading.is-loading {
+        width: 85%;
+        opacity: 1;
+        transition: width 6s cubic-bezier(0.1, 0.7, 0.2, 1), opacity 120ms ease;
+    }
+
+    .page-loading.is-done {
+        width: 100%;
+        opacity: 0;
+        transition: width 150ms ease, opacity 250ms ease 100ms;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .page-loading.is-loading,
+        .page-loading.is-done {
+            transition: none;
+        }
+    }
+
     /* A small button, for a row of tools. */
     .btn-sm {
         min-height: 2rem;

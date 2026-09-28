@@ -249,7 +249,7 @@ final class Contents extends Component
     public function newNote(string $placeType, string $placeId): void
     {
         $placeType = in_array($placeType, ['module', 'folder'], true) ? $placeType : 'workspace';
-        $this->redirectRoute('workspaces.notes.create', [$this->workspaceId] + ($placeType === 'workspace' ? [] : ['in' => "{$placeType}:{$placeId}"]));
+        $this->redirectRoute('workspaces.notes.create', [$this->workspaceId] + ($placeType === 'workspace' ? [] : ['in' => "{$placeType}:{$placeId}"]), navigate: true);
     }
 
     /** Into the trash: nothing to confirm, it can be restored. */
@@ -333,7 +333,7 @@ final class Contents extends Component
 
         if ($leaving !== null) {
             session()->flash('workspace-notice', $this->notice);
-            $this->redirect($leaving);
+            $this->redirect($leaving, navigate: true);
 
             return;
         }

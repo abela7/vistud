@@ -394,3 +394,8 @@ A pull request that adds or changes a screen includes:
 ### Back links (the owner's review, 2026-09-28)
 
 Every page but Home starts with `<x-back :href :to>`: a quiet pill (arrow and the name of the page above) that goes one level up, never sideways. Its accessible name is "Back to …". When the previous page in the tab's history is that same page, it uses the browser's Back, so the page returns scrolled where it was (`resources/js/back.js`). On phones it is at least 44 px tall and replaces the breadcrumb, which shows from 640 px up and only when it says more than the Back link does.
+
+### Moving between pages (the owner's review, 2026-09-28)
+
+A link inside ViStud swaps the next page in without reloading (Livewire's `wire:navigate`, set on links by `resources/js/page.js`): no white flash, the next page is fetched as soon as the pointer rests on its link, and the browser's Back and Forward stay in place too. A page that takes more than a moment shows a thin line along the top in the theme's accent (`.page-loading`), hidden from screen readers. Links to a file's bytes, downloads, `target` links and anything marked `data-no-navigate` load as before. A script that sets up a page registers with `onPage()`, which runs again for each page swapped in; the chosen theme and a collapsed sidebar are put back on the new page before it is painted, and toasts stay in view across the move. The note editor saves and stops when its page is left, asking first only when its changes exist nowhere but in memory.
+

@@ -6,10 +6,6 @@
 
 return [
 
-    /*
-    | The navigation progress bar takes the theme's accent, never a colour
-    | of its own (DESIGN.md §3).
-    */
     // Uploads wait here until App\Study\Files checks and stores them. The
     // size limit matches vistud.files.max_bytes (in kilobytes).
     'temporary_file_upload' => [
@@ -23,9 +19,13 @@ return [
         'cleanup' => true,
     ],
 
+    /*
+    | Pages move without reloading (resources/js/page.js), which draws its
+    | own loading line in the theme's accent: Livewire's bar gives screen
+    | readers a role that doesn't exist.
+    */
     'navigate' => [
-        'show_progress_bar' => true,
-        'progress_bar_color' => 'var(--accent)',
+        'show_progress_bar' => false,
     ],
 
 ];
