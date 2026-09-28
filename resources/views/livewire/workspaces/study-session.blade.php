@@ -29,7 +29,12 @@
 @endphp
 <div class="space-y-6">
     <div class="flex items-start justify-between gap-4">
-        <div class="min-w-0 flex-1">
+        <div class="min-w-0 flex-1 space-y-3">
+            @if ($module)
+                <x-back :href="route('workspaces.modules.show', [$workspaceId, $module->id])" :to="$module->title" />
+            @else
+                <x-back :href="route('workspaces.show', $workspaceId)" to="Overview" />
+            @endif
             <nav aria-label="Path" class="crumbs">
                 <ol role="list">
                     @if ($module)

@@ -81,7 +81,7 @@ test('cards are written one after another, and a round is reviewed with the keyb
     await expect(page.locator('.review-tally')).toContainText('1Not yet');
     await expect(page.getByText('All caught up. Next up: 7 cards tomorrow.')).toBeVisible();
 
-    await page.getByRole('link', { name: 'Back to flashcards' }).click();
+    await page.getByRole('link', { name: 'Back to flashcards', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'All caught up' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Practise anyway' })).toBeVisible();
 });

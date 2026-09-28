@@ -5,7 +5,8 @@
 --}}
 <x-layouts.app :title="'Questions · '.$module->title.' · '.$workspace->name" :workspace="$workspace" section="modules">
     <div class="mx-auto max-w-4xl space-y-6">
-        <div class="space-y-1">
+        <div class="space-y-3">
+            <x-back :href="route('workspaces.modules.show', [$workspace->id, $module->id])" :to="$module->title" />
             <nav aria-label="Path" class="crumbs">
                 <ol role="list">
                     <li><a href="{{ route('workspaces.show', [$workspace->id, 'modules']) }}">Modules</a></li>

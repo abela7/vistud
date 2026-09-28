@@ -4,6 +4,7 @@
 --}}
 <x-layouts.app area="admin" title="Accounts">
     <div class="mx-auto max-w-5xl space-y-8">
+        <x-back :href="route('admin.overview')" to="Admin overview" />
         <livewire:admin.accounts.invitations />
         <livewire:admin.accounts.index />
     </div>

@@ -25,6 +25,12 @@
             </x-alert>
         @endif
 
+        @if ($section === 'overview')
+            <x-back :href="route('home')" to="All workspaces" />
+        @else
+            <x-back :href="route('workspaces.show', $workspace->id)" to="Overview" />
+        @endif
+
         <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex min-w-0 items-center gap-3">
                 <x-workspace.chip :workspace="$workspace" size="lg" class="max-sm:hidden" />

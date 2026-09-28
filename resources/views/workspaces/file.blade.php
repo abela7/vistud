@@ -12,6 +12,10 @@
 <x-layouts.app :title="$file->fileName().' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'">
     <div class="file-page">
         <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            @php
+                [$backTo, $backUrl] = $trail !== [] ? end($trail) : [$inModule ? 'Modules' : 'Notes & files', route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes'])];
+            @endphp
+            <x-back :href="$backUrl" :to="$backTo" class="basis-full" />
             <nav aria-label="Where this file is" class="min-w-0">
                 <ol class="breadcrumbs">
                     <li><a href="{{ route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes']) }}">{{ $inModule ? 'Modules' : 'Notes & files' }}</a></li>

@@ -5,6 +5,7 @@
 --}}
 <x-layouts.app area="admin" title="Overview">
     <div class="mx-auto max-w-5xl space-y-8">
+        <x-back :href="route('home')" to="Your workspaces" />
         <div class="space-y-2">
             <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Admin overview</h1>
             <p class="max-w-2xl text-fg-muted">

@@ -3,6 +3,7 @@ import './forms.js';
 import './shell.js';
 import './invitation.js';
 import './session.js';
+import './back.js';
 import { toast } from './toasts.js';
 
 // The note editor is only loaded on a note's page.

@@ -113,7 +113,7 @@ test('moving, renaming and deleting folders, and the refusals', async ({ page })
     await dialog(page).getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Reading list is deleted.' })).toBeVisible();
 
-    await page.getByRole('navigation', { name: 'Path' }).getByRole('link', { name: 'Modules' }).click();
+    await page.getByRole('link', { name: 'Back to Modules' }).click();
     await openPlace(page, 'Week 2: Cell division');
     await (await menu(page, 'Labs')).getByRole('button', { name: 'Delete' }).click();
     await dialog(page).getByRole('button', { name: 'Delete', exact: true }).click();

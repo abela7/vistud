@@ -17,13 +17,19 @@
 @endphp
 <div class="space-y-6">
     <div class="space-y-3">
-        <nav aria-label="Path" class="crumbs">
-            <ol role="list">
-                @foreach ($trail as [$label, $url])
-                    <li><a href="{{ $url }}">{{ $label }}</a></li>
-                @endforeach
-            </ol>
-        </nav>
+        @if ($trail !== [])
+            <x-back :href="end($trail)[1]" :to="end($trail)[0]" />
+        @endif
+        {{-- The whole path, once it says more than the Back link does. --}}
+        @if (count($trail) > 1)
+            <nav aria-label="Path" class="crumbs">
+                <ol role="list">
+                    @foreach ($trail as [$label, $url])
+                        <li><a href="{{ $url }}">{{ $label }}</a></li>
+                    @endforeach
+                </ol>
+            </nav>
+        @endif
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex min-w-0 items-center gap-3">
                 @if ($isModule)

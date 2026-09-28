@@ -25,7 +25,8 @@
     }
 @endphp
 <div class="space-y-6">
-    <div class="min-w-0">
+    <div class="min-w-0 space-y-3">
+        <x-back :href="$back" to="Flashcards" />
         <nav aria-label="Path" class="crumbs">
             <ol role="list">
                 <li><a href="{{ $back }}">Flashcards</a></li>

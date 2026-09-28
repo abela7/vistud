@@ -390,3 +390,7 @@ A pull request that adds or changes a screen includes:
 | Livewire screens (admin Accounts and Audit log) | `app/Livewire/`, `resources/views/livewire/` |
 | Enforcement | `tests/Architecture/ThemeEnforcementTest.php`, `tests/Browser/theme-sentinel.spec.js` |
 | Setup, build and browser tests | [docs/development/setup.md](docs/development/setup.md) |
+
+### Back links (the owner's review, 2026-09-28)
+
+Every page but Home starts with `<x-back :href :to>`: a quiet pill (arrow and the name of the page above) that goes one level up, never sideways. Its accessible name is "Back to …". When the previous page in the tab's history is that same page, it uses the browser's Back, so the page returns scrolled where it was (`resources/js/back.js`). On phones it is at least 44 px tall and replaces the breadcrumb, which shows from 640 px up and only when it says more than the Back link does.
