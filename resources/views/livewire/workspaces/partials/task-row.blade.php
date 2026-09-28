@@ -3,8 +3,12 @@
     $isDone = $task->status === 'done';
     $meta = array_filter([$task->kindLabel(), $task->moduleId !== null ? ($moduleTitles[$task->moduleId] ?? null) : null]);
 @endphp
-<li wire:key="task-{{ $task->id }}" class="task-row">
-    <button type="button" class="task-check" wire:click="setStatus('{{ $task->id }}', '{{ $isDone ? 'todo' : 'done' }}')" aria-pressed="{{ $isDone ? 'true' : 'false' }}">
+<li wire:key="task-{{ $task->id }}" class="task-row"
+    data-select-key="task:{{ $task->id }}"
+    :class="{ 'is-selected': isSelected('task:{{ $task->id }}') }"
+    x-on:click="handleRowClick($event, 'task:{{ $task->id }}')">
+    <x-selection-check key="task:{{ $task->id }}" label="Select {{ $task->title }}" />
+    <button type="button" class="task-check" x-show="!isSelecting" wire:click="setStatus('{{ $task->id }}', '{{ $isDone ? 'todo' : 'done' }}')" aria-pressed="{{ $isDone ? 'true' : 'false' }}">
         <x-icon :name="$isDone ? 'circle-check' : 'circle'" class="size-5" />
         <span class="sr-only">Done: {{ $task->title }}</span>
     </button>
