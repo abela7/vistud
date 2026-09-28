@@ -1079,7 +1079,7 @@
             margin-bottom: 0;
         }
 
-        :root:has(.app-tabbar) .selection-bar-wrap {
+        body[data-tabbar] .selection-bar-wrap {
             bottom: calc(3.75rem + env(safe-area-inset-bottom));
         }
 
@@ -1089,7 +1089,7 @@
             padding-bottom: calc(0.625rem + env(safe-area-inset-bottom));
         }
 
-        :root:has(.app-tabbar) .selection-bar {
+        body[data-tabbar] .selection-bar {
             padding-bottom: 0.625rem;
         }
 
