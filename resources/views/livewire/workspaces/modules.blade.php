@@ -69,7 +69,7 @@
     @endif
 
     <x-selection-bar>
-        <x-button variant="danger" size="sm" icon="trash-2" :disabled="count === 0" title="Delete empty modules" x-on:click="$wire.openBulkDelete(selectedKeys())">Delete</x-button>
+        <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0" title="Delete empty modules" x-on:click="$wire.openBulkDelete(selectedKeys())">Delete</x-button>
     </x-selection-bar>
 
     <ol class="module-grid" :class="{ 'is-list-view': layout === 'list' }" wire:sort="sortModules" role="list" aria-label="Modules">

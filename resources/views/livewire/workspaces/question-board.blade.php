@@ -16,8 +16,10 @@
     $uid = $this->getId();
     $open = $counts['pending'] + $counts['stuck'];
 @endphp
-<div>
-    <x-toast :message="$notice" />
+<div x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
+    <div role="status" aria-live="polite" class="empty:hidden">
+        <x-toast :message="$notice" />
+    </div>
     @if (! $folded || $counts['all'] > 0)
         <section class="space-y-3" aria-labelledby="questions-{{ $uid }}" @if ($folded) x-data="{ open: false }" @endif>
             @if ($folded)
@@ -75,14 +77,29 @@
                                 </select>
                             </div>
                         @endunless
+                        <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" aria-label="Select questions" :aria-pressed="isSelecting ? 'true' : 'false'">
+                            <x-icon name="list-checks" class="size-4" />
+                            <span x-text="isSelecting ? 'Done' : 'Select'"></span>
+                        </button>
                     </div>
+
+                    <x-selection-bar>
+                        <x-button variant="secondary" size="sm" icon="circle-dot" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'pending' })">Pending</x-button>
+                        <x-button variant="secondary" size="sm" icon="circle-alert" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'stuck' })">Stuck</x-button>
+                        <x-button variant="secondary" size="sm" icon="circle-check" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'answered' })">Answered</x-button>
+                        <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0" x-on:click="$wire.openBulkRemove(selectedKeys())">Remove</x-button>
+                    </x-selection-bar>
                 @endif
 
                 @if ($shown !== [])
                     <ul class="item-list" role="list" aria-label="Questions">
                         @foreach ($shown as $q)
                             @php [$icon, $colour] = $look[$q->status]; @endphp
-                            <li class="item-row" wire:key="question-{{ $q->id }}">
+                            <li class="item-row" wire:key="question-{{ $q->id }}"
+                                data-select-key="question:{{ $q->id }}"
+                                :class="{ 'is-selected': isSelected('question:{{ $q->id }}') }"
+                                x-on:click="handleRowClick($event, 'question:{{ $q->id }}')">
+                                <x-selection-check key="question:{{ $q->id }}" label="Select {{ $q->text }}" />
                                 <span class="item-icon ws-colour-{{ $colour }}" aria-hidden="true"><x-icon :name="$icon" class="size-5" /></span>
                                 <span class="min-w-0 flex-1">
                                     <button type="button" class="tile-link question-text" wire:click="open('{{ $q->id }}')">{{ $q->text }}</button>
@@ -179,5 +196,31 @@
                 </div>
             </form>
         @endif
+    </dialog>
+
+    <dialog id="bulk-question-dialog" class="modal" aria-labelledby="bulk-question-dialog-title"
+        wire:ignore.self
+        x-data
+        x-on:bulk-question-dialog-open.window="$el.open || $el.showModal()"
+        x-on:bulk-question-dialog-close.window="$el.open && $el.close()"
+        x-on:close="$wire.bulkKeys = []"
+        x-on:click="$event.target === $el && $el.close()">
+        <div class="modal-panel" role="document">
+            <div class="modal-head">
+                <h2 id="bulk-question-dialog-title" class="min-w-0 flex-1 text-lg font-semibold">Remove questions?</h2>
+                <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
+                    <x-icon name="x" />
+                </button>
+            </div>
+            <div class="space-y-4 px-5 pt-2">
+                <p class="text-sm text-fg-muted">
+                    Remove {{ count($bulkKeys) }} {{ Str::plural('question', count($bulkKeys)) }} from this board?
+                </p>
+            </div>
+            <div class="modal-actions">
+                <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
+                <x-button variant="danger" wire:click="confirmBulkRemove" wire:loading.attr="aria-busy" busy-label="Removing…">Remove</x-button>
+            </div>
+        </div>
     </dialog>
 </div>

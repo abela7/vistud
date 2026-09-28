@@ -24,12 +24,12 @@
 
     <x-selection-bar>
         @if (! $showTrash)
-            <x-button variant="secondary" size="sm" icon="folder-input" :disabled="count === 0" x-on:click="$wire.openBulkMove(selectedKeys())">Move…</x-button>
-            <x-button variant="secondary" size="sm" icon="trash-2" :disabled="count === 0 || !selectedKeys().some(k => k.startsWith('note:') || k.startsWith('file:'))" title="Move selected notes and files to the trash" x-on:click="$wire.bulk('trash', selectedKeys().filter(k => k.startsWith('note:') || k.startsWith('file:')))">Move to trash</x-button>
-            <x-button variant="danger" size="sm" icon="trash-2" :disabled="count === 0 || !selectedKeys().some(k => k.startsWith('folder:') || k.startsWith('link:'))" title="Delete selected folders and links" x-on:click="$wire.openBulkDelete(selectedKeys().filter(k => k.startsWith('folder:') || k.startsWith('link:')))">Delete</x-button>
+            <x-button variant="secondary" size="sm" icon="folder-input" ::disabled="count === 0" x-on:click="$wire.openBulkMove(selectedKeys())">Move…</x-button>
+            <x-button variant="secondary" size="sm" icon="trash-2" ::disabled="count === 0 || !selectedKeys().some(k => k.startsWith('note:') || k.startsWith('file:'))" title="Move selected notes and files to the trash" x-on:click="$wire.bulk('trash', selectedKeys().filter(k => k.startsWith('note:') || k.startsWith('file:')))">Move to trash</x-button>
+            <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0 || !selectedKeys().some(k => k.startsWith('folder:') || k.startsWith('link:'))" title="Delete selected folders and links" x-on:click="$wire.openBulkDelete(selectedKeys().filter(k => k.startsWith('folder:') || k.startsWith('link:')))">Delete</x-button>
         @else
-            <x-button variant="secondary" size="sm" icon="rotate-ccw" :disabled="count === 0" x-on:click="$wire.bulk('restore', selectedKeys())">Restore</x-button>
-            <x-button variant="danger" size="sm" icon="trash-2" :disabled="count === 0" x-on:click="$wire.openBulkDestroy(selectedKeys())">Delete forever</x-button>
+            <x-button variant="secondary" size="sm" icon="rotate-ccw" ::disabled="count === 0" x-on:click="$wire.bulk('restore', selectedKeys())">Restore</x-button>
+            <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0" x-on:click="$wire.openBulkDestroy(selectedKeys())">Delete forever</x-button>
         @endif
     </x-selection-bar>
 
