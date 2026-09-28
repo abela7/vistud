@@ -511,9 +511,12 @@ final class Contents extends Component
                 'stuck' => count(array_filter($asked, fn ($q) => $q->status === 'stuck')),
             ];
 
+            $sessions = $this->moduleSessions($by, $module->id);
+
             return [
                 'place' => $module, 'placeName' => $module->title, 'key' => "module:{$module->id}", 'trail' => $trail,
-                'studied' => $this->moduleSessions($by, $module->id), 'topicNames' => $topicNames, 'questions' => $questions,
+                'studied' => $sessions, 'topicNames' => $topicNames, 'questions' => $questions,
+                'sessionsCount' => count($sessions),
             ];
         }
 
@@ -527,7 +530,7 @@ final class Contents extends Component
             ? [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])], [$module->title, route('workspaces.modules.show', [$this->workspaceId, $module->id])]]
             : [[__('Notes & files'), route('workspaces.show', [$this->workspaceId, 'notes'])]]));
 
-        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'studied' => [], 'topicNames' => [], 'questions' => null];
+        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'studied' => [], 'topicNames' => [], 'questions' => null, 'sessionsCount' => 0];
     }
 
     /** @return list<SessionDetails> the module's latest study sessions: in it, or on one of its topics */
