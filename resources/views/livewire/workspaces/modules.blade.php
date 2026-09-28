@@ -23,7 +23,7 @@
         return $parts === [] ? 'Empty' : implode(' · ', $parts);
     };
 @endphp
-<div class="space-y-4" x-data="{ layout: $persist('grid').as('vistud.modules.layout') }">
+<div class="space-y-4" x-data="{ ...selectable(), layout: $persist('grid').as('vistud.modules.layout') }" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     <div role="status" aria-live="polite" class="empty:hidden">
         <x-toast :message="$notice" />
     </div>
@@ -34,28 +34,43 @@
                 {{ count($modules) }} {{ Str::plural('module', count($modules)) }}
             </p>
 
-            <div class="inline-flex items-center rounded-lg border border-border bg-surface-raised p-0.5" role="group" aria-label="View mode">
+            <div class="flex items-center gap-2">
                 <button type="button"
-                    class="btn btn-sm"
-                    :class="layout === 'grid' ? 'btn-secondary' : 'btn-ghost text-fg-muted'"
-                    x-on:click="layout = 'grid'"
-                    aria-label="Grid view"
-                    :aria-pressed="layout === 'grid'">
-                    <x-icon name="layout-grid" class="size-4" />
-                    <span class="max-sm:sr-only">Grid</span>
+                    class="btn btn-sm btn-secondary"
+                    x-on:click="toggleMode()"
+                    aria-label="Select modules"
+                    :aria-pressed="isSelecting ? 'true' : 'false'">
+                    <x-icon name="list-checks" class="size-4" />
+                    <span x-text="isSelecting ? 'Done' : 'Select'"></span>
                 </button>
-                <button type="button"
-                    class="btn btn-sm"
-                    :class="layout === 'list' ? 'btn-secondary' : 'btn-ghost text-fg-muted'"
-                    x-on:click="layout = 'list'"
-                    aria-label="List view"
-                    :aria-pressed="layout === 'list'">
-                    <x-icon name="list" class="size-4" />
-                    <span class="max-sm:sr-only">List</span>
-                </button>
+
+                <div class="inline-flex items-center rounded-lg border border-border bg-surface-raised p-0.5" role="group" aria-label="View mode">
+                    <button type="button"
+                        class="btn btn-sm"
+                        :class="layout === 'grid' ? 'btn-secondary' : 'btn-ghost text-fg-muted'"
+                        x-on:click="layout = 'grid'"
+                        aria-label="Grid view"
+                        :aria-pressed="layout === 'grid'">
+                        <x-icon name="layout-grid" class="size-4" />
+                        <span class="max-sm:sr-only">Grid</span>
+                    </button>
+                    <button type="button"
+                        class="btn btn-sm"
+                        :class="layout === 'list' ? 'btn-secondary' : 'btn-ghost text-fg-muted'"
+                        x-on:click="layout = 'list'"
+                        aria-label="List view"
+                        :aria-pressed="layout === 'list'">
+                        <x-icon name="list" class="size-4" />
+                        <span class="max-sm:sr-only">List</span>
+                    </button>
+                </div>
             </div>
         </div>
     @endif
+
+    <x-selection-bar>
+        <x-button variant="danger" size="sm" icon="trash-2" :disabled="count === 0" title="Delete empty modules" x-on:click="$wire.openBulkDelete(selectedKeys())">Delete</x-button>
+    </x-selection-bar>
 
     <ol class="module-grid" :class="{ 'is-list-view': layout === 'list' }" wire:sort="sortModules" role="list" aria-label="Modules">
         @foreach ($modules as $i => $module)
@@ -63,7 +78,11 @@
                 $colour = Theme::CATEGORIES[crc32($module->id) % count(Theme::CATEGORIES)];
                 $topics = $progress[$module->id] ?? null;
             @endphp
-            <li wire:key="module-{{ $module->id }}" wire:sort:item="{{ $module->id }}" class="module-tile ws-colour-{{ $colour }}">
+            <li wire:key="module-{{ $module->id }}" wire:sort:item="{{ $module->id }}" class="module-tile ws-colour-{{ $colour }}"
+                data-select-key="module:{{ $module->id }}"
+                :class="{ 'is-selected': isSelected('module:{{ $module->id }}') }"
+                x-on:click="handleRowClick($event, 'module:{{ $module->id }}')">
+                <x-selection-check key="module:{{ $module->id }}" label="Select {{ $module->title }}" />
                 <span class="place-badge" aria-hidden="true">{{ $i + 1 }}</span>
 
                 <div class="module-main min-w-0 space-y-1">
@@ -100,7 +119,7 @@
                 </div>
             </li>
         @endforeach
-        <li class="module-tile is-new" wire:key="module-new">
+        <li class="module-tile is-new" wire:key="module-new" x-show="!isSelecting">
             <button type="button" class="new-tile" wire:click="newModule">
                 <x-icon name="plus" class="size-6" />
                 <span class="font-semibold">New module</span>
