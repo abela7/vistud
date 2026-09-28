@@ -169,6 +169,11 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await useSentinelTheme(page);
         states['folder page'] = await foreignColours(page);
 
+        await (viewport === phone ? page.getByRole('link', { name: 'Back to Week 1: Cells' }) : page.getByRole('navigation', { name: 'Path' }).getByRole('link', { name: 'Week 1: Cells' })).click();
+        await page.getByRole('link', { name: 'Study sessions' }).click();
+        await useSentinelTheme(page);
+        states['study sessions page'] = await foreignColours(page);
+
         for (const [state, colours] of Object.entries(states)) {
             expect(colours, `${state}: colours not from a token`).toEqual([]);
         }
@@ -252,4 +257,28 @@ test('modules can switch between grid and list view, persist preference, and pas
     await gridBtn.click();
     await expect(grid).not.toHaveClass(/is-list-view/);
     await expect(gridBtn).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('a module links to its study sessions page, and Back climbs back to the module', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openModules(page, makeStudentWithModules());
+    await openPlace(page, 'Week 1: Cells');
+
+    // Button to open Study sessions page
+    const sessionsBtn = page.getByRole('link', { name: 'Study sessions' });
+    await expect(sessionsBtn).toBeVisible();
+    await sessionsBtn.click();
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Study sessions' })).toBeVisible();
+    await expect(page).toHaveURL(/\/modules\/[^/]+\/sessions$/);
+
+    // Axe passes on study sessions page
+    expect(await analyse(page), 'study sessions page').toEqual([]);
+
+    // Back button returns to the module page
+    const backLink = page.getByRole('link', { name: 'Back to Week 1: Cells' });
+    await expect(backLink).toBeVisible();
+    await backLink.click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Week 1: Cells' })).toBeVisible();
+    await expect(page).toHaveURL(/\/modules\/[^/]+$/);
 });

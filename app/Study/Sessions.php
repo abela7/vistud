@@ -89,6 +89,29 @@ final class Sessions
     }
 
     /**
+     * Every study session of a module, newest first: started in it, or on
+     * one of its topics without a module. Its Study sessions page lists them
+     * and the module's page counts them.
+     *
+     * @return list<SessionDetails>
+     */
+    public function forModule(Principal $by, string $workspaceId, string $moduleId): array
+    {
+        $scope = Guard::learner($by);
+        Input::workspace($scope, $workspaceId);
+        $open = $this->openRow($scope);
+        if ($open !== null && $open->workspace_id === $workspaceId) {
+            $this->settled($scope, $by, $open->id);
+        }
+        $topics = LearnerTables::query($scope, 'topics')->where('module_id', $moduleId)->pluck('id')->all();
+
+        return LearnerTables::query($scope, 'study_sessions')->where('workspace_id', $workspaceId)
+            ->where(fn ($q) => $q->where('module_id', $moduleId)->orWhere(fn ($q) => $q->whereNull('module_id')->whereIn('topic_id', $topics)))
+            ->orderByDesc('started_at')->orderByDesc('id')->get()
+            ->map(fn ($row) => $this->details($scope, $row))->all();
+    }
+
+    /**
      * Study time in a workspace: since $since (the start of the week, say),
      * and in all. A session counts where it started.
      *

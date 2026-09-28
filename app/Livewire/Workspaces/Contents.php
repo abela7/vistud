@@ -19,7 +19,6 @@ use App\Study\Modules;
 use App\Study\NoteDetails;
 use App\Study\Notes;
 use App\Study\Questions;
-use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\Workspaces;
@@ -513,7 +512,8 @@ final class Contents extends Component
 
             return [
                 'place' => $module, 'placeName' => $module->title, 'key' => "module:{$module->id}", 'trail' => $trail,
-                'studied' => $this->moduleSessions($by, $module->id), 'topicNames' => $topicNames, 'questions' => $questions,
+                'topicNames' => $topicNames, 'questions' => $questions,
+                'sessionsCount' => count($this->sessions->forModule($by, $this->workspaceId, $module->id)),
             ];
         }
 
@@ -527,20 +527,7 @@ final class Contents extends Component
             ? [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])], [$module->title, route('workspaces.modules.show', [$this->workspaceId, $module->id])]]
             : [[__('Notes & files'), route('workspaces.show', [$this->workspaceId, 'notes'])]]));
 
-        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'studied' => [], 'topicNames' => [], 'questions' => null];
-    }
-
-    /** @return list<SessionDetails> the module's latest study sessions: in it, or on one of its topics */
-    private function moduleSessions(Principal $by, string $moduleId): array
-    {
-        $inModule = [];
-        foreach ($this->topics->list($by, $this->workspaceId) as $topic) {
-            $inModule[$topic->id] = $topic->moduleId === $moduleId;
-        }
-        $sessions = array_filter($this->sessions->list($by, $this->workspaceId, 50),
-            fn ($s) => $s->moduleId === $moduleId || ($s->moduleId === null && ($inModule[$s->topicId] ?? false)));
-
-        return array_slice(array_values($sessions), 0, 5);
+        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'topicNames' => [], 'questions' => null, 'sessionsCount' => 0];
     }
 
     /** @return array<string, array{done: int, total: int}> module id => its topics understood (or mastered), of all */

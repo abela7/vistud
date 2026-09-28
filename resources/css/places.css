@@ -361,7 +361,11 @@
         content: '/';
     }
 
+    /* At least 24 px tall, so two links side by side are each easy to hit (WCAG 2.5.8). */
     .crumbs a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 1.5rem;
         color: var(--text-muted);
         font-weight: 500;
         text-decoration: none;

@@ -6,7 +6,6 @@
 --}}
 @php
     use App\Study\Folders;
-    use App\Study\SessionDetails;
     use Illuminate\Support\Carbon;
 
     $isModule = $view === 'module';
@@ -53,6 +52,12 @@
                             <span class="tab-count">{{ $questions['open'] }}<span class="sr-only"> open{{ $questions['stuck'] > 0 ? ', '.$questions['stuck'].' stuck' : '' }}</span></span>
                         @endif
                     </a>
+                    <a href="{{ route('workspaces.modules.sessions', [$workspaceId, $place->id]) }}" class="btn btn-secondary">
+                        <x-icon name="history" class="size-4" />Study sessions
+                        @if ($sessionsCount > 0)
+                            <span class="tab-count">{{ $sessionsCount }}<span class="sr-only"> {{ Str::plural('session', $sessionsCount) }}</span></span>
+                        @endif
+                    </a>
                 @endif
                 @if ($isModule || $place->moduleId !== null)
                     <x-button variant="primary" icon="play" wire:click="studyHere">Study this</x-button>
@@ -75,23 +80,6 @@
     </div>
 
     @include('livewire.workspaces.partials.place', ['key' => $key, 'placeId' => $place->id])
-
-    @if ($studied !== [])
-        <section aria-labelledby="studied-heading" class="space-y-2">
-            <h2 id="studied-heading" class="section-title">Study sessions</h2>
-            <ul class="item-list" role="list">
-                @foreach ($studied as $session)
-                    <li class="item-row" wire:key="session-{{ $session->id }}">
-                        <span class="item-icon ws-colour-green" aria-hidden="true"><x-icon :name="$session->isOpen() ? 'timer' : 'history'" class="size-5" /></span>
-                        <span class="min-w-0 flex-1">
-                            <a href="{{ route('workspaces.sessions.show', [$workspaceId, $session->id]) }}" class="tile-link">{{ $session->topicId !== null ? ($topicNames[$session->topicId] ?? 'Study session') : 'Study session' }}</a>
-                            <span class="item-meta">{{ ($session->isOpen() ? 'Studying now' : SessionDetails::duration($session->studySeconds)).' · '.Carbon::parse($session->startedAt)->diffForHumans() }}</span>
-                        </span>
-                    </li>
-                @endforeach
-            </ul>
-        </section>
-    @endif
 
     @include('livewire.workspaces.partials.dialog')
 </div>
