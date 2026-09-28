@@ -27,15 +27,15 @@
     }
 
     /* A tile's own menu sits above its link, and an open menu above the tiles around it. */
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row) .relative:has(> [data-menu-button]) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row) .relative:has(> [data-menu-button]) {
         z-index: 1;
     }
 
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row) .relative:has(> [data-menu-button][aria-expanded='true']) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row) .relative:has(> [data-menu-button][aria-expanded='true']) {
         z-index: 30;
     }
 
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row):has([data-menu-button][aria-expanded='true']) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row):has([data-menu-button][aria-expanded='true']) {
         z-index: 30;
     }
 
