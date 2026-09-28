@@ -36,7 +36,7 @@
         <meta name="vistud-account" content="{{ $user->id }}">
     @endif
 </head>
-<body class="bg-canvas text-fg antialiased">
+<body class="bg-canvas text-fg antialiased" @if (isset($tabbar) || $workspace) data-tabbar @endif>
     <a href="#main" class="skip-link">Skip to content</a>
 
     <div class="app-shell">

@@ -376,6 +376,24 @@ class NotesTest extends TestCase
         $this->notes->save($this->by, $note->id, ['doc' => ['type' => 'doc', 'content' => [['type' => 'blockMath', 'attrs' => ['latex' => str_repeat('x', NoteDoc::MAX_FORMULA + 1)]]]]] + $this->edit(2, 'Formulas', '', 'math-002'));
     }
 
+    public function test_a_note_keeps_its_own_layout_and_is_measured_as_stored(): void
+    {
+        $note = $this->notes->create($this->by, 'module', $this->cells->id);
+        $paragraph = fn (string $text) => ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => $text]]];
+
+        // Full width or A4 pages, kept with the note; anything else is dropped.
+        $this->notes->save($this->by, $note->id, ['doc' => ['type' => 'doc', 'attrs' => ['view' => 'continuous'], 'content' => [$paragraph('Imported')]]] + $this->edit(1, 'Layout', '', 'view-001'));
+        $this->assertSame(['view' => 'continuous'], $this->notes->open($this->by, $note->id)->doc['attrs']);
+        $this->notes->save($this->by, $note->id, ['doc' => ['type' => 'doc', 'attrs' => ['view' => 'sideways', 'id' => 'x'], 'content' => [$paragraph('Imported')]]] + $this->edit(2, 'Layout', '', 'view-002'));
+        $this->assertArrayNotHasKey('attrs', $this->notes->open($this->by, $note->id)->doc);
+
+        // Letters outside ASCII count as their UTF-8 bytes, as the note is stored: 1.5 MB of Amharic fits, though escaped it would be 3 MB.
+        $amharic = str_repeat('ሰላም', 166_000);
+        $this->assertSame(1_494_000, strlen($amharic));
+        $this->notes->save($this->by, $note->id, ['doc' => ['type' => 'doc', 'content' => [$paragraph($amharic)]]] + $this->edit(3, 'Layout', '', 'view-003'));
+        $this->assertSame($amharic, $this->notes->open($this->by, $note->id)->doc['content'][0]['content'][0]['text']);
+    }
+
     public function test_marks_keep_their_markers_in_markdown_and_none_in_plain_text(): void
     {
         $doc = ['type' => 'doc', 'content' => [

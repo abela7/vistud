@@ -72,7 +72,8 @@ final class NoteDoc
     /** The cleaned document, or a 422 on the `doc` field. */
     public static function clean(mixed $doc): array
     {
-        $bytes = strlen((string) json_encode($doc));
+        // As stored (App\Study\Notes): letters outside ASCII count as their UTF-8 bytes, not as \u escapes.
+        $bytes = strlen((string) json_encode($doc, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
         if ($bytes > self::MAX_BYTES) {
             Input::refuse(['doc' => 'This note is too long to save. Split it into two notes.']);
         }
@@ -364,6 +365,13 @@ final class NoteDoc
         }
 
         switch ($type) {
+            case 'doc':
+                // How the note is shown: A4 pages or full width (resources/js/note/editor.js). Unset, the student's own choice.
+                $view = $attrs['view'] ?? null;
+                if (in_array($view, ['pages', 'continuous'], true)) {
+                    $kept['view'] = $view;
+                }
+                break;
             case 'heading':
                 $level = $attrs['level'] ?? null;
                 $kept['level'] = is_int($level) && $level >= 1 && $level <= 4 ? $level : 2;

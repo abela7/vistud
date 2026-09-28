@@ -100,7 +100,8 @@
                     <button type="button" class="btn btn-ghost note-mode" onclick="window.print()" title="Print / Export PDF (Ctrl+P)" aria-label="Print or export PDF">
                         <x-icon name="printer" class="size-4" /><span class="max-sm:sr-only">Print</span>
                     </button>
-                    <button type="button" class="btn btn-ghost note-mode" data-note-import title="Import a Markdown (.md) or text (.txt) file into this note">
+                    {{-- Only while the note is empty (resources/js/note/editor.js shows it). --}}
+                    <button type="button" class="btn btn-ghost note-mode" data-note-import title="Start this note from a Markdown (.md) or text (.txt) file" hidden>
                         <span><x-icon name="file-up" class="size-4" /><span class="max-sm:sr-only">Import</span></span>
                     </button>
                     <input type="file" hidden data-import-file accept=".md,.markdown,.txt,text/markdown,text/plain">
@@ -161,7 +162,7 @@
                 </x-alert>
             </div>
 
-            <article class="note-card" data-note-editor data-account="{{ auth()->id() }}" data-image-upload-url="{{ route('api.v1.notes.images.store') }}"
+            <article class="note-card" data-note-editor data-account="{{ auth()->id() }}" data-max-bytes="{{ \App\Study\NoteDoc::MAX_BYTES }}" data-image-upload-url="{{ route('api.v1.notes.images.store') }}"
                 @if ($import ?? null) data-import-url="{{ $import['url'] }}" data-import-name="{{ $import['name'] }}" data-import-kind="{{ $import['markdown'] ? 'markdown' : 'text' }}" @endif
                 @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" @endif>
                 <div class="note-toolbar" role="toolbar" aria-label="Formatting" aria-controls="note-body" data-note-toolbar>
@@ -485,25 +486,6 @@
                         <div class="modal-actions">
                             <x-button data-dialog-close>Cancel</x-button>
                             <x-button variant="primary" data-insert-image-btn>Add</x-button>
-                        </div>
-                    </div>
-                </dialog>
-
-                {{-- Importing a file into a note that already has words: replace them, or add to the end. --}}
-                <dialog id="note-import-dialog" class="modal" aria-labelledby="note-import-title" data-import-dialog>
-                    <div class="modal-panel">
-                        <div class="modal-head">
-                            <h2 id="note-import-title" class="min-w-0 flex-1 text-lg font-semibold">Import <span class="break-words" data-import-file-name></span></h2>
-                            <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" data-dialog-close><x-icon name="x" /></button>
-                        </div>
-                        <div class="space-y-3 px-5">
-                            <p>This note already has some writing. Where should the file go?</p>
-                            <p class="text-sm text-fg-muted">Headings, lists, tables, quotes, code, pictures and formulas come across. Ctrl+Z takes an import back.</p>
-                        </div>
-                        <div class="modal-actions">
-                            <x-button data-dialog-close>Cancel</x-button>
-                            <x-button data-import-choice="replace">Replace everything</x-button>
-                            <x-button variant="primary" data-import-choice="append">Add to the end</x-button>
                         </div>
                     </div>
                 </dialog>
