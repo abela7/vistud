@@ -797,3 +797,45 @@ test('a note moves to a window of its own, beside the study material, and back i
     await page.locator('[data-note-editor][data-ready]').waitFor();
     await expect(body(page)).toContainText('Written beside the slides.');
 });
+
+test('printing and Save as PDF: only the note, on A4 without the browser\'s own header and footer, in its colours', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = makeStudentWithNote();
+    await openStudentHome(page, note.email);
+    await page.evaluate(() => localStorage.setItem('vistud.appearance', 'dark'));
+    await page.goto(note.url);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await body(page).click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.type('Key idea');
+    await page.keyboard.press('Shift+Home');
+    await page.getByRole('toolbar', { name: 'Formatting' }).getByRole('button', { name: 'Highlight', exact: true }).click();
+    await page.getByRole('menu', { name: 'Highlight' }).getByRole('menuitemradio').first().click();
+    await expect(status(page)).toHaveText('Saved');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'vistud-dark');
+
+    // The print dialog: the light theme (white paper), and the note's title as the PDF's name; both put back after.
+    await page.evaluate(() => window.dispatchEvent(new Event('beforeprint')));
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'vistud-light');
+    await expect(page).toHaveTitle('Mitosis vs meiosis');
+    await page.emulateMedia({ media: 'print' });
+    for (const around of ['.app-topbar', '.app-sidebar', '.note-header-bar', '.note-toolbar', '.note-count-bar']) {
+        await expect(page.locator(around).first()).toBeHidden();
+    }
+    await expect(page.getByLabel('Title')).toBeVisible();
+    await expect(body(page).locator('mark')).toHaveText('Key idea');
+    const printed = await page.evaluate(() => ({
+        exact: getComputedStyle(document.documentElement).printColorAdjust,
+        highlight: getComputedStyle(document.querySelector('.note-prose mark')).backgroundColor,
+        top: getComputedStyle(document.querySelector('.app-main')).paddingTop,
+    }));
+    expect(printed.exact).toBe('exact');
+    expect(printed.highlight).not.toBe('rgba(0, 0, 0, 0)');
+    expect(printed.top).toBe('75.5906px');
+    const pdf = await page.pdf({ preferCSSPageSize: true });
+    expect(pdf.toString('latin1')).toMatch(/\/MediaBox \[0 0 594\.9\d* 841\.9\d*\]/);
+    await page.emulateMedia({ media: null });
+    await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'vistud-dark');
+    await expect(page).toHaveTitle(/^Mitosis vs meiosis · Biology/);
+});
