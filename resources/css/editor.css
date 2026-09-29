@@ -892,15 +892,15 @@
     }
 
     /*
-    | Full screen (not a note's own window): the note, its toolbar and its status bar, nothing else. Where it is
+    | Full screen and a note in its own window: the note, its toolbar and its status bar, nothing else. Where it is
     | and its buttons are for the page, not for writing; what matters stays in the status bar: the save status,
-    | the view, Read, Print and Exit.
+    | the view, Read, Print, and Exit (or Open in ViStud).
     */
-    .note-page[data-focus]:not([data-window]) .note-header-bar {
+    .note-page[data-focus] .note-header-bar {
         display: none !important; /* the header's own `flex` utility would win otherwise */
     }
 
-    .note-page[data-focus]:not([data-window]) .note-bar-tools {
+    .note-page[data-focus] .note-bar-tools {
         display: inline-flex;
         align-items: center;
         gap: 0.125rem;

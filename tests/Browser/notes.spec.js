@@ -848,9 +848,9 @@ test('a note moves to a window of its own, beside the study material, and back i
     const win = await opening;
     await win.waitForURL(/\?window=1$/);
     await win.locator('[data-note-editor][data-ready]').waitFor();
-    // Only the note, and where it is.
+    // Only the note: no header bar or navigation.
     await expect(win.getByLabel('Title')).toHaveValue('Mitosis vs meiosis');
-    await expect(win.getByRole('navigation', { name: 'Where this note is' })).toHaveText(/Biology\s*Week 2: Cell division/);
+    await expect(win.locator('.note-header-bar')).toBeHidden();
     await expect(win.locator('.app-topbar, .app-sidebar, [data-back]')).toHaveCount(0);
     // The main tab goes back to where the note lives, free for the study material.
     await expect(page.getByRole('heading', { level: 1, name: 'Week 2: Cell division' })).toBeVisible();
