@@ -358,12 +358,15 @@
                 <div class="note-count-bar">
                     <button type="button" class="note-count note-count-button" data-note-count title="Click for document statistics and reading time" aria-label="Document statistics"></button>
                     <div class="note-zoom-controls" role="group" aria-label="Zoom controls">
-                        <button type="button" class="zoom-button" data-zoom-out title="Zoom out (Ctrl+-)" aria-label="Zoom out">
-                            <x-icon name="minus" class="size-3.5" />
-                        </button>
                         <button type="button" class="zoom-value-button" data-zoom-reset title="Reset zoom to 100% (Ctrl+0)" aria-label="Reset zoom">
                             <span data-zoom-label>100%</span>
                         </button>
+                        <button type="button" class="zoom-button" data-zoom-out title="Zoom out (Ctrl+-)" aria-label="Zoom out">
+                            <x-icon name="minus" class="size-3.5" />
+                        </button>
+                        <div class="zoom-slider-container">
+                            <input type="range" min="50" max="200" step="1" value="100" class="zoom-slider" data-zoom-slider aria-label="Zoom slider" title="Zoom">
+                        </div>
                         <button type="button" class="zoom-button" data-zoom-in title="Zoom in (Ctrl++)" aria-label="Zoom in">
                             <x-icon name="plus" class="size-3.5" />
                         </button>

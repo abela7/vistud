@@ -958,15 +958,17 @@ export async function mount(host) {
     try {
         const savedZoom = parseFloat(localStorage.getItem('vistud.note-zoom'));
         if (!isNaN(savedZoom) && savedZoom >= 0.5 && savedZoom <= 2.0) {
-            currentZoom = Math.round(savedZoom * 10) / 10;
+            currentZoom = Math.round(savedZoom * 100) / 100;
         }
     } catch {}
 
     const zoomLabel = host.querySelector('[data-zoom-label]');
+    const zoomSlider = host.querySelector('[data-zoom-slider]');
     const sheetEl = host.querySelector('[data-note-sheet]');
+    let zoomAnimId = null;
 
-    function applyZoom(zoom, announce = false) {
-        currentZoom = Math.min(2.0, Math.max(0.5, Math.round(zoom * 10) / 10));
+    function setZoomImmediate(zoom, persist = true) {
+        currentZoom = Math.min(2.0, Math.max(0.5, Math.round(zoom * 100) / 100));
         if (sheetEl) {
             sheetEl.style.setProperty('--note-zoom', String(currentZoom));
             sheetEl.style.zoom = String(currentZoom);
@@ -974,25 +976,72 @@ export async function mount(host) {
         if (zoomLabel) {
             zoomLabel.textContent = `${Math.round(currentZoom * 100)}%`;
         }
-        try {
-            localStorage.setItem('vistud.note-zoom', String(currentZoom));
-        } catch {}
-        if (announce) {
-            toast(`Zoom: ${Math.round(currentZoom * 100)}%`);
+        if (zoomSlider && document.activeElement !== zoomSlider) {
+            zoomSlider.value = String(Math.round(currentZoom * 100));
         }
-        scheduleCount();
+        if (persist) {
+            try {
+                localStorage.setItem('vistud.note-zoom', String(currentZoom));
+            } catch {}
+        }
     }
 
-    const zoomIn = () => applyZoom(currentZoom + 0.1, true);
-    const zoomOut = () => applyZoom(currentZoom - 0.1, true);
-    const resetZoom = () => applyZoom(1.0, true);
+    function animateZoomTo(targetZoom, duration = 160) {
+        targetZoom = Math.min(2.0, Math.max(0.5, Math.round(targetZoom * 100) / 100));
+        if (Math.abs(targetZoom - currentZoom) < 0.005) {
+            setZoomImmediate(targetZoom);
+            scheduleCount();
+            return;
+        }
+
+        if (zoomAnimId) cancelAnimationFrame(zoomAnimId);
+
+        const startZoom = currentZoom;
+        const startTime = performance.now();
+
+        function step(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(1, elapsed / duration);
+            const ease = 1 - Math.pow(1 - progress, 3);
+            const val = startZoom + (targetZoom - startZoom) * ease;
+            setZoomImmediate(val, false);
+
+            if (progress < 1) {
+                zoomAnimId = requestAnimationFrame(step);
+            } else {
+                zoomAnimId = null;
+                setZoomImmediate(targetZoom, true);
+                scheduleCount();
+            }
+        }
+
+        zoomAnimId = requestAnimationFrame(step);
+    }
+
+    const zoomIn = () => animateZoomTo(currentZoom + 0.1);
+    const zoomOut = () => animateZoomTo(currentZoom - 0.1);
+    const resetZoom = () => animateZoomTo(1.0);
 
     host.querySelector('[data-zoom-in]')?.addEventListener('click', zoomIn);
     host.querySelector('[data-zoom-out]')?.addEventListener('click', zoomOut);
     host.querySelector('[data-zoom-reset]')?.addEventListener('click', resetZoom);
 
-    // Apply saved zoom to the sheet
-    applyZoom(currentZoom);
+    zoomSlider?.addEventListener('input', (event) => {
+        if (zoomAnimId) cancelAnimationFrame(zoomAnimId);
+        const val = parseFloat(event.target.value) / 100;
+        setZoomImmediate(val, false);
+        scheduleCount();
+    });
+
+    zoomSlider?.addEventListener('change', (event) => {
+        const val = parseFloat(event.target.value) / 100;
+        setZoomImmediate(val, true);
+        scheduleCount();
+    });
+
+    // Apply saved zoom to the sheet and slider
+    setZoomImmediate(currentZoom, false);
+    if (zoomSlider) zoomSlider.value = String(Math.round(currentZoom * 100));
 
     // ---------- Automatic Pagination (MS Word A4 standard) & Statistics ----------
     let updatingPagination = false;
