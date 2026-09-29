@@ -113,6 +113,38 @@ test('a note is pinned from its row in a list, and unpinned there too', async ({
     await expect(dock(page)).toHaveCount(0);
 });
 
+test('a row\'s menu follows a pin taken out of the corner, and the corner survives Back after selecting', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = await twoPins(page);
+    await page.goto(`/workspaces/${note.workspace}/modules`);
+    await page.getByRole('link', { name: /Week 2: Cell division/ }).click();
+    await page.waitForURL(/\/modules\/[^/]+$/);
+
+    // The note is pinned, so its row offers Unpin; take it out of the corner's list and the row offers Pin again.
+    await page.getByRole('button', { name: 'Actions for Mitosis vs meiosis' }).click();
+    await expect(page.getByRole('button', { name: 'Unpin', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await dock(page).getByRole('button', { name: /Pinned notes/ }).click();
+    await page.locator('#pin-menu').getByRole('button', { name: 'Unpin Mitosis vs meiosis' }).click();
+    await expect(page.getByRole('status').filter({ hasText: '“Mitosis vs meiosis” is unpinned.' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Actions for Mitosis vs meiosis' }).click();
+    await expect(page.getByRole('button', { name: 'Pin to the corner' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Unpin', exact: true })).toHaveCount(0);
+
+    // Leave a page while selecting rows, then come back to it: the corner is there, and not marked as selecting.
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Select' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-selecting', '');
+    await page.getByRole('link', { name: 'Overview', exact: true }).first().click();
+    await page.waitForURL(new RegExp(`/workspaces/${note.workspace}$`));
+    await expect(page.locator('html')).not.toHaveAttribute('data-selecting', '');
+    await page.goBack();
+    await page.waitForURL(/\/modules\/[^/]+$/);
+    await expect(page.locator('html')).not.toHaveAttribute('data-selecting', '');
+    await expect(dock(page).getByRole('link', { name: /Pinned note: Untitled note/ })).toBeVisible();
+});
+
 test('several pins are one button with a list; each opens its note, or is unpinned', async ({ page }) => {
     await page.setViewportSize(desktop);
     await twoPins(page);

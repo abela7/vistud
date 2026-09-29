@@ -5,6 +5,7 @@ namespace App\Livewire\Workspaces;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\BulkActions;
 use App\Livewire\Concerns\Notices;
+use App\Livewire\Study\PinnedNotes;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
@@ -277,15 +278,19 @@ final class Contents extends Component
         } catch (Conflict $full) {
             $this->notify($full->getMessage(), 'info');
         }
-        $this->dispatch('pins-changed');
+        $this->dispatch('pins-changed')->to(PinnedNotes::class);
     }
 
     public function unpinNote(string $id): void
     {
         $note = $this->notes->unpin($this->principal(), $id);
         $this->notice = "“{$note->displayTitle()}” is unpinned.";
-        $this->dispatch('pins-changed');
+        $this->dispatch('pins-changed')->to(PinnedNotes::class);
     }
+
+    /** A note was unpinned from the corner: each row's menu says Pin or Unpin again. */
+    #[On('pins-changed')]
+    public function pinsChanged(): void {}
 
     public function restoreNote(string $id): void
     {

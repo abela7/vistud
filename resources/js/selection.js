@@ -14,6 +14,8 @@ export function selectable(extra = {}) {
         count: 0,
 
         init() {
+            // A page brought back by Back or Forward may carry the attribute of the moment it was left.
+            document.documentElement.removeAttribute('data-selecting');
             this.$watch('isSelecting', (val) => {
                 // The pinned notes' button steps aside for the selection bar (resources/css/shell.css).
                 document.documentElement.toggleAttribute('data-selecting', val);
@@ -45,6 +47,7 @@ export function selectable(extra = {}) {
 
         exitMode() {
             this.isSelecting = false;
+            document.documentElement.removeAttribute('data-selecting');
             this.clearSelection();
         },
 

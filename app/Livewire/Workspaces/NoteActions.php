@@ -4,6 +4,7 @@ namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
+use App\Livewire\Study\PinnedNotes;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\Gone;
 use App\Study\Notes;
@@ -47,7 +48,7 @@ final class NoteActions extends Component
             $this->notify($problem->getMessage(), 'info');
         }
 
-        $this->dispatch('pins-changed');
+        $this->dispatch('pins-changed')->to(PinnedNotes::class);
     }
 
     public function trash(): void

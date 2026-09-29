@@ -4,6 +4,7 @@ namespace App\Livewire\Study;
 
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
+use App\Livewire\Workspaces\Contents;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Study\NoteDetails;
@@ -50,7 +51,8 @@ final class PinnedNotes extends Component
         } catch (NotFound) {
             // Gone since the list was drawn: the refresh below shows what's left.
         }
-        $this->dispatch('pins-changed');
+        // The list of notes on the page keeps a Pin or an Unpin in each row's menu: it follows.
+        $this->dispatch('pins-changed')->to(Contents::class);
     }
 
     /** A note was pinned or unpinned elsewhere on the page (its actions, a list). */
