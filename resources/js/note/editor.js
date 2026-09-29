@@ -281,12 +281,15 @@ const NotePageBreak = Node.create({
     },
 });
 
-function createAutoPageBreakWidget(pageNumber) {
+function createAutoPageBreakWidget(pageNumber, remainingSpace = 0) {
     const el = document.createElement('div');
     el.className = 'note-page-break note-auto-page-break';
     el.setAttribute('data-auto-page-break', '');
     el.setAttribute('data-page-number', String(pageNumber));
     el.contentEditable = 'false';
+    if (remainingSpace > 0) {
+        el.style.marginTop = `${Math.round(remainingSpace)}px`;
+    }
 
     const lineLeft = document.createElement('span');
     lineLeft.className = 'page-break-line';
@@ -294,7 +297,7 @@ function createAutoPageBreakWidget(pageNumber) {
 
     const badge = document.createElement('span');
     badge.className = 'page-break-badge';
-    badge.textContent = `Page ${pageNumber}`;
+    badge.textContent = `Page Break · Page ${pageNumber}`;
 
     const lineRight = document.createElement('span');
     lineRight.className = 'page-break-line';
@@ -329,7 +332,7 @@ const NoteAutoPagination = Extension.create({
                 },
                 props: {
                     decorations(state) {
-                        return this.getState(state);
+                        return paginationPluginKey.getState(state);
                     },
                 },
             }),
@@ -1142,6 +1145,14 @@ export async function mount(host) {
 
         doc.forEach((node, pos) => {
             if (node.type.name === 'pageBreak') {
+                const spaceToBottom = Math.max(0, currentBudget - accumulatedHeight);
+                let dom = null;
+                try {
+                    dom = editor.view.nodeDOM(pos);
+                } catch {}
+                if (dom && dom.style) {
+                    dom.style.marginTop = `${Math.round(spaceToBottom + padBottom)}px`;
+                }
                 breakPositions.push(pos);
                 currentPageNum++;
                 accumulatedHeight = 0;
@@ -1149,32 +1160,54 @@ export async function mount(host) {
                 return;
             }
 
-            let dom = editor.view.nodeDOM(pos);
-            if (!dom || dom.nodeType !== 1) {
-                const domAt = editor.view.domAtPos(pos + 1);
-                dom = domAt?.node;
-                if (dom && dom.nodeType !== 1) dom = dom.parentElement;
+            let blockEl = null;
+            try {
+                const dom = editor.view.nodeDOM(pos);
+                if (dom && dom.nodeType === 1) {
+                    blockEl = dom.closest ? (dom.closest('.note-prose > *') || dom) : dom;
+                }
+            } catch {}
+
+            if (!blockEl) {
+                try {
+                    const domAt = editor.view.domAtPos(pos + 1);
+                    const nodeEl = domAt?.node;
+                    const el = nodeEl?.nodeType === 1 ? nodeEl : nodeEl?.parentElement;
+                    blockEl = el?.closest ? (el.closest('.note-prose > *') || el) : el;
+                } catch {}
             }
 
             let blockHeight = 28;
-            if (dom && typeof dom.getBoundingClientRect === 'function') {
-                const rect = dom.getBoundingClientRect();
-                const style = window.getComputedStyle(dom);
-                const mt = parseFloat(style.marginTop) || 0;
-                const mb = parseFloat(style.marginBottom) || 0;
-                blockHeight = (rect.height / zoomScale) + Math.max(mt, mb);
+            if (blockEl && typeof blockEl.getBoundingClientRect === 'function') {
+                const rect = blockEl.getBoundingClientRect();
+                if (rect.height > 0) {
+                    const style = window.getComputedStyle(blockEl);
+                    const mt = parseFloat(style.marginTop) || 0;
+                    const mb = parseFloat(style.marginBottom) || 0;
+                    blockHeight = (rect.height / zoomScale) + Math.max(mt, mb);
+                } else if (node.isTextblock) {
+                    const lines = Math.max(1, Math.ceil((node.textContent?.length || 0) / 75));
+                    blockHeight = lines * 28 + 16;
+                }
+            } else if (node.isTextblock) {
+                const lines = Math.max(1, Math.ceil((node.textContent?.length || 0) / 75));
+                blockHeight = lines * 28 + 16;
             }
 
             if (accumulatedHeight > 0 && (accumulatedHeight + blockHeight > currentBudget)) {
+                const spaceToBottom = Math.max(0, currentBudget - accumulatedHeight);
                 currentPageNum++;
                 currentBudget = subsequentBudget;
                 accumulatedHeight = blockHeight;
                 breakPositions.push(pos);
                 const thisPage = currentPageNum;
                 decorations.push(
-                    Decoration.widget(pos, () => createAutoPageBreakWidget(thisPage), {
+                    Decoration.widget(pos, () => createAutoPageBreakWidget(thisPage, spaceToBottom + padBottom), {
                         side: -1,
                         key: `auto-page-${thisPage}`,
+                        remainingSpace: spaceToBottom + padBottom,
+                        stopEvent: () => true,
+                        ignoreSelection: true,
                     })
                 );
             } else {
@@ -1188,9 +1221,17 @@ export async function mount(host) {
 
         sheetEl.style.setProperty('--note-page-count', String(totalPages));
 
-        const newBreakKey = breakPositions.join(',');
+        decorations.forEach((d) => {
+            const pageNum = d.spec.key.replace('auto-page-', '');
+            const existingEl = proseEl.querySelector(`[data-auto-page-break][data-page-number="${pageNum}"]`);
+            if (existingEl && typeof d.spec.remainingSpace === 'number') {
+                existingEl.style.marginTop = `${Math.round(d.spec.remainingSpace)}px`;
+            }
+        });
+
+        const newBreakKey = breakPositions.map((p, i) => `${p}:p${i + 2}`).join(',');
         const currentDecos = paginationPluginKey.getState(editor.state);
-        const oldPositions = currentDecos ? currentDecos.find().map((d) => d.from).sort((a, b) => a - b).join(',') : '';
+        const oldPositions = currentDecos ? currentDecos.find().map((d) => `${d.from}:${d.spec.key}`).join(',') : '';
 
         if (newBreakKey !== oldPositions) {
             const decos = DecorationSet.create(doc, decorations);
@@ -2234,6 +2275,12 @@ export async function mount(host) {
     setPageViewMode(editor.state.doc.attrs.view);
     viewReady = true;
     document.fonts?.ready?.then(() => scheduleCount());
+    requestAnimationFrame(() => {
+        updatePaginationAndStats();
+    });
+    setTimeout(() => {
+        updatePaginationAndStats();
+    }, 150);
     scheduleCount();
     viewToggleButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
