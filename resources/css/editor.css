@@ -2188,9 +2188,8 @@
     /* Print styles: clean A4/letter document layout */
     /*
     | Printing and Save as PDF (the owner's review, 2026-09-29): only the note, on A4, as it looks in the
-    | Pages view. The page itself has no margin (@page, at the end of this file), so the browser has nowhere
-    | to print its own date, title, address and page number; the margins are padding, repeated on every
-    | page (clone). Colours
+    | Pages view, with ViStud's footer (@page, at the end of this file) in place of the browser's date, title,
+    | address and page number. The top margin is padding, repeated on every page (clone). Colours
     | print too (highlights, callouts, code, table headings), in the light theme (resources/js/note/editor.js).
     */
     @media print {
@@ -2221,12 +2220,12 @@
             display: none !important;
         }
 
-        /* The margins of every printed page, from any page of ViStud. */
+        /* The top of every printed page, from any page of ViStud, and a little room above the footer (@page). */
         .app-main,
         .note-window {
             display: block !important;
             margin: 0 !important;
-            padding: 20mm !important;
+            padding: 20mm 0 6mm !important;
             box-decoration-break: clone;
             -webkit-box-decoration-break: clone;
         }
@@ -2384,8 +2383,29 @@
     }
 }
 
-/* Printing (@media print above): A4, and no page margin, so the browser prints no header or footer of its own. */
+/*
+| Printing (@media print above), on A4. No top margin: the browser has no room for its own header (date and
+| title); the top margin is the page's padding, on every sheet. The bottom margin holds ViStud's footer, which
+| takes the place of the browser's (address and page number): the note's title (--print-title, set by
+| resources/js/note/editor.js) and "Page 2 of 5", under a fine rule.
+*/
 @page {
     size: A4;
-    margin: 0;
+    margin: 0 20mm 14mm;
+
+    @bottom-left {
+        content: var(--print-title, '');
+        font-family: var(--font-sans);
+        font-size: 8.5pt;
+        color: var(--text-muted);
+        border-top: 0.5pt solid var(--border);
+    }
+
+    @bottom-right {
+        content: 'Page ' counter(page) ' of ' counter(pages);
+        font-family: var(--font-sans);
+        font-size: 8.5pt;
+        color: var(--text-muted);
+        border-top: 0.5pt solid var(--border);
+    }
 }

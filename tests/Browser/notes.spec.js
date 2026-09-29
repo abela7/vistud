@@ -798,7 +798,7 @@ test('a note moves to a window of its own, beside the study material, and back i
     await expect(body(page)).toContainText('Written beside the slides.');
 });
 
-test('printing and Save as PDF: only the note, on A4 without the browser\'s own header and footer, in its colours', async ({ page }) => {
+test('printing and Save as PDF: only the note, on A4 with ViStud\'s footer instead of the browser\'s, in its colours', async ({ page }) => {
     await page.setViewportSize(desktop);
     const note = makeStudentWithNote();
     await openStudentHome(page, note.email);
@@ -828,14 +828,18 @@ test('printing and Save as PDF: only the note, on A4 without the browser\'s own 
         exact: getComputedStyle(document.documentElement).printColorAdjust,
         highlight: getComputedStyle(document.querySelector('.note-prose mark')).backgroundColor,
         top: getComputedStyle(document.querySelector('.app-main')).paddingTop,
+        sides: getComputedStyle(document.querySelector('.app-main')).paddingLeft,
+        // The footer's title (@page in resources/css/editor.css): "Page 2 of 5" comes from the page counter.
+        footer: getComputedStyle(document.documentElement).getPropertyValue('--print-title'),
     }));
     expect(printed.exact).toBe('exact');
     expect(printed.highlight).not.toBe('rgba(0, 0, 0, 0)');
-    expect(printed.top).toBe('75.5906px');
+    expect([printed.top, printed.sides, printed.footer]).toEqual(['75.5906px', '0px', '"Mitosis vs meiosis"']);
     const pdf = await page.pdf({ preferCSSPageSize: true });
     expect(pdf.toString('latin1')).toMatch(/\/MediaBox \[0 0 594\.9\d* 841\.9\d*\]/);
     await page.emulateMedia({ media: null });
     await page.evaluate(() => window.dispatchEvent(new Event('afterprint')));
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'vistud-dark');
     await expect(page).toHaveTitle(/^Mitosis vs meiosis · Biology/);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--print-title'))).toBe('');
 });

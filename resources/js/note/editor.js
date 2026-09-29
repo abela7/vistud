@@ -1932,16 +1932,22 @@ export async function mount(host) {
     // On white paper, as the note looks in the light theme, and named after the note (Save as PDF offers
     // "<title>.pdf"). What the page was is put back once the print dialog closes. resources/css/editor.css
     // leaves only the note on the page.
+    // The footer of every page shows the title too (resources/css/editor.css, @page), as a CSS string.
     let beforePrint = null;
+    const cssString = (text) => `"${text.replace(/[\\"]/g, '\\$&').replace(/\s+/g, ' ')}"`;
     on(window, 'beforeprint', () => {
         const root = document.documentElement;
         beforePrint ??= { theme: root.dataset.theme, title: document.title };
         if (root.dataset.themeLight) root.dataset.theme = root.dataset.themeLight;
-        document.title = titleField.value.trim() || 'Untitled note';
+        const title = titleField.value.trim() || 'Untitled note';
+        document.title = title;
+        root.style.setProperty('--print-title', cssString(title.length > 90 ? `${title.slice(0, 89)}…` : title));
     });
     on(window, 'afterprint', () => {
         if (!beforePrint) return;
-        document.documentElement.dataset.theme = beforePrint.theme;
+        const root = document.documentElement;
+        root.dataset.theme = beforePrint.theme;
+        root.style.removeProperty('--print-title');
         document.title = beforePrint.title;
         beforePrint = null;
     });
