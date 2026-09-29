@@ -402,6 +402,8 @@
                     <div class="note-sheet" data-note-sheet>
                         <textarea class="note-title" rows="1" maxlength="{{ \App\Study\Notes::MAX_TITLE }}" placeholder="Untitled note" aria-label="Title" data-note-title>{{ $note?->title }}</textarea>
                         <div id="note-body" data-note-body></div>
+                        {{-- The last page's number, at the foot of the sheet (the others are on the gaps: resources/css/editor.css). --}}
+                        <div class="page-foot" aria-hidden="true"></div>
                     </div>
                 </div>
                 <div class="note-count-bar">

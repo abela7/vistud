@@ -262,6 +262,8 @@ const NotePageBreak = Node.create({
             ['span', { class: 'page-break-line', 'aria-hidden': 'true' }],
             ['span', { class: 'page-break-badge' }, 'Page Break'],
             ['span', { class: 'page-break-line', 'aria-hidden': 'true' }],
+            // The number of the page this break ends, drawn by the stylesheet's page counter (Pages view only).
+            ['span', { class: 'page-number', 'aria-hidden': 'true' }],
         ];
     },
 
@@ -281,31 +283,23 @@ const NotePageBreak = Node.create({
     },
 });
 
+/**
+ * Where a page is full, the next one starts: the gap between two sheets, with the number of the page just ended
+ * in its bottom margin. Nothing is written on it, as in Word; the stylesheet draws both (Pages view only).
+ */
 function createAutoPageBreakWidget(pageNumber, remainingSpace = 0) {
     const el = document.createElement('div');
     el.className = 'note-page-break note-auto-page-break';
     el.setAttribute('data-auto-page-break', '');
     el.setAttribute('data-page-number', String(pageNumber));
+    el.setAttribute('aria-hidden', 'true');
     el.contentEditable = 'false';
     if (remainingSpace > 0) {
         el.style.marginTop = `${Math.round(remainingSpace)}px`;
     }
-
-    const lineLeft = document.createElement('span');
-    lineLeft.className = 'page-break-line';
-    lineLeft.setAttribute('aria-hidden', 'true');
-
-    const badge = document.createElement('span');
-    badge.className = 'page-break-badge';
-    badge.textContent = `Page Break · Page ${pageNumber}`;
-
-    const lineRight = document.createElement('span');
-    lineRight.className = 'page-break-line';
-    lineRight.setAttribute('aria-hidden', 'true');
-
-    el.appendChild(lineLeft);
-    el.appendChild(badge);
-    el.appendChild(lineRight);
+    const number = document.createElement('span');
+    number.className = 'page-number';
+    el.appendChild(number);
     return el;
 }
 
@@ -693,10 +687,8 @@ export async function mount(host) {
             updateToolbar();
             // The note's own layout, when a change brings one (an import, Undo, another tab's version).
             if (viewReady && editor.state.doc.attrs.view !== shownView) setPageViewMode(editor.state.doc.attrs.view);
-            if (toolbarReady && tr && !tr.docChanged && tr.selectionSet && count) {
-                const { currentPage, totalPages, words, chars } = getPageStats();
-                count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
-            }
+            // Moving the cursor says which page it is on at once; typing waits for a pause (scheduleCount).
+            if (toolbarReady && tr && !tr.docChanged && tr.selectionSet) writeCount();
         },
     });
 
@@ -1060,13 +1052,62 @@ export async function mount(host) {
 
     // ---------- Automatic Pagination (MS Word A4 standard) & Statistics ----------
 
+    const inPagesView = () => (page?.getAttribute('data-page-view') ?? 'pages') === 'pages';
+
+    /** The page the cursor is on: one past the breaks before it (a break sits at the start of its page's last block). */
+    const pageOfCursor = () => 1 + lastBreakPositions.filter((position) => editor.state.selection.from > position).length;
+
+    /**
+     * The page on view, as Word's status bar shows while scrolling: the one under the middle of what can be seen
+     * (the note's own scroll area when it has one, as in full screen, else the window). Counted from the gaps
+     * that are drawn, so it is right at any zoom.
+     */
+    function pageInView() {
+        if (!sheetEl || !inPagesView() || lastTotalPages < 2) return 1;
+        let [top, bottom] = [0, window.innerHeight];
+        const scroller = host.querySelector('.note-content');
+        if (scroller && scroller.scrollHeight > scroller.clientHeight + 1) {
+            const box = scroller.getBoundingClientRect();
+            [top, bottom] = [Math.max(top, box.top), Math.min(bottom, box.bottom)];
+        }
+        const middle = (top + bottom) / 2;
+        let current = 1;
+        sheetEl.querySelectorAll('.note-page-break').forEach((gap) => {
+            if (gap.getBoundingClientRect().top < middle) current++;
+        });
+        return Math.min(lastTotalPages, current);
+    }
+
+    /**
+     * How many A4 pages a Full Width note would take, roughly: the area its text covers over the area of one page's
+     * text (A4 less its 20 mm margins). The text is wider there, so the pages differ a little from the printout.
+     */
+    function estimatePages() {
+        const body = host.querySelector('[data-note-body]');
+        if (!body) return 1;
+        const box = body.getBoundingClientRect();
+        const zoom = currentZoom > 0 ? currentZoom : 1;
+        const pageText = ((210 - 40) / 25.4 * 96) * ((297 - 40) / 25.4 * 96);
+        return Math.max(1, Math.ceil(((box.width / zoom) * (box.height / zoom)) / pageText));
+    }
+
     function getPageStats() {
-        const cursorPos = editor ? editor.state.selection.from : 0;
         const words = editor?.storage?.characterCount ? editor.storage.characterCount.words() : 0;
         const chars = editor?.storage?.characterCount ? editor.storage.characterCount.characters() : 0;
-        const totalPages = Math.max(1, lastTotalPages);
-        const currentPage = Math.min(totalPages, Math.max(1, lastBreakPositions.filter((p) => cursorPos >= p).length + 1));
-        return { currentPage, totalPages, words, chars };
+        const pages = inPagesView();
+        const totalPages = pages ? Math.max(1, lastTotalPages) : estimatePages();
+        return { currentPage: pages ? Math.min(totalPages, pageOfCursor()) : 1, totalPages, estimated: !pages, words, chars };
+    }
+
+    /**
+     * The status line under the note. In the Pages view it says which page it is; a Full Width note is one
+     * document with no pages, so it counts words only.
+     */
+    function writeCount(currentPage = null) {
+        if (!count || !editor) return;
+        const { words, chars } = getPageStats();
+        const text = `${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
+        count.textContent = inPagesView() ? `Page ${Math.min(Math.max(1, lastTotalPages), currentPage ?? pageOfCursor())} of ${Math.max(1, lastTotalPages)} · ${text}` : text;
     }
 
     function updatePaginationAndStats() {
@@ -1074,10 +1115,6 @@ export async function mount(host) {
 
         const pageMode = page ? (page.getAttribute('data-page-view') ?? 'pages') : 'pages';
         const isPagesView = pageMode === 'pages';
-
-        const words = editor.storage.characterCount.words();
-        const chars = editor.storage.characterCount.characters();
-        const cursorPos = editor.state.selection.from;
 
         if (!isPagesView) {
             const currentDecos = paginationPluginKey.getState(editor.state);
@@ -1095,33 +1132,9 @@ export async function mount(host) {
             }
 
             if (sheetEl) sheetEl.style.setProperty('--note-page-count', '1');
-
-            let manualBreaks = [];
-            editor.state.doc.descendants((node, pos) => {
-                if (node.type.name === 'pageBreak') manualBreaks.push(pos);
-            });
-
-            let totalPages = 1;
-            let currentPage = 1;
-            if (manualBreaks.length > 0) {
-                totalPages = manualBreaks.length + 1;
-                currentPage = manualBreaks.filter((p) => cursorPos > p).length + 1;
-            } else {
-                const bodyEl = host.querySelector('[data-note-body]');
-                const bodyHeight = bodyEl ? bodyEl.offsetHeight : 0;
-                totalPages = Math.max(1, Math.ceil(bodyHeight / 950));
-                const scrollContainer = host.querySelector('.note-content');
-                if (scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight) {
-                    const scrollRatio = scrollContainer.scrollTop / (scrollContainer.scrollHeight - scrollContainer.clientHeight);
-                    currentPage = Math.min(totalPages, Math.max(1, Math.floor(scrollRatio * totalPages) + 1));
-                } else {
-                    currentPage = 1;
-                }
-            }
-
-            lastTotalPages = totalPages;
-            lastBreakPositions = manualBreaks;
-            if (count) count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
+            lastTotalPages = 1;
+            lastBreakPositions = [];
+            writeCount();
             return;
         }
 
@@ -1256,8 +1269,7 @@ export async function mount(host) {
             }
         }
 
-        const currentPage = Math.min(totalPages, Math.max(1, breakPositions.filter((p) => cursorPos >= p).length + 1));
-        if (count) count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
+        writeCount();
     }
 
     function updateToolbar() {
@@ -1842,8 +1854,8 @@ export async function mount(host) {
             const el = statsDialog.querySelector(sel);
             if (el) el.textContent = val;
         };
-        const { totalPages } = getPageStats();
-        setVal('[data-stat-pages]', totalPages.toLocaleString());
+        const { totalPages, estimated } = getPageStats();
+        setVal('[data-stat-pages]', `${estimated ? '≈ ' : ''}${totalPages.toLocaleString()}`);
         setVal('[data-stat-words]', words.toLocaleString());
         setVal('[data-stat-chars]', chars.toLocaleString());
         setVal('[data-stat-reading]', readingMin);
@@ -2242,23 +2254,19 @@ export async function mount(host) {
         scheduleCount();
     });
     const noteContentEl = host.querySelector('.note-content');
-    noteContentEl?.addEventListener('scroll', () => {
+    let scrollTick = false;
+    function onNoteScroll() {
         if (activeFigureEl) positionImageToolbar(activeFigureEl);
-        if (!editor.isFocused) {
-            if ((page?.getAttribute('data-page-view') ?? 'pages') === 'pages' && lastTotalPages > 1 && sheetEl) {
-                const sheetRect = sheetEl.getBoundingClientRect();
-                const containerRect = noteContentEl.getBoundingClientRect();
-                const relativeY = (containerRect.top + containerRect.height / 3) - sheetRect.top;
-                const pageHeight = 1122.52 * currentZoom;
-                const scrolledPage = Math.min(lastTotalPages, Math.max(1, Math.floor(relativeY / pageHeight) + 1));
-                const words = editor ? editor.storage.characterCount.words() : 0;
-                const chars = editor ? editor.storage.characterCount.characters() : 0;
-                if (count) count.textContent = `Page ${scrolledPage} of ${lastTotalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
-            } else {
-                scheduleCount();
-            }
-        }
-    }, { passive: true });
+        if (scrollTick || !inPagesView()) return;
+        scrollTick = true;
+        requestAnimationFrame(() => {
+            scrollTick = false;
+            if (!left) writeCount(pageInView());
+        });
+    }
+    // The note scrolls in its own area in full screen, and in the window otherwise.
+    noteContentEl?.addEventListener('scroll', onNoteScroll, { passive: true });
+    on(window, 'scroll', onNoteScroll, { passive: true });
     noteContentEl?.addEventListener('wheel', (event) => {
         if (event.ctrlKey || event.metaKey) {
             event.preventDefault();

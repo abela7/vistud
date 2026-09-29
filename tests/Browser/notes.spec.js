@@ -23,6 +23,27 @@ async function openNote(page, which = 'url') {
     return note;
 }
 
+/** A long note, written through the API: 12 paragraphs, a page break the writer made, then 26 more (six pages). */
+async function writeLongNote(page, note) {
+    const api = apiUrl(note);
+    const current = await (await page.request.get(api)).json();
+    const xsrf = decodeURIComponent((await page.context().cookies()).find((c) => c.name === 'XSRF-TOKEN').value);
+    const text = (words) => ({ type: 'text', text: words });
+    const paragraph = (n) => ({ type: 'paragraph', content: [text(`Paragraph ${n}. ${'Cells copy their DNA before they divide, so each new cell gets a full set of instructions. '.repeat(3)}`)] });
+    const doc = { type: 'doc', content: [
+        { type: 'heading', attrs: { level: 2 }, content: [text('Cell division')] },
+        ...Array.from({ length: 12 }, (_, i) => paragraph(i + 1)),
+        { type: 'pageBreak' },
+        { type: 'heading', attrs: { level: 2 }, content: [text('After the break')] },
+        ...Array.from({ length: 26 }, (_, i) => paragraph(i + 20)),
+    ] };
+    const saved = await page.request.put(api, {
+        headers: { 'X-XSRF-TOKEN': xsrf, 'Content-Type': 'application/json', Accept: 'application/json' },
+        data: { base_version: current.version, save_id: 'long-0001', client_id: 'long-0001', title: 'Cell division notes', doc },
+    });
+    expect(saved.ok()).toBe(true);
+}
+
 async function typeAtEnd(page, text) {
     await body(page).click();
     await page.keyboard.press('Control+End');
@@ -842,4 +863,113 @@ test('printing and Save as PDF: only the note, on A4 with ViStud\'s footer inste
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'vistud-dark');
     await expect(page).toHaveTitle(/^Mitosis vs meiosis · Biology/);
     expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--print-title'))).toBe('');
+});
+
+/* Pages and page numbers (the owner's review, 2026-09-29): as in Word, a page ends with its number and a plain gap. */
+
+const A4 = (297 / 25.4) * 96;
+const GAP = 40; // --page-gap: 2.5rem
+
+test('Pages: a page ends with its number and a plain gap; the status line follows the cursor and the scroll', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const note = makeStudentWithNote();
+    await openStudentHome(page, note.email);
+    await writeLongNote(page, note);
+    await page.goto(note.url);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    const gaps = page.locator('.note-page-break');
+    const status = page.locator('[data-note-count]');
+    await expect(status).toContainText(/^Page 1 of \d+ · /);
+    const total = (await gaps.count()) + 1;
+    expect(total).toBeGreaterThanOrEqual(4);
+    await expect(status).toContainText(`Page 1 of ${total} · `);
+
+    // Nothing is written on a break, whether the writer made it or the editor did: no "End of page", no "Start of page".
+    await expect(page.locator('[data-note-sheet]')).not.toContainText(/End of Page|Start of Page|Page Break ·|initial point/i);
+    for (const auto of await page.locator('[data-auto-page-break]').all()) expect(await auto.textContent()).toBe('');
+    // The one the writer made says what it is only when pointed at.
+    const written = page.locator('[data-page-break] .page-break-badge');
+    await expect(written).toHaveCSS('opacity', '0');
+    await written.evaluate((badge) => badge.closest('[data-page-break]').scrollIntoView({ block: 'center' }));
+    await page.locator('[data-page-break]').hover();
+    await expect(written).toHaveCSS('opacity', '1');
+
+    // Each page's number sits in the middle of its bottom margin, right above the gap that ends it; the last one is at the foot of the sheet.
+    const geometry = await page.evaluate(() => {
+        const sheet = document.querySelector('[data-note-sheet]').getBoundingClientRect();
+        const numbers = [...document.querySelectorAll('.note-page-break')].map((gap) => {
+            const number = gap.querySelector('.page-number').getBoundingClientRect();
+            return { above: Math.round(gap.getBoundingClientRect().top - number.bottom), height: Math.round(gap.getBoundingClientRect().height), centred: Math.abs(number.left + number.width / 2 - (sheet.left + sheet.width / 2)) < 2 };
+        });
+        const foot = document.querySelector('.page-foot').getBoundingClientRect();
+        return { numbers, foot: { above: Math.round(sheet.bottom - foot.bottom), centred: Math.abs(foot.left + foot.width / 2 - (sheet.left + sheet.width / 2)) < 2 }, sheet: sheet.height };
+    });
+    for (const number of geometry.numbers) expect([number.above >= 24 && number.above <= 42, number.height, number.centred]).toEqual([true, GAP, true]);
+    expect(geometry.foot.above).toBeGreaterThanOrEqual(24);
+    expect(geometry.foot.above).toBeLessThanOrEqual(42);
+    expect(geometry.foot.centred).toBe(true);
+    // The pages are true A4 sheets with the gaps between: the sheet is exactly as tall as that.
+    expect(Math.abs(geometry.sheet - (total * A4 + (total - 1) * GAP))).toBeLessThan(4);
+
+    // The cursor's page.
+    await body(page).locator('p').last().click();
+    await expect(status).toContainText(`Page ${total} of ${total} · `);
+    await body(page).locator('h2').first().click();
+    await expect(status).toContainText(`Page 1 of ${total} · `);
+    // The page on view, as one scrolls: the second page's number in the middle of the window.
+    await page.locator('.page-number').nth(1).evaluate((number) => number.scrollIntoView({ block: 'center' }));
+    await expect(status).toContainText(`Page 2 of ${total} · `);
+    await page.locator('.page-foot').evaluate((foot) => foot.scrollIntoView({ block: 'center' }));
+    await expect(status).toContainText(`Page ${total} of ${total} · `);
+});
+
+test('Full Width is one document: no pages, no numbers, and a written break is a fine line', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const note = makeStudentWithNote();
+    await openStudentHome(page, note.email);
+    await writeLongNote(page, note);
+    await page.goto(note.url);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(page.locator('[data-note-count]')).toContainText('Page 1 of ');
+    await page.locator('[data-note-count]').click();
+    const pages = page.locator('[data-stat-pages]');
+    await expect(pages).toHaveText(/^\d+$/);
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: 'Toggle document view mode' }).click();
+    await expect(page.locator('[data-note-page]')).toHaveAttribute('data-page-view', 'continuous');
+    await expect(page.locator('[data-note-count]')).toHaveText(/^\d+ words · [\d,]+ characters$/);
+    await expect(page.locator('[data-auto-page-break]')).toHaveCount(0);
+    await expect(page.locator('.page-foot')).toBeHidden();
+    await expect(page.locator('.page-number').first()).toBeHidden();
+    // The break the writer made stays as a line with its name, as in Word's draft view.
+    await expect(page.locator('[data-page-break]')).toBeVisible();
+    await expect(page.locator('[data-page-break] .page-break-badge')).toBeVisible();
+    await expect(page.locator('[data-page-break] .page-break-line').first()).toBeVisible();
+    // How many pages it would take is only an estimate here.
+    await page.locator('[data-note-count]').click();
+    await expect(pages).toHaveText(/^≈ \d+$/);
+    await page.keyboard.press('Escape');
+
+    // And back: pages, numbers and the count return.
+    await page.getByRole('button', { name: 'Toggle document view mode' }).click();
+    await expect(page.locator('[data-note-count]')).toContainText(/^Page 1 of \d+ · /);
+    await expect(page.locator('.page-foot')).toBeVisible();
+});
+
+test('printing leaves out the page numbers and gaps of the screen (the paper has its own footer)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const note = makeStudentWithNote();
+    await openStudentHome(page, note.email);
+    await writeLongNote(page, note);
+    await page.goto(note.url);
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(page.locator('.page-number').first()).toBeVisible();
+    await page.emulateMedia({ media: 'print' });
+    await expect(page.locator('.page-foot')).toBeHidden();
+    await expect(page.locator('.page-number').first()).toBeHidden();
+    await expect(page.locator('[data-auto-page-break]').first()).toBeHidden();
+    // The break the writer made is a page break in the printout, and nothing else.
+    expect(await page.locator('[data-page-break]').evaluate((el) => [getComputedStyle(el).height, getComputedStyle(el).breakAfter])).toEqual(['0px', 'page']);
+    await page.emulateMedia({ media: null });
 });
