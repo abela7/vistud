@@ -8,6 +8,7 @@ use App\Http\Controllers\FlashcardReviewController;
 use App\Http\Controllers\NoteExportController;
 use App\Http\Controllers\NotePageController;
 use App\Http\Controllers\PlacePageController;
+use App\Http\Controllers\QuestionPageController;
 use App\Http\Controllers\SessionBriefingController;
 use App\Http\Controllers\SessionPageController;
 use App\Http\Controllers\WorkspacePageController;
@@ -62,6 +63,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspaces/{workspace}/sessions/{session}/briefing', SessionBriefingController::class)
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'session' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.sessions.briefing');
+
+    // A question on a page of its own, and a new one (docs/specs/study-memory.md §3).
+    Route::get('/workspaces/{workspace}/questions/new', [QuestionPageController::class, 'create'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.questions.create');
+    Route::get('/workspaces/{workspace}/questions/{question}', [QuestionPageController::class, 'show'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'question' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.questions.show');
 
     // A module's or a folder's own page (docs/specs/workspaces.md).
     Route::get('/workspaces/{workspace}/modules/{module}', [PlacePageController::class, 'module'])

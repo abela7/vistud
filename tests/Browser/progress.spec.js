@@ -42,7 +42,7 @@ test('a student tracks topics and questions', async ({ page }) => {
     await dialog(page).getByRole('button', { name: 'Add topic' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Transactions is added.' })).toBeVisible();
 
-    // Questions: one line to write one down, the panel for the rest.
+    // Questions: one line to write one down, a page of their own for the rest.
     const questions = page.getByRole('list', { name: 'Questions' });
     const line = page.getByPlaceholder("What don't you get? Write it down…");
     await line.fill('What does a foreign key point at?');
@@ -51,13 +51,15 @@ test('a student tracks topics and questions', async ({ page }) => {
     await expect(line).toHaveValue('');
 
     await page.getByRole('button', { name: 'New question' }).click();
-    const panel = page.locator('#question-dialog');
-    await expect(panel.getByLabel('Question', { exact: true })).toBeFocused();
-    await panel.getByLabel('Question', { exact: true }).fill('When is a table in third normal form?');
-    await panel.getByLabel(/^Topic/).selectOption({ label: 'Normalisation' });
-    await panel.getByText('Stuck', { exact: true }).click();
-    await panel.getByRole('button', { name: 'Save' }).click();
-    await expect(panel).toBeHidden();
+    await page.getByRole('heading', { level: 1, name: 'New question' }).waitFor();
+    const words = page.getByLabel("What don't you get?");
+    await expect(words).toBeFocused();
+    await words.fill('When is a table in third normal form?');
+    await page.getByLabel(/^Topic/).selectOption({ label: 'Normalisation' });
+    await page.getByText('Stuck', { exact: true }).click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    // Saved, back on Progress.
+    await page.getByRole('heading', { level: 1, name: 'Progress' }).waitFor();
     // Stuck comes first.
     await expect(questions.getByRole('listitem').first()).toContainText('When is a table in third normal form?');
     await expect(questions.getByRole('listitem').first()).toContainText('Stuck · Normalisation');
@@ -66,11 +68,15 @@ test('a student tracks topics and questions', async ({ page }) => {
     await expect(questions.getByRole('listitem')).toHaveCount(1);
     await page.getByRole('button', { name: /^All\s+3$/ }).click();
 
-    await questions.getByRole('button', { name: 'When is a table in third normal form?', exact: true }).click();
-    await panel.getByText('Answered', { exact: true }).click();
-    await panel.getByRole('textbox', { name: /^Answer/ }).fill('When no column depends on another non-key column.');
-    await panel.getByRole('button', { name: 'Save' }).click();
-    await expect(questions).toContainText('When no column depends on another non-key column.');
+    await questions.getByRole('link', { name: 'When is a table in third normal form?', exact: true }).click();
+    await page.getByRole('heading', { level: 1, name: 'Question' }).waitFor();
+    await page.getByText('Answered', { exact: true }).click();
+    await page.getByRole('textbox', { name: /^Answer/ }).fill('When no column depends on another non-key column.');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'The question is saved.' })).toBeVisible();
+    await page.getByRole('link', { name: /^Back to/ }).click();
+    await page.getByRole('heading', { level: 1, name: 'Progress' }).waitFor();
+    await expect(page.getByRole('list', { name: 'Questions' })).toContainText('When no column depends on another non-key column.');
 });
 
 for (const [name, viewport] of Object.entries({ desktop, phone })) {
@@ -80,8 +86,11 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await useSentinelTheme(page);
         const states = { progress: await foreignColours(page) };
         await page.getByRole('button', { name: 'New question' }).click();
-        await page.locator('#question-dialog').getByLabel('Question', { exact: true }).waitFor();
-        states['question panel'] = await foreignColours(page);
+        await page.getByLabel("What don't you get?").waitFor();
+        await page.waitForLoadState('load');
+        // The page moved to in place brings its own theme: the sentinel goes on again.
+        await useSentinelTheme(page);
+        states['question page'] = await foreignColours(page);
         for (const [state, colours] of Object.entries(states)) {
             expect(colours, `${state}: colours not from a token`).toEqual([]);
         }

@@ -48,7 +48,7 @@
                     <x-icon name="list-checks" class="size-4" />
                     <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
                 </button>
-                @include('livewire.workspaces.partials.new-menu', ['placeId' => $place->id, 'folders' => $isModule || $place->depth < Folders::MAX_DEPTH, 'questionUrl' => $isModule ? route('workspaces.modules.questions', [$workspaceId, $place->id, 'ask' => 1]) : null])
+                @include('livewire.workspaces.partials.new-menu', ['placeId' => $place->id, 'folders' => $isModule || $place->depth < Folders::MAX_DEPTH, 'questionUrl' => $isModule ? route('workspaces.questions.create', [$workspaceId, 'module' => $place->id]) : null])
                 @if ($isModule)
                     <a href="{{ route('workspaces.modules.questions', [$workspaceId, $place->id]) }}" class="btn btn-secondary">
                         <x-icon name="circle-help" class="size-4" />Questions

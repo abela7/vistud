@@ -1,7 +1,7 @@
 {{--
     A place's "New" button: a note, files, a link or a folder in it
     ($placeType and $placeId). $folders is false where no folder may go;
-    $questionUrl adds a question (a module's page: its questions page, opening a new one).
+    $questionUrl adds a question (a module's page: the page for a new question in it).
 --}}
 <div class="relative shrink-0">
     <button type="button" @class(['btn', 'btn-primary' => $primary ?? false, 'btn-secondary' => ! ($primary ?? false)]) wire:ignore.self data-menu-button aria-controls="new-menu" aria-expanded="false">

@@ -27,15 +27,15 @@
     }
 
     /* A tile's own menu sits above its link, and an open menu above the tiles around it. */
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row) .relative:has(> [data-menu-button]) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card) .relative:has(> [data-menu-button]) {
         z-index: 1;
     }
 
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row) .relative:has(> [data-menu-button][aria-expanded='true']) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card) .relative:has(> [data-menu-button][aria-expanded='true']) {
         z-index: 30;
     }
 
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row):has([data-menu-button][aria-expanded='true']) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card):has([data-menu-button][aria-expanded='true']) {
         z-index: 30;
     }
 
@@ -625,6 +625,201 @@
         overflow-wrap: anywhere;
     }
 
+    /*
+    | A module's questions as cards (the owner's review, 2026-09-29): the status as a chip in its colour
+    | (--ws) with a strip of it along the top, the question, its answer once there is one, and when it
+    | was asked at the bottom, aligned across a row. A card is one link to the question's own page.
+    */
+    .question-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+        gap: 1rem;
+    }
+
+    .question-card {
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: auto auto 1fr auto;
+        grid-template-areas:
+            'head menu'
+            'text text'
+            'answer answer'
+            'meta meta';
+        column-gap: 0.5rem;
+        row-gap: 0.75rem;
+        min-width: 0;
+        padding: 1.125rem 0.75rem 0.875rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+        box-shadow: inset 0 3px 0 var(--ws, var(--accent));
+        transition:
+            border-color 0.15s ease,
+            box-shadow 0.15s ease;
+    }
+
+    .question-card:hover {
+        border-color: var(--ws, var(--border-strong));
+        box-shadow:
+            inset 0 3px 0 var(--ws, var(--accent)),
+            var(--elevation-md);
+    }
+
+    .question-card-head {
+        grid-area: head;
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        min-width: 0;
+    }
+
+    .question-card > .question-card-menu {
+        grid-area: menu;
+        align-self: start;
+        margin: -0.375rem 0 0;
+    }
+
+    .question-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.1875rem 0.75rem 0.1875rem 0.5rem;
+        border-radius: 9999px;
+        background-color: var(--ws-subtle);
+        color: var(--text);
+        font-size: 0.8125rem;
+        font-weight: 600;
+    }
+
+    .question-status svg {
+        color: var(--ws);
+    }
+
+    .question-card-text {
+        grid-area: text;
+        display: -webkit-box;
+        overflow: hidden;
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1.45;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+        line-clamp: 4;
+    }
+
+    .question-card .question-answer {
+        grid-area: answer;
+        align-self: start;
+        margin-top: 0;
+    }
+
+    /* The lines are cut inside the padding, so no half line shows below the last. */
+    .question-answer-text {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 4;
+        line-clamp: 4;
+    }
+
+    .question-card-meta {
+        grid-area: meta;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem 0.875rem;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .question-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3125rem;
+    }
+
+    /* While selecting, the checkbox sits before the status chip. */
+    .question-card-head > .selection-check {
+        z-index: 2;
+    }
+
+    /*
+    | One question on a page of its own: the question and its answer, the options beside them (below the
+    | answer on a phone), Save at the end of the words. The options are one narrow column.
+    */
+    .question-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+            'main'
+            'options'
+            'actions';
+        align-items: start;
+        gap: 1.25rem;
+    }
+
+    .question-main {
+        grid-area: main;
+        min-width: 0;
+    }
+
+    .question-options {
+        grid-area: options;
+        min-width: 0;
+    }
+
+    .question-actions {
+        grid-area: actions;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.75rem;
+    }
+
+    @media (min-width: 64rem) {
+        .question-layout {
+            grid-template-columns: minmax(0, 1fr) 21rem;
+            grid-template-areas:
+                'main options'
+                'actions options';
+        }
+    }
+
+    .question-panel {
+        padding: 1.25rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+    }
+
+    .question-input {
+        min-height: 6rem;
+        max-height: 60dvh;
+        line-height: 1.6;
+        field-sizing: content;
+    }
+
+    /* Three choices in a narrow column: the words stay whole. */
+    .question-options .status-choice {
+        padding-inline: 0.25rem;
+        font-size: 0.875rem;
+    }
+
+    .question-options .status-choice:has(input:checked) {
+        padding-inline: calc(0.25rem - 1px);
+    }
+
+    .question-asked {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--divider);
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+
     /* A list's search, filter and sort, in one row that wraps. */
     .question-tools {
         display: flex;
@@ -742,7 +937,8 @@
     .is-selecting [data-row-menu],
     .is-selecting [data-drag-handle],
     .is-selecting [wire\:sort\:handle],
-    .is-selecting [wire\:sort\:item] > .module-actions {
+    .is-selecting [wire\:sort\:item] > .module-actions,
+    .is-selecting .question-card-menu {
         display: none !important;
     }
 
@@ -754,12 +950,12 @@
         pointer-events: none;
     }
 
-    .is-selecting :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-row) {
+    .is-selecting :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card) {
         cursor: pointer;
         user-select: none;
     }
 
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-row).is-selected {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card).is-selected {
         background-color: var(--selected) !important;
         border-color: var(--accent) !important;
     }

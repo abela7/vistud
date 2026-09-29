@@ -3,7 +3,6 @@
 namespace Tests\Feature\Web;
 
 use App\Livewire\Workspaces\Progress;
-use App\Livewire\Workspaces\QuestionBoard;
 use App\Models\User;
 use App\Study\Modules;
 use App\Study\Questions;
@@ -97,9 +96,9 @@ class ProgressScreenTest extends TestCase
         $topic = app(Topics::class)->create($this->principal($bob), $theirs->id, 'Secret');
 
         $this->actingAs($this->ada)->get(route('workspaces.show', [$theirs->id, 'progress']))->assertNotFound();
-        $this->actingAs($this->ada);
-        Livewire::test(QuestionBoard::class, ['workspaceId' => $this->databases->id])
-            ->call('create', $topic->id)->set('question', 'Mine')->call('save')->assertHasErrors('question');
+        // Another student's topic isn't trusted on the page for a new question: it starts with none.
+        $this->actingAs($this->ada)->get(route('workspaces.questions.create', [$this->databases->id, 'topic' => $topic->id]))
+            ->assertOk()->assertDontSee('Secret');
         $this->assertSame([], app(Questions::class)->list($this->principal($bob), $theirs->id));
     }
 

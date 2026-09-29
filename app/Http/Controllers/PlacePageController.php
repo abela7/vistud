@@ -8,12 +8,13 @@ use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 /**
  * A module's or a folder's own page: /workspaces/{workspace}/modules/{module}
  * and /workspaces/{workspace}/folders/{folder}; a module's questions,
- * /workspaces/{workspace}/modules/{module}/questions (`?ask=1` opens a new one);
+ * /workspaces/{workspace}/modules/{module}/questions (`?ask=1` goes to the page for a new one);
  * and a module's study sessions, /workspaces/{workspace}/modules/{module}/sessions.
  * Another student's, or one from another workspace, answers 404 like a missing one.
  * The page itself is App\Livewire\Workspaces\Contents.
@@ -30,14 +31,19 @@ class PlacePageController
         return view('workspaces.place', ['workspace' => $details, 'view' => 'module', 'placeId' => $place->id, 'title' => $place->title, 'section' => 'modules']);
     }
 
-    public function questions(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, string $workspace, string $module): View
+    public function questions(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, string $workspace, string $module): View|RedirectResponse
     {
         $by = $principals->fromRequest($request);
         $details = $workspaces->find($by, $workspace);
         $place = $modules->find($by, $module);
         $place->workspaceId === $details->id || throw new NotFound;
 
-        return view('workspaces.questions', ['workspace' => $details, 'module' => $place, 'ask' => $request->boolean('ask')]);
+        // The old way to start a question: it has a page of its own now.
+        if ($request->boolean('ask')) {
+            return redirect()->route('workspaces.questions.create', [$details->id, 'module' => $place->id]);
+        }
+
+        return view('workspaces.questions', ['workspace' => $details, 'module' => $place]);
     }
 
     public function sessions(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, string $workspace, string $module): View

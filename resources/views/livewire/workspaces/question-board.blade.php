@@ -1,9 +1,12 @@
 {{--
     Questions (App\Livewire\Workspaces\QuestionBoard): one line to write one
-    down, a search, a filter by status and a sort, the list, and the side
-    panel for one question. Folded (a study session): no line, nothing until
-    there is a question, then the list closed under its heading until opened,
-    with a link to the module's questions page.
+    down, a search, a filter by status and a sort, and the questions; each is a
+    link to its own page (App\Livewire\Workspaces\QuestionPage). As a module's
+    questions page (`page`) it has the section heading with Select and New
+    question, and the questions are cards across the whole width; elsewhere
+    (Progress, a study session) they are rows. Folded (a study session): no
+    line, nothing until there is a question, then the list closed under its
+    heading until opened, with a link to the module's questions page.
 --}}
 @php
     use App\Livewire\Workspaces\QuestionBoard;
@@ -16,12 +19,28 @@
     $uid = $this->getId();
     $open = $counts['pending'] + $counts['stuck'];
 @endphp
-<div x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
+<div @class(['space-y-5' => $page]) x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
+    @if ($page)
+        <x-workspace.section-header :workspace="$workspace" title="Questions" :count="$counts['all'] > 0 ? $counts['all'] : null" count-label="questions"
+            :back-href="route('workspaces.modules.show', [$workspaceId, $moduleId])" :back-to="$module->title" :eyebrow="$workspace->name.' · '.$module->title">
+            @if ($counts['all'] > 0)
+                {{-- While selecting, the selection bar's Done ends it; the focus goes to its Select all. --}}
+                <button type="button" class="btn btn-secondary" x-show="!isSelecting" x-on:click="toggleMode(); $nextTick(() => $root.querySelector('.selection-all-box input')?.focus())">
+                    <x-icon name="list-checks" class="size-4" />
+                    <span class="max-md:sr-only">Select</span>
+                </button>
+            @endif
+            <a href="{{ route('workspaces.questions.create', [$workspaceId, 'module' => $moduleId]) }}" class="btn btn-primary">
+                <x-icon name="plus" class="size-4" />
+                <span class="max-sm:sr-only">New question</span>
+            </a>
+        </x-workspace.section-header>
+    @endif
     <div role="status" aria-live="polite" class="empty:hidden">
-        <x-toast :message="$notice" />
+        <x-toast :message="$notice" :tone="$noticeTone" />
     </div>
     @if (! $folded || $counts['all'] > 0)
-        <section class="space-y-3" aria-labelledby="questions-{{ $uid }}" @if ($folded) x-data="{ open: false }" @endif>
+        <section @class(['space-y-3', 'space-y-4' => $page]) aria-labelledby="questions-{{ $uid }}" @if ($folded) x-data="{ open: false }" @endif>
             @if ($folded)
                 <div class="fold-head">
                     <h2 class="min-w-0 flex-1">
@@ -77,10 +96,12 @@
                                 </select>
                             </div>
                         @endunless
-                        <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
-                            <x-icon name="list-checks" class="size-4" />
-                            <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
-                        </button>
+                        @unless ($page)
+                            <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
+                                <x-icon name="list-checks" class="size-4" />
+                                <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
+                            </button>
+                        @endunless
                     </div>
 
                     <x-selection-bar>
@@ -92,111 +113,92 @@
                 @endif
 
                 @if ($shown !== [])
-                    <ul class="item-list" role="list" aria-label="Questions">
-                        @foreach ($shown as $q)
-                            @php [$icon, $colour] = $look[$q->status]; @endphp
-                            <li class="item-row" wire:key="question-{{ $q->id }}"
-                                data-select-key="question:{{ $q->id }}"
-                                :class="{ 'is-selected': isSelected('question:{{ $q->id }}') }"
-                                x-on:click="handleRowClick($event, 'question:{{ $q->id }}')">
-                                <x-selection-check key="question:{{ $q->id }}" label="Select {{ $q->text }}" />
-                                <span class="item-icon ws-colour-{{ $colour }}" aria-hidden="true"><x-icon :name="$icon" class="size-5" /></span>
-                                <span class="min-w-0 flex-1">
-                                    <button type="button" class="tile-link question-text" wire:click="open('{{ $q->id }}')">{{ $q->text }}</button>
-                                    <span class="item-meta">{{ implode(' · ', array_filter([
-                                        $q->statusLabel(),
-                                        $q->topicId !== null ? ($topicNames[$q->topicId] ?? null) : null,
-                                        $q->askTeacher ? 'for the teacher' : null,
-                                        Carbon::parse($q->askedAt)->diffForHumans(),
-                                    ])) }}</span>
-                                    @if ($q->status === 'answered' && $q->answer)
-                                        <span class="question-answer">{{ Str::limit($q->answer, 160) }}</span>
+                    @if ($page)
+                        <ul class="question-grid" role="list" aria-label="Questions">
+                            @foreach ($shown as $q)
+                                @php
+                                    [$icon, $colour] = $look[$q->status];
+                                    $url = route('workspaces.questions.show', [$workspaceId, $q->id]);
+                                @endphp
+                                <li class="question-card ws-colour-{{ $colour }}" wire:key="question-{{ $q->id }}"
+                                    data-select-key="question:{{ $q->id }}"
+                                    :class="{ 'is-selected': isSelected('question:{{ $q->id }}') }"
+                                    x-on:click="handleRowClick($event, 'question:{{ $q->id }}')">
+                                    <div class="question-card-head">
+                                        <x-selection-check key="question:{{ $q->id }}" label="Select {{ $q->text }}" />
+                                        <span class="question-status"><x-icon :name="$icon" class="size-4" />{{ $q->statusLabel() }}</span>
+                                    </div>
+                                    <h3 class="question-card-text"><a href="{{ $url }}" class="tile-link">{{ $q->text }}</a></h3>
+                                    @if ($q->answer)
+                                        <div class="question-answer"><p class="question-answer-text">{{ $q->answer }}</p></div>
                                     @endif
-                                </span>
-                                @include('livewire.workspaces.partials.row-menu', ['id' => 'q-'.$q->id, 'label' => Str::limit($q->text, 60), 'items' => array_values(array_filter([
-                                    $q->status !== 'answered' ? ['Answered', 'circle-check', "open('{$q->id}', 'answered')", false] : null,
-                                    $q->status !== 'stuck' ? ['Stuck', 'circle-alert', "mark('{$q->id}', 'stuck')", false] : null,
-                                    $q->status !== 'pending' ? ['Pending', 'circle-dot', "mark('{$q->id}', 'pending')", false] : null,
-                                    ['Open', 'pencil', "open('{$q->id}')", false],
-                                ]))])
-                            </li>
-                        @endforeach
-                    </ul>
+                                    <p class="question-card-meta">
+                                        <span class="question-meta-item"><x-icon name="clock" class="size-3.5 shrink-0" />{{ Carbon::parse($q->askedAt)->diffForHumans() }}</span>
+                                        @if ($q->topicId !== null && isset($topicNames[$q->topicId]))
+                                            <span class="question-meta-item">{{ $topicNames[$q->topicId] }}</span>
+                                        @endif
+                                        @if ($q->askTeacher)
+                                            <span class="question-meta-item"><x-icon name="users" class="size-3.5 shrink-0" />For the teacher</span>
+                                        @endif
+                                    </p>
+                                    <div class="question-card-menu">
+                                        @include('livewire.workspaces.partials.row-menu', ['id' => 'q-'.$q->id, 'label' => Str::limit($q->text, 60), 'items' => array_values(array_filter([
+                                            ['Open', 'pencil', null, false, $url],
+                                            $q->status !== 'answered' ? ['Answered…', 'circle-check', null, false, route('workspaces.questions.show', [$workspaceId, $q->id, 'status' => 'answered'])] : null,
+                                            $q->status !== 'stuck' ? ['Stuck', 'circle-alert', "mark('{$q->id}', 'stuck')", false] : null,
+                                            $q->status !== 'pending' ? ['Pending', 'circle-dot', "mark('{$q->id}', 'pending')", false] : null,
+                                        ]))])
+                                    </div>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <ul class="item-list" role="list" aria-label="Questions">
+                            @foreach ($shown as $q)
+                                @php
+                                    [$icon, $colour] = $look[$q->status];
+                                    $url = route('workspaces.questions.show', [$workspaceId, $q->id]);
+                                @endphp
+                                <li class="item-row" wire:key="question-{{ $q->id }}"
+                                    data-select-key="question:{{ $q->id }}"
+                                    :class="{ 'is-selected': isSelected('question:{{ $q->id }}') }"
+                                    x-on:click="handleRowClick($event, 'question:{{ $q->id }}')">
+                                    <x-selection-check key="question:{{ $q->id }}" label="Select {{ $q->text }}" />
+                                    <span class="item-icon ws-colour-{{ $colour }}" aria-hidden="true"><x-icon :name="$icon" class="size-5" /></span>
+                                    <span class="min-w-0 flex-1">
+                                        <a href="{{ $url }}" class="tile-link question-text">{{ $q->text }}</a>
+                                        <span class="item-meta">{{ implode(' · ', array_filter([
+                                            $q->statusLabel(),
+                                            $q->topicId !== null ? ($topicNames[$q->topicId] ?? null) : null,
+                                            $q->askTeacher ? 'for the teacher' : null,
+                                            Carbon::parse($q->askedAt)->diffForHumans(),
+                                        ])) }}</span>
+                                        @if ($q->status === 'answered' && $q->answer)
+                                            <span class="question-answer">{{ Str::limit($q->answer, 160) }}</span>
+                                        @endif
+                                    </span>
+                                    @include('livewire.workspaces.partials.row-menu', ['id' => 'q-'.$q->id, 'label' => Str::limit($q->text, 60), 'items' => array_values(array_filter([
+                                        ['Open', 'pencil', null, false, $url],
+                                        $q->status !== 'answered' ? ['Answered…', 'circle-check', null, false, route('workspaces.questions.show', [$workspaceId, $q->id, 'status' => 'answered'])] : null,
+                                        $q->status !== 'stuck' ? ['Stuck', 'circle-alert', "mark('{$q->id}', 'stuck')", false] : null,
+                                        $q->status !== 'pending' ? ['Pending', 'circle-dot', "mark('{$q->id}', 'pending')", false] : null,
+                                    ]))])
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
                 @elseif ($counts['all'] > 0)
                     <p class="text-sm text-fg-muted">{{ trim($search) !== '' ? 'No question matches.' : 'None '.Str::lower($tabs[$filter]).'.' }}</p>
+                @elseif ($page)
+                    <div class="empty-place">
+                        <span class="item-icon ws-colour-blue" aria-hidden="true"><x-icon name="circle-help" class="size-5" /></span>
+                        <p class="font-medium">No questions yet</p>
+                        <p class="text-sm text-fg-muted">Write down what you don't get, in a line above or on a page of its own, and come back when it makes sense.</p>
+                    </div>
                 @endif
             </div>
         </section>
     @endif
-
-    <dialog id="question-dialog" class="modal" aria-labelledby="question-dialog-title"
-        wire:ignore.self
-        x-data
-        x-on:question-dialog-open.window="$el.open || $el.showModal()"
-        x-on:question-dialog-close.window="$el.open && $el.close()"
-        x-init="$wire.editing && $nextTick(() => $el.open || $el.showModal())"
-        x-on:close="$wire.editing && $wire.close()"
-        x-on:click="$event.target === $el && $el.close()">
-        @if ($editing)
-            <form wire:submit="save" novalidate class="modal-panel" wire:key="question-{{ $editing }}" x-data="{ sure: false }">
-                <div class="modal-head">
-                    <h2 id="question-dialog-title" class="min-w-0 flex-1 text-lg font-semibold">{{ $editing === 'new' ? 'New question' : 'Question' }}</h2>
-                    <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
-                        <x-icon name="x" />
-                    </button>
-                </div>
-                <div class="space-y-5 px-5">
-                    <div class="field">
-                        <label for="question-text" class="field-label">Question</label>
-                        <textarea id="question-text" class="input" rows="3" maxlength="{{ Questions::MAX_TEXT }}" wire:model="question" @if ($editing === 'new') autofocus @endif></textarea>
-                        @error('question') <p class="field-error">{{ $message }}</p> @enderror
-                    </div>
-
-                    <fieldset class="space-y-2">
-                        <legend class="field-label mb-2">Status</legend>
-                        <div class="status-choices">
-                            @foreach (Questions::STATUSES as $key => $word)
-                                <label @class(['status-choice', "ws-colour-{$look[$key][1]}"])>
-                                    <input type="radio" name="question-status" value="{{ $key }}" wire:model.live="status">
-                                    <x-icon :name="$look[$key][0]" class="size-5" />
-                                    <span>{{ $word }}</span>
-                                </label>
-                            @endforeach
-                        </div>
-                        @error('status') <p class="field-error">{{ $message }}</p> @enderror
-                    </fieldset>
-
-                    <div class="field">
-                        <label for="question-answer" class="field-label">Answer <span class="font-normal text-fg-muted">(optional)</span></label>
-                        <textarea id="question-answer" class="input" rows="{{ $status === 'answered' ? 5 : 3 }}" maxlength="{{ Questions::MAX_ANSWER }}" wire:model="answer" placeholder="What you found out, in your own words" @if ($editing !== 'new' && $status === 'answered') autofocus @endif></textarea>
-                        @error('answer') <p class="field-error">{{ $message }}</p> @enderror
-                    </div>
-
-                    @if ($editing === 'new' && $topics !== [])
-                        <div class="field">
-                            <label for="question-topic" class="field-label">Topic <span class="font-normal text-fg-muted">(optional)</span></label>
-                            <select id="question-topic" class="input" wire:model="topicId">
-                                <option value="">None</option>
-                                @foreach ($topics as $topic)
-                                    <option value="{{ $topic->id }}">{{ $topic->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    @endif
-
-                    <x-checkbox name="askTeacher" label="Ask the teacher" wire:model="askTeacher" />
-                </div>
-                <div class="modal-actions">
-                    @if ($editing !== 'new')
-                        <button type="button" class="btn btn-ghost mr-auto" x-show="! sure" x-on:click="sure = true"><x-icon name="trash-2" class="size-4" />Delete</button>
-                        <button type="button" class="btn btn-danger mr-auto" x-show="sure" x-cloak wire:click="delete">Delete for good</button>
-                    @endif
-                    <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
-                    <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">Save</x-button>
-                </div>
-            </form>
-        @endif
-    </dialog>
 
     <dialog id="bulk-question-dialog" class="modal" aria-labelledby="bulk-question-dialog-title"
         wire:ignore.self

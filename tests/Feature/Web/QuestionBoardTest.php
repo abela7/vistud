@@ -41,33 +41,25 @@ class QuestionBoardTest extends TestCase
         $this->week1 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 1']);
     }
 
-    public function test_a_question_is_written_in_a_line_then_answered_in_the_panel(): void
+    public function test_a_question_is_written_in_a_line_and_marked_from_its_card(): void
     {
-        $board = $this->board(['moduleId' => $this->week1->id])
+        $board = $this->board(['moduleId' => $this->week1->id, 'page' => true])
             ->call('add')->assertHasErrors('text')
             ->set('text', 'Why is a primary key never empty?')->call('add')
             ->assertSet('text', '')->assertDispatched('questions-changed')
-            ->assertSeeInOrder(['Questions', 'All', '1', 'Pending', '1', 'Why is a primary key never empty?', 'Pending']);
+            ->assertSeeInOrder(['Databases', 'Week 1', 'Questions', 'New question', 'All', '1', 'Pending', '1', 'Why is a primary key never empty?']);
         $question = $this->questions()[0];
         $this->assertSame([$this->week1->id, 'pending'], [$question->moduleId, $question->status]);
 
-        // One click from the row's menu.
-        $board->call('mark', $question->id, 'stuck')->assertSeeInOrder(['Why is a primary key never empty?', 'Stuck']);
+        // Each card is a link to the question's own page, and its menu has the way to answer it there.
+        $page = route('workspaces.questions.show', [$this->databases->id, $question->id]);
+        $board->assertSee('href="'.$page.'"', false)->assertSee($page.'?status=answered', false);
 
-        // The panel: new words, answered, the answer written down.
-        $board->call('open', $question->id, 'answered')->assertDispatched('question-dialog-open')
-            ->assertSet('status', 'answered')->assertSee('What you found out, in your own words')
-            ->set('question', 'Why can a primary key never be empty?')
-            ->set('answer', 'Every row needs a value that names it.')->call('save')
-            ->assertDispatched('question-dialog-close')
-            ->assertSeeInOrder(['Why can a primary key never be empty?', 'Answered', 'Every row needs a value that names it.']);
-        $this->assertSame(['answered', 'Every row needs a value that names it.'], [$this->questions()[0]->status, $this->questions()[0]->answer]);
+        // One click from the card's menu.
+        $board->call('mark', $question->id, 'stuck')->assertSeeInOrder(['Stuck', 'Why is a primary key never empty?']);
+        $this->assertSame('stuck', $this->questions()[0]->status);
 
-        $board->call('show', 'pending')->assertSee('None pending.')->assertDontSee('Why can a primary key')
-            ->call('show', 'answered')->assertSee('Why can a primary key never be empty?');
-
-        $board->call('open', $question->id)->call('delete')->assertSee('The question is deleted.');
-        $this->assertSame([], $this->questions());
+        $board->call('show', 'pending')->assertSee('None pending.')->call('show', 'stuck')->assertSee('Why is a primary key never empty?');
     }
 
     public function test_in_a_session_questions_go_to_its_module_and_the_session(): void
@@ -116,10 +108,9 @@ class QuestionBoardTest extends TestCase
             ->set('search', 'nothing like this')->assertSee('No question matches.')
             ->set('search', '')->call('show', 'stuck')->assertSee('Why normalise a table?')->assertDontSee('What is a foreign key?');
 
-        // ?ask=1 opens the panel for a new one straight away.
-        $this->board(['moduleId' => $this->week1->id, 'ask' => true])->assertSet('editing', 'new')->assertSee('New question');
+        // ?ask=1, the old way to start one, goes to the page for a new question.
         $this->actingAs($this->ada)->get(route('workspaces.modules.questions', [$this->databases->id, $this->week1->id, 'ask' => 1]))
-            ->assertOk()->assertSee('New question');
+            ->assertRedirect(route('workspaces.questions.create', [$this->databases->id, 'module' => $this->week1->id]));
     }
 
     public function test_in_a_session_the_questions_are_folded_until_opened(): void
@@ -142,17 +133,15 @@ class QuestionBoardTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.modules.questions', [$this->databases->id, $theirs->id]))->assertNotFound();
     }
 
-    public function test_progress_holds_every_question_and_a_topics_menu_starts_one(): void
+    public function test_progress_holds_every_question_and_a_new_one_has_a_page(): void
     {
         $by = $this->principal($this->ada);
         $joins = app(Topics::class)->create($by, $this->databases->id, 'Joins', $this->week1->id);
+        app(Questions::class)->ask($by, $this->databases->id, 'Why does a left join keep unmatched rows?', $joins->id);
 
-        $this->board()->call('create', $joins->id)->assertSet('editing', 'new')->assertSee('New question')
-            ->call('save')->assertHasErrors('question')
-            ->set('question', 'Why does a left join keep unmatched rows?')->set('status', 'stuck')->set('askTeacher', true)->call('save')
-            ->assertSeeInOrder(['Why does a left join keep unmatched rows?', 'Stuck', 'Joins', 'for the teacher']);
-        $question = $this->questions()[0];
-        $this->assertSame(['stuck', $joins->id, $this->week1->id, true], [$question->status, $question->topicId, $question->moduleId, $question->askTeacher]);
+        // Asking from a board goes to the page for a new question, about the topic, coming back here.
+        $this->board()->call('create', $joins->id)
+            ->assertRedirect(route('workspaces.questions.create', [$this->databases->id, 'topic' => $joins->id]));
 
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->databases->id, 'progress']))
             ->assertSeeInOrder(['Questions', 'Why does a left join keep unmatched rows?']);
@@ -165,11 +154,10 @@ class QuestionBoardTest extends TestCase
         $secret = app(Questions::class)->ask($bob, $theirs->id, 'Their question');
 
         $board = $this->board(['moduleId' => $this->week1->id]);
-        $board->call('open', $secret->id)->assertSet('editing', null)->assertDontSee('Their question');
         $board->call('mark', $secret->id, 'answered');
         $this->assertSame('pending', app(Questions::class)->find($bob, $secret->id)->status);
         $this->assertThrows(fn () => $this->board()->set('moduleId', 'other'), CannotUpdateLockedPropertyException::class);
-        $this->assertThrows(fn () => $this->board()->set('editing', $secret->id), CannotUpdateLockedPropertyException::class);
+        $this->assertThrows(fn () => $this->board()->set('page', true), CannotUpdateLockedPropertyException::class);
     }
 
     /** @return list<QuestionDetails> */
