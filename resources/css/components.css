@@ -989,10 +989,124 @@
         background-color: var(--logo-plate);
     }
 
+    /* ---------- Bulk selection bar & controls (DESIGN.md §5) ---------- */
+
+    .selection-check {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .selection-bar-wrap {
+        position: sticky;
+        top: 0;
+        z-index: 25;
+        margin-bottom: 1rem;
+    }
+
+    .selection-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.5rem 0.75rem;
+        padding: 0.625rem 0.875rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+        box-shadow: var(--elevation-md);
+    }
+
+    .selection-bar-leading {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .selection-summary {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        color: var(--text-muted);
+    }
+
+    .selection-count {
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .selection-divider {
+        color: var(--text-subtle);
+    }
+
+    .selection-link {
+        border: none;
+        background: transparent;
+        padding: 0;
+        font-size: inherit;
+        font-weight: 500;
+        color: var(--accent-contrast);
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    .selection-link:disabled {
+        color: var(--text-subtle);
+        cursor: default;
+        text-decoration: none;
+    }
+
+    .selection-bar-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+
+    .selection-bar-trailing {
+        display: flex;
+        align-items: center;
+    }
+
+    @media (max-width: 767.98px) {
+        .selection-bar-wrap {
+            position: fixed;
+            inset: auto 0 0;
+            z-index: 35;
+            margin-bottom: 0;
+        }
+
+        body[data-tabbar] .selection-bar-wrap {
+            bottom: calc(3.75rem + env(safe-area-inset-bottom));
+        }
+
+        .selection-bar {
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+            border-bottom: none;
+            padding-bottom: calc(0.625rem + env(safe-area-inset-bottom));
+        }
+
+        body[data-tabbar] .selection-bar {
+            padding-bottom: 0.625rem;
+        }
+
+        .is-selecting-container {
+            padding-bottom: 4.5rem;
+        }
+    }
+
     /* Touch: every control is at least 44 px tall (DESIGN.md §6.2). */
-    @media (pointer: coarse) {
+    @media (pointer: coarse), (max-width: 767px) {
         .btn,
         .segmented-option {
+            min-height: 2.75rem;
+        }
+
+        .selection-check .checkbox-box {
+            min-width: 2.75rem;
             min-height: 2.75rem;
         }
     }

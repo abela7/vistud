@@ -7,15 +7,28 @@
     use App\Study\Activities;
     use Illuminate\Support\Str;
 @endphp
-<section aria-labelledby="tasks-heading" class="overview-card space-y-3">
+<section aria-labelledby="tasks-heading" class="overview-card space-y-3" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 id="tasks-heading" class="font-semibold">Coming up</h2>
-        <x-button variant="ghost" icon="plus" wire:click="newTask" aria-label="Add a task">Add</x-button>
+        <div class="flex items-center gap-2">
+            @if ($open !== [] || $done !== [])
+                <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
+                    <x-icon name="list-checks" class="size-4" />
+                    <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
+                </button>
+            @endif
+            <x-button variant="ghost" icon="plus" wire:click="newTask" aria-label="Add a task">Add</x-button>
+        </div>
     </div>
 
     <div role="status" aria-live="polite" class="empty:hidden">
         <x-toast :message="$notice" />
     </div>
+
+    <x-selection-bar>
+        <x-button variant="secondary" size="sm" icon="circle-check" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'done' })">Mark done</x-button>
+        <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0" x-on:click="$wire.openBulkDelete(selectedKeys())">Delete</x-button>
+    </x-selection-bar>
 
     @if ($open === [] && $done === [])
         <p class="text-sm text-fg-muted">Nothing due. Add assignments, quizzes and exams here.</p>
@@ -99,5 +112,31 @@
                 </div>
             </form>
         @endif
+    </dialog>
+
+    <dialog id="bulk-task-dialog" class="modal" aria-labelledby="bulk-task-dialog-title"
+        wire:ignore.self
+        x-data
+        x-on:bulk-task-dialog-open.window="$el.open || $el.showModal()"
+        x-on:bulk-task-dialog-close.window="$el.open && $el.close()"
+        x-on:close="$wire.bulkKeys = []"
+        x-on:click="$event.target === $el && $el.close()">
+        <div class="modal-panel" role="document">
+            <div class="modal-head">
+                <h2 id="bulk-task-dialog-title" class="min-w-0 flex-1 text-lg font-semibold">Delete tasks?</h2>
+                <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
+                    <x-icon name="x" />
+                </button>
+            </div>
+            <div class="space-y-4 px-5 pt-2">
+                <p class="text-sm text-fg-muted">
+                    Delete {{ count($bulkKeys) }} selected {{ Str::plural('task', count($bulkKeys)) }}? They leave your list and this can't be undone.
+                </p>
+            </div>
+            <div class="modal-actions">
+                <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
+                <x-button variant="danger" wire:click="confirmBulkDelete" wire:loading.attr="aria-busy" busy-label="Deleting…">Delete</x-button>
+            </div>
+        </div>
     </dialog>
 </section>

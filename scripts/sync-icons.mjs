@@ -81,6 +81,7 @@ const icons = [
     'lightbulb',
     'link',
     'list',
+    'list-checks',
     'list-ordered',
     'list-todo',
     'loader-circle',

@@ -9,14 +9,29 @@
 
     $top = "workspace:{$workspaceId}";
 @endphp
-<div class="space-y-6">
-    <div class="flex justify-end">
+<div class="space-y-6" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
+    <div class="flex items-center justify-end gap-2">
+        <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
+            <x-icon name="list-checks" class="size-4" />
+            <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
+        </button>
         @include('livewire.workspaces.partials.new-menu', ['placeType' => 'workspace', 'placeId' => $workspaceId, 'primary' => true])
     </div>
 
     <div role="status" aria-live="polite" class="empty:hidden">
-        <x-toast :message="$notice" />
+        <x-toast :message="$notice" :action-label="$noticeActionLabel" :action-event="$noticeActionEvent" :action-payload="$noticeActionPayload" />
     </div>
+
+    <x-selection-bar>
+        @if (! $showTrash)
+            <x-button variant="secondary" size="sm" icon="folder-input" ::disabled="count === 0" x-on:click="$wire.openBulkMove(selectedKeys())">Move…</x-button>
+            <x-button variant="secondary" size="sm" icon="trash-2" ::disabled="count === 0 || !selectedKeys().some(k => k.startsWith('note:') || k.startsWith('file:'))" title="Move selected notes and files to the trash" x-on:click="$wire.bulk('trash', selectedKeys().filter(k => k.startsWith('note:') || k.startsWith('file:')))">Move to trash</x-button>
+            <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0 || !selectedKeys().some(k => k.startsWith('folder:') || k.startsWith('link:'))" title="Delete selected folders and links" x-on:click="$wire.openBulkDelete(selectedKeys().filter(k => k.startsWith('folder:') || k.startsWith('link:')))">Delete</x-button>
+        @else
+            <x-button variant="secondary" size="sm" icon="rotate-ccw" ::disabled="count === 0" x-on:click="$wire.bulk('restore', selectedKeys())">Restore</x-button>
+            <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0" x-on:click="$wire.openBulkDestroy(selectedKeys())">Delete forever</x-button>
+        @endif
+    </x-selection-bar>
 
     @include('livewire.workspaces.partials.place', ['key' => $top, 'placeType' => 'workspace', 'placeId' => $workspaceId])
 
@@ -34,7 +49,11 @@
                     <p class="border-b border-divider px-4 py-3 text-sm text-fg-muted">Deleted for good after {{ Notes::TRASH_DAYS }} days.</p>
                     <ul class="divide-y divide-divider" role="list">
                         @foreach ($trash as $note)
-                            <li wire:key="trash-{{ $note->id }}" class="flex flex-wrap items-center gap-3 px-4 py-3">
+                            <li wire:key="trash-{{ $note->id }}" class="flex flex-wrap items-center gap-3 px-4 py-3"
+                                data-select-key="note:{{ $note->id }}"
+                                :class="{ 'is-selected': isSelected('note:{{ $note->id }}') }"
+                                x-on:click="handleRowClick($event, 'note:{{ $note->id }}')">
+                                <x-selection-check key="note:{{ $note->id }}" label="Select {{ $note->displayTitle() }}" />
                                 <x-icon name="file-text" class="size-5 shrink-0 text-fg-muted" />
                                 <span class="min-w-0 flex-1">
                                     <span class="block font-medium break-words">{{ $note->displayTitle() }}</span>
@@ -47,7 +66,11 @@
                             </li>
                         @endforeach
                         @foreach ($trashedFiles as $file)
-                            <li wire:key="trash-{{ $file->id }}" class="flex flex-wrap items-center gap-3 px-4 py-3">
+                            <li wire:key="trash-{{ $file->id }}" class="flex flex-wrap items-center gap-3 px-4 py-3"
+                                data-select-key="file:{{ $file->id }}"
+                                :class="{ 'is-selected': isSelected('file:{{ $file->id }}') }"
+                                x-on:click="handleRowClick($event, 'file:{{ $file->id }}')">
+                                <x-selection-check key="file:{{ $file->id }}" label="Select {{ $file->fileName() }}" />
                                 <x-icon :name="$file->icon()" class="size-5 shrink-0 text-fg-muted" />
                                 <span class="min-w-0 flex-1">
                                     <span class="block font-medium break-words">{{ $file->fileName() }}</span>

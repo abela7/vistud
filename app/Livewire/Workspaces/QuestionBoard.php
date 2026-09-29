@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\BulkActions;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
@@ -30,7 +31,7 @@ use Livewire\Component;
  */
 final class QuestionBoard extends Component
 {
-    use Notices;
+    use BulkActions, Notices;
 
     #[Locked]
     public string $workspaceId;
@@ -204,6 +205,69 @@ final class QuestionBoard extends Component
     {
         $this->reset('editing', 'question', 'status', 'answer', 'topicId', 'askTeacher');
         $this->resetErrorBag();
+    }
+
+    public function openBulkRemove(array $keys): void
+    {
+        $this->bulkKeys = $keys;
+        $this->dispatch('bulk-question-dialog-open');
+    }
+
+    public function confirmBulkRemove(): void
+    {
+        $this->bulk('remove', $this->bulkKeys);
+        $this->bulkKeys = [];
+        $this->dispatch('bulk-question-dialog-close');
+        $this->dispatch('selection-clear');
+    }
+
+    protected function allowedBulkTypes(): array
+    {
+        return ['question'];
+    }
+
+    protected function performBulkAction(string $action, array $items, array $payload): void
+    {
+        $by = $this->principal();
+        $done = 0;
+
+        if ($action === 'status') {
+            $status = (string) ($payload['status'] ?? 'pending');
+            foreach ($items as [$type, $id]) {
+                try {
+                    $this->questions->setStatus($by, $id, $status);
+                    $done++;
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $word = match ($status) {
+                'stuck' => 'Stuck',
+                'answered' => 'Answered',
+                default => 'Pending',
+            };
+            $this->notify($done === 1 ? "1 question marked {$word}." : "{$done} questions marked {$word}.");
+            $this->dispatch('questions-changed');
+            $this->dispatch('selection-clear');
+
+            return;
+        }
+
+        if (in_array($action, ['remove', 'delete'], true)) {
+            foreach ($items as [$type, $id]) {
+                try {
+                    $this->questions->retire($by, $id);
+                    $done++;
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $this->notify($done === 1 ? '1 question removed.' : "{$done} questions removed.");
+            $this->dispatch('questions-changed');
+            $this->dispatch('selection-clear');
+
+            return;
+        }
     }
 
     #[On('questions-changed')]

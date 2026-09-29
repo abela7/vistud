@@ -287,7 +287,24 @@ Already built in M1: the account menu, the workspace switch and the admin marker
 
 ### 5.6 Third-party components
 
-Third-party UI takes its colours from tokens and never from its own palette: FullCalendar's skeleton CSS with our token mapping, ECharts themed from computed tokens and rebuilt on `vistud:theme-changed`, Tiptap with our own CSS, native controls through `accent-color` and custom styling (ADR 0003 §6.2). Gradients in third-party components come only from the `--grad-*` tokens. Each is covered by the sentinel test in all its interactive states.
+### 5.7 Selecting many (bulk actions)
+
+Bulk actions allow students to select multiple items across any list (folders, notes, files, links, modules, questions, flashcards, topics, tasks) and act on them in unison (owner's review, 2026-09-28).
+
+- **Pattern & Trigger:** A quiet "Select" button (`<button class="btn btn-secondary">` with `list-checks` icon) sits beside the primary view controls. Clicking it enters selection mode: the button label changes to "Done", interactive items gain a leading checkbox (`<x-selection-check>`), and row `⋯` menus and sorting drag handles are suppressed so clicks safely select the row.
+- **Action Bar:** `<x-selection-bar>` wraps a sticky desktop toolbar and a fixed mobile bar pinned above the workspace bottom navigation (`calc(3.75rem + env(safe-area-inset-bottom))`). It features:
+  - An "all shown" master checkbox (`aria-label="Select all shown items"`, supporting indeterminate state).
+  - A live region counter (`role="status" aria-live="polite"`, e.g. "3 selected").
+  - Quick action links: "Select all" / "Select none", "Clear".
+  - Contextual action buttons (Move, Move to trash, Delete, Change status, Restore, Delete forever) which disable when selection is empty.
+  - A "Done" button to exit selection mode cleanly.
+- **Interactions & Accessibility:**
+  - **Clicking anywhere on an item's row or tile** selects/deselects that item in selection mode (`selectable()` Alpine component).
+  - **Shift-click** selects contiguous ranges between the last-toggled item and the clicked item.
+  - **Keyboard navigation:** <kbd>Esc</kbd> exits selection mode; <kbd>Ctrl+A</kbd> / <kbd>Cmd+A</kbd> selects all items in the current list when selecting.
+  - **Touch screens:** Checkbox touch target is at least 44 × 44 pt (`@media (pointer: coarse), (max-width: 767px)`).
+  - **Non-destructive vs. Destructive Actions:** Non-destructive actions (moving to trash) show a transient toast with an "Undo" action that immediately restores items without a modal interrupt. Truly destructive actions (deleting permanently or deleting items with dependencies) open a single modal dialog (`.modal`) confirming the count and names before proceeding.
+  - **Batch execution:** Handled via domain services with atomic, non-blocking operations and validation (max 200 items per request, format `type:id`, ownership verification). Items that cannot be deleted due to dependencies (such as non-empty folders or modules) are gracefully skipped and reported in the completion notice (e.g. "1 skipped: “Week 1” isn't empty").
 
 ## 6. Layout and responsive behaviour
 

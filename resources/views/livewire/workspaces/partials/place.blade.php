@@ -16,7 +16,11 @@
     <ul class="folder-grid" role="list" aria-label="Folders">
         @foreach ($placeFolders as $i => $folder)
             @php $inside = $itemCounts[$folder->id] ?? 0; @endphp
-            <li class="folder-tile" wire:key="folder-{{ $folder->id }}">
+            <li class="folder-tile" wire:key="folder-{{ $folder->id }}"
+                data-select-key="folder:{{ $folder->id }}"
+                :class="{ 'is-selected': isSelected('folder:{{ $folder->id }}') }"
+                x-on:click="handleRowClick($event, 'folder:{{ $folder->id }}')">
+                <x-selection-check key="folder:{{ $folder->id }}" label="Select {{ $folder->name }}" />
                 <span class="item-icon ws-colour-amber" aria-hidden="true"><x-icon name="folder" class="size-5" /></span>
                 <span class="min-w-0 flex-1">
                     <a href="{{ route('workspaces.folders.show', [$workspaceId, $folder->id]) }}" class="tile-link">{{ $folder->name }}</a>
@@ -37,7 +41,11 @@
 @if ($placeNotes !== [] || $placeFiles !== [] || $placeLinks !== [])
     <ul class="item-list" role="list" aria-label="Notes, files and links">
         @foreach ($placeNotes as $note)
-            <li class="item-row" wire:key="note-{{ $note->id }}">
+            <li class="item-row" wire:key="note-{{ $note->id }}"
+                data-select-key="note:{{ $note->id }}"
+                :class="{ 'is-selected': isSelected('note:{{ $note->id }}') }"
+                x-on:click="handleRowClick($event, 'note:{{ $note->id }}')">
+                <x-selection-check key="note:{{ $note->id }}" label="Select {{ $note->displayTitle() }}" />
                 <span class="item-icon" aria-hidden="true"><x-icon name="file-text" class="size-5" /></span>
                 <span class="min-w-0 flex-1">
                     <a href="{{ route('workspaces.notes.show', [$note->workspaceId, $note->id]) }}" class="tile-link">{{ $note->displayTitle() }}</a>
@@ -51,7 +59,11 @@
             </li>
         @endforeach
         @foreach ($placeFiles as $file)
-            <li class="item-row" wire:key="file-{{ $file->id }}">
+            <li class="item-row" wire:key="file-{{ $file->id }}"
+                data-select-key="file:{{ $file->id }}"
+                :class="{ 'is-selected': isSelected('file:{{ $file->id }}') }"
+                x-on:click="handleRowClick($event, 'file:{{ $file->id }}')">
+                <x-selection-check key="file:{{ $file->id }}" label="Select {{ $file->fileName() }}" />
                 <span class="item-icon ws-colour-{{ $fileColours[$file->kind] ?? 'teal' }}" aria-hidden="true"><x-icon :name="$file->icon()" class="size-5" /></span>
                 <span class="min-w-0 flex-1">
                     <a href="{{ route('workspaces.files.show', [$file->workspaceId, $file->id]) }}" class="tile-link">{{ $file->fileName() }}</a>
@@ -66,7 +78,11 @@
             </li>
         @endforeach
         @foreach ($placeLinks as $link)
-            <li class="item-row" wire:key="link-{{ $link->id }}">
+            <li class="item-row" wire:key="link-{{ $link->id }}"
+                data-select-key="link:{{ $link->id }}"
+                :class="{ 'is-selected': isSelected('link:{{ $link->id }}') }"
+                x-on:click="handleRowClick($event, 'link:{{ $link->id }}')">
+                <x-selection-check key="link:{{ $link->id }}" label="Select {{ $link->title }}" />
                 <span class="item-icon ws-colour-teal" aria-hidden="true"><x-icon name="link" class="size-5" /></span>
                 <span class="min-w-0 flex-1">
                     <a href="{{ $link->url }}" target="_blank" rel="noopener noreferrer" class="tile-link">{{ $link->title }}<span class="sr-only"> (opens in a new tab)</span></a>

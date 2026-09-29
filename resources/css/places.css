@@ -711,6 +711,43 @@
         outline: 2px solid var(--focus-ring);
         outline-offset: 2px;
     }
+
+    /* Selection mode in lists and tiles (DESIGN.md §5) */
+    .is-selecting [data-row-menu],
+    .is-selecting [data-drag-handle],
+    .is-selecting [wire\:sort\:handle],
+    .is-selecting [wire\:sort\:item] > .module-actions {
+        display: none !important;
+    }
+
+    .is-selecting .tile-link {
+        pointer-events: none;
+    }
+
+    .is-selecting .tile-link::after {
+        pointer-events: none;
+    }
+
+    .is-selecting :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-row) {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-row).is-selected {
+        background-color: var(--selected) !important;
+        border-color: var(--accent) !important;
+    }
+
+    .module-tile > .selection-check {
+        position: absolute;
+        top: 0.75rem;
+        left: 0.75rem;
+        z-index: 2;
+    }
+
+    .module-grid.is-list-view .module-tile > .selection-check {
+        position: static;
+    }
 }
 
 @layer components {

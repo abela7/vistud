@@ -3,7 +3,10 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\BulkActions;
+use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
+use App\Platform\Errors\NotFound;
 use App\Study\Flashcards;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
@@ -21,6 +24,8 @@ use Livewire\Component;
  */
 final class Deck extends Component
 {
+    use BulkActions, Notices;
+
     #[Locked]
     public string $workspaceId;
 
@@ -60,6 +65,47 @@ final class Deck extends Component
     public function deleteCard(string $id): void
     {
         $this->dispatch('flashcard-delete', id: $id);
+    }
+
+    public function openBulkRemove(array $keys): void
+    {
+        $this->bulkKeys = $keys;
+        $this->dispatch('bulk-flashcard-dialog-open');
+    }
+
+    public function confirmBulkRemove(): void
+    {
+        $this->bulk('remove', $this->bulkKeys);
+        $this->bulkKeys = [];
+        $this->dispatch('bulk-flashcard-dialog-close');
+        $this->dispatch('selection-clear');
+    }
+
+    protected function allowedBulkTypes(): array
+    {
+        return ['flashcard'];
+    }
+
+    protected function performBulkAction(string $action, array $items, array $payload): void
+    {
+        $by = $this->principal();
+        $done = 0;
+
+        if (in_array($action, ['remove', 'delete'], true)) {
+            foreach ($items as [$type, $id]) {
+                try {
+                    $this->flashcards->retire($by, $id);
+                    $done++;
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $this->notify($done === 1 ? '1 card removed.' : "{$done} cards removed.");
+            $this->dispatch('flashcards-changed');
+            $this->dispatch('selection-clear');
+
+            return;
+        }
     }
 
     public function render(): View

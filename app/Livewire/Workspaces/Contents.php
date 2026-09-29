@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\BulkActions;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
@@ -24,6 +25,7 @@ use App\Study\Topics;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use Livewire\WithFileUploads;
@@ -38,7 +40,10 @@ use Livewire\WithFileUploads;
  */
 final class Contents extends Component
 {
-    use Notices, WithFileUploads;
+    use BulkActions, Notices, WithFileUploads;
+
+    /** @var list<string> */
+    public array $lastTrashed = [];
 
     #[Locked]
     public string $workspaceId;
@@ -284,6 +289,217 @@ final class Contents extends Component
     public function toggleTrash(): void
     {
         $this->showTrash = ! $this->showTrash;
+        $this->dispatch('selection-clear');
+    }
+
+    public function openBulkMove(array $keys): void
+    {
+        $this->open('bulk-move', creating: false, targetType: 'bulk');
+        $this->bulkKeys = $keys;
+        $this->destination = "workspace:{$this->workspaceId}";
+    }
+
+    public function openBulkDelete(array $keys): void
+    {
+        $this->open('bulk-delete', creating: false, targetType: 'bulk');
+        $this->bulkKeys = $keys;
+    }
+
+    public function openBulkDestroy(array $keys): void
+    {
+        $this->open('bulk-destroy', creating: false, targetType: 'bulk');
+        $this->bulkKeys = $keys;
+    }
+
+    #[On('bulk-undo')]
+    public function undoTrash(): void
+    {
+        if ($this->lastTrashed === []) {
+            return;
+        }
+        $by = $this->principal();
+        $restored = 0;
+        foreach ($this->lastTrashed as $key) {
+            [$type, $id] = explode(':', $key, 2);
+            try {
+                if ($type === 'note') {
+                    $this->notes->restore($by, $id);
+                    $restored++;
+                } elseif ($type === 'file') {
+                    $this->files->restore($by, $id);
+                    $restored++;
+                }
+            } catch (NotFound) {
+                // Gone or already restored
+            }
+        }
+        $this->lastTrashed = [];
+        $this->notify($restored === 1 ? '1 item is restored.' : "{$restored} items are restored.");
+    }
+
+    protected function allowedBulkTypes(): array
+    {
+        return ['folder', 'note', 'file', 'link', 'module'];
+    }
+
+    protected function performBulkAction(string $action, array $items, array $payload): void
+    {
+        $by = $this->principal();
+        $done = 0;
+        $skipped = [];
+
+        if ($action === 'trash') {
+            $trashedKeys = [];
+            foreach ($items as [$type, $id, $key]) {
+                try {
+                    if ($type === 'note') {
+                        $this->notes->trash($by, $id);
+                        $trashedKeys[] = $key;
+                        $done++;
+                    } elseif ($type === 'file') {
+                        $this->files->trash($by, $id);
+                        $trashedKeys[] = $key;
+                        $done++;
+                    }
+                } catch (NotFound) {
+                    // Ignored (other student or missing)
+                }
+            }
+            $this->lastTrashed = $trashedKeys;
+            $msg = $done === 1 ? '1 item moved to the trash.' : "{$done} items moved to the trash.";
+            $this->notify($msg, 'success', 'Undo', 'bulk-undo');
+
+            return;
+        }
+
+        if ($action === 'restore') {
+            foreach ($items as [$type, $id]) {
+                try {
+                    if ($type === 'note') {
+                        $this->notes->restore($by, $id);
+                        $done++;
+                    } elseif ($type === 'file') {
+                        $this->files->restore($by, $id);
+                        $done++;
+                    }
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $msg = $done === 1 ? '1 item is restored.' : "{$done} items are restored.";
+            $this->notify($msg, 'success');
+
+            return;
+        }
+
+        if ($action === 'destroy') {
+            foreach ($items as [$type, $id]) {
+                try {
+                    if ($type === 'note') {
+                        $this->notes->destroy($by, $id);
+                        $done++;
+                    } elseif ($type === 'file') {
+                        $this->files->destroy($by, $id);
+                        $done++;
+                    }
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $msg = $done === 1 ? '1 item is deleted.' : "{$done} items are deleted.";
+            $this->notify($msg, 'success');
+
+            return;
+        }
+
+        if ($action === 'delete') {
+            foreach ($items as [$type, $id]) {
+                try {
+                    if ($type === 'folder') {
+                        $this->folders->delete($by, $id);
+                        $done++;
+                    } elseif ($type === 'link') {
+                        $this->links->delete($by, $id);
+                        $done++;
+                    } elseif ($type === 'note') {
+                        $this->notes->destroy($by, $id);
+                        $done++;
+                    } elseif ($type === 'file') {
+                        $this->files->destroy($by, $id);
+                        $done++;
+                    } elseif ($type === 'module') {
+                        $this->modules->delete($by, $id);
+                        $done++;
+                    }
+                } catch (Conflict $e) {
+                    try {
+                        $name = $type === 'folder' ? $this->folders->find($by, $id)->name : $this->modules->find($by, $id)->title;
+                        $skipped[] = "1 skipped: “{$name}” isn't empty.";
+                    } catch (NotFound) {
+                        $skipped[] = "1 skipped: isn't empty.";
+                    }
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $parts = [];
+            if ($done > 0) {
+                $parts[] = $done === 1 ? '1 item is deleted.' : "{$done} items are deleted.";
+            }
+            if ($skipped !== []) {
+                $parts[] = implode(' ', $skipped);
+            }
+            $this->notify(implode(' ', $parts) ?: 'Nothing was deleted.', 'success');
+
+            return;
+        }
+
+        if ($action === 'move') {
+            $destination = (string) ($payload['destination'] ?? '');
+            [$destType, $destId] = array_pad(explode(':', $destination, 2), 2, '');
+            foreach ($items as [$type, $id]) {
+                try {
+                    if ($type === 'folder') {
+                        $this->folders->move($by, $id, $destType, $destId);
+                        $done++;
+                    } elseif ($type === 'note') {
+                        $this->notes->move($by, $id, $destType, $destId);
+                        $done++;
+                    } elseif ($type === 'file') {
+                        $this->files->move($by, $id, $destType, $destId);
+                        $done++;
+                    } elseif ($type === 'link') {
+                        $this->links->move($by, $id, $destType, $destId);
+                        $done++;
+                    }
+                } catch (Conflict) {
+                    try {
+                        $name = match ($type) {
+                            'folder' => $this->folders->find($by, $id)->name,
+                            'note' => $this->notes->find($by, $id)->displayTitle(),
+                            'file' => $this->files->find($by, $id)->fileName(),
+                            'link' => $this->links->find($by, $id)->title,
+                            default => 'Item',
+                        };
+                        $skipped[] = "1 skipped: “{$name}” can't be moved there.";
+                    } catch (NotFound) {
+                        $skipped[] = "1 skipped: can't be moved there.";
+                    }
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $parts = [];
+            if ($done > 0) {
+                $parts[] = $done === 1 ? '1 item is moved.' : "{$done} items are moved.";
+            }
+            if ($skipped !== []) {
+                $parts[] = implode(' ', $skipped);
+            }
+            $this->notify(implode(' ', $parts) ?: 'Nothing was moved.', 'success');
+
+            return;
+        }
     }
 
     // ---------- Saving ----------
@@ -295,6 +511,31 @@ final class Contents extends Component
         $this->error = null;
         // Deleting the page's own module or folder leaves for the place around it.
         $leaving = $this->mode === 'delete' && $this->placeId !== null && $this->targetId === $this->placeId ? $this->parentUrl() : null;
+
+        if ($this->mode === 'bulk-move') {
+            $this->bulk('move', $this->bulkKeys, ['destination' => $this->destination]);
+            $this->close();
+            $this->dispatch('structure-dialog-close');
+            $this->dispatch('selection-clear');
+
+            return;
+        }
+        if ($this->mode === 'bulk-delete') {
+            $this->bulk('delete', $this->bulkKeys);
+            $this->close();
+            $this->dispatch('structure-dialog-close');
+            $this->dispatch('selection-clear');
+
+            return;
+        }
+        if ($this->mode === 'bulk-destroy') {
+            $this->bulk('destroy', $this->bulkKeys);
+            $this->close();
+            $this->dispatch('structure-dialog-close');
+            $this->dispatch('selection-clear');
+
+            return;
+        }
 
         try {
             $this->notice = match ([$this->mode, $this->creating]) {
@@ -350,7 +591,7 @@ final class Contents extends Component
                 $upload->delete();
             }
         }
-        $this->reset('mode', 'creating', 'targetType', 'targetId', 'title', 'startsOn', 'endsOn', 'name', 'url', 'instructions', 'destination', 'error', 'uploads', 'uploadErrors');
+        $this->reset('mode', 'creating', 'targetType', 'targetId', 'title', 'startsOn', 'endsOn', 'name', 'url', 'instructions', 'destination', 'error', 'uploads', 'uploadErrors', 'bulkKeys');
         $this->resetErrorBag();
     }
 
@@ -433,7 +674,8 @@ final class Contents extends Component
             'maxUpload' => Files::maxBytes(),
             'counts' => $counts,
             'target' => $this->targetName($modules, $folders, $notes, $files),
-            'moveOptions' => $this->mode === 'move' ? $this->moveOptions($workspace->name, $modules, $folders) : [],
+            'moveOptions' => in_array($this->mode, ['move', 'bulk-move'], true) ? $this->moveOptions($workspace->name, $modules, $folders) : [],
+            'bulkKeys' => $this->bulkKeys,
         ];
 
         if ($this->view === 'modules') {
@@ -723,20 +965,33 @@ final class Contents extends Component
     {
         $inside = [];
         $height = 0;
-        if ($this->targetType === 'folder') {
-            $moving = collect($folders)->firstWhere('id', $this->targetId);
-            if ($moving === null) {
-                return [];
+        $movingFolderIds = [];
+        if ($this->targetType === 'folder' && $this->targetId !== null) {
+            $movingFolderIds[] = $this->targetId;
+        } elseif ($this->mode === 'bulk-move') {
+            foreach ($this->bulkKeys as $key) {
+                if (str_starts_with($key, 'folder:')) {
+                    $movingFolderIds[] = substr($key, 7);
+                }
             }
-            $inside = [$moving->id => true];
+        }
+
+        if ($movingFolderIds !== []) {
+            foreach ($movingFolderIds as $fid) {
+                $inside[$fid] = true;
+            }
             foreach ($folders as $folder) {
                 if ($folder->parentId !== null && isset($inside[$folder->parentId])) {
                     $inside[$folder->id] = true;
                 }
             }
-            $height = max(array_map(fn ($f) => $f->depth, array_filter($folders, fn ($f) => isset($inside[$f->id])))) - $moving->depth;
+            $movingFolders = array_filter($folders, fn ($f) => in_array($f->id, $movingFolderIds, true));
+            $insideFolders = array_filter($folders, fn ($f) => isset($inside[$f->id]));
+            $minDepth = $movingFolders === [] ? 0 : min(array_map(fn ($f) => $f->depth, $movingFolders));
+            $maxDepth = $insideFolders === [] ? 0 : max(array_map(fn ($f) => $f->depth, $insideFolders));
+            $height = max(0, $maxDepth - $minDepth);
         }
-        $tooDeep = fn (int $depth) => $this->targetType === 'folder' && $depth + 1 + $height > Folders::MAX_DEPTH;
+        $tooDeep = fn (int $depth) => $movingFolderIds !== [] && $depth + 1 + $height > Folders::MAX_DEPTH;
 
         $options = [['value' => "workspace:{$this->workspaceId}", 'label' => "{$workspaceName} (not in a module)", 'depth' => 0, 'icon' => 'folder', 'disabled' => $tooDeep(0)]];
         $folderOptions = function (?string $moduleId) use ($folders, $inside, $tooDeep): array {

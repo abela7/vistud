@@ -14,7 +14,7 @@
     $submit = ['topic' => $targetId === null ? 'Add topic' : 'Rename', 'move' => 'Move', 'finding' => $findingId === null ? 'Add finding' : 'Save'];
     $groups = [...array_map(fn ($m) => [$m->id, $m->title], $modules), ['', $modules === [] ? '' : 'Not in a module']];
 @endphp
-<div class="space-y-8">
+<div class="space-y-8" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <ul class="flex flex-wrap gap-2" role="list" aria-label="Topics by status">
             @foreach ($counts as $status => $count)
@@ -22,6 +22,12 @@
             @endforeach
         </ul>
         <div class="flex flex-wrap gap-2">
+            @if ($topics !== [])
+                <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
+                    <x-icon name="list-checks" class="size-4" />
+                    <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
+                </button>
+            @endif
             <x-button icon="circle-help" x-data x-on:click="Livewire.dispatch('question-new')">New question</x-button>
             <x-button variant="primary" icon="plus" wire:click="newTopic">New topic</x-button>
         </div>
@@ -30,6 +36,16 @@
     <div role="status" aria-live="polite">
         <x-toast :message="$notice" />
     </div>
+
+    <x-selection-bar>
+        <x-button variant="secondary" size="sm" icon="check" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'covered' })">Covered</x-button>
+        <x-button variant="secondary" size="sm" icon="circle-check" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'understood' })">Understood</x-button>
+        <x-button variant="secondary" size="sm" icon="circle-alert" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'confused' })">Confused</x-button>
+        @if ($modules !== [])
+            <x-button variant="secondary" size="sm" icon="folder-input" ::disabled="count === 0" x-on:click="$wire.openBulkMove(selectedKeys())">Move to module…</x-button>
+        @endif
+        <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0" x-on:click="$wire.openBulkRemove(selectedKeys())">Remove</x-button>
+    </x-selection-bar>
 
     <section aria-labelledby="topics-heading" class="space-y-4">
         <h2 id="topics-heading" class="text-lg font-semibold">Topics</h2>
@@ -54,7 +70,11 @@
                                     $topicFindings = $findings[$topic->id] ?? [];
                                     $showFindings = $topicFindings !== [] && in_array($topic->id, $expanded, true);
                                 @endphp
-                                <li wire:key="topic-{{ $topic->id }}" class="topic-row">
+                                <li wire:key="topic-{{ $topic->id }}" class="topic-row"
+                                    data-select-key="topic:{{ $topic->id }}"
+                                    :class="{ 'is-selected': isSelected('topic:{{ $topic->id }}') }"
+                                    x-on:click="handleRowClick($event, 'topic:{{ $topic->id }}')">
+                                    <x-selection-check key="topic:{{ $topic->id }}" label="Select {{ $topic->name }}" />
                                     <div class="topic-main">
                                         <p class="flex flex-wrap items-center gap-2">
                                             <span class="font-semibold break-words">{{ $topic->name }}</span>
@@ -199,4 +219,65 @@
     </dialog>
 
     <livewire:workspaces.flashcard-editor :workspace-id="$workspaceId" />
+
+    <dialog id="bulk-topic-move-dialog" class="modal" aria-labelledby="bulk-topic-move-title"
+        wire:ignore.self
+        x-data
+        x-on:bulk-topic-move-open.window="$el.open || $el.showModal()"
+        x-on:bulk-topic-move-close.window="$el.open && $el.close()"
+        x-on:close="$wire.bulkKeys = []"
+        x-on:click="$event.target === $el && $el.close()">
+        <form wire:submit="confirmBulkMove" novalidate class="modal-panel" role="document">
+            <div class="modal-head">
+                <h2 id="bulk-topic-move-title" class="min-w-0 flex-1 text-lg font-semibold">Move topics</h2>
+                <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
+                    <x-icon name="x" />
+                </button>
+            </div>
+            <div class="space-y-4 px-5 pt-2">
+                <p class="text-sm text-fg-muted">
+                    Move {{ count($bulkKeys) }} selected {{ Str::plural('topic', count($bulkKeys)) }} to:
+                </p>
+                <div class="field">
+                    <label for="bulk-topic-module" class="field-label">Module</label>
+                    <select id="bulk-topic-module" class="input" wire:model="bulkModuleId" autofocus>
+                        <option value="">Not in a module</option>
+                        @foreach ($modules as $module)
+                            <option value="{{ $module->id }}">{{ $module->title }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
+                <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" busy-label="Moving…">Move</x-button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="bulk-topic-remove-dialog" class="modal" aria-labelledby="bulk-topic-remove-title"
+        wire:ignore.self
+        x-data
+        x-on:bulk-topic-remove-open.window="$el.open || $el.showModal()"
+        x-on:bulk-topic-remove-close.window="$el.open && $el.close()"
+        x-on:close="$wire.bulkKeys = []"
+        x-on:click="$event.target === $el && $el.close()">
+        <div class="modal-panel" role="document">
+            <div class="modal-head">
+                <h2 id="bulk-topic-remove-title" class="min-w-0 flex-1 text-lg font-semibold">Remove topics?</h2>
+                <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
+                    <x-icon name="x" />
+                </button>
+            </div>
+            <div class="space-y-4 px-5 pt-2">
+                <p class="text-sm text-fg-muted">
+                    Remove {{ count($bulkKeys) }} selected {{ Str::plural('topic', count($bulkKeys)) }}? What you did on them stays in your journal.
+                </p>
+            </div>
+            <div class="modal-actions">
+                <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
+                <x-button variant="danger" wire:click="confirmBulkRemove" wire:loading.attr="aria-busy" busy-label="Removing…">Remove</x-button>
+            </div>
+        </div>
+    </dialog>
 </div>

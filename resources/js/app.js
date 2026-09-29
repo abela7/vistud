@@ -5,6 +5,7 @@ import './shell.js';
 import './invitation.js';
 import './session.js';
 import './back.js';
+import './selection.js';
 import './note-window.js';
 import { toast } from './toasts.js';
 

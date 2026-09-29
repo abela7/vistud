@@ -14,7 +14,7 @@ const LIFE = 6000;
 const MOST = 3;
 const seen = new Set();
 
-export function toast(text, tone = 'success') {
+export function toast(text, tone = 'success', action = null) {
     const stack = document.querySelector('[data-toasts]');
     const template = document.querySelector('template[data-toast-template]');
     if (!stack || !template || !text) return;
@@ -43,6 +43,27 @@ export function toast(text, tone = 'success') {
     };
     const release = () => { if (held > 0 && --held === 0) run(); };
 
+    const actionButton = item.querySelector('[data-toast-action]');
+    if (actionButton) {
+        if (action && action.label) {
+            actionButton.textContent = action.label;
+            actionButton.hidden = false;
+            actionButton.addEventListener('click', () => {
+                if (typeof action.click === 'function') {
+                    action.click();
+                } else if (action.event) {
+                    if (window.Livewire) {
+                        window.Livewire.dispatch(action.event, action.payload || {});
+                    }
+                    window.dispatchEvent(new CustomEvent(action.event, { detail: action.payload }));
+                }
+                close();
+            });
+        } else {
+            actionButton.remove();
+        }
+    }
+
     // A toast that appears under a still pointer doesn't count as pointed at.
     let pointed = false;
     item.addEventListener('pointermove', () => { if (!pointed) { pointed = true; hold(); } });
@@ -61,7 +82,12 @@ function showNew() {
     document.querySelectorAll('[data-toast][data-toast-id]').forEach((el) => {
         if (seen.has(el.dataset.toastId)) return;
         seen.add(el.dataset.toastId);
-        toast(el.dataset.toast, el.dataset.toastTone || 'success');
+        const action = el.dataset.toastActionLabel ? {
+            label: el.dataset.toastActionLabel,
+            event: el.dataset.toastActionEvent,
+            payload: el.dataset.toastActionPayload ? JSON.parse(el.dataset.toastActionPayload) : null,
+        } : null;
+        toast(el.dataset.toast, el.dataset.toastTone || 'success', action);
     });
 }
 

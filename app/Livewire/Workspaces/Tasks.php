@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\BulkActions;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
@@ -21,7 +22,7 @@ use Livewire\Component;
  */
 final class Tasks extends Component
 {
-    use Notices;
+    use BulkActions, Notices;
 
     #[Locked]
     public string $workspaceId;
@@ -90,6 +91,63 @@ final class Tasks extends Component
     public function toggleDone(): void
     {
         $this->showDone = ! $this->showDone;
+    }
+
+    public function openBulkDelete(array $keys): void
+    {
+        $this->bulkKeys = $keys;
+        $this->dispatch('bulk-task-dialog-open');
+    }
+
+    public function confirmBulkDelete(): void
+    {
+        $this->bulk('delete', $this->bulkKeys);
+        $this->bulkKeys = [];
+        $this->dispatch('bulk-task-dialog-close');
+        $this->dispatch('selection-clear');
+    }
+
+    protected function allowedBulkTypes(): array
+    {
+        return ['task'];
+    }
+
+    protected function performBulkAction(string $action, array $items, array $payload): void
+    {
+        $by = $this->principal();
+        $done = 0;
+
+        if ($action === 'status') {
+            $status = (string) ($payload['status'] ?? 'done');
+            foreach ($items as [$type, $id]) {
+                try {
+                    $this->activities->setStatus($by, $id, $status);
+                    $done++;
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $word = $status === 'done' ? 'done' : 'to do';
+            $this->notify($done === 1 ? "1 task marked {$word}." : "{$done} tasks marked {$word}.");
+            $this->dispatch('selection-clear');
+
+            return;
+        }
+
+        if (in_array($action, ['delete', 'remove'], true)) {
+            foreach ($items as [$type, $id]) {
+                try {
+                    $this->activities->delete($by, $id);
+                    $done++;
+                } catch (NotFound) {
+                    // Ignored
+                }
+            }
+            $this->notify($done === 1 ? '1 task deleted.' : "{$done} tasks deleted.");
+            $this->dispatch('selection-clear');
+
+            return;
+        }
     }
 
     public function save(): void

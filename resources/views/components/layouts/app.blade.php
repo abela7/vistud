@@ -186,6 +186,7 @@
             <span class="toast-icon" data-toast-icon="success"><x-icon name="circle-check" class="size-5" /></span>
             <span class="toast-icon" data-toast-icon="info"><x-icon name="info" class="size-5" /></span>
             <p class="toast-text" data-toast-text></p>
+            <button type="button" class="toast-action" data-toast-action hidden></button>
             <button type="button" class="toast-close" aria-label="Dismiss" data-toast-close><x-icon name="x" class="size-4" /></button>
         </div>
     </template>
