@@ -224,7 +224,7 @@ On touch devices every control is at least 44 px whatever the density (§6.2).
 
 ### 4.4 Borders and radii
 
-- **Borders:** 1 px `--border` for containers; 1 px `--border-strong` for inputs and other controls (3:1, so their edges are visible); `--divider` for separators; 1.5 px for checkboxes; 2 px for the focus ring.
+- **Borders:** 1 px `--border` for containers; 1 px `--border-strong` for inputs and other controls (3:1, so their edges are visible); `--divider` for separators; 1.5 px for checkboxes; 2 px for the keyboard focus ring; a text field's focus is its own 1 px border in `--focus-ring` with a soft 2 px halo in `--accent-subtle`.
 - **Radii:** `sm` 6 px (checkboxes, badges), `md` 8 px (buttons, inputs), `lg` 12 px (alerts, segmented controls, menus), `xl` 16 px (cards, panels, dialogs), `2xl` 24 px (mobile bottom sheets), `full` (pills, avatars).
 
 ### 4.5 Shadows and elevation
@@ -247,7 +247,7 @@ Shared components live in `resources/views/components/` and their state styles i
 |---|---|---|---|---|---|---|
 | **Primary button** | `--grad-primary-hover` | Shared ring | — | Solid `--surface-sunken`, `--text-disabled`, `not-allowed` cursor | Spinner and a busy label ("Logging in…"), repeated submits ignored | — |
 | **Secondary, ghost, danger buttons** | `--hover` overlay | Shared ring | — | As above | As above | — |
-| **Text input** | Border to `--text-subtle` | Shared ring, border to `--focus-ring` | — | `--surface-sunken`, `--text-disabled` | — | `--danger` border, `aria-invalid`, message below with an icon, linked by `aria-describedby` |
+| **Text input** | Border to `--text-subtle` | No ring: border to `--focus-ring` with a soft 2 px halo in `--accent-subtle`, the theme's own tint (the owner's review, 2026-09-29) | — | `--surface-sunken`, `--text-disabled` | — | `--danger` border, `aria-invalid`, message below with an icon, linked by `aria-describedby` |
 | **Checkbox** | Border to `--text-subtle` | Shared ring | `--accent` fill with a tick | `--surface-sunken` | — | As for inputs |
 | **Segmented control** | `--hover` overlay | Ring around the option | `--grad-selected` with `--on-selected` and a shadow | Dimmed text, no hover | — | — |
 | **Link** | Thicker underline | Shared ring | — | — | — | — |

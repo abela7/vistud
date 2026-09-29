@@ -46,14 +46,31 @@
     }
 
     /*
-    | One focus style for everything (ADR 0003 §6.3): a 2 px ring with an
-    | offset gap filled by --focus-ring-offset, so the ring stays visible on
-    | any background, gradients included.
+    | One focus style for everything (ADR 0003 §6.3): a 2 px ring with a
+    | 1 px gap filled by --focus-ring-offset, so the ring stays visible on
+    | any background, gradients included. It shows for the keyboard, not for
+    | a press on a button or a link.
     */
     :focus-visible {
         outline: 2px solid var(--focus-ring);
-        outline-offset: 2px;
-        box-shadow: 0 0 0 2px var(--focus-ring-offset);
+        outline-offset: 1px;
+        box-shadow: 0 0 0 1px var(--focus-ring-offset);
+    }
+
+    /*
+    | Text fields (the owner's review, 2026-09-29: the ring was too bold): no ring and no gap. The 1 px
+    | border takes the focus colour, with a soft 2 px halo in the theme's own tint (--accent-subtle), so the
+    | field's shape stays and the theme's colour says where you are. :where() keeps the specificity of a
+    | field's own class above it.
+    */
+    :where(
+            input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='button'], [type='submit'], [type='reset'], [type='image']),
+            textarea,
+            select
+        ):focus-visible {
+        outline: none;
+        border-color: var(--focus-ring);
+        box-shadow: 0 0 0 2px var(--accent-subtle);
     }
 
     :focus:not(:focus-visible) {

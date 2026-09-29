@@ -17,6 +17,8 @@ for (const theme of THEMES) {
 }
 
 test('the keyboard reaches every control in order, each with a visible focus ring', async ({ page }) => {
+    // A field's border eases to the focus colour; measured at once, it would be half way.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/login');
     const reached = [];
     // Email has focus on arrival (autofocus); Tab walks on from there.
@@ -28,7 +30,16 @@ test('the keyboard reaches every control in order, each with a visible focus rin
             // A visually hidden radio shows its ring on its label (components.css).
             const shown = el.closest('.segmented-option') ?? el;
             const style = getComputedStyle(shown);
-            const ring = style.outlineStyle === 'solid' && parseFloat(style.outlineWidth) >= 2;
+            // A text field has no ring (the owner's review, 2026-09-29): its own border takes the theme's
+            // focus colour, with a soft halo. Everything else has the 2 px ring.
+            const probe = Object.assign(document.createElement('span'), { style: 'color: var(--focus-ring)' });
+            document.body.append(probe);
+            const focusColour = getComputedStyle(probe).color;
+            probe.remove();
+            const field = shown.matches('input:not([type=checkbox]):not([type=radio]), textarea, select');
+            const ring = field
+                ? style.borderTopColor === focusColour && style.outlineStyle === 'none' && style.boxShadow !== 'none'
+                : style.outlineStyle === 'solid' && parseFloat(style.outlineWidth) >= 2;
             return ring ? name : `${name} (no focus ring)`;
         }));
     }

@@ -582,8 +582,8 @@
     }
 
     .question-add:focus-within {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px var(--focus-ring);
+        border-color: var(--focus-ring);
+        box-shadow: 0 0 0 2px var(--accent-subtle);
     }
 
     .question-add .item-icon {
@@ -600,6 +600,7 @@
         color: var(--text);
         font-size: 1rem;
         outline: none;
+        box-shadow: none; /* the line around it shows the focus */
     }
 
     .question-add-input::placeholder {

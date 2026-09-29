@@ -300,7 +300,7 @@ Three checks run in CI, and all three must pass:
    - Every colour computed on the page, **gradient images and shadows** and chart SVG included, must match a sentinel value.
 4. **Live switching.** A browser test switches themes and checks that the gradient treatments change with no reload and no change to the page's markup.
 
-**Focus.** Removing outlines is forbidden unless the shared focus-visible style replaces them. That style is a 2 px `--focus-ring` with an offset.
+**Focus.** Removing outlines is forbidden unless the shared focus-visible style replaces them. That style is a 2 px `--focus-ring` with a 1 px offset, for the keyboard (buttons, links, tabs and the like); text fields, selects and text areas instead take the focus colour on their own 1 px border, with a soft 2 px halo in `--accent-subtle`, so they never show a ring or a gap (the owner's review, 2026-09-29).
 
 ### 6.4 Custom themes (D7 = A), contrast and preferences
 
