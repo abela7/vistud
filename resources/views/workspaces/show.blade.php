@@ -27,24 +27,14 @@
 
         @if ($section === 'overview')
             <x-back :href="route('home')" to="All workspaces" />
-        @else
-            <x-back :href="route('workspaces.show', $workspace->id)" to="Overview" />
-        @endif
-
-        <div class="flex flex-wrap items-center justify-between gap-4">
-            <div class="flex min-w-0 items-center gap-3">
-                <x-workspace.chip :workspace="$workspace" size="lg" class="max-sm:hidden" />
-                <div class="min-w-0">
-                    @if ($section === 'overview')
+            <div class="flex flex-wrap items-center justify-between gap-4">
+                <div class="flex min-w-0 items-center gap-3">
+                    <x-workspace.chip :workspace="$workspace" size="lg" class="max-sm:hidden" />
+                    <div class="min-w-0">
                         <p class="text-sm text-fg-muted">{{ $greeting }}</p>
                         <h1 class="text-2xl font-semibold tracking-tight break-words sm:text-3xl">{{ $workspace->name }}</h1>
-                    @else
-                        <p class="text-sm break-words text-fg-muted">{{ $workspace->name }}</p>
-                        <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ $label }}</h1>
-                    @endif
+                    </div>
                 </div>
-            </div>
-            @if ($section === 'overview')
                 <div class="flex flex-wrap items-center gap-2">
                     <div class="relative shrink-0">
                         <button type="button" class="topbar-button" data-menu-button aria-controls="overview-menu" aria-expanded="false" title="More">
@@ -62,8 +52,11 @@
                         <a href="{{ route('workspaces.sessions.show', [$openSession->workspaceId, $openSession->id]) }}" class="btn btn-primary btn-lg"><x-icon name="timer" class="size-4" />Back to your session</a>
                     @endif
                 </div>
-            @endif
-        </div>
+            </div>
+        @elseif (! in_array($section, ['modules', 'notes'], true))
+            {{-- Modules and Notes & files draw this themselves, with their actions beside the title (livewire/workspaces/). --}}
+            <x-workspace.section-header :workspace="$workspace" :title="$label" />
+        @endif
 
         @if ($section === 'overview')
             <livewire:workspaces.study-time :workspace-id="$workspace->id" :stats="true" />

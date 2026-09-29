@@ -599,10 +599,123 @@
         translate: -2px 0;
     }
 
+    /* Beside a title (x-workspace.section-header): a round button, named on hover and for screen readers. */
+    .back-link-compact {
+        flex: none;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        min-height: 0;
+        padding: 0;
+    }
+
+    /* ---------- A section's heading: one row (x-workspace.section-header) ---------- */
+
+    .section-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem 1rem;
+    }
+
+    .section-header-text {
+        display: grid;
+        flex: 1 1 10rem;
+        min-width: 0;
+    }
+
+    .section-header-eyebrow {
+        overflow: hidden;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .section-header-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        line-height: 1.2;
+        overflow-wrap: anywhere;
+    }
+
+    .section-header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin-left: auto;
+    }
+
+    .count-pill {
+        display: inline-grid;
+        flex: none;
+        place-items: center;
+        min-width: 1.625rem;
+        height: 1.625rem;
+        padding: 0 0.5rem;
+        border-radius: 9999px;
+        background-color: var(--surface-sunken);
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
+    @media (min-width: 640px) {
+        .section-header-title {
+            font-size: 1.75rem;
+        }
+    }
+
+    /* Grid or List: two icon buttons in one frame, the chosen one filled. */
+    .view-switch {
+        display: inline-flex;
+        gap: 0.125rem;
+        padding: 0.1875rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-raised);
+    }
+
+    .view-switch > button {
+        display: inline-grid;
+        place-items: center;
+        width: 2.25rem;
+        height: 2rem;
+        border-radius: var(--radius-md);
+        color: var(--text-muted);
+        transition:
+            background-color 120ms ease,
+            color 120ms ease;
+    }
+
+    .view-switch > button:hover {
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    .view-switch > button[aria-pressed='true'] {
+        background-color: var(--selected);
+        color: var(--text);
+    }
+
+    .view-switch > button:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 1px;
+    }
+
     /* A phone has room for one way back: the Back link. The full path shows from tablets up. */
     @media (max-width: 639px) {
         .back-link {
             min-height: 2.75rem;
+        }
+
+        .back-link-compact {
+            width: 2.75rem;
+            height: 2.75rem;
         }
 
         .crumbs,

@@ -160,100 +160,146 @@
         text-align: center;
     }
 
-    /* ---------- Modules as cards & list ---------- */
+    /* ---------- Modules as cards & list (the owner's review, 2026-09-29) ---------- */
+    /*
+    | A card: its colour along the top, its number beside its title, when it runs, what it holds as small
+    | counts, and its topics understood at the bottom, aligned across a row. The list shows the same in one
+    | line per module, dropping what doesn't fit.
+    */
 
     .module-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
         gap: 1rem;
     }
 
     .module-tile {
         position: relative;
         display: grid;
-        grid-template-columns: 1fr auto;
+        grid-template-columns: auto minmax(0, 1fr) auto;
         grid-template-rows: auto 1fr auto;
         grid-template-areas:
-            "badge menu"
-            "main main"
-            "progress progress";
-        gap: 0.875rem;
+            'number main menu'
+            'holds holds holds'
+            'progress progress progress';
+        column-gap: 0.75rem;
+        row-gap: 0.875rem;
         min-width: 0;
-        min-height: 11rem;
-        padding: 1rem 0.75rem 1.125rem 1.125rem;
+        padding: 1.125rem 0.75rem 1rem 1rem;
         border: 1px solid var(--border);
-        border-radius: var(--radius-2xl);
+        border-radius: var(--radius-xl);
         background-color: var(--surface-raised);
+        box-shadow: inset 0 3px 0 var(--ws, var(--accent));
         transition:
             border-color 0.15s ease,
             box-shadow 0.15s ease;
     }
 
-    .module-tile:not(.is-new):hover {
+    .module-tile:hover {
         border-color: var(--ws, var(--border-strong));
-        box-shadow: var(--elevation-md);
+        box-shadow:
+            inset 0 3px 0 var(--ws, var(--accent)),
+            var(--elevation-md);
     }
 
-    .module-tile > .place-badge {
-        grid-area: badge;
-        justify-self: start;
-        align-self: start;
+    .module-number {
+        grid-area: number;
+        display: inline-grid;
+        place-items: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: var(--radius-md);
+        background-color: var(--ws-subtle, var(--accent-subtle));
+        color: var(--ws, var(--accent-contrast));
+        font-size: 0.8125rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .module-main {
+        grid-area: main;
+        min-width: 0;
+        align-self: center;
+    }
+
+    .module-title {
+        display: -webkit-box;
+        overflow: hidden;
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1.35;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+    }
+
+    .module-when {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        margin-top: 0.25rem;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
     }
 
     .module-tile > .module-actions {
         grid-area: menu;
-        justify-self: end;
         align-self: start;
+        margin: -0.375rem 0 0;
     }
 
-    .module-tile > .module-main {
-        grid-area: main;
-        align-self: start;
-    }
-
-    .module-tile > .module-topics-desktop {
-        grid-area: progress;
-        align-self: end;
-        display: block !important;
-    }
-
-    .module-grid:not(.is-list-view) .module-topics-inline {
-        display: none !important;
-    }
-
-    .module-tile.is-new {
+    .module-holds {
+        grid-area: holds;
         display: flex;
-        padding: 0;
-        border-style: dashed;
-        border-color: var(--border-strong);
+        flex-wrap: wrap;
+        align-content: start;
+        gap: 0.375rem;
+    }
+
+    .module-hold {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3125rem;
+        padding: 0.1875rem 0.5rem;
+        border-radius: 9999px;
+        background-color: var(--surface-sunken);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .module-hold.is-empty {
+        padding-inline: 0;
         background-color: transparent;
     }
 
-    .new-tile {
+    .module-progress {
+        grid-area: progress;
+        display: grid;
+        gap: 0.375rem;
+    }
+
+    .module-progress-label {
         display: flex;
-        flex: 1;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
+        justify-content: space-between;
         gap: 0.5rem;
-        border-radius: inherit;
         color: var(--text-muted);
-        transition:
-            background-color 0.15s ease,
-            color 0.15s ease;
+        font-size: 0.75rem;
     }
 
-    .new-tile:hover {
-        background-color: var(--hover);
+    .module-progress-label > :last-child {
         color: var(--text);
+        font-weight: 600;
     }
 
-    .new-tile:focus-visible {
-        outline: 2px solid var(--focus-ring);
-        outline-offset: 2px;
+    @media (min-width: 640px) {
+        .module-title {
+            font-size: 1.0625rem;
+        }
     }
 
-    /* List view for modules across all devices */
+    /* The list: one row per module, in one bordered block. */
     .module-grid.is-list-view {
         display: flex;
         flex-direction: column;
@@ -261,6 +307,19 @@
         border: 1px solid var(--border);
         border-radius: var(--radius-xl);
         background-color: var(--surface-raised);
+    }
+
+    .module-grid.is-list-view > .module-tile {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-rows: auto;
+        grid-template-areas: 'number main menu';
+        align-items: center;
+        row-gap: 0;
+        padding: 0.75rem 0.75rem 0.75rem 1rem;
+        border: 0;
+        border-radius: 0;
+        background-color: transparent;
+        box-shadow: inset 3px 0 0 var(--ws, var(--accent));
     }
 
     .module-grid.is-list-view > .module-tile:first-child {
@@ -273,82 +332,49 @@
         border-bottom-right-radius: inherit;
     }
 
-    .module-grid.is-list-view .module-tile {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: 0.875rem;
-        min-height: auto;
-        padding: 0.75rem 0.75rem 0.75rem 1rem;
-        border: none;
-        border-radius: 0;
-        background-color: transparent;
-        box-shadow: none;
-        transition: background-color 0.15s ease;
-    }
-
-    .module-grid.is-list-view .module-tile + .module-tile {
+    .module-grid.is-list-view > .module-tile + .module-tile {
         border-top: 1px solid var(--divider);
     }
 
-    .module-grid.is-list-view .module-tile:not(.is-new):hover {
+    .module-grid.is-list-view > .module-tile:hover {
         background-color: var(--hover);
-        border-color: transparent;
-        box-shadow: none;
     }
 
-    .module-grid.is-list-view .module-tile > .place-badge {
-        flex: none;
-        width: 2.5rem;
-        height: 2.5rem;
+    .module-grid.is-list-view .module-main {
+        align-self: center;
     }
 
-    .module-grid.is-list-view .module-tile > .module-main {
-        flex: 1;
-        min-width: 0;
+    .module-grid.is-list-view > .module-tile > .module-actions {
+        align-self: center;
+        margin: 0;
     }
 
-    .module-grid.is-list-view .module-tile > .module-topics-desktop {
-        display: none !important;
+    .module-grid.is-list-view :is(.module-holds, .module-progress) {
+        display: none;
     }
 
     @media (min-width: 640px) {
-        .module-grid.is-list-view .module-tile > .module-topics-desktop {
-            display: block !important;
-            flex: none;
-            width: 10rem;
+        .module-grid.is-list-view > .module-tile {
+            grid-template-columns: auto minmax(0, 1fr) 9rem auto;
+            grid-template-areas: 'number main progress menu';
+            column-gap: 1rem;
         }
 
-        .module-grid.is-list-view .module-topics-inline {
-            display: none !important;
+        .module-grid.is-list-view .module-progress {
+            display: grid;
         }
     }
 
-    .module-grid.is-list-view .module-tile > .module-actions {
-        flex: none;
-    }
+    @media (min-width: 1024px) {
+        .module-grid.is-list-view > .module-tile {
+            grid-template-columns: auto minmax(0, 1fr) auto 10rem auto;
+            grid-template-areas: 'number main holds progress menu';
+        }
 
-    .module-grid.is-list-view .module-tile.is-new {
-        display: block;
-        padding: 0;
-        border: none;
-        border-top: 1px dashed var(--divider);
-        background-color: transparent;
-    }
-
-    .module-grid.is-list-view .new-tile {
-        flex-direction: row;
-        justify-content: flex-start;
-        align-items: center;
-        gap: 0.75rem;
-        min-height: 3.25rem;
-        padding: 0.625rem 1rem;
-        color: var(--text-muted);
-    }
-
-    .module-grid.is-list-view .new-tile .size-6 {
-        width: 1.25rem;
-        height: 1.25rem;
+        .module-grid.is-list-view .module-holds {
+            display: flex;
+            flex-wrap: nowrap;
+        }
     }
 
     /* How much of a module is understood: the fill and a lighter track of the same colour. */
@@ -738,15 +764,20 @@
         border-color: var(--accent) !important;
     }
 
+    /* Selecting: a module's checkbox takes its number's place. */
     .module-tile > .selection-check {
-        position: absolute;
-        top: 0.75rem;
-        left: 0.75rem;
+        grid-area: number;
+        align-self: start;
+        justify-self: start;
         z-index: 2;
     }
 
-    .module-grid.is-list-view .module-tile > .selection-check {
-        position: static;
+    .module-grid.is-list-view > .module-tile > .selection-check {
+        align-self: center;
+    }
+
+    .is-selecting .module-number {
+        visibility: hidden;
     }
 }
 

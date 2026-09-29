@@ -42,7 +42,8 @@ class ModulesScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
             ->assertOk()
             ->assertSee('<title>Modules · Biology', false)
-            ->assertSeeInOrder(['Cells', 'Cell division', 'New module'])
+            // One row of heading and actions, then the cards (the owner's review, 2026-09-29).
+            ->assertSeeInOrder(['Modules', 'New module', '1', 'Cells', '2', 'Cell division'])
             ->assertSee(route('workspaces.modules.show', [$this->biology->id, $this->modules()[0]->id]), false)
             ->assertSee('wire:sort="sortModules"', false);
 
@@ -168,7 +169,7 @@ class ModulesScreenTest extends TestCase
             ->assertSee(route('workspaces.modules.show', [$this->biology->id, $cells->id]), false);
 
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
-            ->assertSeeInOrder(['Cells', '1 note · 2 folders', '0 of 1 topics understood']);
+            ->assertSeeInOrder(['Cells', '1 note', '2 folders', 'Topics understood', '0/1']);
 
         // "Study this" starts in the module; so does a folder inside it.
         $this->place('module', $cells->id)->call('studyHere')->assertDispatched('study-start', moduleId: $cells->id);
