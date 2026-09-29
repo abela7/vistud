@@ -357,6 +357,17 @@
                 </div>
                 <div class="note-count-bar">
                     <button type="button" class="note-count note-count-button" data-note-count title="Click for document statistics and reading time" aria-label="Document statistics"></button>
+                    <div class="note-zoom-controls" role="group" aria-label="Zoom controls">
+                        <button type="button" class="zoom-button" data-zoom-out title="Zoom out (Ctrl+-)" aria-label="Zoom out">
+                            <x-icon name="minus" class="size-3.5" />
+                        </button>
+                        <button type="button" class="zoom-value-button" data-zoom-reset title="Reset zoom to 100% (Ctrl+0)" aria-label="Reset zoom">
+                            <span data-zoom-label>100%</span>
+                        </button>
+                        <button type="button" class="zoom-button" data-zoom-in title="Zoom in (Ctrl++)" aria-label="Zoom in">
+                            <x-icon name="plus" class="size-3.5" />
+                        </button>
+                    </div>
                 </div>
 
                 {{-- The note's side panels: its statistics, the shortcuts, and a picture to add. --}}
@@ -423,6 +434,8 @@
                                         <dt>Find</dt><dd><kbd>Ctrl</kbd> + <kbd>F</kbd></dd>
                                         <dt>Find & Replace</dt><dd><kbd>Ctrl</kbd> + <kbd>H</kbd></dd>
                                         <dt>Print / PDF</dt><dd><kbd>Ctrl</kbd> + <kbd>P</kbd></dd>
+                                        <dt>Zoom In / Out</dt><dd><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd></dd>
+                                        <dt>Reset Zoom</dt><dd><kbd>Ctrl</kbd> + <kbd>0</kbd></dd>
                                     </dl>
                                 </div>
                                 <div class="shortcuts-section">
