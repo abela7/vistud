@@ -1928,6 +1928,24 @@ export async function mount(host) {
         if (!inWindow && event.key === 'Escape' && page.hasAttribute('data-focus') && !document.fullscreenElement && !busy) setFocus(false);
     });
 
+    // ---------- Printing and Save as PDF (the owner's review, 2026-09-29) ----------
+    // On white paper, as the note looks in the light theme, and named after the note (Save as PDF offers
+    // "<title>.pdf"). What the page was is put back once the print dialog closes. resources/css/editor.css
+    // leaves only the note on the page.
+    let beforePrint = null;
+    on(window, 'beforeprint', () => {
+        const root = document.documentElement;
+        beforePrint ??= { theme: root.dataset.theme, title: document.title };
+        if (root.dataset.themeLight) root.dataset.theme = root.dataset.themeLight;
+        document.title = titleField.value.trim() || 'Untitled note';
+    });
+    on(window, 'afterprint', () => {
+        if (!beforePrint) return;
+        document.documentElement.dataset.theme = beforePrint.theme;
+        document.title = beforePrint.title;
+        beforePrint = null;
+    });
+
     // ---------- A window of its own (the owner's review, 2026-09-29) ----------
     // The note beside the study material: New window moves it out, Open in ViStud brings it back.
     /** Waits until `done()` holds, for at most `ms`; says whether it did. */

@@ -673,10 +673,11 @@
        MS Word Standard A4 Pages Layout (Default)
        ======================================================== */
 
+    /* A true A4 sheet with the margins it prints with (20 mm), so the screen breaks lines where the paper does. */
     .note-page[data-page-view='pages'] {
-        --sheet-width: min(60rem, 92vw);
-        --sheet-padding-x: clamp(1.5rem, 5vw, 3.5rem);
-        --sheet-padding-y: clamp(2rem, 5vh, 3.5rem);
+        --sheet-width: 210mm;
+        --sheet-padding-x: clamp(1.5rem, 5vw, 20mm);
+        --sheet-padding-y: clamp(2rem, 5vh, 20mm);
     }
 
     .note-page[data-page-view='pages'] .note-card {
@@ -694,7 +695,7 @@
     .note-page[data-page-view='pages'] .note-sheet {
         width: 100%;
         max-width: var(--sheet-width);
-        min-height: 80rem; /* Standard A4 1:1.414 height proportion */
+        min-height: 297mm; /* An A4 sheet's height */
         margin-inline: auto;
         padding: var(--sheet-padding-y) var(--sheet-padding-x);
         background-color: var(--surface-raised);
@@ -714,7 +715,7 @@
     }
 
     .note-page[data-focus][data-page-view='pages'] .note-sheet {
-        max-width: min(64rem, 94vw);
+        max-width: min(var(--sheet-width), 94vw);
         box-shadow: var(--elevation-lg);
     }
 
@@ -2185,51 +2186,94 @@
     }
 
     /* Print styles: clean A4/letter document layout */
+    /*
+    | Printing and Save as PDF (the owner's review, 2026-09-29): only the note, on A4, as it looks in the
+    | Pages view. The page itself has no margin (@page, at the end of this file), so the browser has nowhere
+    | to print its own date, title, address and page number; the margins are padding, repeated on every
+    | page (clone). Colours
+    | print too (highlights, callouts, code, table headings), in the light theme (resources/js/note/editor.js).
+    */
     @media print {
-        header,
-        nav,
+        :root {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        html,
+        body {
+            background-color: var(--surface-raised) !important;
+        }
+
+        .skip-link,
+        .app-topbar,
+        .app-sidebar,
+        .app-tabbar,
+        .drawer,
+        dialog,
+        .toast-stack,
+        .page-loading,
+        .note-header-bar,
+        [data-note-alerts],
         .note-toolbar,
         .editor-bar,
-        .save-status,
-        .note-mode,
         .note-count-bar,
-        .image-floating-toolbar,
-        [data-note-alerts] {
+        .image-floating-toolbar {
             display: none !important;
         }
 
-        body {
-            background-color: var(--surface) !important;
-            color: var(--text) !important;
+        /* The margins of every printed page, from any page of ViStud. */
+        .app-main,
+        .note-window {
+            display: block !important;
+            margin: 0 !important;
+            padding: 20mm !important;
+            box-decoration-break: clone;
+            -webkit-box-decoration-break: clone;
         }
 
-        .note-page {
-            padding: 0 !important;
-        }
-
-        .note-card {
-            border: none !important;
-            border-radius: 0 !important;
-            background: transparent !important;
-            min-height: auto !important;
-            box-shadow: none !important;
-        }
-
+        .app-shell,
+        .app-body,
+        .note-page,
+        .note-card,
         .note-content {
+            display: block !important;
+            position: static !important;
+            width: auto !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            margin: 0 !important;
             padding: 0 !important;
+            overflow: visible !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
         }
 
+        .note-sheet {
+            display: block !important;
+            width: auto !important;
+            max-width: none !important;
+            min-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+
+        /* The sizes of the Pages view on a computer, whatever the size of the screen printing it. */
         .note-title {
             font-size: 2.25rem !important;
-            margin-bottom: 1.5rem !important;
-            border: 0 !important;
         }
 
-        .note-prose {
-            font-size: 11pt !important;
-            line-height: 1.6 !important;
+        .note-content .note-prose {
+            font-size: 1.0625rem !important;
         }
 
+        /* A page break starts a new sheet of paper; it shows nothing itself. */
         .note-page-break {
             display: block !important;
             height: 0 !important;
@@ -2239,20 +2283,31 @@
             box-shadow: none !important;
             background: transparent !important;
             break-after: page !important;
-            page-break-after: always !important;
         }
 
         .note-page-break * {
             display: none !important;
         }
 
-        .note-sheet {
-            box-shadow: none !important;
-            border: none !important;
-            padding: 0 !important;
-            max-width: 100% !important;
-            min-height: auto !important;
-            background: transparent !important;
+        /* Nothing is cut in two where it can be kept whole, and a heading stays with what follows it. */
+        .note-prose :is(h1, h2, h3, h4) {
+            break-after: avoid;
+        }
+
+        .note-prose :is([data-callout], figure, pre, blockquote, tr, div[data-type='block-math'], li) {
+            break-inside: avoid;
+        }
+
+        /* What only the editor shows: the placeholder, the selection, the cursor between blocks. */
+        .note-prose [data-placeholder]::before,
+        .note-prose .ProseMirror-gapcursor,
+        .note-prose .selectedCell::after {
+            display: none !important;
+        }
+
+        .note-prose .ProseMirror-selectednode,
+        .note-prose .ProseMirror-selectednode * {
+            outline: none !important;
         }
     }
 
@@ -2327,4 +2382,10 @@
     .note-page[data-reading] [data-note-import] {
         display: none;
     }
+}
+
+/* Printing (@media print above): A4, and no page margin, so the browser prints no header or footer of its own. */
+@page {
+    size: A4;
+    margin: 0;
 }
