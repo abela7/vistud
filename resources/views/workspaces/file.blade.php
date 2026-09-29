@@ -36,6 +36,9 @@
                     @if ($file->previewable())
                         <a class="btn btn-ghost" href="{{ $content }}" target="_blank" rel="noopener"><x-icon name="external-link" class="size-4" /><span class="max-sm:sr-only">Open in a new tab</span></a>
                     @endif
+                    @if ($takeNotes !== null)
+                        <a class="btn btn-primary" href="{{ $takeNotes }}" target="_blank" data-note-window title="A new note in a window of its own, beside this file"><x-icon name="notebook-pen" class="size-4" />Take notes</a>
+                    @endif
                     @if ($openAsNote !== null)
                         <a class="btn btn-secondary" href="{{ $openAsNote }}" title="A new note made from this file; the file stays as it is"><x-icon name="file-plus" class="size-4" />Open as a note</a>
                     @endif

@@ -6,6 +6,7 @@ import './invitation.js';
 import './session.js';
 import './back.js';
 import './selection.js';
+import './note-window.js';
 import { toast } from './toasts.js';
 
 // The note editor is only loaded on a note's page; it saves and stops by itself when the page is left.

@@ -9,6 +9,8 @@
     use Illuminate\Support\Str;
 
     $new = $note === null;
+    // In a window of its own (?window=1): only the note, beside the study material.
+    $window ??= false;
     $shownTitle = $new ? 'New note' : $note->displayTitle();
     $payload = $new ? ['id' => null, 'version' => 0, 'doc' => \App\Study\NoteDoc::empty()] : ['id' => $note->id, 'version' => $note->version, 'doc' => $note->doc];
     $statusIcons = [
@@ -55,12 +57,23 @@
     $mathOps = ['±', '×', '÷', '√', '∫', '∑', '∂', '∇', '≈', '≠', '≤', '≥', '∞', '°', '→'];
     $mathTemplates = ['F⃗ = ma', 'E = mc²', 'v⃗', 'Δt', 'x²', 'H₂O', 'μm', 'm/s²'];
 @endphp
-<x-layouts.app :title="$shownTitle.' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'">
-    <div class="note-page" data-note-page data-page-view="pages">
+<x-dynamic-component :component="$window ? 'layouts.note-window' : 'layouts.app'" :title="$shownTitle.' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'">
+    <div class="note-page" data-note-page data-page-view="pages" @if ($window) data-focus data-window @endif>
         <div class="note-header-bar flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             @php
                 [$backTo, $backUrl] = $trail !== [] ? end($trail) : [$inModule ? 'Modules' : 'Notes & files', route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes'])];
             @endphp
+            @if ($window)
+                {{-- Where it is, as words: a link here would take the note's window somewhere else. --}}
+                <nav aria-label="Where this note is" class="min-w-0">
+                    <ol class="breadcrumbs">
+                        <li><span>{{ $workspace->name }}</span></li>
+                        @foreach ($trail as [$label])
+                            <li><x-icon name="chevron-right" class="size-4 shrink-0 text-fg-subtle" /><span>{{ $label }}</span></li>
+                        @endforeach
+                    </ol>
+                </nav>
+            @else
             <x-back :href="$backUrl" :to="$backTo" class="basis-full" />
             <nav aria-label="Where this note is" class="min-w-0">
                 <ol class="breadcrumbs">
@@ -77,6 +90,7 @@
                     @endforeach
                 </ol>
             </nav>
+            @endif
             <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
                 @if ($new || $note->trashedAt === null)
                     <p class="save-status" data-save-status data-state="{{ $new ? 'draft' : 'saved' }}" role="status">
@@ -85,6 +99,15 @@
                         @endforeach
                         <span data-save-label>{{ $new ? 'Not saved yet' : 'Saved' }}</span>
                     </p>
+                    @if ($window)
+                        <button type="button" class="btn btn-ghost note-mode" data-note-pop-in title="Open this note in ViStud's main window, and close this one">
+                            <span><x-icon name="app-window" class="size-4" /><span class="max-sm:sr-only">Open in ViStud</span></span>
+                        </button>
+                    @else
+                        <button type="button" class="btn btn-ghost note-mode" data-note-pop-out title="Open this note in a window of its own, beside your study material">
+                            <span><x-icon name="picture-in-picture-2" class="size-4" /><span class="max-sm:sr-only">New window</span></span>
+                        </button>
+                    @endif
                     <button type="button" class="btn btn-ghost note-mode" data-note-view-toggle title="Document view mode: Pages (A4) or Full Width" aria-label="Toggle document view mode">
                         <span class="when-pages"><x-icon name="file-text" class="size-4" /><span class="max-sm:sr-only">Pages</span></span>
                         <span class="when-continuous"><x-icon name="scroll-text" class="size-4" /><span class="max-sm:sr-only">Full Width</span></span>
@@ -93,10 +116,12 @@
                         <span class="when-editing"><x-icon name="book-open-text" class="size-4" /><span class="max-sm:sr-only">Read</span></span>
                         <span class="when-reading"><x-icon name="pencil" class="size-4" /><span class="max-sm:sr-only">Edit</span></span>
                     </button>
-                    <button type="button" class="btn btn-ghost note-mode" data-note-focus>
-                        <span class="when-page"><x-icon name="maximize-2" class="size-4" /><span class="max-sm:sr-only">Full screen</span></span>
-                        <span class="when-focused"><x-icon name="minimize-2" class="size-4" /><span class="max-sm:sr-only">Exit full screen</span></span>
-                    </button>
+                    @unless ($window)
+                        <button type="button" class="btn btn-ghost note-mode" data-note-focus>
+                            <span class="when-page"><x-icon name="maximize-2" class="size-4" /><span class="max-sm:sr-only">Full screen</span></span>
+                            <span class="when-focused"><x-icon name="minimize-2" class="size-4" /><span class="max-sm:sr-only">Exit full screen</span></span>
+                        </button>
+                    @endunless
                     <button type="button" class="btn btn-ghost note-mode" onclick="window.print()" title="Print / Export PDF (Ctrl+P)" aria-label="Print or export PDF">
                         <x-icon name="printer" class="size-4" /><span class="max-sm:sr-only">Print</span>
                     </button>
@@ -106,7 +131,7 @@
                     </button>
                     <input type="file" hidden data-import-file accept=".md,.markdown,.txt,text/markdown,text/plain">
                 @endif
-                @unless ($new)
+                @unless ($new || $window)
                     <livewire:workspaces.note-actions :note-id="$note->id" />
                 @endunless
             </div>
@@ -162,7 +187,7 @@
                 </x-alert>
             </div>
 
-            <article class="note-card" data-note-editor data-account="{{ auth()->id() }}" data-max-bytes="{{ \App\Study\NoteDoc::MAX_BYTES }}" data-image-upload-url="{{ route('api.v1.notes.images.store') }}"
+            <article class="note-card" data-note-editor @if ($window) data-window @endif data-account="{{ auth()->id() }}" data-max-bytes="{{ \App\Study\NoteDoc::MAX_BYTES }}" data-image-upload-url="{{ route('api.v1.notes.images.store') }}"
                 @if ($import ?? null) data-import-url="{{ $import['url'] }}" data-import-name="{{ $import['name'] }}" data-import-kind="{{ $import['markdown'] ? 'markdown' : 'text' }}" @endif
                 @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" @endif>
                 <div class="note-toolbar" role="toolbar" aria-label="Formatting" aria-controls="note-body" data-note-toolbar>
@@ -545,4 +570,4 @@
             </article>
         @endif
     </div>
-</x-layouts.app>
+</x-dynamic-component>

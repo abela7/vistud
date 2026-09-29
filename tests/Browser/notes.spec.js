@@ -762,3 +762,38 @@ test('A4 pages or full width is kept with each note, on every device', async ({ 
     await page.locator('[data-note-editor][data-ready]').waitFor();
     await expect(view).toHaveAttribute('data-page-view', 'continuous');
 });
+
+test('a note moves to a window of its own, beside the study material, and back into ViStud', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = await openNote(page);
+    const opening = page.waitForEvent('popup');
+    await page.getByRole('button', { name: 'New window' }).click();
+    const win = await opening;
+    await win.waitForURL(/\?window=1$/);
+    await win.locator('[data-note-editor][data-ready]').waitFor();
+    // Only the note, and where it is.
+    await expect(win.getByLabel('Title')).toHaveValue('Mitosis vs meiosis');
+    await expect(win.getByRole('navigation', { name: 'Where this note is' })).toHaveText(/Biology\s*Week 2: Cell division/);
+    await expect(win.locator('.app-topbar, .app-sidebar, [data-back]')).toHaveCount(0);
+    // The main tab goes back to where the note lives, free for the study material.
+    await expect(page.getByRole('heading', { level: 1, name: 'Week 2: Cell division' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: '“Mitosis vs meiosis” is open in its own window.' })).toBeVisible();
+
+    // It is the note, saving as anywhere else.
+    await win.locator('.note-prose').click();
+    await win.keyboard.press('Control+End');
+    await win.keyboard.type(' Written beside the slides.');
+    await expect.poll(() => serverText(page, note)).toContain('Written beside the slides.');
+    const violations = (await new AxeBuilder({ page: win }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations.map((v) => v.id);
+    expect(violations).toEqual([]);
+    await useSentinelTheme(win);
+    expect(await foreignColours(win)).toEqual([]);
+
+    // Open in ViStud: the note back in the main tab, and its window closes.
+    const closing = win.waitForEvent('close');
+    await win.getByRole('button', { name: 'Open in ViStud' }).click();
+    await closing;
+    await page.waitForURL((url) => url.pathname === note.url && url.search === '');
+    await page.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(body(page)).toContainText('Written beside the slides.');
+});

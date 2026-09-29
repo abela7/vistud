@@ -221,6 +221,14 @@
         }
     }
 
+    /* A note in a window of its own is often half a screen wide: every tool shows there too. */
+    @media (min-width: 480px) {
+        .note-page[data-window] .note-toolbar {
+            flex-wrap: wrap;
+            overflow-x: visible;
+        }
+    }
+
     /* In full-screen: the toolbar is FIXED (non-scrollable), permanently anchored at the top! */
     .note-page[data-focus] .note-toolbar {
         flex: none;
