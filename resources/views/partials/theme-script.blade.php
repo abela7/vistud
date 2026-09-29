@@ -11,6 +11,10 @@
         var dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
         root.dataset.appearance = mode;
         root.dataset.theme = dark ? root.dataset.themeDark : root.dataset.themeLight;
+        var scheme = dark ? 'dark' : 'light';
+        root.style.colorScheme = scheme;
+        var meta = document.querySelector('meta[name="color-scheme"]');
+        if (meta) meta.content = scheme;
         try { if (localStorage.getItem('vistud.sidebar') === 'collapsed') root.dataset.sidebar = 'collapsed'; } catch (e) {}
     })();
 </script>
