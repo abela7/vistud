@@ -191,56 +191,67 @@
                 @if ($import ?? null) data-import-url="{{ $import['url'] }}" data-import-name="{{ $import['name'] }}" data-import-kind="{{ $import['markdown'] ? 'markdown' : 'text' }}" @endif
                 @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" @endif>
                 <div class="note-toolbar" role="toolbar" aria-label="Formatting" aria-controls="note-body" data-note-toolbar>
-                    <button type="button" class="toolbar-button" data-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo" tabindex="0"><x-icon name="undo-2" class="size-5" /></button>
-                    <button type="button" class="toolbar-button" data-command="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" tabindex="-1"><x-icon name="redo-2" class="size-5" /></button>
-                    <span class="toolbar-separator" aria-hidden="true"></span>
-                    <label for="note-block-style" class="sr-only">Text style</label>
-                    <select id="note-block-style" class="toolbar-select" data-block-style tabindex="-1">
-                        <option value="paragraph">Text</option>
-                        <option value="1">Title</option>
-                        <option value="2">Heading 1</option>
-                        <option value="3">Heading 2</option>
-                        <option value="4">Heading 3</option>
-                    </select>
-                    <span class="toolbar-separator" aria-hidden="true"></span>
-                    @foreach ($marks as [$command, $icon, $label, $toggle])
-                        <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ Str::before($label, ' (') }}" tabindex="-1" aria-pressed="false"><x-icon :name="$icon" class="size-5" /></button>
-                    @endforeach
-                    <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-highlight-menu" popovertarget="note-highlight-menu" title="Highlight" aria-label="Highlight" aria-haspopup="menu" tabindex="-1">
-                        <x-icon name="highlighter" class="size-5" /><x-icon name="chevron-down" class="size-3" />
+                    <button type="button" class="toolbar-nav-button toolbar-nav-prev" data-toolbar-prev title="Previous tools" aria-label="Previous tools" hidden tabindex="-1">
+                        <x-icon name="chevron-left" class="size-4" />
                     </button>
-                    @foreach ($scripts as [$command, $icon, $label, $toggle])
-                        <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="-1" aria-pressed="false"><x-icon :name="$icon" class="size-5" /></button>
-                    @endforeach
-                    <span class="toolbar-separator" aria-hidden="true"></span>
-                    <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-align-menu" popovertarget="note-align-menu" title="Align" aria-label="Align" aria-haspopup="menu" tabindex="-1">
-                        @foreach ($aligns as $value => [$icon, $word])
-                            <x-icon :name="$icon" class="size-5" data-align-icon="{{ $value }}" :hidden="$value !== 'left'" />
+                    <div class="note-toolbar-scroll" data-toolbar-scroll>
+                        <button type="button" class="toolbar-button" data-command="undo" title="Undo (Ctrl+Z)" aria-label="Undo" tabindex="0"><x-icon name="undo-2" class="size-5" /></button>
+                        <button type="button" class="toolbar-button" data-command="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" tabindex="-1"><x-icon name="redo-2" class="size-5" /></button>
+                        <span class="toolbar-separator" aria-hidden="true"></span>
+                        <label for="note-block-style" class="sr-only">Text style</label>
+                        <select id="note-block-style" class="toolbar-select" data-block-style tabindex="-1">
+                            <option value="paragraph">Text</option>
+                            <option value="1">Title</option>
+                            <option value="2">Heading 1</option>
+                            <option value="3">Heading 2</option>
+                            <option value="4">Heading 3</option>
+                        </select>
+                        <span class="toolbar-separator" aria-hidden="true"></span>
+                        @foreach ($marks as [$command, $icon, $label, $toggle])
+                            <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ Str::before($label, ' (') }}" tabindex="-1" aria-pressed="false"><x-icon :name="$icon" class="size-5" /></button>
                         @endforeach
-                        <x-icon name="chevron-down" class="size-3" />
+                        <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-highlight-menu" popovertarget="note-highlight-menu" title="Highlight" aria-label="Highlight" aria-haspopup="menu" tabindex="-1">
+                            <x-icon name="highlighter" class="size-5" /><x-icon name="chevron-down" class="size-3" />
+                        </button>
+                        @foreach ($scripts as [$command, $icon, $label, $toggle])
+                            <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="-1" aria-pressed="false"><x-icon :name="$icon" class="size-5" /></button>
+                        @endforeach
+                        <span class="toolbar-separator" aria-hidden="true"></span>
+                        <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-align-menu" popovertarget="note-align-menu" title="Align" aria-label="Align" aria-haspopup="menu" tabindex="-1">
+                            @foreach ($aligns as $value => [$icon, $word])
+                                <x-icon :name="$icon" class="size-5" data-align-icon="{{ $value }}" :hidden="$value !== 'left'" />
+                            @endforeach
+                            <x-icon name="chevron-down" class="size-3" />
+                        </button>
+                        <span class="toolbar-separator" aria-hidden="true"></span>
+                        @foreach ($lists as [$command, $icon, $label, $toggle])
+                            <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="-1" aria-pressed="false"><x-icon :name="$icon" class="size-5" /></button>
+                        @endforeach
+                        <button type="button" class="toolbar-button" data-command="outdent" title="Decrease indent (Shift+Tab)" aria-label="Decrease indent" tabindex="-1"><x-icon name="indent-decrease" class="size-5" /></button>
+                        <button type="button" class="toolbar-button" data-command="indent" title="Increase indent (Tab)" aria-label="Increase indent" tabindex="-1"><x-icon name="indent-increase" class="size-5" /></button>
+                        <span class="toolbar-separator" aria-hidden="true"></span>
+                        @foreach ($blocks as [$command, $icon, $label, $toggle])
+                            <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="-1" @if ($toggle) aria-pressed="false" @endif><x-icon :name="$icon" class="size-5" /></button>
+                        @endforeach
+                        <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-callout-menu" popovertarget="note-callout-menu" title="Callout (Theorem, Formula, Definition...)" aria-label="Callout" aria-haspopup="menu" tabindex="-1">
+                            <x-icon name="lightbulb" class="size-5" /><x-icon name="chevron-down" class="size-3" />
+                        </button>
+                        <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-math-menu" popovertarget="note-math-menu" title="Math & Physics symbols" aria-label="Symbols" aria-haspopup="dialog" tabindex="-1">
+                            <x-icon name="sigma" class="size-5" /><x-icon name="chevron-down" class="size-3" />
+                        </button>
+                        <button type="button" class="toolbar-button" data-command="image" title="Insert image (Upload or URL)" aria-label="Insert image" tabindex="-1"><x-icon name="image" class="size-5" /></button>
+                        <button type="button" class="toolbar-button" data-command="link" title="Link (Ctrl+K)" aria-label="Link" tabindex="-1" aria-pressed="false" aria-expanded="false" aria-controls="note-link-bar"><x-icon name="link" class="size-5" /></button>
+                        <button type="button" class="toolbar-button" data-command="find" title="Find & Replace (Ctrl+F / Ctrl+H)" aria-label="Find and replace" tabindex="-1"><x-icon name="search" class="size-5" /></button>
+                        <button type="button" class="toolbar-button" data-command="shortcuts" title="Keyboard shortcuts (Ctrl+/)" aria-label="Keyboard shortcuts" tabindex="-1"><x-icon name="keyboard" class="size-5" /></button>
+                        <span class="toolbar-separator" aria-hidden="true"></span>
+                        <button type="button" class="toolbar-button" data-command="clear" title="Clear formatting" aria-label="Clear formatting" tabindex="-1"><x-icon name="remove-formatting" class="size-5" /></button>
+                    </div>
+                    <button type="button" class="toolbar-nav-button toolbar-nav-next" data-toolbar-next title="Next tools" aria-label="Next tools" hidden tabindex="-1">
+                        <x-icon name="chevron-right" class="size-4" />
                     </button>
-                    <span class="toolbar-separator" aria-hidden="true"></span>
-                    @foreach ($lists as [$command, $icon, $label, $toggle])
-                        <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="-1" aria-pressed="false"><x-icon :name="$icon" class="size-5" /></button>
-                    @endforeach
-                    <button type="button" class="toolbar-button" data-command="outdent" title="Decrease indent (Shift+Tab)" aria-label="Decrease indent" tabindex="-1"><x-icon name="indent-decrease" class="size-5" /></button>
-                    <button type="button" class="toolbar-button" data-command="indent" title="Increase indent (Tab)" aria-label="Increase indent" tabindex="-1"><x-icon name="indent-increase" class="size-5" /></button>
-                    <span class="toolbar-separator" aria-hidden="true"></span>
-                    @foreach ($blocks as [$command, $icon, $label, $toggle])
-                        <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="-1" @if ($toggle) aria-pressed="false" @endif><x-icon :name="$icon" class="size-5" /></button>
-                    @endforeach
-                    <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-callout-menu" popovertarget="note-callout-menu" title="Callout (Theorem, Formula, Definition...)" aria-label="Callout" aria-haspopup="menu" tabindex="-1">
-                        <x-icon name="lightbulb" class="size-5" /><x-icon name="chevron-down" class="size-3" />
+                    <button type="button" class="toolbar-button toolbar-more-button" data-menu-for="note-more-tools-menu" popovertarget="note-more-tools-menu" title="More tools" aria-label="More tools" aria-haspopup="menu" tabindex="-1">
+                        <x-icon name="ellipsis" class="size-5" />
                     </button>
-                    <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-math-menu" popovertarget="note-math-menu" title="Math & Physics symbols" aria-label="Symbols" aria-haspopup="dialog" tabindex="-1">
-                        <x-icon name="sigma" class="size-5" /><x-icon name="chevron-down" class="size-3" />
-                    </button>
-                    <button type="button" class="toolbar-button" data-command="image" title="Insert image (Upload or URL)" aria-label="Insert image" tabindex="-1"><x-icon name="image" class="size-5" /></button>
-                    <button type="button" class="toolbar-button" data-command="link" title="Link (Ctrl+K)" aria-label="Link" tabindex="-1" aria-pressed="false" aria-expanded="false" aria-controls="note-link-bar"><x-icon name="link" class="size-5" /></button>
-                    <button type="button" class="toolbar-button" data-command="find" title="Find & Replace (Ctrl+F / Ctrl+H)" aria-label="Find and replace" tabindex="-1"><x-icon name="search" class="size-5" /></button>
-                    <button type="button" class="toolbar-button" data-command="shortcuts" title="Keyboard shortcuts (Ctrl+/)" aria-label="Keyboard shortcuts" tabindex="-1"><x-icon name="keyboard" class="size-5" /></button>
-                    <span class="toolbar-separator" aria-hidden="true"></span>
-                    <button type="button" class="toolbar-button" data-command="clear" title="Clear formatting" aria-label="Clear formatting" tabindex="-1"><x-icon name="remove-formatting" class="size-5" /></button>
                 </div>
 
                 {{-- The toolbar's menus: popovers, so a toolbar that scrolls sideways on a phone never cuts them off. --}}
@@ -306,6 +317,44 @@
                     </div>
                 </div>
 
+                <div id="note-more-tools-menu" class="toolbar-menu more-tools-menu" popover role="menu" aria-label="More tools">
+                    <div class="more-tools-section">
+                        <span class="more-tools-title">Formatting</span>
+                        <div class="flex flex-wrap gap-1">
+                            <button type="button" class="toolbar-button" data-command="strike" title="Strikethrough" aria-label="Strikethrough"><x-icon name="strikethrough" class="size-4" /></button>
+                            <button type="button" class="toolbar-button" data-command="code" title="Code in a line" aria-label="Code"><x-icon name="code" class="size-4" /></button>
+                            <button type="button" class="toolbar-button" data-command="subscript" title="Subscript" aria-label="Subscript"><x-icon name="subscript" class="size-4" /></button>
+                            <button type="button" class="toolbar-button" data-command="superscript" title="Superscript" aria-label="Superscript"><x-icon name="superscript" class="size-4" /></button>
+                            <button type="button" class="toolbar-button" data-command="clear" title="Clear formatting" aria-label="Clear formatting"><x-icon name="remove-formatting" class="size-4" /></button>
+                        </div>
+                    </div>
+                    <div class="more-tools-section">
+                        <span class="more-tools-title">Paragraph & Structure</span>
+                        <div class="flex flex-wrap gap-1">
+                            <button type="button" class="toolbar-button" data-command="outdent" title="Decrease indent" aria-label="Decrease indent"><x-icon name="indent-decrease" class="size-4" /></button>
+                            <button type="button" class="toolbar-button" data-command="indent" title="Increase indent" aria-label="Increase indent"><x-icon name="indent-increase" class="size-4" /></button>
+                            <button type="button" class="toolbar-button" data-command="blockquote" title="Quote" aria-label="Quote"><x-icon name="text-quote" class="size-4" /></button>
+                            <button type="button" class="toolbar-button" data-command="codeBlock" title="Code block" aria-label="Code block"><x-icon name="square-code" class="size-4" /></button>
+                            <button type="button" class="toolbar-button" data-command="divider" title="Divider" aria-label="Divider"><x-icon name="minus" class="size-4" /></button>
+                            <button type="button" class="toolbar-button" data-command="pageBreak" title="Page break" aria-label="Page break"><x-icon name="file-plus" class="size-4" /></button>
+                        </div>
+                    </div>
+                    <div class="more-tools-section">
+                        <span class="more-tools-title">Special & Palettes</span>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button type="button" class="btn btn-secondary btn-sm" data-more-action="callout"><x-icon name="lightbulb" class="size-4" />Callout</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-more-action="math"><x-icon name="sigma" class="size-4" />Symbols</button>
+                        </div>
+                    </div>
+                    <div class="more-tools-section">
+                        <span class="more-tools-title">Search & Help</span>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button type="button" class="btn btn-ghost btn-sm" data-command="find"><x-icon name="search" class="size-4" />Find</button>
+                            <button type="button" class="btn btn-ghost btn-sm" data-command="shortcuts"><x-icon name="keyboard" class="size-4" />Shortcuts</button>
+                        </div>
+                    </div>
+                </div>
+
                 {{-- A link: its address, for the selected words. --}}
                 <div id="note-link-bar" class="editor-bar" data-link-bar hidden>
                     <label for="note-link" class="text-sm font-medium">Link address</label>
@@ -357,6 +406,20 @@
                 </div>
                 <div class="note-count-bar">
                     <button type="button" class="note-count note-count-button" data-note-count title="Click for document statistics and reading time" aria-label="Document statistics"></button>
+                    <div class="note-zoom-controls" role="group" aria-label="Zoom controls">
+                        <button type="button" class="zoom-value-button" data-zoom-reset title="Reset zoom to 100% (Ctrl+0)" aria-label="Reset zoom">
+                            <span data-zoom-label>100%</span>
+                        </button>
+                        <button type="button" class="zoom-button" data-zoom-out title="Zoom out (Ctrl+-)" aria-label="Zoom out">
+                            <x-icon name="minus" class="size-3.5" />
+                        </button>
+                        <div class="zoom-slider-container">
+                            <input type="range" min="50" max="200" step="1" value="100" class="zoom-slider" data-zoom-slider aria-label="Zoom slider" title="Zoom">
+                        </div>
+                        <button type="button" class="zoom-button" data-zoom-in title="Zoom in (Ctrl++)" aria-label="Zoom in">
+                            <x-icon name="plus" class="size-3.5" />
+                        </button>
+                    </div>
                 </div>
 
                 {{-- The note's side panels: its statistics, the shortcuts, and a picture to add. --}}
@@ -423,6 +486,8 @@
                                         <dt>Find</dt><dd><kbd>Ctrl</kbd> + <kbd>F</kbd></dd>
                                         <dt>Find & Replace</dt><dd><kbd>Ctrl</kbd> + <kbd>H</kbd></dd>
                                         <dt>Print / PDF</dt><dd><kbd>Ctrl</kbd> + <kbd>P</kbd></dd>
+                                        <dt>Zoom In / Out</dt><dd><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd></dd>
+                                        <dt>Reset Zoom</dt><dd><kbd>Ctrl</kbd> + <kbd>0</kbd></dd>
                                     </dl>
                                 </div>
                                 <div class="shortcuts-section">

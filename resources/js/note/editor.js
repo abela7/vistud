@@ -25,7 +25,8 @@ import { Markdown } from '@tiptap/markdown';
 import { Mathematics } from '@tiptap/extension-mathematics';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import { NodeSelection, TextSelection } from '@tiptap/pm/state';
+import { NodeSelection, TextSelection, Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { canSplit } from '@tiptap/pm/transform';
 import { deleteDrafts, openDrafts } from './drafts.js';
 import { createAutosave, randomId, xsrf } from './autosave.js';
@@ -278,7 +279,65 @@ const NotePageBreak = Node.create({
             },
         };
     },
+});
 
+function createAutoPageBreakWidget(pageNumber, remainingSpace = 0) {
+    const el = document.createElement('div');
+    el.className = 'note-page-break note-auto-page-break';
+    el.setAttribute('data-auto-page-break', '');
+    el.setAttribute('data-page-number', String(pageNumber));
+    el.contentEditable = 'false';
+    if (remainingSpace > 0) {
+        el.style.marginTop = `${Math.round(remainingSpace)}px`;
+    }
+
+    const lineLeft = document.createElement('span');
+    lineLeft.className = 'page-break-line';
+    lineLeft.setAttribute('aria-hidden', 'true');
+
+    const badge = document.createElement('span');
+    badge.className = 'page-break-badge';
+    badge.textContent = `Page Break · Page ${pageNumber}`;
+
+    const lineRight = document.createElement('span');
+    lineRight.className = 'page-break-line';
+    lineRight.setAttribute('aria-hidden', 'true');
+
+    el.appendChild(lineLeft);
+    el.appendChild(badge);
+    el.appendChild(lineRight);
+    return el;
+}
+
+const paginationPluginKey = new PluginKey('autoPagination');
+
+const NoteAutoPagination = Extension.create({
+    name: 'autoPagination',
+    addProseMirrorPlugins() {
+        return [
+            new Plugin({
+                key: paginationPluginKey,
+                state: {
+                    init() {
+                        return DecorationSet.empty;
+                    },
+                    apply(tr, set) {
+                        set = set.map(tr.mapping, tr.doc);
+                        const meta = tr.getMeta(paginationPluginKey);
+                        if (meta !== undefined) {
+                            return meta;
+                        }
+                        return set;
+                    },
+                },
+                props: {
+                    decorations(state) {
+                        return paginationPluginKey.getState(state);
+                    },
+                },
+            }),
+        ];
+    },
 });
 
 const LABELS = {
@@ -412,7 +471,14 @@ export async function mount(host) {
     const alerts = document.querySelector('[data-note-alerts]');
     const heading = document.querySelector('[data-note-heading]');
     const toolbar = host.querySelector('[data-note-toolbar]');
-    const buttons = [...toolbar.querySelectorAll('button[data-command]')];
+    const scrollContainer = toolbar.querySelector('[data-toolbar-scroll]');
+    const prevBtn = toolbar.querySelector('[data-toolbar-prev]');
+    const nextBtn = toolbar.querySelector('[data-toolbar-next]');
+    const moreToolsMenu = host.querySelector('#note-more-tools-menu');
+    const buttons = [
+        ...toolbar.querySelectorAll('button[data-command]'),
+        ...(moreToolsMenu ? moreToolsMenu.querySelectorAll('button[data-command]') : []),
+    ];
     let toolbarReady = false;
     // Only the note, in a window of its own beside the study material (resources/js/note-window.js).
     const inWindow = host.hasAttribute('data-window');
@@ -550,6 +616,7 @@ export async function mount(host) {
             NoteCallout,
             NoteImage,
             NotePageBreak,
+            NoteAutoPagination,
             NoteKeys,
             Subscript,
             Superscript,
@@ -616,10 +683,15 @@ export async function mount(host) {
             if (!loading) changed();
             showImport();
         },
-        onTransaction: () => {
+        onTransaction: ({ transaction: tr }) => {
+            if (updatingPagination) return;
             updateToolbar();
             // The note's own layout, when a change brings one (an import, Undo, another tab's version).
             if (viewReady && editor.state.doc.attrs.view !== shownView) setPageViewMode(editor.state.doc.attrs.view);
+            if (tr && !tr.docChanged && tr.selectionSet && count) {
+                const { currentPage, totalPages, words, chars } = getPageStats();
+                count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
+            }
         },
     });
 
@@ -853,7 +925,7 @@ export async function mount(host) {
 
     // ---------- Toolbar: one tab stop, arrow keys move along it ----------
     const page = document.querySelector('[data-note-page]');
-    const items = [...toolbar.querySelectorAll('button, select')];
+    const items = [...toolbar.querySelectorAll('[data-toolbar-scroll] button, [data-toolbar-scroll] select, .toolbar-more-button')];
     const blockStyle = toolbar.querySelector('[data-block-style]');
     const highlightMenu = host.querySelector('#note-highlight-menu');
     const alignMenu = host.querySelector('#note-align-menu');
@@ -891,39 +963,299 @@ export async function mount(host) {
         updateToolbar();
     });
 
-    function getPageStats() {
-        let pageBreakPositions = [];
-        editor.state.doc.descendants((node, pos) => {
-            if (node.type.name === 'pageBreak') {
-                pageBreakPositions.push(pos);
-            }
-        });
+    // ---------- Zoom controls (MS Word-like) ----------
+    let currentZoom = 1.0;
+    try {
+        const savedZoom = parseFloat(localStorage.getItem('vistud.note-zoom'));
+        if (!isNaN(savedZoom) && savedZoom >= 0.5 && savedZoom <= 2.0) {
+            currentZoom = Math.round(savedZoom * 100) / 100;
+        }
+    } catch {}
 
-        const cursorPos = editor.state.selection.from;
-        const words = editor.storage.characterCount.words();
-        const chars = editor.storage.characterCount.characters();
+    const zoomLabel = host.querySelector('[data-zoom-label]');
+    const zoomSlider = host.querySelector('[data-zoom-slider]');
+    const sheetEl = host.querySelector('[data-note-sheet]');
+    let zoomAnimId = null;
 
-        let totalPages = 1;
-        let currentPage = 1;
+    function setZoomImmediate(zoom, persist = true) {
+        currentZoom = Math.min(2.0, Math.max(0.5, Math.round(zoom * 100) / 100));
+        if (sheetEl) {
+            sheetEl.style.setProperty('--note-zoom', String(currentZoom));
+            sheetEl.style.zoom = String(currentZoom);
+        }
+        if (zoomLabel) {
+            zoomLabel.textContent = `${Math.round(currentZoom * 100)}%`;
+        }
+        if (zoomSlider && document.activeElement !== zoomSlider) {
+            zoomSlider.value = String(Math.round(currentZoom * 100));
+        }
+        if (persist) {
+            try {
+                localStorage.setItem('vistud.note-zoom', String(currentZoom));
+            } catch {}
+        }
+    }
 
-        if (pageBreakPositions.length > 0) {
-            totalPages = pageBreakPositions.length + 1;
-            currentPage = pageBreakPositions.filter((p) => cursorPos > p).length + 1;
-        } else {
-            const bodyEl = host.querySelector('[data-note-body]');
-            const bodyHeight = bodyEl ? bodyEl.offsetHeight : 0;
-            totalPages = Math.max(1, Math.ceil(bodyHeight / 950));
+    function animateZoomTo(targetZoom, duration = 160) {
+        targetZoom = Math.min(2.0, Math.max(0.5, Math.round(targetZoom * 100) / 100));
+        if (Math.abs(targetZoom - currentZoom) < 0.005) {
+            setZoomImmediate(targetZoom);
+            scheduleCount();
+            return;
+        }
 
-            const scrollContainer = host.querySelector('.note-content');
-            if (scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight) {
-                const scrollRatio = scrollContainer.scrollTop / (scrollContainer.scrollHeight - scrollContainer.clientHeight);
-                currentPage = Math.min(totalPages, Math.max(1, Math.floor(scrollRatio * totalPages) + 1));
+        if (zoomAnimId) cancelAnimationFrame(zoomAnimId);
+
+        const startZoom = currentZoom;
+        const startTime = performance.now();
+
+        function step(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(1, elapsed / duration);
+            const ease = 1 - Math.pow(1 - progress, 3);
+            const val = startZoom + (targetZoom - startZoom) * ease;
+            setZoomImmediate(val, false);
+
+            if (progress < 1) {
+                zoomAnimId = requestAnimationFrame(step);
             } else {
-                currentPage = 1;
+                zoomAnimId = null;
+                setZoomImmediate(targetZoom, true);
+                scheduleCount();
             }
         }
 
+        zoomAnimId = requestAnimationFrame(step);
+    }
+
+    const zoomIn = () => animateZoomTo(currentZoom + 0.1);
+    const zoomOut = () => animateZoomTo(currentZoom - 0.1);
+    const resetZoom = () => animateZoomTo(1.0);
+
+    host.querySelector('[data-zoom-in]')?.addEventListener('click', zoomIn);
+    host.querySelector('[data-zoom-out]')?.addEventListener('click', zoomOut);
+    host.querySelector('[data-zoom-reset]')?.addEventListener('click', resetZoom);
+
+    zoomSlider?.addEventListener('input', (event) => {
+        if (zoomAnimId) cancelAnimationFrame(zoomAnimId);
+        const val = parseFloat(event.target.value) / 100;
+        setZoomImmediate(val, false);
+        scheduleCount();
+    });
+
+    zoomSlider?.addEventListener('change', (event) => {
+        const val = parseFloat(event.target.value) / 100;
+        setZoomImmediate(val, true);
+        scheduleCount();
+    });
+
+    // Apply saved zoom to the sheet and slider
+    setZoomImmediate(currentZoom, false);
+    if (zoomSlider) zoomSlider.value = String(Math.round(currentZoom * 100));
+
+    // ---------- Automatic Pagination (MS Word A4 standard) & Statistics ----------
+    let updatingPagination = false;
+    let lastBreakPositions = [];
+    let lastTotalPages = 1;
+
+    function getPageStats() {
+        const cursorPos = editor ? editor.state.selection.from : 0;
+        const words = editor?.storage?.characterCount ? editor.storage.characterCount.words() : 0;
+        const chars = editor?.storage?.characterCount ? editor.storage.characterCount.characters() : 0;
+        const totalPages = Math.max(1, lastTotalPages);
+        const currentPage = Math.min(totalPages, Math.max(1, lastBreakPositions.filter((p) => cursorPos >= p).length + 1));
         return { currentPage, totalPages, words, chars };
+    }
+
+    function updatePaginationAndStats() {
+        if (left || !editor || !editor.view || !editor.view.dom) return;
+
+        const pageMode = page ? (page.getAttribute('data-page-view') ?? 'pages') : 'pages';
+        const isPagesView = pageMode === 'pages';
+
+        const words = editor.storage.characterCount.words();
+        const chars = editor.storage.characterCount.characters();
+        const cursorPos = editor.state.selection.from;
+
+        if (!isPagesView) {
+            const currentDecos = paginationPluginKey.getState(editor.state);
+            if (currentDecos && currentDecos.find().length > 0) {
+                updatingPagination = true;
+                try {
+                    editor.view.dispatch(
+                        editor.state.tr
+                            .setMeta(paginationPluginKey, DecorationSet.empty)
+                            .setMeta('addToHistory', false)
+                    );
+                } finally {
+                    updatingPagination = false;
+                }
+            }
+
+            if (sheetEl) sheetEl.style.setProperty('--note-page-count', '1');
+
+            let manualBreaks = [];
+            editor.state.doc.descendants((node, pos) => {
+                if (node.type.name === 'pageBreak') manualBreaks.push(pos);
+            });
+
+            let totalPages = 1;
+            let currentPage = 1;
+            if (manualBreaks.length > 0) {
+                totalPages = manualBreaks.length + 1;
+                currentPage = manualBreaks.filter((p) => cursorPos > p).length + 1;
+            } else {
+                const bodyEl = host.querySelector('[data-note-body]');
+                const bodyHeight = bodyEl ? bodyEl.offsetHeight : 0;
+                totalPages = Math.max(1, Math.ceil(bodyHeight / 950));
+                const scrollContainer = host.querySelector('.note-content');
+                if (scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight) {
+                    const scrollRatio = scrollContainer.scrollTop / (scrollContainer.scrollHeight - scrollContainer.clientHeight);
+                    currentPage = Math.min(totalPages, Math.max(1, Math.floor(scrollRatio * totalPages) + 1));
+                } else {
+                    currentPage = 1;
+                }
+            }
+
+            lastTotalPages = totalPages;
+            lastBreakPositions = manualBreaks;
+            if (count) count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
+            return;
+        }
+
+        // Pages (A4) View:
+        const proseEl = editor.view.dom;
+        if (!sheetEl || !proseEl) return;
+
+        // A4 sheet height in CSS pixels: 297mm * (96 / 25.4) = ~1122.52px
+        const A4_HEIGHT_PX = 1122.52;
+        const sheetStyle = window.getComputedStyle(sheetEl);
+        const padTop = parseFloat(sheetStyle.paddingTop) || 75.6;
+        const padBottom = parseFloat(sheetStyle.paddingBottom) || 75.6;
+
+        const titleH = (titleField ? titleField.offsetHeight : 0) || 45;
+        const titleStyle = titleField ? window.getComputedStyle(titleField) : null;
+        const titleMb = titleStyle ? (parseFloat(titleStyle.marginBottom) || 0) : 0;
+        const headerHeight = titleH + titleMb;
+
+        const page1Budget = Math.max(200, A4_HEIGHT_PX - padTop - padBottom - headerHeight);
+        const subsequentBudget = Math.max(200, A4_HEIGHT_PX - padTop - padBottom);
+
+        const doc = editor.state.doc;
+        let accumulatedHeight = 0;
+        let currentPageNum = 1;
+        let currentBudget = page1Budget;
+        const breakPositions = [];
+        const decorations = [];
+
+        const zoomScale = currentZoom > 0 ? currentZoom : 1;
+
+        doc.forEach((node, pos) => {
+            if (node.type.name === 'pageBreak') {
+                const spaceToBottom = Math.max(0, currentBudget - accumulatedHeight);
+                let dom = null;
+                try {
+                    dom = editor.view.nodeDOM(pos);
+                } catch {}
+                if (dom && dom.style) {
+                    dom.style.marginTop = `${Math.round(spaceToBottom + padBottom)}px`;
+                }
+                breakPositions.push(pos);
+                currentPageNum++;
+                accumulatedHeight = 0;
+                currentBudget = subsequentBudget;
+                return;
+            }
+
+            let blockEl = null;
+            try {
+                const dom = editor.view.nodeDOM(pos);
+                if (dom && dom.nodeType === 1) {
+                    blockEl = dom.closest ? (dom.closest('.note-prose > *') || dom) : dom;
+                }
+            } catch {}
+
+            if (!blockEl) {
+                try {
+                    const domAt = editor.view.domAtPos(pos + 1);
+                    const nodeEl = domAt?.node;
+                    const el = nodeEl?.nodeType === 1 ? nodeEl : nodeEl?.parentElement;
+                    blockEl = el?.closest ? (el.closest('.note-prose > *') || el) : el;
+                } catch {}
+            }
+
+            let blockHeight = 28;
+            if (blockEl && typeof blockEl.getBoundingClientRect === 'function') {
+                const rect = blockEl.getBoundingClientRect();
+                if (rect.height > 0) {
+                    const style = window.getComputedStyle(blockEl);
+                    const mt = parseFloat(style.marginTop) || 0;
+                    const mb = parseFloat(style.marginBottom) || 0;
+                    blockHeight = (rect.height / zoomScale) + Math.max(mt, mb);
+                } else if (node.isTextblock) {
+                    const lines = Math.max(1, Math.ceil((node.textContent?.length || 0) / 75));
+                    blockHeight = lines * 28 + 16;
+                }
+            } else if (node.isTextblock) {
+                const lines = Math.max(1, Math.ceil((node.textContent?.length || 0) / 75));
+                blockHeight = lines * 28 + 16;
+            }
+
+            if (accumulatedHeight > 0 && (accumulatedHeight + blockHeight > currentBudget)) {
+                const spaceToBottom = Math.max(0, currentBudget - accumulatedHeight);
+                currentPageNum++;
+                currentBudget = subsequentBudget;
+                accumulatedHeight = blockHeight;
+                breakPositions.push(pos);
+                const thisPage = currentPageNum;
+                decorations.push(
+                    Decoration.widget(pos, () => createAutoPageBreakWidget(thisPage, spaceToBottom + padBottom), {
+                        side: -1,
+                        key: `auto-page-${thisPage}`,
+                        remainingSpace: spaceToBottom + padBottom,
+                        stopEvent: () => true,
+                        ignoreSelection: true,
+                    })
+                );
+            } else {
+                accumulatedHeight += blockHeight;
+            }
+        });
+
+        const totalPages = currentPageNum;
+        lastTotalPages = totalPages;
+        lastBreakPositions = breakPositions;
+
+        sheetEl.style.setProperty('--note-page-count', String(totalPages));
+
+        decorations.forEach((d) => {
+            const pageNum = d.spec.key.replace('auto-page-', '');
+            const existingEl = proseEl.querySelector(`[data-auto-page-break][data-page-number="${pageNum}"]`);
+            if (existingEl && typeof d.spec.remainingSpace === 'number') {
+                existingEl.style.marginTop = `${Math.round(d.spec.remainingSpace)}px`;
+            }
+        });
+
+        const newBreakKey = breakPositions.map((p, i) => `${p}:p${i + 2}`).join(',');
+        const currentDecos = paginationPluginKey.getState(editor.state);
+        const oldPositions = currentDecos ? currentDecos.find().map((d) => `${d.from}:${d.spec.key}`).join(',') : '';
+
+        if (newBreakKey !== oldPositions) {
+            const decos = DecorationSet.create(doc, decorations);
+            updatingPagination = true;
+            try {
+                editor.view.dispatch(
+                    editor.state.tr
+                        .setMeta(paginationPluginKey, decos)
+                        .setMeta('addToHistory', false)
+                );
+            } finally {
+                updatingPagination = false;
+            }
+        }
+
+        const currentPage = Math.min(totalPages, Math.max(1, breakPositions.filter((p) => cursorPos >= p).length + 1));
+        if (count) count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
     }
 
     function updateToolbar() {
@@ -970,8 +1302,38 @@ export async function mount(host) {
             items.forEach((b) => { b.tabIndex = b === first ? 0 : -1; });
         }
         tableBar.hidden = !editor.isActive('table') || page.hasAttribute('data-reading');
+        updateToolbarNav();
         scheduleCount();
     }
+
+    function updateToolbarNav() {
+        if (!scrollContainer) return;
+        const sl = Math.ceil(scrollContainer.scrollLeft);
+        const max = Math.floor(scrollContainer.scrollWidth - scrollContainer.clientWidth);
+        if (prevBtn) prevBtn.hidden = sl <= 2;
+        if (nextBtn) nextBtn.hidden = sl >= max - 2;
+    }
+
+    if (scrollContainer) {
+        scrollContainer.addEventListener('scroll', updateToolbarNav, { passive: true });
+        scrollContainer.addEventListener('wheel', (event) => {
+            if (event.deltaY !== 0 && event.deltaX === 0) {
+                scrollContainer.scrollLeft += event.deltaY;
+                event.preventDefault();
+            }
+        }, { passive: false });
+    }
+
+    prevBtn?.addEventListener('click', () => {
+        scrollContainer?.scrollBy({ left: -220, behavior: 'smooth' });
+    });
+
+    nextBtn?.addEventListener('click', () => {
+        scrollContainer?.scrollBy({ left: 220, behavior: 'smooth' });
+    });
+
+    on(window, 'resize', updateToolbarNav);
+
     /**
      * The status line counts every word and measures the note, so it waits for a pause in the typing: done on
      * each key, a long note would lag.
@@ -980,8 +1342,7 @@ export async function mount(host) {
         clearTimeout(countTimer);
         countTimer = setTimeout(() => {
             if (left) return;
-            const { currentPage, totalPages, words, chars } = getPageStats();
-            count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
+            updatePaginationAndStats();
         }, 250);
     }
     // A click on a tool leaves the focus (and the selection) in the note; the keyboard still reaches the toolbar.
@@ -1065,21 +1426,48 @@ export async function mount(host) {
         if (at < 0 || step === undefined) return;
         // Left and right inside the select change nothing on most browsers; they move along the toolbar.
         event.preventDefault();
-        const next = enabled[Math.max(0, Math.min(enabled.length - 1, Number.isFinite(step) ? (at + step + enabled.length) % enabled.length : (step < 0 ? 0 : enabled.length - 1)))];
+        const next = step === Infinity
+            ? (enabled.find((b) => b.dataset.command === 'clear') || enabled[enabled.length - 1])
+            : (step === -Infinity
+                ? (enabled.find((b) => b.dataset.command === 'undo') || enabled[0])
+                : enabled[Math.max(0, Math.min(enabled.length - 1, (at + step + enabled.length) % enabled.length))]);
         items.forEach((b) => { b.tabIndex = b === next ? 0 : -1; });
         next.focus();
+        next.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     });
 
-    // The menus (highlight colours, alignment, callouts, math) open under their button.
-    for (const menu of [highlightMenu, alignMenu, calloutMenu, mathMenu].filter(Boolean)) {
+    // The menus (highlight colours, alignment, callouts, math, more tools) open under their button.
+    for (const menu of [highlightMenu, alignMenu, calloutMenu, mathMenu, moreToolsMenu].filter(Boolean)) {
         const opener = toolbar.querySelector(`[data-menu-for="${menu.id}"]`);
         if (!opener) continue;
         menu.addEventListener('toggle', (event) => {
             opener.setAttribute('aria-expanded', String(event.newState === 'open'));
             if (event.newState !== 'open') return;
             const box = opener.getBoundingClientRect();
-            menu.style.top = `${box.bottom + 4}px`;
-            menu.style.left = `${Math.max(8, Math.min(box.left, window.innerWidth - menu.offsetWidth - 8))}px`;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const menuWidth = menu.offsetWidth;
+            const menuHeight = menu.offsetHeight;
+
+            // Align left edge to button, or if right-aligned or close to right edge, keep safely on-screen:
+            let left = box.left;
+            if (left + menuWidth > viewportWidth - 8) {
+                left = Math.max(8, box.right - menuWidth);
+            }
+            left = Math.max(8, Math.min(left, viewportWidth - menuWidth - 8));
+
+            // Position below opener, or above if it would overflow the bottom:
+            let top = box.bottom + 4;
+            if (top + menuHeight > viewportHeight - 8) {
+                if (box.top - menuHeight - 4 >= 8) {
+                    top = box.top - menuHeight - 4;
+                } else {
+                    top = Math.max(8, viewportHeight - menuHeight - 8);
+                }
+            }
+
+            menu.style.top = `${top}px`;
+            menu.style.left = `${left}px`;
             (menu.querySelector('[aria-checked="true"]') ?? menu.querySelector('button'))?.focus();
         });
         menu.addEventListener('keydown', (event) => {
@@ -1089,6 +1477,67 @@ export async function mount(host) {
             if (step) {
                 event.preventDefault();
                 choices[(at + step + choices.length) % choices.length].focus();
+            }
+        });
+    }
+
+    if (moreToolsMenu) {
+        moreToolsMenu.addEventListener('mousedown', (event) => {
+            if (event.target.closest('button')) event.preventDefault();
+        });
+        moreToolsMenu.addEventListener('click', (event) => {
+            const moreAction = event.target.closest('button[data-more-action]');
+            if (moreAction) {
+                const action = moreAction.dataset.moreAction;
+                moreToolsMenu.hidePopover();
+                if (action === 'callout') {
+                    calloutMenu?.showPopover();
+                } else if (action === 'math') {
+                    mathMenu?.showPopover();
+                }
+                return;
+            }
+
+            const button = event.target.closest('button[data-command]');
+            if (!button) return;
+            const cmd = button.dataset.command;
+            moreToolsMenu.hidePopover();
+
+            if (cmd === 'find') {
+                toggleFindBar(true);
+                return;
+            }
+            if (cmd === 'shortcuts') {
+                shortcutsDialog?.showModal();
+                return;
+            }
+
+            if (lastFocused === 'title') {
+                if (cmd === 'indent') {
+                    titleField.setRangeText('    ', titleField.selectionStart, titleField.selectionEnd, 'end');
+                    titleField.dispatchEvent(new Event('input'));
+                    titleField.focus();
+                    return;
+                }
+                if (cmd === 'clear') {
+                    delete titleField.dataset.align;
+                    delete titleField.dataset.italic;
+                    delete titleField.dataset.underline;
+                    delete titleField.dataset.tone;
+                    saveTitleStyle();
+                    updateToolbar();
+                    titleField.focus();
+                    return;
+                }
+            }
+
+            backToNote();
+            const BLOCK_COMMANDS = new Set(['blockquote', 'codeBlock', 'bulletList', 'orderedList', 'taskList', 'clear']);
+            if (COMMANDS[cmd]) {
+                if (BLOCK_COMMANDS.has(cmd)) {
+                    isolateSelection(editor);
+                }
+                COMMANDS[cmd][0](editor.chain().focus()).run();
             }
         });
     }
@@ -1786,12 +2235,38 @@ export async function mount(host) {
         document.addEventListener('mouseup', onMouseUp);
     });
 
-    on(window, 'resize', hideImageToolbar);
+    on(window, 'resize', () => {
+        hideImageToolbar();
+        scheduleCount();
+    });
     const noteContentEl = host.querySelector('.note-content');
     noteContentEl?.addEventListener('scroll', () => {
         if (activeFigureEl) positionImageToolbar(activeFigureEl);
-        if (!editor.isFocused) scheduleCount();
+        if (!editor.isFocused) {
+            if ((page?.getAttribute('data-page-view') ?? 'pages') === 'pages' && lastTotalPages > 1 && sheetEl) {
+                const sheetRect = sheetEl.getBoundingClientRect();
+                const containerRect = noteContentEl.getBoundingClientRect();
+                const relativeY = (containerRect.top + containerRect.height / 3) - sheetRect.top;
+                const pageHeight = 1122.52 * currentZoom;
+                const scrolledPage = Math.min(lastTotalPages, Math.max(1, Math.floor(relativeY / pageHeight) + 1));
+                const words = editor ? editor.storage.characterCount.words() : 0;
+                const chars = editor ? editor.storage.characterCount.characters() : 0;
+                if (count) count.textContent = `Page ${scrolledPage} of ${lastTotalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
+            } else {
+                scheduleCount();
+            }
+        }
     }, { passive: true });
+    noteContentEl?.addEventListener('wheel', (event) => {
+        if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            if (event.deltaY < 0) {
+                zoomIn();
+            } else if (event.deltaY > 0) {
+                zoomOut();
+            }
+        }
+    }, { passive: false });
     noteContentEl?.addEventListener('click', (event) => {
         if (event.target === event.currentTarget) {
             editor.commands.focus('end');
@@ -1829,6 +2304,21 @@ export async function mount(host) {
         if (isMod && event.shiftKey && !event.altKey && key === 'i') {
             event.preventDefault();
             imageDialog?.showModal();
+            return;
+        }
+        if (isMod && (event.key === '+' || event.code === 'NumpadAdd' || (event.key === '=' && event.shiftKey))) {
+            event.preventDefault();
+            zoomIn();
+            return;
+        }
+        if (isMod && (event.key === '-' || event.code === 'NumpadSubtract')) {
+            event.preventDefault();
+            zoomOut();
+            return;
+        }
+        if (isMod && (event.key === '0' || event.code === 'Numpad0') && !event.altKey) {
+            event.preventDefault();
+            resetZoom();
             return;
         }
 
@@ -1905,9 +2395,18 @@ export async function mount(host) {
         viewToggleButtons.forEach((btn) => {
             btn.title = activeMode === 'pages' ? 'Switch to Full Width view' : 'Switch to Pages (A4) view';
         });
+        scheduleCount();
     }
     setPageViewMode(editor.state.doc.attrs.view);
     viewReady = true;
+    document.fonts?.ready?.then(() => scheduleCount());
+    requestAnimationFrame(() => {
+        updatePaginationAndStats();
+    });
+    setTimeout(() => {
+        updatePaginationAndStats();
+    }, 150);
+    scheduleCount();
     viewToggleButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
             const next = page.getAttribute('data-page-view') === 'pages' ? 'continuous' : 'pages';

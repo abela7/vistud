@@ -28,6 +28,7 @@ const icons = [
     'calendar-clock',
     'check',
     'chevron-down',
+    'chevron-left',
     'chevron-right',
     'chevrons-up-down',
     'circle',
