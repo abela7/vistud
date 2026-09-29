@@ -20,7 +20,7 @@
     </x-workspace.section-header>
 
     <div role="status" aria-live="polite" class="empty:hidden">
-        <x-toast :message="$notice" :action-label="$noticeActionLabel" :action-event="$noticeActionEvent" :action-payload="$noticeActionPayload" />
+        <x-toast :message="$notice" :tone="$noticeTone" :action-label="$noticeActionLabel" :action-event="$noticeActionEvent" :action-payload="$noticeActionPayload" />
     </div>
 
     <x-selection-bar>

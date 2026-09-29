@@ -267,6 +267,26 @@ final class Contents extends Component
         $this->notice = "“{$note->displayTitle()}” is in the trash.";
     }
 
+    /** Pinned or not: a button for the note in the corner of every page (App\Livewire\Study\PinnedNotes). */
+    public function pinNote(string $id): void
+    {
+        $by = $this->principal();
+        try {
+            $note = $this->notes->pin($by, $id);
+            $this->notice = "“{$note->displayTitle()}” is pinned. Its button is in the corner of every page.";
+        } catch (Conflict $full) {
+            $this->notify($full->getMessage(), 'info');
+        }
+        $this->dispatch('pins-changed');
+    }
+
+    public function unpinNote(string $id): void
+    {
+        $note = $this->notes->unpin($this->principal(), $id);
+        $this->notice = "“{$note->displayTitle()}” is unpinned.";
+        $this->dispatch('pins-changed');
+    }
+
     public function restoreNote(string $id): void
     {
         $note = $this->notes->restore($this->principal(), $id);

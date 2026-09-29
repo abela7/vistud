@@ -4,7 +4,7 @@ namespace App\Platform\Errors;
 
 /**
  * 409. The request clashes with the current state. Codes in use:
- * version_conflict, id_conflict, capture_key_conflict, last_admin.
+ * version_conflict, id_conflict, capture_key_conflict, last_admin, too_many_pinned.
  */
 final class Conflict extends AppError
 {

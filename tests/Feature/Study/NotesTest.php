@@ -268,6 +268,8 @@ class NotesTest extends TestCase
             fn () => $this->notes->open($this->by, $note->id),
             fn () => $this->notes->save($this->by, $note->id, $this->edit(1, 'Mine', 'Mine.', 'steal-001')),
             fn () => $this->notes->trash($this->by, $note->id),
+            fn () => $this->notes->pin($this->by, $note->id),
+            fn () => $this->notes->unpin($this->by, $note->id),
             fn () => $this->notes->move($this->by, $note->id, 'workspace', $this->biology->id),
             fn () => $this->notes->create($this->by, 'workspace', $theirs->id),
             fn () => $this->notes->list($this->by, $theirs->id),
@@ -275,6 +277,75 @@ class NotesTest extends TestCase
             $this->assertThrows($attempt, NotFound::class);
         }
         $this->assertSame('Secret', $this->notes->open($bob, $note->id)->title);
+        $this->assertSame([], $this->notes->pinned($this->by));
+    }
+
+    public function test_a_pinned_note_is_listed_from_every_workspace_in_the_order_it_was_pinned(): void
+    {
+        $maths = app(Workspaces::class)->create($this->by, ['name' => 'Mathematics']);
+        $mitosis = $this->notes->create($this->by, 'module', $this->cells->id, 'Mitosis');
+        $algebra = $this->notes->create($this->by, 'workspace', $maths->id, 'Algebra');
+        $unpinned = $this->notes->create($this->by, 'workspace', $maths->id, 'Geometry');
+        $updatedAt = $this->notes->find($this->by, $mitosis->id)->updatedAt;
+
+        $this->assertSame([false, []], [$mitosis->isPinned(), $this->notes->pinned($this->by)]);
+
+        $this->travel(1)->minutes();
+        $this->assertTrue($this->notes->pin($this->by, $algebra->id)->isPinned());
+        $this->travel(1)->minutes();
+        $pinned = $this->notes->pin($this->by, $mitosis->id);
+        $this->assertTrue($pinned->isPinned());
+        // Pinning is a preference, not an edit: the note is as it was.
+        $this->assertSame([$updatedAt, 1], [$pinned->updatedAt, $pinned->version]);
+        $this->assertSame([$algebra->id, $mitosis->id], array_map(fn ($n) => $n->id, $this->notes->pinned($this->by)));
+
+        // Pinning again keeps its place; unpinning takes it out.
+        $this->travel(1)->minutes();
+        $this->notes->pin($this->by, $algebra->id);
+        $this->assertSame([$algebra->id, $mitosis->id], array_map(fn ($n) => $n->id, $this->notes->pinned($this->by)));
+        $this->assertFalse($this->notes->unpin($this->by, $algebra->id)->isPinned());
+        $this->assertFalse($this->notes->unpin($this->by, $unpinned->id)->isPinned());
+        $this->assertSame([$mitosis->id], array_map(fn ($n) => $n->id, $this->notes->pinned($this->by)));
+
+        // Another student's pins are theirs.
+        $this->assertSame([], $this->notes->pinned($this->principal($this->student())));
+    }
+
+    public function test_a_note_in_the_trash_cannot_be_pinned_and_trashing_unpins(): void
+    {
+        $note = $this->notes->create($this->by, 'workspace', $this->biology->id, 'Mitosis');
+        $this->notes->pin($this->by, $note->id);
+
+        $this->notes->trash($this->by, $note->id);
+        $this->assertSame([], $this->notes->pinned($this->by));
+        $this->assertThrows(fn () => $this->notes->pin($this->by, $note->id), Gone::class);
+
+        // It comes back as an ordinary note.
+        $this->assertFalse($this->notes->restore($this->by, $note->id)->isPinned());
+        $this->assertSame([], $this->notes->pinned($this->by));
+    }
+
+    public function test_only_so_many_notes_can_be_pinned(): void
+    {
+        $ids = [];
+        for ($n = 1; $n <= Notes::MAX_PINNED + 1; $n++) {
+            $ids[] = $this->notes->create($this->by, 'workspace', $this->biology->id, "Note {$n}")->id;
+        }
+        foreach (array_slice($ids, 0, Notes::MAX_PINNED) as $id) {
+            $this->notes->pin($this->by, $id);
+        }
+
+        try {
+            $this->notes->pin($this->by, $ids[Notes::MAX_PINNED]);
+            $this->fail('A ninth pin was accepted.');
+        } catch (Conflict $full) {
+            $this->assertSame(['too_many_pinned', 'You can pin 8 notes. Unpin one to pin another.'], [$full->errorCode, $full->getMessage()]);
+        }
+        // A note that's pinned already doesn't count twice; room made by an unpin is room.
+        $this->assertTrue($this->notes->pin($this->by, $ids[0])->isPinned());
+        $this->notes->unpin($this->by, $ids[0]);
+        $this->assertTrue($this->notes->pin($this->by, $ids[Notes::MAX_PINNED])->isPinned());
+        $this->assertCount(Notes::MAX_PINNED, $this->notes->pinned($this->by));
     }
 
     public function test_callout_blocks_are_kept_cleaned_and_rendered_in_markdown(): void

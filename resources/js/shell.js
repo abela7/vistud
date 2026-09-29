@@ -136,3 +136,18 @@ onPage(() => {
     watchedTopbar = document.querySelector('.app-topbar');
     if (watchedTopbar) topbarSize?.observe(watchedTopbar);
 });
+
+// The phone tab bar's height, for what floats above it (the pinned notes' button, resources/css/shell.css): it is
+// taller where its labels wrap, or when the text is large.
+let watchedTabbar = null;
+const fitTabbar = () => {
+    if (watchedTabbar) root.style.setProperty('--tabbar-height', `${watchedTabbar.offsetHeight}px`);
+    else root.style.removeProperty('--tabbar-height');
+};
+const tabbarSize = 'ResizeObserver' in window ? new ResizeObserver(fitTabbar) : null;
+onPage(() => {
+    if (watchedTabbar) tabbarSize?.unobserve(watchedTabbar);
+    watchedTabbar = document.querySelector('.app-tabbar');
+    if (watchedTabbar) tabbarSize?.observe(watchedTabbar);
+    fitTabbar();
+});

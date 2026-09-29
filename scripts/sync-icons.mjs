@@ -105,6 +105,8 @@ const icons = [
     'pause',
     'pencil',
     'picture-in-picture-2',
+    'pin',
+    'pin-off',
     'play',
     'plus',
     'presentation',

@@ -53,6 +53,7 @@
                 </span>
                 @include('livewire.workspaces.partials.row-menu', ['id' => $note->id, 'label' => $note->displayTitle(), 'items' => [
                     ['Open in a new window', 'picture-in-picture-2', null, false, route('workspaces.notes.show', [$note->workspaceId, $note->id, 'window' => 1]), "vistud-note-{$note->id}"],
+                    $note->isPinned() ? ['Unpin', 'pin-off', "unpinNote('{$note->id}')", false] : ['Pin to the corner', 'pin', "pinNote('{$note->id}')", false],
                     ['Move to…', 'folder-input', "moveNote('{$note->id}')", false],
                     ['Move to trash', 'trash-2', "trashNote('{$note->id}')", false],
                 ]])

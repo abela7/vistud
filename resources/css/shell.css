@@ -418,6 +418,168 @@
         font-weight: 600;
     }
 
+    /* ---------- Pinned notes (App\Livewire\Study\PinnedNotes) ---------- */
+
+    /*
+    | The button in the bottom corner of every student page: above the phone tab bar, below menus, panels and
+    | toasts. A list opens above it. It steps aside while rows are being selected (their bar takes the foot of
+    | the page), in full screen (the note covers it) and in print.
+    */
+    .pin-dock {
+        position: fixed;
+        right: 1rem;
+        bottom: calc(1rem + env(safe-area-inset-bottom));
+        z-index: 35;
+        display: flex;
+        flex-direction: column-reverse;
+        align-items: flex-end;
+        gap: 0.5rem;
+        max-width: calc(100vw - 2rem);
+    }
+
+    /* The foot of the page's own room, so its last row isn't under the button. */
+    .pin-clearance {
+        height: 2rem;
+    }
+
+    .pin-fab {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        max-width: 100%;
+        min-height: 2.75rem;
+        padding: 0 1.125rem 0 0.875rem;
+        border-radius: 9999px;
+        background-image: var(--grad-primary);
+        color: var(--on-primary);
+        font-weight: 600;
+        text-decoration: none;
+        box-shadow: var(--elevation-lg);
+        cursor: pointer;
+    }
+
+    .pin-fab:hover {
+        background-image: var(--grad-primary-hover);
+    }
+
+    .pin-fab:active {
+        background-image: var(--grad-primary-active);
+    }
+
+    .pin-fab:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .pin-fab-label {
+        min-width: 0;
+        max-width: 16rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .pin-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.375rem;
+        height: 1.375rem;
+        padding: 0 0.375rem;
+        border-radius: 9999px;
+        background-color: var(--surface-raised);
+        color: var(--text);
+        font-size: 0.75rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .pin-menu {
+        width: min(22rem, calc(100vw - 2rem));
+        max-height: min(24rem, calc(100dvh - var(--tabbar-height, 0px) - 5rem));
+        overflow-y: auto;
+        padding: 0.375rem 0;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-raised);
+        color: var(--text);
+        box-shadow: var(--elevation-lg);
+    }
+
+    .pin-row {
+        display: flex;
+        align-items: center;
+        gap: 0.125rem;
+        padding-right: 0.375rem;
+    }
+
+    .pin-open {
+        flex: 1;
+        min-width: 0;
+        width: auto;
+        min-height: 3rem;
+        padding-block: 0.375rem;
+    }
+
+    .pin-title,
+    .pin-where {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .pin-where {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .pin-remove {
+        flex: none;
+        color: var(--text-muted);
+    }
+
+    /* A round button on a phone, its count on its corner; the tab bar keeps the foot of the page. */
+    @media (width < 40rem) {
+        .pin-fab {
+            justify-content: center;
+            width: 3rem;
+            height: 3rem;
+            padding: 0;
+        }
+
+        .pin-fab-label {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+        }
+
+        .pin-count {
+            position: absolute;
+            top: -0.25rem;
+            right: -0.25rem;
+            border: 1px solid var(--border);
+        }
+    }
+
+    /* The tab bar's own height is measured (resources/js/shell.js): its labels wrap on a narrow phone. */
+    @media (max-width: 767.98px) {
+        body[data-tabbar] .pin-dock {
+            bottom: calc(var(--tabbar-height, 4.5rem) + 0.75rem);
+        }
+
+        body[data-tabbar] .pin-clearance {
+            height: max(2rem, calc(var(--tabbar-height, 4.5rem) - 1.75rem));
+        }
+    }
+
+    html[data-selecting] .pin-dock {
+        display: none;
+    }
+
     /* ---------- Phone tab bar (a workspace's sections) ---------- */
 
     .app-tabbar {

@@ -20,7 +20,14 @@ final readonly class NoteDetails
         public string $updatedAt,
         public ?string $trashedAt,
         public ?array $doc = null,
+        public ?string $pinnedAt = null,
     ) {}
+
+    /** Pinned: it has a button in the corner of every page. */
+    public function isPinned(): bool
+    {
+        return $this->pinnedAt !== null;
+    }
 
     /** The title to show: an untitled note still needs a name. */
     public function displayTitle(): string

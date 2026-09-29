@@ -57,7 +57,7 @@
     $mathOps = ['±', '×', '÷', '√', '∫', '∑', '∂', '∇', '≈', '≠', '≤', '≥', '∞', '°', '→'];
     $mathTemplates = ['F⃗ = ma', 'E = mc²', 'v⃗', 'Δt', 'x²', 'H₂O', 'μm', 'm/s²'];
 @endphp
-<x-dynamic-component :component="$window ? 'layouts.note-window' : 'layouts.app'" :title="$shownTitle.' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'">
+<x-dynamic-component :component="$window ? 'layouts.note-window' : 'layouts.app'" :title="$shownTitle.' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'" :pinned-current="$note?->id">
     <div class="note-page" data-note-page data-page-view="pages" @if ($window) data-focus data-window @endif>
         <div class="note-header-bar flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             @php

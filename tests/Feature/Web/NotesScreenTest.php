@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Web;
 
+use App\Livewire\Study\PinnedNotes;
 use App\Livewire\Workspaces\Contents;
 use App\Livewire\Workspaces\NoteActions;
 use App\Models\User;
@@ -81,6 +82,85 @@ class NotesScreenTest extends TestCase
             ->assertOk()->assertSee('This note is in the trash')->assertDontSee('data-note-editor', false);
         $this->actions($note)->call('restore')->assertRedirect(route('workspaces.notes.show', [$this->biology->id, $note->id]));
         $this->assertNull(app(Notes::class)->find($this->principal($this->ada), $note->id)->trashedAt);
+    }
+
+    public function test_a_note_is_pinned_from_its_page_and_from_the_list(): void
+    {
+        $by = $this->principal($this->ada);
+        $notes = app(Notes::class);
+        $mitosis = $notes->create($by, 'workspace', $this->biology->id, 'Mitosis');
+        $meiosis = $notes->create($by, 'workspace', $this->biology->id, 'Meiosis');
+
+        $this->actions($mitosis)
+            ->assertSee('Pin')->assertDontSee('Unpin')
+            ->call('togglePin')->assertSee('Pinned. Its button is now in the corner of every page.')->assertSee('Unpin')
+            ->assertDispatched('pins-changed')
+            ->call('togglePin')->assertSee('Unpinned.')->assertSee('title="Pin: keep a button', false);
+        $this->assertSame([], $notes->pinned($by));
+
+        $this->contents('notes')
+            ->assertSee('Pin to the corner')->assertDontSee('Unpin')
+            ->call('pinNote', $meiosis->id)->assertSee('“Meiosis” is pinned.')->assertDispatched('pins-changed')
+            ->assertSee('Unpin')
+            ->call('unpinNote', $meiosis->id)->assertSee('“Meiosis” is unpinned.');
+        $this->assertSame([], $notes->pinned($by));
+
+        // Pinned notes are as many as a student can keep; the next says so and changes nothing.
+        $others = [];
+        for ($n = 1; $n <= Notes::MAX_PINNED; $n++) {
+            $others[] = $notes->create($by, 'workspace', $this->biology->id, "Extra {$n}");
+            $notes->pin($by, $others[$n - 1]->id);
+        }
+        $this->contents('notes')->call('pinNote', $meiosis->id)->assertSee('You can pin 8 notes. Unpin one to pin another.');
+        $this->actions($mitosis)->call('togglePin')->assertSee('You can pin 8 notes. Unpin one to pin another.')
+            ->assertSee('data-toast-tone="info"', false);
+        $this->assertCount(Notes::MAX_PINNED, $notes->pinned($by));
+    }
+
+    public function test_the_pinned_notes_are_a_button_on_every_student_page_but_their_own(): void
+    {
+        $by = $this->principal($this->ada);
+        $notes = app(Notes::class);
+        $mitosis = $notes->create($by, 'workspace', $this->biology->id, 'Mitosis');
+        $meiosis = $notes->create($by, 'workspace', $this->biology->id, 'Meiosis');
+        $overview = route('workspaces.show', [$this->biology->id, 'notes']);
+
+        // Nothing pinned: nothing in the corner.
+        $this->actingAs($this->ada)->get($overview)->assertOk()->assertDontSee('data-pin-dock', false);
+
+        // One pin is a button that opens its note in a window of its own.
+        $notes->pin($by, $mitosis->id);
+        $window = route('workspaces.notes.show', [$this->biology->id, $mitosis->id, 'window' => 1]);
+        $this->actingAs($this->ada)->get($overview)->assertOk()
+            ->assertSee('data-pin-dock', false)
+            ->assertSee('href="'.$window.'" target="vistud-note-'.$mitosis->id.'" data-note-window', false)
+            ->assertSeeInOrder(['Pinned note: ', 'Mitosis']);
+        $this->actingAs($this->ada)->get(route('home'))->assertOk()->assertSee('data-pin-dock', false);
+        // On its own page it's already open.
+        $this->actingAs($this->ada)->get(route('workspaces.notes.show', [$this->biology->id, $mitosis->id]))->assertOk()->assertDontSee('data-pin-dock', false);
+        // In a window of its own there's no corner at all.
+        $this->actingAs($this->ada)->get($window)->assertOk()->assertDontSee('data-pin-dock', false);
+
+        // Several are one button and a list, each with its own unpin.
+        $notes->pin($by, $meiosis->id);
+        $this->actingAs($this->ada)->get($overview)->assertOk()
+            ->assertSeeInOrder(['id="pin-menu"', 'Mitosis', 'Biology', 'Unpin Mitosis', 'Meiosis', 'Biology', 'Unpin Meiosis'])
+            ->assertSee('aria-controls="pin-menu"', false);
+        $this->actingAs($this->ada)->get(route('workspaces.notes.show', [$this->biology->id, $mitosis->id]))->assertOk()
+            ->assertSee('Pinned note: ', false)->assertSee('Meiosis')->assertDontSee('id="pin-menu"', false);
+
+        // Unpinning from the list is the component's own, and it doesn't reach another student's pins.
+        $this->livewireSession();
+        Livewire::test(PinnedNotes::class)
+            ->assertSee('Pinned notes')
+            ->call('unpin', $mitosis->id)->assertSee('“Mitosis” is unpinned.')->assertDispatched('pins-changed');
+        $this->assertSame([$meiosis->id], array_map(fn ($n) => $n->id, $notes->pinned($by)));
+        $bob = $this->student();
+        $bobsNote = $notes->create($this->principal($bob), 'workspace', app(Workspaces::class)->create($this->principal($bob), ['name' => 'Private'])->id, 'Secret');
+        $notes->pin($this->principal($bob), $bobsNote->id);
+        Livewire::test(PinnedNotes::class)->call('unpin', $bobsNote->id);
+        $this->assertCount(1, $notes->pinned($this->principal($bob)));
+        $this->actingAs($this->ada)->get($overview)->assertDontSee('Secret');
     }
 
     public function test_notes_are_created_and_listed_in_modules_and_in_notes_and_files(): void

@@ -186,6 +186,16 @@ function noteFor(email) {
     return JSON.parse(execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop());
 }
 
+/** `count` new notes in the student's first workspace, each pinned, made through the real services. */
+export function pinNewNotes(email, count) {
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
+        `$n = app(\\App\\Study\\Notes::class); $w = app(\\App\\Study\\Workspaces::class)->list($p)[0];`,
+        `for ($i = 1; $i <= ${count}; $i++) { $n->pin($p, $n->create($p, 'workspace', $w->id, "Pinned {$i}")->id); }`,
+    ].join(' ');
+    execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
+}
+
 /** A student with a Databases workspace, one module, three topics in different states, and one open question. */
 export function makeStudentWithTopics() {
     const email = makeAccount(false);

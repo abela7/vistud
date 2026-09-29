@@ -15,6 +15,8 @@ export function selectable(extra = {}) {
 
         init() {
             this.$watch('isSelecting', (val) => {
+                // The pinned notes' button steps aside for the selection bar (resources/css/shell.css).
+                document.documentElement.toggleAttribute('data-selecting', val);
                 if (!val) {
                     this.clearSelection();
                 }

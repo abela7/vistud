@@ -29,6 +29,9 @@ final class Notes
 
     public const TRASH_DAYS = 30;
 
+    /** The most notes a student keeps pinned. */
+    public const MAX_PINNED = 8;
+
     private const JSON = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR;
 
     /** @return list<NoteDetails> the notes not in the trash, in order within each place */
@@ -49,6 +52,51 @@ final class Notes
 
         return LearnerTables::query($scope, 'notes')->where('workspace_id', $workspaceId)->whereNotNull('trashed_at')
             ->orderByDesc('trashed_at')->get()->map(fn ($row) => self::details($row))->all();
+    }
+
+    /**
+     * The student's pinned notes, from every workspace, in the order they were pinned (the corner buttons).
+     *
+     * @return list<NoteDetails>
+     */
+    public function pinned(Principal $by): array
+    {
+        $scope = Guard::learner($by);
+
+        return LearnerTables::query($scope, 'notes')->whereNotNull('pinned_at')->whereNull('trashed_at')
+            ->orderBy('pinned_at')->orderBy('id')->get()->map(fn ($row) => self::details($row))->all();
+    }
+
+    /** Pins a note: a button for it in the corner of every page. Pinning a pinned note changes nothing. */
+    public function pin(Principal $by, string $id): NoteDetails
+    {
+        $scope = Guard::learner($by);
+
+        DB::transaction(function () use ($scope, $id) {
+            $note = $this->row($scope, $id, lock: true);
+            if ($note->trashed_at !== null) {
+                throw new Gone('trashed');
+            }
+            if ($note->pinned_at !== null) {
+                return;
+            }
+            if (LearnerTables::query($scope, 'notes')->whereNotNull('pinned_at')->whereNull('trashed_at')->count() >= self::MAX_PINNED) {
+                throw new Conflict('too_many_pinned', 'You can pin '.self::MAX_PINNED.' notes. Unpin one to pin another.');
+            }
+            LearnerTables::query($scope, 'notes')->where('id', $id)->update(['pinned_at' => now()]);
+        });
+
+        return $this->find($by, $id);
+    }
+
+    /** Takes the note's button away. Unpinning a note that isn't pinned changes nothing. */
+    public function unpin(Principal $by, string $id): NoteDetails
+    {
+        $scope = Guard::learner($by);
+        $this->row($scope, $id);
+        LearnerTables::query($scope, 'notes')->where('id', $id)->update(['pinned_at' => null]);
+
+        return $this->find($by, $id);
     }
 
     /** The note without its document, trashed or not. */
@@ -209,7 +257,8 @@ final class Notes
         DB::transaction(function () use ($scope, $id) {
             $note = $this->row($scope, $id, lock: true);
             if ($note->trashed_at === null) {
-                LearnerTables::query($scope, 'notes')->where('id', $id)->update(['trashed_at' => now()]);
+                // A note in the trash isn't pinned: what comes back from it is an ordinary note.
+                LearnerTables::query($scope, 'notes')->where('id', $id)->update(['trashed_at' => now(), 'pinned_at' => null]);
                 $this->tombstone($scope, $id, 'trashed');
             }
         });
@@ -326,6 +375,7 @@ final class Notes
             $row->id, $row->workspace_id, $row->module_id, $row->folder_id, $row->title,
             (int) $row->current_version, (int) $row->position, self::time($row->updated_at),
             $row->trashed_at === null ? null : self::time($row->trashed_at), $doc,
+            $row->pinned_at === null ? null : self::time($row->pinned_at),
         );
     }
 }

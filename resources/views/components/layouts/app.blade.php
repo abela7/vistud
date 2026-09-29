@@ -7,10 +7,11 @@
     The admin area adds the permanent Admin marker and its own items.
     Inside a study workspace (`workspace` and `section` props) the sidebar
     holds that workspace's switcher and sections, and phones get a bottom tab
-    bar of its sections. Optional slots (used by the design mockups):
+    bar of its sections. Students also get their pinned notes' button in the
+    bottom corner (App\Livewire\Study\PinnedNotes). Optional slots (used by the design mockups):
     `sidebar` replaces the navigation, and `tabbar` adds a bottom bar.
 --}}
-@props(['title', 'area' => 'student', 'workspace' => null, 'section' => null])
+@props(['title', 'area' => 'student', 'workspace' => null, 'section' => null, 'pinnedCurrent' => null])
 @php
     $principal = app(\App\Identity\PrincipalFactory::class)->fromRequest(request());
     $isAdmin = $principal->hasRole(\App\Platform\Access\Role::Admin);
@@ -113,6 +114,10 @@
 
             <main id="main" @class(['app-main', 'has-tabbar' => isset($tabbar) || $workspace]) tabindex="-1">
                 {{ $slot }}
+                @if ($area === 'student' && $isStudent)
+                    {{-- The pinned notes' button in the corner, on every student page (`pinnedCurrent`: the note this page shows). --}}
+                    <livewire:study.pinned-notes :current="$pinnedCurrent" />
+                @endif
             </main>
         </div>
 

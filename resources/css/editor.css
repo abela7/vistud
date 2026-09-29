@@ -2577,6 +2577,8 @@
         .drawer,
         dialog,
         .toast-stack,
+        .pin-dock,
+        .pin-clearance,
         .page-loading,
         .note-header-bar,
         [data-note-alerts],
