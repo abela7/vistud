@@ -170,3 +170,32 @@ test('a Markdown file is shown as it was meant to look, and opens as a note', as
     await expect(page.getByRole('navigation', { name: 'Where this note is' })).toHaveText(/Modules\s*Week 1: Cells/);
     await expect(page.locator('[data-save-status]')).toHaveText('Saved');
 });
+
+test('Take notes opens a new note in its own window, beside the file, kept in the same place', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await withFiles(page);
+    await page.keyboard.press('Escape');
+    await week1(page).getByRole('link', { name: 'Lecture 2 - cell division.pdf' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Lecture 2 - cell division.pdf' }).waitFor();
+
+    const opening = page.waitForEvent('popup');
+    await page.getByRole('link', { name: 'Take notes' }).click();
+    const win = await opening;
+    await win.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(win.getByRole('navigation', { name: 'Where this note is' })).toHaveText(/Biology\s*Week 1: Cells/);
+    await win.getByLabel('Title').fill('Lecture 2 notes');
+    await win.keyboard.press('Enter');
+    await win.keyboard.type('Prophase comes first.');
+    // Made by its first words, and still in its window after a reload.
+    await win.waitForURL(/\/notes\/[0-9a-f-]+\?window=1$/);
+    await expect(win.locator('[data-save-status]')).toHaveText('Saved');
+    await win.reload();
+    await win.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(win.locator('.app-topbar')).toHaveCount(0);
+    await expect(win.getByLabel('Title')).toHaveValue('Lecture 2 notes');
+
+    // The file stayed open in the main tab, and the note is in Week 1 with it.
+    await expect(page.getByRole('heading', { level: 1, name: 'Lecture 2 - cell division.pdf' })).toBeVisible();
+    await page.getByRole('link', { name: 'Back to Week 1: Cells' }).click();
+    await expect(week1(page).getByRole('link', { name: 'Lecture 2 notes' })).toBeVisible();
+});

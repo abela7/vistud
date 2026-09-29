@@ -156,6 +156,46 @@ class NotesScreenTest extends TestCase
         $this->assertThrows(fn () => $this->actions($note)->set('noteId', 'someone-elses'), CannotUpdateLockedPropertyException::class);
     }
 
+    public function test_a_note_opens_in_a_window_of_its_own_with_only_the_note(): void
+    {
+        $by = $this->principal($this->ada);
+        $cells = app(Modules::class)->create($by, $this->biology->id, ['title' => 'Cells']);
+        $labs = app(Folders::class)->create($by, 'module', $cells->id, 'Labs');
+        $note = app(Notes::class)->create($by, 'folder', $labs->id, 'Mitosis');
+
+        // Its page offers a window of its own; the list's ⋯ menu too, one window per note.
+        $this->actingAs($this->ada)->get(route('workspaces.notes.show', [$this->biology->id, $note->id]))
+            ->assertOk()->assertSee('data-note-pop-out', false)->assertSee('New window')->assertSee('app-topbar', false)->assertDontSee('data-window', false);
+        $this->actingAs($this->ada)->get(route('workspaces.folders.show', [$this->biology->id, $labs->id]))
+            ->assertOk()->assertSee('Open in a new window')
+            ->assertSee('href="'.route('workspaces.notes.show', [$this->biology->id, $note->id, 'window' => 1]).'"', false)
+            ->assertSee('target="vistud-note-'.$note->id.'" data-note-window', false);
+
+        // The window: the note and where it is, as words; no top bar, sidebar, menu or Back.
+        $this->actingAs($this->ada)->get(route('workspaces.notes.show', [$this->biology->id, $note->id, 'window' => 1]))
+            ->assertOk()
+            ->assertSee('<title>Mitosis · Biology · ViStud</title>', false)
+            ->assertSee('data-window', false)
+            ->assertSee('data-note-full', false)
+            ->assertSeeInOrder(['Where this note is', 'Biology', 'Cells', 'Labs', 'Open in ViStud'])
+            ->assertSee('data-save-url="'.route('api.v1.notes.update', $note->id).'"', false)
+            ->assertDontSee('app-topbar', false)->assertDontSee('data-back', false)->assertDontSee('data-note-pop-out', false)
+            ->assertDontSee('Actions for Mitosis')->assertDontSee('wire:', false)
+            ->assertDontSee(route('workspaces.folders.show', [$this->biology->id, $labs->id]), false);
+
+        // A new note beside the study material: made in its place by its first words, like any other.
+        $this->actingAs($this->ada)->get(route('workspaces.notes.create', [$this->biology->id, 'in' => "folder:{$labs->id}", 'window' => 1]))
+            ->assertOk()->assertSee('data-window', false)
+            ->assertSee('data-create-url="'.route('api.v1.notes.store').'"', false)->assertSee('data-place-id="'.$labs->id.'"', false);
+
+        // In the trash it opens on its page, where it can be restored; another student's is missing.
+        app(Notes::class)->trash($by, $note->id);
+        $this->actingAs($this->ada)->get(route('workspaces.notes.show', [$this->biology->id, $note->id, 'window' => 1]))
+            ->assertRedirect(route('workspaces.notes.show', [$this->biology->id, $note->id]));
+        $bob = $this->student();
+        $this->actingAs($bob)->get(route('workspaces.notes.show', [$this->biology->id, $note->id, 'window' => 1]))->assertNotFound();
+    }
+
     public function test_a_note_downloads_as_markdown_and_as_plain_text(): void
     {
         $by = $this->principal($this->ada);

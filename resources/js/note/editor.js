@@ -30,6 +30,7 @@ import { canSplit } from '@tiptap/pm/transform';
 import { deleteDrafts, openDrafts } from './drafts.js';
 import { createAutosave, randomId, xsrf } from './autosave.js';
 import { toast } from '../toasts.js';
+import { openNoteWindow, show as showInWindow } from '../note-window.js';
 
 const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'listItem', 'taskItem', 'table', 'tableRow', 'tableHeader', 'tableCell', 'callout', 'image', 'pageBreak', 'blockMath'];
 
@@ -413,6 +414,8 @@ export async function mount(host) {
     const toolbar = host.querySelector('[data-note-toolbar]');
     const buttons = [...toolbar.querySelectorAll('button[data-command]')];
     let toolbarReady = false;
+    // Only the note, in a window of its own beside the study material (resources/js/note-window.js).
+    const inWindow = host.hasAttribute('data-window');
     // Set up further down; the editor's callbacks wait for them.
     let viewReady = false;
     let shownView = null;
@@ -705,7 +708,8 @@ export async function mount(host) {
             } catch {}
             host.dataset.saveUrl = data.save_url;
             delete host.dataset.createUrl;
-            history.replaceState(history.state, '', data.url);
+            // A new note in its own window stays there: the address keeps ?window=1 for a reload.
+            history.replaceState(history.state, '', inWindow ? `${data.url}?window=1` : data.url);
             startAutosave();
             // Whatever was typed while it was being made is saved next.
             if (JSON.stringify(sent) !== JSON.stringify({ title: titleField.value, doc: compact(editor.getJSON()) })) autosave.changed();
@@ -1917,11 +1921,78 @@ export async function mount(host) {
     });
 
     on(document, 'fullscreenchange', () => {
-        if (!document.fullscreenElement && page.hasAttribute('data-focus')) setFocus(false);
+        if (!inWindow && !document.fullscreenElement && page.hasAttribute('data-focus')) setFocus(false);
     });
     on(document, 'keydown', (event) => {
         const busy = document.querySelector('dialog[open], [data-menu-panel]:not([hidden])');
-        if (event.key === 'Escape' && page.hasAttribute('data-focus') && !document.fullscreenElement && !busy) setFocus(false);
+        if (!inWindow && event.key === 'Escape' && page.hasAttribute('data-focus') && !document.fullscreenElement && !busy) setFocus(false);
+    });
+
+    // ---------- A window of its own (the owner's review, 2026-09-29) ----------
+    // The note beside the study material: New window moves it out, Open in ViStud brings it back.
+    /** Waits until `done()` holds, for at most `ms`; says whether it did. */
+    const until = (done, ms = 5000) => new Promise((resolve) => {
+        const started = Date.now();
+        const check = () => {
+            if (done()) resolve(true);
+            else if (Date.now() - started > ms) resolve(false);
+            else setTimeout(check, 100);
+        };
+        check();
+    });
+    /** Everything written is on the server, so the other window opens all of it (and no draft of this one). */
+    function savedForMoving() {
+        if (autosave) {
+            autosave.flush();
+            return until(() => autosave.isClean());
+        }
+        if (!hasWords()) return Promise.resolve(true);
+        createNote();
+        return until(() => autosave?.isClean() ?? false);
+    }
+    page.querySelector('[data-note-pop-out]')?.addEventListener('click', async () => {
+        // The window first: browsers allow one only straight after a press. The note goes into it once saved.
+        const opened = openNoteWindow(null, note.id ? `vistud-note-${note.id}` : '_blank');
+        if (!opened) {
+            toast('Your browser blocked the new window. Allow pop-ups for ViStud, then try again.', 'info');
+            return;
+        }
+        const saved = await savedForMoving();
+        if (left) return;
+        if (!saved) {
+            opened.close();
+            toast('This note isn\'t saved yet, so it can\'t move to its own window. Try again in a moment.', 'info');
+            return;
+        }
+        // The note's own address, even for one made just now.
+        const url = new URL(window.location.href);
+        url.searchParams.set('window', '1');
+        showInWindow(opened, url.href);
+        // This page goes back to where the note lives, free for the study material.
+        toast(`“${titleField.value.trim() || 'Untitled note'}” is open in its own window.`, 'success');
+        const back = page.querySelector('[data-back]')?.href;
+        if (back) window.Livewire ? window.Livewire.navigate(back) : window.location.assign(back);
+    });
+    page.querySelector('[data-note-pop-in]')?.addEventListener('click', async () => {
+        if (!(await savedForMoving())) {
+            toast('This note isn\'t saved yet. Try again in a moment.', 'info');
+            return;
+        }
+        const url = new URL(window.location.href);
+        url.searchParams.delete('window');
+        let main = null;
+        try {
+            if (window.opener && !window.opener.closed && window.opener.location.origin === window.location.origin) main = window.opener;
+        } catch {}
+        if (!main) {
+            // Opened as a tab of its own, or the main window is gone: this one becomes the note's page.
+            window.location.assign(url.href);
+            return;
+        }
+        if (main.Livewire) main.Livewire.navigate(url.href);
+        else main.location.assign(url.href);
+        main.focus();
+        window.close();
     });
 
     // ---------- Other tabs ----------

@@ -163,9 +163,12 @@ class FilesScreenTest extends TestCase
             ->assertDontSee('<pre class="file-preview file-text"', false);
         // Open as a note: a new note in the same place, made from the file (App\Http\Controllers\NotePageController).
         $page->assertSee(route('workspaces.notes.create', [$this->biology->id, 'from' => "file:{$file->id}", 'in' => "module:{$this->cells->id}"]));
+        // Take notes: a new note in the same place, in a window of its own beside the file.
+        $page->assertSee(route('workspaces.notes.create', [$this->biology->id, 'in' => "module:{$this->cells->id}", 'window' => 1]))
+            ->assertSee('target="_blank" data-note-window', false);
 
         $this->actions($file)->call('trash');
-        $this->page($file)->assertOk()->assertDontSee('Open as a note')->assertDontSee('<h1>Cells</h1>', false);
+        $this->page($file)->assertOk()->assertDontSee('Open as a note')->assertDontSee('Take notes')->assertDontSee('<h1>Cells</h1>', false);
     }
 
     private function stored(string $name, string $bytes): FileDetails

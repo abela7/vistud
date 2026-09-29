@@ -49,6 +49,8 @@ class FilePageController
             // A Markdown file is shown as it was meant to look; any text file can open as a new note in the same place.
             'markdown' => $text !== null && in_array($found->extension, ['md', 'markdown'], true) ? MarkdownPreview::html($text) : null,
             'openAsNote' => $text !== null ? route('workspaces.notes.create', [$details->id, 'from' => "file:{$found->id}"] + ($place === null ? [] : ['in' => $place])) : null,
+            // Notes beside the file: a new note in the same place, in a window of its own (resources/js/note-window.js).
+            'takeNotes' => $found->trashedAt === null ? route('workspaces.notes.create', [$details->id] + ($place === null ? [] : ['in' => $place]) + ['window' => 1]) : null,
         ]);
     }
 }

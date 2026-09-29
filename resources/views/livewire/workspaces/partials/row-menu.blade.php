@@ -1,7 +1,9 @@
 {{--
     A row's actions menu. $id makes the menu's ID; $label names the row;
     $items: [label, icon, wire:click, disabled], or [label, icon, null, false,
-    href] for a link (a download). Livewire leaves the open or
+    href] for a link (a download), or [label, icon, null, false, href, window]
+    for a note opened in the window called `window` (resources/js/note-window.js).
+    Livewire leaves the open or
     closed state alone (wire:ignore.self), so an update can't snap it shut;
     shell.js closes it on an outside click, Esc, or choosing an item.
 --}}
@@ -15,7 +17,7 @@
         @foreach ($items as $item)
             @php [$text, $icon, $action, $disabled] = $item; @endphp
             @if (isset($item[4]))
-                <a class="menu-item" href="{{ $item[4] }}">
+                <a class="menu-item" href="{{ $item[4] }}" @isset($item[5]) target="{{ $item[5] }}" data-note-window @endisset>
                     <x-icon :name="$icon" class="size-4" />{{ $text }}
                 </a>
             @else

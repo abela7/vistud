@@ -10,6 +10,7 @@ use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 /**
@@ -20,10 +21,13 @@ use Illuminate\Http\Request;
  * level without) is the editor for a note that doesn't exist yet: it is made
  * by its first words (POST /api/v1/notes), and never if none are written.
  * With &from=file:{id} it starts by importing that Markdown or text file.
+ * With ?window=1 either is only the note, in a window of its own beside the
+ * study material (resources/js/note-window.js); a note in the trash opens
+ * on its page instead, where it can be restored.
  */
 class NotePageController
 {
-    public function __invoke(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Notes $notes, Modules $modules, Folders $folders, string $workspace, string $note): View
+    public function __invoke(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Notes $notes, Modules $modules, Folders $folders, string $workspace, string $note): View|RedirectResponse
     {
         $by = $principals->fromRequest($request);
         $details = $workspaces->find($by, $workspace);
@@ -32,7 +36,12 @@ class NotePageController
             throw new NotFound;
         }
 
-        return view('workspaces.note', ['workspace' => $details, 'note' => $opened, 'trail' => $this->trail($details->id, $opened->moduleId, $opened->folderId, $modules, $folders, $by), 'inModule' => $opened->moduleId !== null]);
+        $window = $request->boolean('window');
+        if ($window && $opened->trashedAt !== null) {
+            return redirect()->route('workspaces.notes.show', [$details->id, $opened->id]);
+        }
+
+        return view('workspaces.note', ['workspace' => $details, 'note' => $opened, 'window' => $window, 'trail' => $this->trail($details->id, $opened->moduleId, $opened->folderId, $modules, $folders, $by), 'inModule' => $opened->moduleId !== null]);
     }
 
     public function create(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, Folders $folders, Files $files, string $workspace): View
@@ -64,7 +73,7 @@ class NotePageController
         $place = $folderId !== null ? ['folder', $folderId] : ($moduleId !== null ? ['module', $moduleId] : ['workspace', $details->id]);
 
         return view('workspaces.note', [
-            'workspace' => $details, 'note' => null, 'place' => $place, 'import' => $import,
+            'workspace' => $details, 'note' => null, 'place' => $place, 'import' => $import, 'window' => $request->boolean('window'),
             'trail' => $this->trail($details->id, $moduleId, $folderId, $modules, $folders, $by), 'inModule' => $moduleId !== null,
         ]);
     }
