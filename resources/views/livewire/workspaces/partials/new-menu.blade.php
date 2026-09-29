@@ -7,7 +7,7 @@
     <button type="button" @class(['btn', 'btn-primary' => $primary ?? false, 'btn-secondary' => ! ($primary ?? false)]) wire:ignore.self data-menu-button aria-controls="new-menu" aria-expanded="false">
         <span class="btn-idle"><x-icon name="plus" class="size-4" />New</span>
     </button>
-    <div id="new-menu" class="row-menu" wire:ignore.self data-menu-panel hidden>
+    <div id="new-menu" class="row-menu" wire:ignore.self data-menu-panel popover="manual" hidden>
         <button type="button" class="menu-item" wire:click="newNote('{{ $placeType }}', '{{ $placeId }}')"><x-icon name="file-plus" class="size-4" />Note</button>
         <button type="button" class="menu-item" wire:click="uploadFiles('{{ $placeType }}', '{{ $placeId }}')"><x-icon name="upload" class="size-4" />Upload files</button>
         <button type="button" class="menu-item" wire:click="newLink('{{ $placeType }}', '{{ $placeId }}')"><x-icon name="link" class="size-4" />Link</button>

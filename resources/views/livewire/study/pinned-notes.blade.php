@@ -30,7 +30,7 @@
                     <span class="pin-count" aria-hidden="true">{{ count($pinned) }}</span>
                     <span class="sr-only">, {{ count($pinned) }} pinned</span>
                 </button>
-                <div id="pin-menu" class="pin-menu" wire:ignore.self data-menu-panel hidden role="group" aria-label="Pinned notes">
+                <div id="pin-menu" class="pin-menu" wire:ignore.self data-menu-panel popover="manual" hidden role="group" aria-label="Pinned notes">
                     <ul role="list">
                         @foreach ($pinned as $note)
                             <li class="pin-row" wire:key="pin-{{ $note->id }}">

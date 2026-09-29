@@ -40,7 +40,7 @@
                         <button type="button" class="topbar-button" data-menu-button aria-controls="overview-menu" aria-expanded="false" title="More">
                             <x-icon name="ellipsis" class="size-5" /><span class="sr-only">More for {{ $workspace->name }}</span>
                         </button>
-                        <div id="overview-menu" class="row-menu" data-menu-panel hidden>
+                        <div id="overview-menu" class="row-menu" data-menu-panel popover="manual" hidden>
                             <button type="button" class="menu-item" x-data x-on:click="$dispatch('workspace-form-open')"><x-icon name="pencil" class="size-4" />Edit workspace</button>
                             <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('instructions-open')"><x-icon name="message-square-text" class="size-4" />Instructions for the AI</button>
                             <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('study-log')"><x-icon name="history" class="size-4" />Log time</button>

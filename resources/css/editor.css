@@ -2485,21 +2485,44 @@
     }
 
     /* Floating Image Toolbar */
+    /*
+    | The bar over a selected picture: a popover in the top layer, placed beside the picture by the script
+    | (resources/js/floating.js), so the top bar can't cover it and a narrow window never cuts it off: its
+    | groups wrap onto a second row instead.
+    */
     .image-floating-toolbar {
-        position: absolute;
+        position: fixed;
+        inset: auto;
+        margin: 0;
         z-index: 20;
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 0.375rem;
+        justify-content: center;
+        gap: 0.25rem 0.375rem;
         padding: 0.25rem 0.5rem;
         background-color: var(--surface-raised);
+        color: var(--text);
         border: 1px solid var(--border);
         border-radius: var(--radius-md);
         box-shadow: var(--elevation-md);
-        transform: translate(-50%, -100%);
-        margin-top: -0.625rem;
         pointer-events: auto;
         animation: toast-in 120ms ease-out;
+    }
+
+    /* The caption button carries a word, so it is wider than the icon buttons around it. */
+    .image-floating-toolbar [data-image-action='caption'] {
+        grid-auto-flow: column;
+        gap: 0.25rem;
+        width: auto;
+        padding-inline: 0.5rem;
+    }
+
+    /* Wrapped onto rows, a divider between groups would stand at the end of a line. */
+    @media (max-width: 26rem) {
+        .image-floating-toolbar .toolbar-separator {
+            display: none;
+        }
     }
 
     .image-floating-toolbar[hidden] {

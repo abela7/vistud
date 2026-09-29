@@ -259,6 +259,28 @@ export function makeStudentWithPomodoro(secondsLeft = 4) {
 }
 
 /**
+ * makeStudentWithCards(), plus what every page holds a menu for: a folder in the module, notes in the module, in
+ * that folder and at the top level, a file, more questions in each state, and a session that is open. Returns the
+ * IDs the pages need.
+ */
+export function makeStudentWithEverything() {
+    const student = makeStudentWithCards();
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `$w = '${student.workspace}'; $m = app(\\App\\Study\\Modules::class)->list($p, $w)[0]; $notes = app(\\App\\Study\\Notes::class);`,
+        `$folder = app(\\App\\Study\\Folders::class)->create($p, 'module', $m->id, 'Labs');`,
+        `$inModule = $notes->create($p, 'module', $m->id, 'Lecture 3: joins'); $inFolder = $notes->create($p, 'folder', $folder->id, 'Lab 1'); $top = $notes->create($p, 'workspace', $w, 'Exam plan');`,
+        `$file = app(\\App\\Study\\Files::class)->upload($p, 'module', $m->id, base_path('tests/Browser/fixtures/files/Lecture 2 - cell division.pdf'), 'Lecture 2.pdf');`,
+        `$q = app(\\App\\Study\\Questions::class); $stuck = $q->ask($p, $w, 'Why does a left join keep unmatched rows?', null, $m->id); $q->setStatus($p, $stuck->id, 'stuck');`,
+        `$done = $q->ask($p, $w, 'What is a key?', null, $m->id); $q->setStatus($p, $done->id, 'answered', 'A column that names a row.');`,
+        `$session = app(\\App\\Study\\Sessions::class)->start($p, $w, null, $m->id);`,
+        `echo json_encode(['module' => $m->id, 'folder' => $folder->id, 'note' => $inModule->id, 'topNote' => $top->id, 'file' => $file->id, 'session' => $session->id, 'question' => $stuck->id]);`,
+    ].join(' ');
+    const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
+    return { ...student, ...JSON.parse(out) };
+}
+
+/**
  * makeStudentWithTopics(), plus flashcards: three on Joins (one made with an
  * AI), one on keys, and one on keys already answered, due tomorrow.
  */

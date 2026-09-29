@@ -5,7 +5,9 @@
     for a note opened in the window called `window` (resources/js/note-window.js).
     Livewire leaves the open or
     closed state alone (wire:ignore.self), so an update can't snap it shut;
-    shell.js closes it on an outside click, Esc, or choosing an item.
+    shell.js closes it on an outside click, Esc, or choosing an item. It is a
+    popover: shown in the top layer and placed beside its button, so no list
+    or panel clips it and it is always inside the window (resources/js/floating.js).
 --}}
 <div class="relative shrink-0">
     <button type="button" class="topbar-button" wire:ignore.self data-menu-button aria-controls="menu-{{ $id }}" aria-expanded="false" title="Actions">
@@ -13,7 +15,7 @@
         {{-- Text, not an attribute: the button's own attributes are ignored by updates, its content isn't. --}}
         <span class="sr-only">Actions for {{ $label }}</span>
     </button>
-    <div id="menu-{{ $id }}" class="row-menu" wire:ignore.self data-menu-panel hidden>
+    <div id="menu-{{ $id }}" class="row-menu" wire:ignore.self data-menu-panel popover="manual" hidden>
         @foreach ($items as $item)
             @php [$text, $icon, $action, $disabled] = $item; @endphp
             @if (isset($item[4]))

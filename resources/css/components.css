@@ -1033,6 +1033,24 @@
         box-shadow: var(--elevation-lg);
     }
 
+    /*
+    | A menu is a popover: shown in the browser's top layer, so no sidebar, list or panel can clip it and nothing
+    | sits on top of it. resources/js/floating.js places it beside its button and keeps it inside the window; the
+    | stylesheet's own offsets are cleared here, and the switcher's list has a width that does not depend on its
+    | (now missing) parent.
+    */
+    .row-menu:popover-open,
+    .ws-menu:popover-open,
+    .pin-menu:popover-open {
+        position: fixed;
+        inset: auto;
+        margin: 0;
+    }
+
+    .ws-menu:popover-open {
+        width: 16rem;
+    }
+
     .menu-item:disabled {
         color: var(--text-disabled);
         cursor: not-allowed;

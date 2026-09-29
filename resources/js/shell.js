@@ -10,6 +10,7 @@
 */
 
 import { onPage } from './page.js';
+import { clearPlacement, placeMenu } from './floating.js';
 
 const root = document.documentElement;
 const SIDEBAR_KEY = 'vistud.sidebar';
@@ -91,12 +92,73 @@ document.addEventListener('livewire:navigating', (event) => {
     });
 });
 
-// ---------- Account menu ----------
+// ---------- Menus ----------
+// A button with data-menu-button opens the panel its aria-controls names (data-menu-panel). A panel that is a
+// popover is shown in the browser's top layer and placed beside its button (resources/js/floating.js), so
+// nothing clips it and it is always inside the window; the account menu is its own fixed panel.
+
+let placed = null;
+let watching = null;
+
+function place() {
+    if (!placed) return;
+    const { button, panel } = placed;
+    const box = button.getBoundingClientRect();
+    // Its button scrolled out of the window: the menu goes with it.
+    if (box.bottom < 0 || box.top > window.innerHeight || box.right < 0 || box.left > window.innerWidth) {
+        setMenu(button, false);
+        return;
+    }
+    // Measuring lets it grow to its full height for a moment: where the list was scrolled to stays.
+    const scrolled = panel.scrollTop;
+    placeMenu(button, panel, panel.dataset.menuAlign === 'start' ? 'start' : 'end');
+    panel.scrollTop = scrolled;
+}
+
+let scheduled = false;
+function placeSoon() {
+    if (scheduled || !placed) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+        scheduled = false;
+        place();
+    });
+}
+
+window.addEventListener('resize', placeSoon);
+// The page scrolling moves the button; the menu's own list scrolling doesn't.
+document.addEventListener('scroll', (event) => {
+    if (placed && event.target instanceof Node && placed.panel.contains(event.target)) return;
+    placeSoon();
+}, true);
 
 function setMenu(button, open) {
     const panel = document.getElementById(button.getAttribute('aria-controls'));
     if (!panel) return;
-    panel.hidden = !open;
+    const floating = panel.hasAttribute('popover') && typeof panel.showPopover === 'function';
+    if (open) {
+        panel.hidden = false;
+        if (floating) {
+            if (!panel.matches(':popover-open')) panel.showPopover();
+            placed = { button, panel };
+            place();
+            // A list that grows or shrinks while it is open (a pin taken away) keeps its place.
+            watching?.disconnect();
+            watching = 'ResizeObserver' in window ? new ResizeObserver(placeSoon) : null;
+            watching?.observe(panel);
+        }
+    } else {
+        if (floating) {
+            if (panel.matches(':popover-open')) panel.hidePopover();
+            clearPlacement(panel);
+            if (placed?.panel === panel) {
+                placed = null;
+                watching?.disconnect();
+                watching = null;
+            }
+        }
+        panel.hidden = true;
+    }
     button.setAttribute('aria-expanded', String(open));
 }
 
@@ -108,6 +170,8 @@ document.addEventListener('click', (event) => {
     const button = event.target.closest('[data-menu-button]');
     const open = openMenuButton();
     if (button) {
+        // One menu at a time.
+        if (open && open !== button) setMenu(open, false);
         setMenu(button, button.getAttribute('aria-expanded') !== 'true');
         return;
     }

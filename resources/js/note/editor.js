@@ -25,6 +25,7 @@ import { Markdown } from '@tiptap/markdown';
 import { Mathematics } from '@tiptap/extension-mathematics';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import { placeBeside } from '../floating.js';
 import { NodeSelection, TextSelection, Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { canSplit } from '@tiptap/pm/transform';
@@ -2118,13 +2119,26 @@ export async function mount(host) {
     let activeFigureEl = null;
     let selectedImagePos = null;
 
+    /** The top of the space the bar may use: under the top bar and the toolbar, which stay put while the note scrolls. */
+    function clearOfBars() {
+        let bottom = 0;
+        const bars = [toolbar, page.hasAttribute('data-focus') ? null : document.querySelector('.app-topbar')];
+        for (const bar of bars) {
+            if (bar && bar.getClientRects().length) bottom = Math.max(bottom, bar.getBoundingClientRect().bottom);
+        }
+        return bottom;
+    }
+
     function positionImageToolbar(figureEl) {
         if (!imageToolbar || !figureEl) return;
         imageToolbar.hidden = false;
-        const rect = figureEl.getBoundingClientRect();
-        imageToolbar.style.position = 'fixed';
-        imageToolbar.style.top = `${Math.max(60, rect.top - 10)}px`;
-        imageToolbar.style.left = `${Math.max(120, Math.min(rect.left + (rect.width / 2), window.innerWidth - 130))}px`;
+        // In the top layer, beside the picture: above it where there is room, and always inside the window.
+        try {
+            if (!imageToolbar.matches(':popover-open')) imageToolbar.showPopover();
+        } catch {
+            // No popovers here: the bar is fixed all the same, and placed the same way.
+        }
+        placeBeside(figureEl, imageToolbar, { align: 'center', prefer: 'above', insetTop: clearOfBars() });
 
         const currentAlign = figureEl.dataset.align || 'center';
         const currentWidth = figureEl.dataset.width || '100%';
@@ -2138,11 +2152,35 @@ export async function mount(host) {
     }
 
     function hideImageToolbar() {
+        try {
+            if (imageToolbar?.matches(':popover-open')) imageToolbar.hidePopover();
+        } catch {
+            // No popovers here.
+        }
         if (imageToolbar) imageToolbar.hidden = true;
         if (activeFigureEl) activeFigureEl.classList.remove('is-selected');
         activeFigureEl = null;
         selectedImagePos = null;
     }
+
+    // The note scrolling, or the window changing size, moves the picture: the bar goes with it, and goes away
+    // when the picture has left the window.
+    let barFrame = 0;
+    const followPicture = () => {
+        if (barFrame || !activeFigureEl || !imageToolbar || imageToolbar.hidden) return;
+        barFrame = requestAnimationFrame(() => {
+            barFrame = 0;
+            if (!activeFigureEl?.isConnected) {
+                hideImageToolbar();
+                return;
+            }
+            const box = activeFigureEl.getBoundingClientRect();
+            if (box.bottom < clearOfBars() || box.top > window.innerHeight) hideImageToolbar();
+            else positionImageToolbar(activeFigureEl);
+        });
+    };
+    on(window, 'resize', followPicture);
+    document.addEventListener('scroll', followPicture, { capture: true, signal: leaving.signal });
 
     host.querySelector('[data-note-body]').addEventListener('click', (event) => {
         const figure = event.target.closest('figure.note-image-figure');

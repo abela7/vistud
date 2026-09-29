@@ -632,8 +632,8 @@
                     </div>
                 </dialog>
 
-                {{-- Floating Image Controls Bar for Selected Image --}}
-                <div id="note-image-toolbar" class="image-floating-toolbar" role="toolbar" aria-label="Picture" data-image-toolbar hidden>
+                {{-- The bar over a selected picture: a popover, placed beside the picture inside the window (resources/js/floating.js). --}}
+                <div id="note-image-toolbar" class="image-floating-toolbar" role="toolbar" aria-label="Picture" data-image-toolbar popover="manual" hidden>
                     <div class="image-toolbar-group">
                         <button type="button" class="toolbar-button" data-image-align="left" title="Align Left" aria-label="Align Left">
                             <x-icon name="align-left" class="size-4" />

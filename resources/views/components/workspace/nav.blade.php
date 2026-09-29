@@ -1,7 +1,9 @@
 {{--
     The sidebar inside a workspace: the switcher (the current workspace,
     opening a list of the others) and the workspace's sections. Drawn in the
-    desktop sidebar and in the slide-in menu, so its menu ID is passed in.
+    desktop sidebar and in the slide-in menu, so its menu ID is passed in. The
+    list is a popover, so the sidebar (which scrolls, and collapses to icons)
+    can't clip it: it opens out over the page from the switcher's left edge.
 --}}
 @props(['workspace', 'workspaces', 'section', 'menuId'])
 <div class="space-y-3">
@@ -14,7 +16,7 @@
             </span>
             <x-icon name="chevrons-up-down" class="ws-switcher-caret size-4 text-fg-muted" />
         </button>
-        <div id="{{ $menuId }}" class="ws-menu" data-menu-panel hidden>
+        <div id="{{ $menuId }}" class="ws-menu" data-menu-panel data-menu-align="start" popover="manual" hidden>
             @foreach ($workspaces as $other)
                 <a href="{{ route('workspaces.show', $other->id) }}" class="menu-item" @if ($other->id === $workspace->id) aria-current="page" @endif>
                     <x-workspace.chip :workspace="$other" size="sm" /><span class="truncate">{{ $other->name }}</span>
