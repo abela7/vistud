@@ -25,6 +25,10 @@ export function applyAppearance(mode) {
     const changed = root.dataset.theme !== theme;
     root.dataset.appearance = mode;
     root.dataset.theme = theme;
+    const scheme = theme === root.dataset.themeDark ? 'dark' : 'light';
+    root.style.colorScheme = scheme;
+    const meta = document.querySelector('meta[name="color-scheme"]');
+    if (meta) meta.content = scheme;
     syncControls();
     if (changed) {
         window.dispatchEvent(new CustomEvent('vistud:theme-changed', { detail: { mode, theme } }));

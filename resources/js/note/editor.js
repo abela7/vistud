@@ -2396,6 +2396,7 @@ export async function mount(host) {
     }
     const barLeft = page.querySelector('[data-note-bar-left]');
     const statusHome = { parent: status.parentElement, next: status.nextSibling };
+    if (inWindow) barLeft?.prepend(status);
     page.querySelectorAll('[data-note-read]').forEach((btn) => btn.addEventListener('click', () => setReading(!page.hasAttribute('data-reading'))));
     focusButtons.forEach((btn) => btn.addEventListener('click', () => setFocus(!page.hasAttribute('data-focus'))));
 
@@ -2514,7 +2515,7 @@ export async function mount(host) {
         const back = page.querySelector('[data-back]')?.href;
         if (back) window.Livewire ? window.Livewire.navigate(back) : window.location.assign(back);
     });
-    page.querySelector('[data-note-pop-in]')?.addEventListener('click', async () => {
+    page.querySelectorAll('[data-note-pop-in]').forEach((btn) => btn.addEventListener('click', async () => {
         if (!(await savedForMoving())) {
             toast('This note isn\'t saved yet. Try again in a moment.', 'info');
             return;
@@ -2534,7 +2535,7 @@ export async function mount(host) {
         else main.location.assign(url.href);
         main.focus();
         window.close();
-    });
+    }));
 
     // ---------- Other tabs ----------
     /** Shows a version from the server, without making it something undo would take back. */

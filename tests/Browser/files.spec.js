@@ -182,7 +182,7 @@ test('Take notes opens a new note in its own window, beside the file, kept in th
     await page.getByRole('link', { name: 'Take notes' }).click();
     const win = await opening;
     await win.locator('[data-note-editor][data-ready]').waitFor();
-    await expect(win.getByRole('navigation', { name: 'Where this note is' })).toHaveText(/Biology\s*Week 1: Cells/);
+    await expect(win.locator('.note-header-bar')).toBeHidden();
     await win.getByLabel('Title').fill('Lecture 2 notes');
     await win.keyboard.press('Enter');
     await win.keyboard.type('Prophase comes first.');

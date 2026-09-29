@@ -27,13 +27,18 @@ function halfScreen() {
 export function openNoteWindow(url, name = '_blank') {
     const opened = window.open('', name, halfScreen());
     if (!opened) return null;
+    // A new window, until its address is loaded: the page's background, not a white flash.
+    try {
+        if (opened.location.href === 'about:blank') {
+            const bodyBg = getComputedStyle(document.body).backgroundColor;
+            const docStyle = getComputedStyle(document.documentElement);
+            const bg = bodyBg || docStyle.backgroundColor;
+            opened.document.documentElement.style.backgroundColor = bg;
+            opened.document.documentElement.style.colorScheme = docStyle.colorScheme;
+            if (opened.document.body) opened.document.body.style.backgroundColor = bg;
+        }
+    } catch {}
     if (url) show(opened, url);
-    else {
-        // A new window, until its address is set: the page's background, not a white flash.
-        try {
-            if (opened.location.href === 'about:blank') opened.document.documentElement.style.background = getComputedStyle(document.body).backgroundColor;
-        } catch {}
-    }
     opened.focus();
     return opened;
 }

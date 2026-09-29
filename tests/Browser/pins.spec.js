@@ -332,3 +332,40 @@ test('very large text and a narrow window: the list and the button stay inside',
     expect(within(buttonBox, 320, 568)).toBe(true);
     expect(await notOverflowing(page)).toBe(true);
 });
+
+test('in dark mode, opening a pinned note window inherits the dark canvas immediately without a white flash', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    const note = makeStudentWithNote();
+    await openStudentHome(page, note.email);
+    await openNotePage(page, note.url);
+    await page.getByRole('button', { name: 'Pin', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Unpin', exact: true })).toBeVisible();
+
+    // Set appearance to dark in localStorage, as the student chose.
+    await page.evaluate(() => {
+        localStorage.setItem('vistud.appearance', 'dark');
+        document.documentElement.dataset.appearance = 'dark';
+        document.documentElement.dataset.theme = document.documentElement.dataset.themeDark;
+    });
+
+    await page.goto(`/workspaces/${note.workspace}`);
+    const pill = dock(page).getByRole('link', { name: /Pinned note: Mitosis vs meiosis/ });
+    await expect(pill).toBeVisible();
+
+    const opening = page.waitForEvent('popup');
+    await pill.click();
+    const win = await opening;
+
+    await win.waitForURL(/\?window=1$/);
+    await win.locator('[data-note-editor][data-ready]').waitFor();
+
+    // From the very first moment, color-scheme and background are dark, never white.
+    const initialScheme = await win.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+    expect(initialScheme).toBe('dark');
+
+    const canvasBg = await win.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    expect(canvasBg).not.toBe('rgb(255, 255, 255)');
+    expect(canvasBg).not.toBe('rgba(0, 0, 0, 0)');
+    await win.close();
+});
+

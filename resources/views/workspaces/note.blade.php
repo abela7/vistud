@@ -426,25 +426,30 @@
                             <x-icon name="plus" class="size-3.5" />
                         </button>
                     </div>
-                    {{-- Full screen has no header: what it held that still matters is here, the same buttons in small. --}}
-                    @unless ($window)
-                        <div class="note-bar-tools" role="group" aria-label="Note">
-                            <button type="button" class="toolbar-button note-mode" data-note-view-toggle title="Document view mode: Pages (A4) or Full Width" aria-label="Toggle document view mode">
-                                <span class="when-pages"><x-icon name="file-text" class="size-4" /></span>
-                                <span class="when-continuous"><x-icon name="scroll-text" class="size-4" /></span>
+                    {{-- Full screen and a note in its own window have no header: what it held that still matters is here, the same buttons in small. --}}
+                    <div class="note-bar-tools" role="group" aria-label="Note">
+                        @if ($window)
+                            <button type="button" class="toolbar-button note-mode" data-note-pop-in title="Open this note in ViStud's main window, and close this one" aria-label="Open in ViStud">
+                                <x-icon name="app-window" class="size-4" />
                             </button>
-                            <button type="button" class="toolbar-button note-mode" data-note-read>
-                                <span class="when-editing"><x-icon name="book-open-text" class="size-4" /><span class="sr-only">Read</span></span>
-                                <span class="when-reading"><x-icon name="pencil" class="size-4" /><span class="sr-only">Edit</span></span>
-                            </button>
-                            <button type="button" class="toolbar-button note-mode" onclick="window.print()" title="Print / Export PDF (Ctrl+P)" aria-label="Print or export PDF">
-                                <x-icon name="printer" class="size-4" />
-                            </button>
+                        @endif
+                        <button type="button" class="toolbar-button note-mode" data-note-view-toggle title="Document view mode: Pages (A4) or Full Width" aria-label="Toggle document view mode">
+                            <span class="when-pages"><x-icon name="file-text" class="size-4" /></span>
+                            <span class="when-continuous"><x-icon name="scroll-text" class="size-4" /></span>
+                        </button>
+                        <button type="button" class="toolbar-button note-mode" data-note-read>
+                            <span class="when-editing"><x-icon name="book-open-text" class="size-4" /><span class="sr-only">Read</span></span>
+                            <span class="when-reading"><x-icon name="pencil" class="size-4" /><span class="sr-only">Edit</span></span>
+                        </button>
+                        <button type="button" class="toolbar-button note-mode" onclick="window.print()" title="Print / Export PDF (Ctrl+P)" aria-label="Print or export PDF">
+                            <x-icon name="printer" class="size-4" />
+                        </button>
+                        @unless ($window)
                             <button type="button" class="toolbar-button note-mode" data-note-focus title="Exit full screen (Esc)">
                                 <span class="when-focused"><x-icon name="minimize-2" class="size-4" /><span class="sr-only">Exit full screen</span></span>
                             </button>
-                        </div>
-                    @endunless
+                        @endunless
+                    </div>
                     </div>
                 </div>
 
