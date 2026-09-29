@@ -484,6 +484,11 @@ export async function mount(host) {
     const inWindow = host.hasAttribute('data-window');
     // Set up further down; the editor's callbacks wait for them.
     let viewReady = false;
+    // The automatic pagination's state (Pages view): declared here, before the editor, because its
+    // transactions (a draft restored, IDs given) already ask about them.
+    let updatingPagination = false;
+    let lastBreakPositions = [];
+    let lastTotalPages = 1;
     let shownView = null;
     let importReady = false;
     let countTimer = null;
@@ -688,7 +693,7 @@ export async function mount(host) {
             updateToolbar();
             // The note's own layout, when a change brings one (an import, Undo, another tab's version).
             if (viewReady && editor.state.doc.attrs.view !== shownView) setPageViewMode(editor.state.doc.attrs.view);
-            if (tr && !tr.docChanged && tr.selectionSet && count) {
+            if (toolbarReady && tr && !tr.docChanged && tr.selectionSet && count) {
                 const { currentPage, totalPages, words, chars } = getPageStats();
                 count.textContent = `Page ${currentPage} of ${totalPages} · ${words} ${words === 1 ? 'word' : 'words'} · ${chars.toLocaleString()} characters`;
             }
@@ -1054,9 +1059,6 @@ export async function mount(host) {
     if (zoomSlider) zoomSlider.value = String(Math.round(currentZoom * 100));
 
     // ---------- Automatic Pagination (MS Word A4 standard) & Statistics ----------
-    let updatingPagination = false;
-    let lastBreakPositions = [];
-    let lastTotalPages = 1;
 
     function getPageStats() {
         const cursorPos = editor ? editor.state.selection.from : 0;

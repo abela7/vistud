@@ -563,6 +563,7 @@
 
     .note-count-bar {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
         gap: 0.75rem;
@@ -727,9 +728,10 @@
         border: none;
     }
 
-    @media (max-width: 480px) {
+    /* A phone zooms with two fingers: the slider goes, − and + stay, and the line wraps before it spills. */
+    @media (max-width: 639.98px) {
         .zoom-slider-container {
-            width: 4.5rem;
+            display: none;
         }
     }
 
