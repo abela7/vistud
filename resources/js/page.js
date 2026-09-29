@@ -88,6 +88,19 @@ document.addEventListener('livewire:navigated', () => {
     window.Livewire?.all().forEach((component) => component.$wire.$refresh());
 });
 
+// A refresh can answer after the page has moved on (Back, then Forward at once): its component is no longer
+// in the page, and updating what's left of it would run its Alpine bits without their data. Nothing to show.
+let skipping = false;
+function skipLeftBehind() {
+    if (skipping || !window.Livewire?.hook) return;
+    skipping = true;
+    window.Livewire.hook('morph.updating', ({ component, skip }) => {
+        if (component?.el && !component.el.isConnected) skip();
+    });
+}
+document.addEventListener('livewire:init', skipLeftBehind);
+skipLeftBehind();
+
 // ---------- While the next page loads ----------
 // A thin line at the top in the theme's accent, only once a page takes more than a moment. (Livewire's own
 // bar is off in config/livewire.php: its markup gives screen readers a role that doesn't exist.) Outside

@@ -10,11 +10,11 @@
 <section aria-labelledby="tasks-heading" class="overview-card space-y-3" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 id="tasks-heading" class="font-semibold">Coming up</h2>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
             @if ($open !== [] || $done !== [])
                 <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
                     <x-icon name="list-checks" class="size-4" />
-                    <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
+                    <span class="max-sm:sr-only" x-text="isSelecting ? 'Done' : 'Select'">Select</span>
                 </button>
             @endif
             <x-button variant="ghost" icon="plus" wire:click="newTask" aria-label="Add a task">Add</x-button>

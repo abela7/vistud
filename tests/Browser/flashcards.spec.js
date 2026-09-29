@@ -89,7 +89,7 @@ test('cards are written one after another, and a round is reviewed with the keyb
 test('cards are made with an AI: copy the prompt, paste the reply, keep the new ones', async ({ page }) => {
     await page.setViewportSize(desktop);
     await openDeck(page);
-    await page.getByLabel('Show').selectOption({ label: 'Joins (3)' });
+    await page.getByLabel('Show', { exact: true }).selectOption({ label: 'Joins (3)' });
     await expect(page.getByRole('heading', { name: '3 cards to review today in Joins' })).toBeVisible();
     await page.getByRole('button', { name: 'Make cards with an AI' }).click();
     const maker = page.locator('#card-maker-dialog');
