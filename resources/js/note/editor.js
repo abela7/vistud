@@ -471,7 +471,14 @@ export async function mount(host) {
     const alerts = document.querySelector('[data-note-alerts]');
     const heading = document.querySelector('[data-note-heading]');
     const toolbar = host.querySelector('[data-note-toolbar]');
-    const buttons = [...toolbar.querySelectorAll('button[data-command]')];
+    const scrollContainer = toolbar.querySelector('[data-toolbar-scroll]');
+    const prevBtn = toolbar.querySelector('[data-toolbar-prev]');
+    const nextBtn = toolbar.querySelector('[data-toolbar-next]');
+    const moreToolsMenu = host.querySelector('#note-more-tools-menu');
+    const buttons = [
+        ...toolbar.querySelectorAll('button[data-command]'),
+        ...(moreToolsMenu ? moreToolsMenu.querySelectorAll('button[data-command]') : []),
+    ];
     let toolbarReady = false;
     // Only the note, in a window of its own beside the study material (resources/js/note-window.js).
     const inWindow = host.hasAttribute('data-window');
@@ -918,7 +925,7 @@ export async function mount(host) {
 
     // ---------- Toolbar: one tab stop, arrow keys move along it ----------
     const page = document.querySelector('[data-note-page]');
-    const items = [...toolbar.querySelectorAll('button, select')];
+    const items = [...toolbar.querySelectorAll('[data-toolbar-scroll] button, [data-toolbar-scroll] select, .toolbar-more-button')];
     const blockStyle = toolbar.querySelector('[data-block-style]');
     const highlightMenu = host.querySelector('#note-highlight-menu');
     const alignMenu = host.querySelector('#note-align-menu');
@@ -1295,8 +1302,38 @@ export async function mount(host) {
             items.forEach((b) => { b.tabIndex = b === first ? 0 : -1; });
         }
         tableBar.hidden = !editor.isActive('table') || page.hasAttribute('data-reading');
+        updateToolbarNav();
         scheduleCount();
     }
+
+    function updateToolbarNav() {
+        if (!scrollContainer) return;
+        const sl = Math.ceil(scrollContainer.scrollLeft);
+        const max = Math.floor(scrollContainer.scrollWidth - scrollContainer.clientWidth);
+        if (prevBtn) prevBtn.hidden = sl <= 2;
+        if (nextBtn) nextBtn.hidden = sl >= max - 2;
+    }
+
+    if (scrollContainer) {
+        scrollContainer.addEventListener('scroll', updateToolbarNav, { passive: true });
+        scrollContainer.addEventListener('wheel', (event) => {
+            if (event.deltaY !== 0 && event.deltaX === 0) {
+                scrollContainer.scrollLeft += event.deltaY;
+                event.preventDefault();
+            }
+        }, { passive: false });
+    }
+
+    prevBtn?.addEventListener('click', () => {
+        scrollContainer?.scrollBy({ left: -220, behavior: 'smooth' });
+    });
+
+    nextBtn?.addEventListener('click', () => {
+        scrollContainer?.scrollBy({ left: 220, behavior: 'smooth' });
+    });
+
+    on(window, 'resize', updateToolbarNav);
+
     /**
      * The status line counts every word and measures the note, so it waits for a pause in the typing: done on
      * each key, a long note would lag.
@@ -1389,21 +1426,48 @@ export async function mount(host) {
         if (at < 0 || step === undefined) return;
         // Left and right inside the select change nothing on most browsers; they move along the toolbar.
         event.preventDefault();
-        const next = enabled[Math.max(0, Math.min(enabled.length - 1, Number.isFinite(step) ? (at + step + enabled.length) % enabled.length : (step < 0 ? 0 : enabled.length - 1)))];
+        const next = step === Infinity
+            ? (enabled.find((b) => b.dataset.command === 'clear') || enabled[enabled.length - 1])
+            : (step === -Infinity
+                ? (enabled.find((b) => b.dataset.command === 'undo') || enabled[0])
+                : enabled[Math.max(0, Math.min(enabled.length - 1, (at + step + enabled.length) % enabled.length))]);
         items.forEach((b) => { b.tabIndex = b === next ? 0 : -1; });
         next.focus();
+        next.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     });
 
-    // The menus (highlight colours, alignment, callouts, math) open under their button.
-    for (const menu of [highlightMenu, alignMenu, calloutMenu, mathMenu].filter(Boolean)) {
+    // The menus (highlight colours, alignment, callouts, math, more tools) open under their button.
+    for (const menu of [highlightMenu, alignMenu, calloutMenu, mathMenu, moreToolsMenu].filter(Boolean)) {
         const opener = toolbar.querySelector(`[data-menu-for="${menu.id}"]`);
         if (!opener) continue;
         menu.addEventListener('toggle', (event) => {
             opener.setAttribute('aria-expanded', String(event.newState === 'open'));
             if (event.newState !== 'open') return;
             const box = opener.getBoundingClientRect();
-            menu.style.top = `${box.bottom + 4}px`;
-            menu.style.left = `${Math.max(8, Math.min(box.left, window.innerWidth - menu.offsetWidth - 8))}px`;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const menuWidth = menu.offsetWidth;
+            const menuHeight = menu.offsetHeight;
+
+            // Align left edge to button, or if right-aligned or close to right edge, keep safely on-screen:
+            let left = box.left;
+            if (left + menuWidth > viewportWidth - 8) {
+                left = Math.max(8, box.right - menuWidth);
+            }
+            left = Math.max(8, Math.min(left, viewportWidth - menuWidth - 8));
+
+            // Position below opener, or above if it would overflow the bottom:
+            let top = box.bottom + 4;
+            if (top + menuHeight > viewportHeight - 8) {
+                if (box.top - menuHeight - 4 >= 8) {
+                    top = box.top - menuHeight - 4;
+                } else {
+                    top = Math.max(8, viewportHeight - menuHeight - 8);
+                }
+            }
+
+            menu.style.top = `${top}px`;
+            menu.style.left = `${left}px`;
             (menu.querySelector('[aria-checked="true"]') ?? menu.querySelector('button'))?.focus();
         });
         menu.addEventListener('keydown', (event) => {
@@ -1413,6 +1477,67 @@ export async function mount(host) {
             if (step) {
                 event.preventDefault();
                 choices[(at + step + choices.length) % choices.length].focus();
+            }
+        });
+    }
+
+    if (moreToolsMenu) {
+        moreToolsMenu.addEventListener('mousedown', (event) => {
+            if (event.target.closest('button')) event.preventDefault();
+        });
+        moreToolsMenu.addEventListener('click', (event) => {
+            const moreAction = event.target.closest('button[data-more-action]');
+            if (moreAction) {
+                const action = moreAction.dataset.moreAction;
+                moreToolsMenu.hidePopover();
+                if (action === 'callout') {
+                    calloutMenu?.showPopover();
+                } else if (action === 'math') {
+                    mathMenu?.showPopover();
+                }
+                return;
+            }
+
+            const button = event.target.closest('button[data-command]');
+            if (!button) return;
+            const cmd = button.dataset.command;
+            moreToolsMenu.hidePopover();
+
+            if (cmd === 'find') {
+                toggleFindBar(true);
+                return;
+            }
+            if (cmd === 'shortcuts') {
+                shortcutsDialog?.showModal();
+                return;
+            }
+
+            if (lastFocused === 'title') {
+                if (cmd === 'indent') {
+                    titleField.setRangeText('    ', titleField.selectionStart, titleField.selectionEnd, 'end');
+                    titleField.dispatchEvent(new Event('input'));
+                    titleField.focus();
+                    return;
+                }
+                if (cmd === 'clear') {
+                    delete titleField.dataset.align;
+                    delete titleField.dataset.italic;
+                    delete titleField.dataset.underline;
+                    delete titleField.dataset.tone;
+                    saveTitleStyle();
+                    updateToolbar();
+                    titleField.focus();
+                    return;
+                }
+            }
+
+            backToNote();
+            const BLOCK_COMMANDS = new Set(['blockquote', 'codeBlock', 'bulletList', 'orderedList', 'taskList', 'clear']);
+            if (COMMANDS[cmd]) {
+                if (BLOCK_COMMANDS.has(cmd)) {
+                    isolateSelection(editor);
+                }
+                COMMANDS[cmd][0](editor.chain().focus()).run();
             }
         });
     }
