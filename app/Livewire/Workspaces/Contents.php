@@ -42,7 +42,8 @@ final class Contents extends Component
 {
     use BulkActions, Notices, WithFileUploads;
 
-    /** @var list<string> */
+    /** What the last bulk trash took, for its Undo. Only the server sets it. @var list<string> */
+    #[Locked]
     public array $lastTrashed = [];
 
     #[Locked]
@@ -431,12 +432,18 @@ final class Contents extends Component
                         $this->modules->delete($by, $id);
                         $done++;
                     }
-                } catch (Conflict $e) {
+                } catch (Conflict) {
+                    // A folder or module with things in it, or a note or file that isn't in the trash.
                     try {
-                        $name = $type === 'folder' ? $this->folders->find($by, $id)->name : $this->modules->find($by, $id)->title;
-                        $skipped[] = "1 skipped: “{$name}” isn't empty.";
+                        $skipped[] = match ($type) {
+                            'folder' => "1 skipped: “{$this->folders->find($by, $id)->name}” isn't empty.",
+                            'module' => "1 skipped: “{$this->modules->find($by, $id)->title}” isn't empty.",
+                            'note' => "1 skipped: “{$this->notes->find($by, $id)->displayTitle()}” isn't in the trash.",
+                            'file' => "1 skipped: “{$this->files->find($by, $id)->fileName()}” isn't in the trash.",
+                            default => '1 skipped.',
+                        };
                     } catch (NotFound) {
-                        $skipped[] = "1 skipped: isn't empty.";
+                        $skipped[] = '1 skipped.';
                     }
                 } catch (NotFound) {
                     // Ignored
