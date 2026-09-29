@@ -196,6 +196,62 @@ test('read mode and full screen, for reading and for writing', async ({ page }) 
     await expect(page.getByRole('button', { name: 'Full screen' })).toBeFocused();
 });
 
+test('full screen shows only the note: no header, and what still matters is in the status bar', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openNote(page);
+    const toolbar = page.getByRole('toolbar', { name: 'Formatting' });
+    const bar = page.locator('.note-count-bar');
+    await page.getByRole('button', { name: 'Full screen' }).click();
+
+    // No Back link, no path, no header buttons: the toolbar is the first thing on the screen.
+    await expect(page.locator('.note-header-bar')).toBeHidden();
+    await expect(page.locator('[data-back]')).toBeHidden();
+    await expect(page.getByRole('navigation', { name: 'Where this note is' })).toBeHidden();
+    expect((await toolbar.boundingBox()).y).toBeLessThanOrEqual(2);
+    // What still matters is in the status bar: the save status, the view, Read, Print and Exit.
+    await expect(bar.locator('[data-save-status]')).toBeVisible();
+    await expect(bar.locator('[data-save-status]')).toHaveText('Saved');
+    for (const name of ['Toggle document view mode', 'Read', 'Print or export PDF', 'Exit full screen']) {
+        await expect(bar.getByRole('button', { name, exact: true })).toBeVisible();
+    }
+    // Writing is saved and shown there; Read hides the toolbar but the way out stays.
+    await typeAtEnd(page, ' Written in full screen.');
+    await expect(bar.locator('[data-save-status]')).toHaveText('Saved');
+    await bar.getByRole('button', { name: 'Read', exact: true }).click();
+    await expect(toolbar).toBeHidden();
+    await expect(bar.getByRole('button', { name: 'Exit full screen', exact: true })).toBeVisible();
+    await bar.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(toolbar).toBeVisible();
+    await bar.getByRole('button', { name: 'Toggle document view mode' }).click();
+    await expect(page.locator('[data-note-page]')).toHaveAttribute('data-page-view', 'continuous');
+    await bar.getByRole('button', { name: 'Toggle document view mode' }).click();
+
+    // Out again: the header is back with the save status in it, and focus is on the button that opened it.
+    await bar.getByRole('button', { name: 'Exit full screen', exact: true }).click();
+    await expect(page.locator('.note-header-bar')).toBeVisible();
+    await expect(page.locator('.note-header-bar [data-save-status]')).toBeVisible();
+    await expect(bar.locator('[data-save-status]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Full screen' })).toBeFocused();
+});
+
+test('full screen on a phone: the status bar fits, and nothing scrolls sideways', async ({ page }) => {
+    await page.setViewportSize(phone);
+    await openNote(page);
+    await page.getByRole('button', { name: 'Full screen' }).click();
+    const bar = page.locator('.note-count-bar');
+    for (const name of ['Toggle document view mode', 'Read', 'Print or export PDF', 'Exit full screen']) {
+        const box = await bar.getByRole('button', { name, exact: true }).boundingBox();
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(phone.width);
+    }
+    // "Saved" is its icon alone here, and still says so to a screen reader.
+    await expect(bar.locator('[data-save-status]')).toHaveText('Saved');
+    expect((await bar.locator('[data-save-label]').boundingBox()).width).toBeLessThanOrEqual(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(phone.width);
+    await bar.getByRole('button', { name: 'Exit full screen', exact: true }).click();
+    await expect(page.locator('.note-header-bar')).toBeVisible();
+});
+
 test('with the server unreachable the draft survives a reload, and saves once it is back', async ({ page }) => {
     await page.setViewportSize(desktop);
     const note = await openNote(page);

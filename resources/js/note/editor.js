@@ -2386,9 +2386,17 @@ export async function mount(host) {
         const root = document.documentElement;
         if (on && root.requestFullscreen && !document.fullscreenElement) root.requestFullscreen().catch(() => {});
         if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
-        focusButtons[0]?.focus();
+        // The save status is in the header, which full screen doesn't show: it lives in the status bar meanwhile.
+        if (!inWindow) {
+            if (on) barLeft?.prepend(status);
+            else statusHome.parent.insertBefore(status, statusHome.next);
+        }
+        // Back to the button that was pressed: the header's, or the status bar's, whichever is on show.
+        [...focusButtons].find((btn) => btn.getClientRects().length > 0)?.focus();
     }
-    page.querySelector('[data-note-read]').addEventListener('click', () => setReading(!page.hasAttribute('data-reading')));
+    const barLeft = page.querySelector('[data-note-bar-left]');
+    const statusHome = { parent: status.parentElement, next: status.nextSibling };
+    page.querySelectorAll('[data-note-read]').forEach((btn) => btn.addEventListener('click', () => setReading(!page.hasAttribute('data-reading'))));
     focusButtons.forEach((btn) => btn.addEventListener('click', () => setFocus(!page.hasAttribute('data-focus'))));
 
     // ---------- Document View Mode: Pages (A4) vs Continuous ----------

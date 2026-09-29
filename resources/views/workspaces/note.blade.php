@@ -407,7 +407,11 @@
                     </div>
                 </div>
                 <div class="note-count-bar">
-                    <button type="button" class="note-count note-count-button" data-note-count title="Click for document statistics and reading time" aria-label="Document statistics"></button>
+                    {{-- In full screen the header is gone: the save status moves in here (resources/js/note/editor.js). --}}
+                    <div class="note-bar-left" data-note-bar-left>
+                        <button type="button" class="note-count note-count-button" data-note-count title="Click for document statistics and reading time" aria-label="Document statistics"></button>
+                    </div>
+                    <div class="note-bar-right">
                     <div class="note-zoom-controls" role="group" aria-label="Zoom controls">
                         <button type="button" class="zoom-value-button" data-zoom-reset title="Reset zoom to 100% (Ctrl+0)" aria-label="Reset zoom">
                             <span data-zoom-label>100%</span>
@@ -421,6 +425,26 @@
                         <button type="button" class="zoom-button" data-zoom-in title="Zoom in (Ctrl++)" aria-label="Zoom in">
                             <x-icon name="plus" class="size-3.5" />
                         </button>
+                    </div>
+                    {{-- Full screen has no header: what it held that still matters is here, the same buttons in small. --}}
+                    @unless ($window)
+                        <div class="note-bar-tools" role="group" aria-label="Note">
+                            <button type="button" class="toolbar-button note-mode" data-note-view-toggle title="Document view mode: Pages (A4) or Full Width" aria-label="Toggle document view mode">
+                                <span class="when-pages"><x-icon name="file-text" class="size-4" /></span>
+                                <span class="when-continuous"><x-icon name="scroll-text" class="size-4" /></span>
+                            </button>
+                            <button type="button" class="toolbar-button note-mode" data-note-read>
+                                <span class="when-editing"><x-icon name="book-open-text" class="size-4" /><span class="sr-only">Read</span></span>
+                                <span class="when-reading"><x-icon name="pencil" class="size-4" /><span class="sr-only">Edit</span></span>
+                            </button>
+                            <button type="button" class="toolbar-button note-mode" onclick="window.print()" title="Print / Export PDF (Ctrl+P)" aria-label="Print or export PDF">
+                                <x-icon name="printer" class="size-4" />
+                            </button>
+                            <button type="button" class="toolbar-button note-mode" data-note-focus title="Exit full screen (Esc)">
+                                <span class="when-focused"><x-icon name="minimize-2" class="size-4" /><span class="sr-only">Exit full screen</span></span>
+                            </button>
+                        </div>
+                    @endunless
                     </div>
                 </div>
 
