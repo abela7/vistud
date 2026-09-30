@@ -4,6 +4,7 @@ use App\Brain\Store\JournalReader;
 use App\Http\Controllers\Api\V1\NoteImageController;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
+use App\Http\Controllers\FilePreviewController;
 use App\Http\Controllers\FlashcardReviewController;
 use App\Http\Controllers\NoteExportController;
 use App\Http\Controllers\NotePageController;
@@ -55,6 +56,8 @@ Route::middleware('auth')->group(function () {
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'file' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.files.show');
     Route::get('/files/{file}/content', FileContentController::class)->where('file', '[A-Za-z0-9-]{1,64}')->name('files.content');
+    // A Word, PowerPoint or Excel file as a PDF to show (App\Study\FilePreviews).
+    Route::get('/files/{file}/preview', FilePreviewController::class)->where('file', '[A-Za-z0-9-]{1,64}')->name('files.preview');
 
     // A study session and its clock (docs/specs/study-memory.md §4).
     Route::get('/workspaces/{workspace}/sessions/{session}', SessionPageController::class)

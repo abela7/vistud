@@ -85,6 +85,45 @@ final class Folders
         return $this->find($by, $id);
     }
 
+    /**
+     * The folder at $path under a place (a workspace's top level, a module or a folder), made where it doesn't
+     * exist yet: "Week 1/Lectures" finds or makes Week 1, then Lectures inside it. For an uploaded folder, whose
+     * files keep the folders they were in. Returns the place the path ends at: [type, id], the place itself for an
+     * empty path. Names match whatever their case (Week 1 is week 1); a folder that would go deeper than MAX_DEPTH
+     * is refused (409 too_deep), and so is one whose name isn't valid (422).
+     *
+     * @param  list<string>  $path
+     * @return array{0: string, 1: string}
+     */
+    public function ensurePath(Principal $by, string $placeType, string $placeId, array $path): array
+    {
+        $scope = Guard::learner($by);
+        $names = array_map(fn ($name) => self::validatedName($name), $path);
+
+        return DB::transaction(function () use ($scope, $placeType, $placeId, $names) {
+            [$type, $id] = [$placeType, $placeId];
+            foreach ($names as $name) {
+                [$workspaceId, $moduleId, $parentFolder, $depth] = Input::place($scope, $type, $id);
+                $existing = $this->siblings($scope, $workspaceId, $moduleId, $parentFolder)
+                    ->first(fn ($folder) => mb_strtolower($folder->name) === mb_strtolower($name))?->id;
+                if ($existing === null) {
+                    if ($depth > self::MAX_DEPTH) {
+                        throw new Conflict('too_deep', 'Folders go at most '.self::MAX_DEPTH.' levels deep.');
+                    }
+                    $existing = Ids::new();
+                    LearnerTables::insert($scope, 'folders', [
+                        'id' => $existing, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'parent_id' => $parentFolder,
+                        'name' => $name, 'depth' => $depth, 'position' => $this->nextPosition($scope, $workspaceId, $moduleId, $parentFolder),
+                        'created_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
+                [$type, $id] = ['folder', (string) $existing];
+            }
+
+            return [$type, $id];
+        });
+    }
+
     public function rename(Principal $by, string $id, mixed $name): void
     {
         $scope = Guard::learner($by);

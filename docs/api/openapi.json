@@ -69,6 +69,83 @@
         }
       }
     },
+    "/api/v1/files": {
+      "post": {
+        "operationId": "uploadFile",
+        "summary": "Keeps one uploaded file in a workspace's top level, a module or a folder, and, for a file from an uploaded folder, in the folders it was in (made where they don't exist yet). The upload dialog sends files one at a time. Checked by its bytes (no macros, no scripts) and within the student's storage quota",
+        "x-stability": "provisional",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "place_type",
+                  "place_id"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PDF, Word, PowerPoint, Excel, OpenDocument, text or an image; up to the server's limit (25 MB by default)"
+                  },
+                  "place_type": {
+                    "type": "string",
+                    "enum": [
+                      "workspace",
+                      "module",
+                      "folder"
+                    ]
+                  },
+                  "place_id": {
+                    "type": "string"
+                  },
+                  "folder": {
+                    "type": "string",
+                    "description": "The folders the file was in inside an uploaded folder, separated by / (\"Week 1/Lectures\"); each is found by name, whatever its case, or made"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Kept",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadedFile"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error",
+            "description": "not_found: the place isn't the student's"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error",
+            "description": "quota_exceeded, or too_deep: the folders would go more than 8 levels deep"
+          },
+          "419": {
+            "$ref": "#/components/responses/Error"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error",
+            "description": "validation_failed: no place, no file, too large, a kind that can't be uploaded, or one that isn't what its name says (macros, scripts)"
+          }
+        }
+      }
+    },
     "/api/v1/notes": {
       "post": {
         "operationId": "createNote",
@@ -884,6 +961,69 @@
             "type": "string",
             "format": "uri",
             "description": "Where the note's image block points"
+          }
+        }
+      },
+      "UploadedFile": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "size",
+          "place",
+          "url"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name with its extension"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "pdf",
+              "document",
+              "slides",
+              "spreadsheet",
+              "text",
+              "image"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "description": "Bytes"
+          },
+          "place": {
+            "type": "object",
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "workspace",
+                  "module",
+                  "folder"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            },
+            "description": "Where it went: the uploaded folder's own folder when there was one"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The file's page"
           }
         }
       }

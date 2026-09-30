@@ -37,12 +37,7 @@
     x-on:close="$wire.mode && $wire.close()"
     x-on:click="$event.target === $el && $el.close()">
     @if ($mode)
-        <form wire:submit="save" novalidate class="modal-panel" wire:key="dialog-{{ $mode }}-{{ $targetId }}-{{ $creating ? 'new' : 'edit' }}"
-            x-data="{ progress: null, failed: false }"
-            x-on:livewire-upload-start="progress = 0; failed = false"
-            x-on:livewire-upload-progress="progress = $event.detail.progress"
-            x-on:livewire-upload-finish="progress = null"
-            x-on:livewire-upload-error="progress = null; failed = true">
+        <form wire:submit="save" novalidate class="modal-panel" wire:key="dialog-{{ $mode }}-{{ $targetId }}-{{ $creating ? 'new' : 'edit' }}">
             <div class="modal-head">
                 <h2 id="structure-dialog-title" class="min-w-0 flex-1 text-lg font-semibold break-words" @if (in_array($mode, ['move', 'delete', 'bulk-move', 'bulk-delete', 'bulk-destroy'], true)) tabindex="-1" autofocus @endif>{{ $headings[$mode] ?? '' }}</h2>
                 <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
@@ -72,41 +67,38 @@
                         @error('instructions') <p class="field-error">{{ $message }}</p> @enderror
                     </div>
                 @elseif ($mode === 'upload')
-                    <div class="space-y-3">
-                        <label class="drop-zone" x-data="{ over: false }" x-bind:class="over && 'is-over'" x-on:dragenter="over = true" x-on:dragleave="over = false" x-on:drop="over = false">
-                            <input type="file" multiple wire:model="uploads" accept="{{ \App\Study\FileTypes::accept() }}" class="drop-zone-input">
+                    {{-- resources/js/uploader.js: each file on its own, a folder with its folders. Livewire leaves the list alone. --}}
+                    <div class="space-y-3" wire:ignore
+                        x-data="uploader({ url: @js(route('api.v1.files.store')), placeType: @js($targetType), placeId: @js($targetId), maxBytes: {{ $maxUpload }}, extensions: @js([...array_keys(\App\Study\FileTypes::TYPES), 'jpeg']) })">
+                        <div class="drop-zone" x-bind:class="over && 'is-over'" x-on:dragover.prevent="over = true" x-on:dragleave="over = false" x-on:drop.prevent="drop($event)">
                             <x-icon name="upload" class="size-6 text-fg-muted" />
-                            <span class="font-semibold">Choose files, or drop them here</span>
-                            <span class="text-sm text-fg-muted">PDF, Word, PowerPoint, Excel, OpenDocument, text and images, up to {{ \Illuminate\Support\Number::fileSize($maxUpload) }} each</span>
-                        </label>
-                        <div x-show="progress !== null" x-cloak class="upload-progress" role="progressbar" aria-label="Uploading" aria-valuemin="0" aria-valuemax="100" x-bind:aria-valuenow="progress">
-                            <span x-bind:style="`width: ${progress}%`"></span>
+                            <span class="font-semibold">Drop files or folders here</span>
+                            <span class="text-sm text-fg-muted">PDF, Word, PowerPoint, Excel, OpenDocument, text and images, up to {{ \Illuminate\Support\Number::fileSize($maxUpload) }} each. A folder keeps its folders.</span>
+                            <div class="mt-2 flex flex-wrap justify-center gap-2">
+                                <x-button icon="file-up" x-on:click="$refs.files.click()">Choose files</x-button>
+                                <x-button icon="folder-input" x-on:click="$refs.folder.click()">Choose a folder</x-button>
+                            </div>
+                            <input type="file" multiple hidden x-ref="files" x-on:change="choose($event)" accept="{{ \App\Study\FileTypes::accept() }}" data-upload-files>
+                            <input type="file" hidden webkitdirectory x-ref="folder" x-on:change="choose($event)" data-upload-folder>
                         </div>
-                        <p x-show="failed" x-cloak class="field-error">The upload didn't go through. A file may be bigger than {{ \Illuminate\Support\Number::fileSize($maxUpload) }}; try it on its own.</p>
-                        @error('uploads') <p class="field-error">{{ $message }}</p> @enderror
-                        @error('uploads.*') <p class="field-error">{{ $message }}</p> @enderror
-                        @if ($uploads !== [])
-                            <ul class="space-y-1 text-sm" role="list" aria-label="Chosen files">
-                                @foreach ($uploads as $upload)
-                                    @if ($upload instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile)
-                                        <li class="flex items-center gap-2" wire:key="upload-{{ $loop->index }}">
-                                            <x-icon name="file" class="size-4 shrink-0 text-fg-muted" />
-                                            <span class="min-w-0 flex-1 break-words">{{ $upload->getClientOriginalName() }}</span>
-                                            <span class="shrink-0 text-fg-muted">{{ \Illuminate\Support\Number::fileSize((int) $upload->getSize()) }}</span>
-                                        </li>
-                                    @endif
-                                @endforeach
-                            </ul>
-                        @endif
-                        @if ($uploadErrors !== [])
-                            <x-alert tone="danger" :title="count($uploadErrors) === 1 ? 'This file wasn\'t uploaded' : 'These files weren\'t uploaded'">
-                                <ul class="space-y-1" role="list">
-                                    @foreach ($uploadErrors as [$failedName, $reason])
-                                        <li><span class="font-semibold break-words">{{ $failedName }}</span>: {{ $reason }}</li>
-                                    @endforeach
-                                </ul>
-                            </x-alert>
-                        @endif
+                        <p class="text-sm font-medium" role="status" x-text="summary"></p>
+                        <ul class="upload-list" role="list" aria-label="Chosen files" x-show="items.length > 0" x-cloak>
+                            <template x-for="item in items" x-bind:key="item.key">
+                                <li class="upload-item" x-bind:data-state="item.state">
+                                    <span class="upload-icon" aria-hidden="true">
+                                        <span x-show="item.state === 'done'"><x-icon name="circle-check" class="size-4" /></span>
+                                        <span x-show="item.state === 'refused'"><x-icon name="circle-alert" class="size-4" /></span>
+                                        <span x-show="item.state === 'sending'"><x-icon name="loader-circle" class="size-4 animate-spin" /></span>
+                                        <span x-show="item.state === 'waiting'"><x-icon name="file" class="size-4" /></span>
+                                    </span>
+                                    <span class="min-w-0 flex-1">
+                                        <span class="upload-name" x-text="item.path"></span>
+                                        <span class="upload-note" x-text="item.state === 'sending' ? `${item.progress}%` : item.note"></span>
+                                        <span class="upload-progress" x-show="item.state === 'sending'"><span x-bind:style="`width: ${item.progress}%`"></span></span>
+                                    </span>
+                                </li>
+                            </template>
+                        </ul>
                     </div>
                 @elseif (in_array($mode, ['move', 'bulk-move'], true))
                     <fieldset class="space-y-1">
@@ -139,8 +131,10 @@
             </div>
 
             <div class="modal-actions">
-                <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
-                <x-button type="submit" :variant="in_array($mode, ['delete', 'bulk-delete', 'bulk-destroy'], true) ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" :busy-label="in_array($mode, ['delete', 'bulk-delete', 'bulk-destroy'], true) ? 'Deleting…' : ($mode === 'upload' ? 'Checking…' : 'Saving…')" x-bind:disabled="progress !== null">{{ $submit[$mode] ?? 'Save' }}</x-button>
+                <x-button x-on:click="$el.closest('dialog').close()">{{ $mode === 'upload' ? 'Close' : 'Cancel' }}</x-button>
+                @unless ($mode === 'upload')
+                <x-button type="submit" :variant="in_array($mode, ['delete', 'bulk-delete', 'bulk-destroy'], true) ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" :busy-label="in_array($mode, ['delete', 'bulk-delete', 'bulk-destroy'], true) ? 'Deleting…' : ($mode === 'upload' ? 'Checking…' : 'Saving…')">{{ $submit[$mode] ?? 'Save' }}</x-button>
+                @endunless
             </div>
         </form>
     @endif

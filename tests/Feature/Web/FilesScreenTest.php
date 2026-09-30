@@ -7,6 +7,7 @@ use App\Livewire\Workspaces\FileActions;
 use App\Models\User;
 use App\Study\FileDetails;
 use App\Study\Files;
+use App\Study\Folders;
 use App\Study\ModuleDetails;
 use App\Study\Modules;
 use App\Study\WorkspaceDetails;
@@ -40,29 +41,31 @@ class FilesScreenTest extends TestCase
         $this->cells = app(Modules::class)->create($this->principal($this->ada), $this->biology->id, ['title' => 'Cells']);
     }
 
-    public function test_uploading_keeps_the_good_files_and_says_why_the_others_were_refused(): void
+    public function test_files_are_uploaded_one_at_a_time_and_the_refused_ones_say_why(): void
     {
         $this->contents('modules')
             ->call('uploadFiles', 'module', $this->cells->id)
-            ->assertSee('Upload files to Cells')
+            ->assertSee('Upload files to Cells')->assertSee('Choose a folder')
             ->assertSee('accept=".pdf,.docx', false)
-            ->set('uploads', [
-                UploadedFile::fake()->createWithContent('Lecture 2.pdf', $this->pdf()),
-                UploadedFile::fake()->createWithContent('Essay.docm', 'macros'),
-                UploadedFile::fake()->createWithContent('Slides.pdf', "MZ\x90\x00program"),
-            ])
-            ->call('save')
-            ->assertSee('1 file uploaded.')
-            ->assertSet('mode', 'upload')
-            ->assertSee('These files weren&#039;t uploaded', false)
-            ->assertSee('Essay.docm')
-            ->assertSee('This file isn&#039;t really a PDF.', false);
+            // The dialog tells the list it's done: with none refused it closes and says how many.
+            ->call('uploadsFinished', 2, 0)->assertSee('2 files uploaded.')->assertSet('mode', null);
 
-        $this->assertSame(['Lecture 2.pdf'], array_map(fn (FileDetails $f) => $f->fileName(), $this->files()));
-        $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
-            ->assertSeeInOrder(['Cells', '1 file']);
-        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $this->cells->id]))
-            ->assertSeeInOrder(['Cells', 'Lecture 2.pdf', 'PDF · ']);
+        $post = fn (UploadedFile $file, array $more = []) => $this->actingAs($this->ada)->post(route('api.v1.files.store'), ['file' => $file, 'place_type' => 'module', 'place_id' => $this->cells->id] + $more, ['Accept' => 'application/json']);
+        $post(UploadedFile::fake()->createWithContent('Lecture 2.pdf', $this->pdf()))->assertCreated()->assertJsonPath('name', 'Lecture 2.pdf')->assertJsonPath('place.type', 'module');
+        $post(UploadedFile::fake()->createWithContent('Essay.docm', 'macros'))->assertUnprocessable();
+        $post(UploadedFile::fake()->createWithContent('Slides.pdf', "MZ\x90\x00program"))->assertUnprocessable()->assertJsonPath('error.details.fields.file.0', 'This file isn\'t really a PDF.');
+
+        // A file from an uploaded folder goes into the folders it was in, made once and found after.
+        $post(UploadedFile::fake()->createWithContent('Lecture 1.pdf', $this->pdf()), ['folder' => 'Week 1/Lectures'])->assertCreated()->assertJsonPath('place.type', 'folder');
+        $post(UploadedFile::fake()->createWithContent('Lab 1.pdf', $this->pdf()), ['folder' => 'week 1\\Labs'])->assertCreated();
+        $post(UploadedFile::fake()->createWithContent('Macros.docm', 'x'), ['folder' => 'Refused/Never made'])->assertUnprocessable();
+        $folders = app(Folders::class)->tree($this->principal($this->ada), $this->biology->id);
+        $this->assertEqualsCanonicalizing(['Week 1', 'Lectures', 'Labs'], array_map(fn ($f) => $f->name, $folders));
+        $this->assertEqualsCanonicalizing(['Lecture 2.pdf', 'Lecture 1.pdf', 'Lab 1.pdf'], array_map(fn (FileDetails $f) => $f->fileName(), $this->files()));
+
+        // Another student's place is missing.
+        $theirs = app(Workspaces::class)->create($this->principal($this->student()), ['name' => 'Theirs']);
+        $this->actingAs($this->ada)->post(route('api.v1.files.store'), ['file' => UploadedFile::fake()->createWithContent('x.pdf', $this->pdf()), 'place_type' => 'workspace', 'place_id' => $theirs->id], ['Accept' => 'application/json'])->assertNotFound();
     }
 
     public function test_a_file_is_renamed_moved_trashed_restored_and_deleted_from_the_lists(): void
@@ -97,7 +100,11 @@ class FilesScreenTest extends TestCase
             ->assertSee(route('workspaces.modules.show', [$this->biology->id, $this->cells->id]), false)
             ->assertSee('<iframe class="file-preview" src="'.route('files.content', $pdf->id).'"', false)
             ->assertSee(route('files.content', [$pdf->id, 'download' => 1]), false);
-        $this->page($docx)->assertSee('No preview for Word document files yet')->assertDontSee('<iframe', false);
+        // Word, PowerPoint and Excel show as a PDF made by LibreOffice; without it, the page says how to get it.
+        config(['vistud.files.office' => 'none']);
+        $this->page($docx)->assertSee('Word document files show here once LibreOffice is on this computer')->assertDontSee('<iframe', false);
+        config(['vistud.files.office' => PHP_BINARY]);
+        $this->page($docx)->assertSee('Preparing the preview')->assertSee('src="'.route('files.preview', $docx->id).'"', false);
         // Text is shown on the page, escaped.
         $this->page($text)->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)->assertDontSee('<script>alert(1)', false);
 

@@ -1,0 +1,156 @@
+<?php
+
+namespace App\Study;
+
+use App\Platform\Access\Principal;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Symfony\Component\Process\ExecutableFinder;
+use Symfony\Component\Process\Process;
+use Throwable;
+
+/**
+ * Word, PowerPoint and Excel files shown in the browser (the owner's review, 2026-09-30). LibreOffice turns the
+ * file into a PDF the first time it is opened (a few seconds), and the PDF is kept beside it on the files disk,
+ * so the browser's own PDF viewer shows it after that. LibreOffice runs with a fresh profile for each file, with
+ * macros off and links never updated, so a document can't run anything or pull in anything from outside; the
+ * file was checked by FileTypes before it was kept. Without LibreOffice on this computer there is no preview,
+ * and the file page says how to get one.
+ */
+final class FilePreviews
+{
+    /** The kinds that are turned into a PDF to show. */
+    public const KINDS = ['document', 'slides', 'spreadsheet'];
+
+    private const TIMEOUT_SECONDS = 120;
+
+    public function __construct(private Files $files) {}
+
+    public static function converts(FileDetails $file): bool
+    {
+        return in_array($file->kind, self::KINDS, true);
+    }
+
+    /** LibreOffice's soffice on this computer, or null. */
+    public static function converter(): ?string
+    {
+        $configured = trim((string) config('vistud.files.office'));
+        if ($configured === 'none') {
+            return null;
+        }
+        if ($configured !== '') {
+            return is_file($configured) ? $configured : null;
+        }
+        foreach ([
+            'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
+            'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+            '/Applications/LibreOffice.app/Contents/MacOS/soffice',
+        ] as $path) {
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+        $finder = new ExecutableFinder;
+
+        return $finder->find('soffice') ?? $finder->find('libreoffice');
+    }
+
+    /**
+     * The file as a PDF to show: its key on the files disk, made the first time. Null when it can't be made here
+     * (no LibreOffice, or LibreOffice couldn't read it). Another student's file is 404, a trashed one 410.
+     */
+    public function pdf(Principal $by, string $id): ?string
+    {
+        [$file, $key] = $this->files->content($by, $id);
+        if (! self::converts($file)) {
+            return null;
+        }
+        $disk = Files::disk();
+        $pdfKey = self::key($key);
+        if ($disk->exists($pdfKey)) {
+            return $pdfKey;
+        }
+        if ($disk->exists("{$pdfKey}.failed") || ($converter = self::converter()) === null) {
+            return null;
+        }
+
+        $work = storage_path('app/private/previews-work/'.Str::random(20));
+        File::ensureDirectoryExists("{$work}/in");
+        File::ensureDirectoryExists("{$work}/out");
+        File::ensureDirectoryExists("{$work}/profile/user");
+        try {
+            $source = "{$work}/in/source.{$file->extension}";
+            $in = $disk->readStream($key);
+            $out = fopen($source, 'wb');
+            stream_copy_to_stream($in, $out);
+            fclose($in);
+            fclose($out);
+            file_put_contents("{$work}/profile/user/registrymodifications.xcu", self::settings());
+
+            $process = new Process([
+                $converter, '-env:UserInstallation='.self::fileUrl("{$work}/profile"),
+                '--headless', '--norestore', '--nolockcheck', '--nodefault', '--nologo',
+                '--convert-to', 'pdf', '--outdir', "{$work}/out", $source,
+            ], null, PHP_OS_FAMILY === 'Windows' ? null : ['HOME' => $work]);
+            $process->setTimeout(self::TIMEOUT_SECONDS);
+            $process->run();
+
+            $pdf = "{$work}/out/source.pdf";
+            if (is_file($pdf) && str_starts_with((string) file_get_contents($pdf, length: 5), '%PDF-')) {
+                $stream = fopen($pdf, 'rb');
+                $disk->writeStream($pdfKey, $stream);
+                fclose($stream);
+
+                return $pdfKey;
+            }
+            $problem = trim($process->getErrorOutput().' '.$process->getOutput()) ?: 'no PDF';
+        } catch (Throwable $e) {
+            $problem = $e->getMessage();
+        } finally {
+            File::deleteDirectory($work);
+        }
+
+        // Not tried again on every visit: a file LibreOffice can't read won't read next time either.
+        Log::warning('A file preview could not be made.', ['file' => $id, 'problem' => Str::limit($problem, 500)]);
+        $disk->put("{$pdfKey}.failed", Str::limit($problem, 500));
+
+        return null;
+    }
+
+    /** Forgets the preview of a file whose bytes are at $storageKey (the file is deleted). */
+    public static function forget(string $storageKey): void
+    {
+        Files::disk()->delete([self::key($storageKey), self::key($storageKey).'.failed']);
+    }
+
+    private static function key(string $storageKey): string
+    {
+        return str_replace('/files/', '/previews/', $storageKey).'.pdf';
+    }
+
+    /** A local path as the file: URL LibreOffice wants for its profile (C:\Users\a b → file:///C:/Users/a%20b). */
+    private static function fileUrl(string $path): string
+    {
+        $parts = explode('/', str_replace('\\', '/', $path));
+        $parts = array_map(fn ($part) => preg_match('/^[A-Za-z]:$/', $part) ? $part : rawurlencode($part), $parts);
+
+        return 'file://'.(str_starts_with($path, '/') ? '' : '/').implode('/', $parts);
+    }
+
+    /** LibreOffice settings for this run: no macros at all, and links in documents never updated. */
+    private static function settings(): string
+    {
+        $item = fn (string $path, string $name, string $value) => "<item oor:path=\"{$path}\"><prop oor:name=\"{$name}\" oor:op=\"fuse\"><value>{$value}</value></prop></item>";
+
+        return '<?xml version="1.0" encoding="UTF-8"?>'."\n"
+            .'<oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+            .$item('/org.openoffice.Office.Common/Security/Scripting', 'DisableMacrosExecution', 'true')
+            .$item('/org.openoffice.Office.Common/Security/Scripting', 'MacroSecurityLevel', '3')
+            .$item('/org.openoffice.Office.Common/Security/Scripting', 'BlockUntrustedRefererLinks', 'true')
+            // Writer: 0 always, 1 on request, 2 never. Calc: 0 always, 1 never, 2 on request.
+            .$item('/org.openoffice.Office.Writer/Content/Update', 'Link', '2')
+            .$item('/org.openoffice.Office.Calc/Content/Update', 'Link', '1')
+            .'</oor:items>';
+    }
+}

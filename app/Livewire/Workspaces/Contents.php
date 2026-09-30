@@ -28,8 +28,6 @@ use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
-use Livewire\WithFileUploads;
 
 /**
  * What a workspace holds (docs/specs/workspaces.md, steps 2 and 3), as places
@@ -41,7 +39,7 @@ use Livewire\WithFileUploads;
  */
 final class Contents extends Component
 {
-    use BulkActions, Notices, WithFileUploads;
+    use BulkActions, Notices;
 
     /** What the last bulk trash took, for its Undo. Only the server sets it. @var list<string> */
     #[Locked]
@@ -91,13 +89,6 @@ final class Contents extends Component
 
     /** Where a moved folder, note or file goes: workspace:{id}, module:{id} or folder:{id}. */
     public string $destination = '';
-
-    /** Files chosen in the upload dialog, waiting in Livewire's temporary storage. */
-    public array $uploads = [];
-
-    /** The files that couldn't be uploaded, and why: [name, reason]. */
-    #[Locked]
-    public array $uploadErrors = [];
 
     #[Locked]
     public ?string $error = null;
@@ -237,6 +228,21 @@ final class Contents extends Component
         $module = $this->modules->find($this->principal(), $moduleId);
         $this->open('instructions', targetType: 'module', targetId: $module->id);
         $this->instructions = $this->instructionTexts->get($this->principal(), "module:{$module->id}");
+    }
+
+    /**
+     * The upload dialog sent its files (POST /api/v1/files, one at a time, from resources/js/uploader.js): the list
+     * is drawn again with them, and with none refused the dialog closes and says how many.
+     */
+    public function uploadsFinished(int $uploaded, int $refused): void
+    {
+        if ($uploaded > 0) {
+            $this->notify(($uploaded === 1 ? '1 file' : "{$uploaded} files").' uploaded.');
+        }
+        if ($refused === 0) {
+            $this->close();
+            $this->dispatch('structure-dialog-close');
+        }
     }
 
     /** Upload files to the top level (`workspace`), a module or a folder. */
@@ -579,7 +585,6 @@ final class Contents extends Component
                 ['link', true] => '“'.$this->links->add($by, (string) $this->targetType, (string) $this->targetId, ['title' => $this->name, 'url' => $this->url])->title.'” is added.',
                 ['link', false] => '“'.$this->links->update($by, (string) $this->targetId, ['title' => $this->name, 'url' => $this->url])->title.'” is saved.',
                 ['instructions', false] => $this->savedInstructions($by),
-                ['upload', true] => $this->uploaded($by),
                 ['move', false] => $this->moved($by),
                 ['delete', false] => $this->deleted($by),
                 default => null,
@@ -599,8 +604,7 @@ final class Contents extends Component
 
             return;
         }
-        // Some files failed, or none was chosen: the dialog stays open to say which.
-        if ($this->uploadErrors !== [] || $this->getErrorBag()->isNotEmpty()) {
+        if ($this->getErrorBag()->isNotEmpty()) {
             return;
         }
 
@@ -618,12 +622,7 @@ final class Contents extends Component
     /** The dialog closed. */
     public function close(): void
     {
-        foreach ($this->uploads as $upload) {
-            if ($upload instanceof TemporaryUploadedFile) {
-                $upload->delete();
-            }
-        }
-        $this->reset('mode', 'creating', 'targetType', 'targetId', 'title', 'startsOn', 'endsOn', 'name', 'url', 'instructions', 'destination', 'error', 'uploads', 'uploadErrors', 'bulkKeys');
+        $this->reset('mode', 'creating', 'targetType', 'targetId', 'title', 'startsOn', 'endsOn', 'name', 'url', 'instructions', 'destination', 'error', 'bulkKeys');
         $this->resetErrorBag();
     }
 
@@ -876,41 +875,6 @@ final class Contents extends Component
         $this->instructionTexts->set($by, "module:{$this->targetId}", $this->instructions);
 
         return 'The instructions for '.$this->modules->find($by, (string) $this->targetId)->title.' are saved.';
-    }
-
-    /** Each chosen file, checked and kept; the ones that fail are listed with the reason, and stay out. */
-    private function uploaded(Principal $by): ?string
-    {
-        $this->uploadErrors = [];
-        $uploads = array_values(array_filter($this->uploads, fn ($u) => $u instanceof TemporaryUploadedFile));
-        if ($uploads === []) {
-            $this->addError('uploads', 'Choose at least one file.');
-
-            return null;
-        }
-        if (count($uploads) > 10) {
-            $this->addError('uploads', 'Upload up to 10 files at a time.');
-
-            return null;
-        }
-
-        $done = 0;
-        foreach ($uploads as $upload) {
-            $name = $upload->getClientOriginalName();
-            try {
-                $this->files->upload($by, (string) $this->targetType, (string) $this->targetId, $upload->getRealPath(), $name);
-                $done++;
-            } catch (Unprocessable $e) {
-                $this->uploadErrors[] = [$name, $e->details['fields']['file'][0] ?? $e->getMessage()];
-            } catch (Conflict $e) {
-                $this->uploadErrors[] = [$name, $e->getMessage()];
-            } finally {
-                $upload->delete();
-            }
-        }
-        $this->uploads = [];
-
-        return $done === 0 ? null : $done.' '.($done === 1 ? 'file' : 'files').' uploaded.';
     }
 
     private function moved(Principal $by): string

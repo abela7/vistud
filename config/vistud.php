@@ -39,6 +39,9 @@ return [
         'max_bytes' => (int) env('VISTUD_FILES_MAX_BYTES', 25 * 1024 * 1024),
         // Everything one student can store, the trash included.
         'quota_bytes' => (int) env('VISTUD_FILES_QUOTA_BYTES', 2 * 1024 * 1024 * 1024),
+        // LibreOffice's soffice, which turns Word, PowerPoint and Excel files into a PDF to show (App\Study\FilePreviews).
+        // Empty: found where LibreOffice installs itself, or on the PATH. "none": no previews.
+        'office' => env('VISTUD_OFFICE_BINARY'),
     ],
 
     'invitations' => [

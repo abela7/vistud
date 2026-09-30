@@ -65,6 +65,12 @@ final class FileTypes
             Input::refuse(['file' => 'This kind of file can\'t be uploaded. Use PDF, Word, PowerPoint, Excel, OpenDocument, text or an image (PNG, JPG, GIF, WebP).']);
         }
 
+        // Word, PowerPoint, Excel and OpenDocument files are ZIP files inside: without PHP's zip extension they
+        // can't be checked, which is this server's problem, not the file's (php artisan vistud:doctor says so).
+        if (in_array($extension, ['docx', 'pptx', 'xlsx', 'odt', 'odp', 'ods'], true) && ! class_exists(ZipArchive::class)) {
+            Input::refuse(['file' => 'This computer can\'t check '.$type[2].' files yet: PHP\'s zip extension is off. Run php artisan vistud:doctor to see how to turn it on.']);
+        }
+
         $problem = match ($extension) {
             'pdf' => self::pdf($path),
             'docx', 'pptx', 'xlsx' => self::ooxml($path, self::OOXML_MAIN[$extension]),

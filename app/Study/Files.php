@@ -10,6 +10,7 @@ use App\Platform\Errors\Conflict;
 use App\Platform\Errors\Gone;
 use App\Platform\Errors\NotFound;
 use App\Platform\Ids;
+use App\Platform\Uploads\UploadLimits;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -31,22 +32,10 @@ final class Files
 
     public const TRASH_DAYS = 30;
 
-    /** The largest upload that gets through: this app's limit, or PHP's if lower. */
+    /** The largest upload that gets through: this app's limit, or PHP's if lower (App\Platform\Uploads\UploadLimits). */
     public static function maxBytes(): int
     {
-        $ini = function (string $key): int {
-            $value = trim((string) ini_get($key));
-            $number = (int) $value;
-
-            return match (strtolower(substr($value, -1))) {
-                'g' => $number * 1024 ** 3,
-                'm' => $number * 1024 ** 2,
-                'k' => $number * 1024,
-                default => $number,
-            };
-        };
-
-        return min(array_filter([(int) config('vistud.files.max_bytes'), $ini('upload_max_filesize'), $ini('post_max_size')]));
+        return UploadLimits::effective();
     }
 
     /** @return list<FileDetails> the files not in the trash, in order within each place */
@@ -256,6 +245,7 @@ final class Files
     {
         LearnerTables::query($scope, 'files')->where('id', $row->id)->delete();
         self::disk()->delete($row->storage_key);
+        FilePreviews::forget($row->storage_key);
     }
 
     private function nextPosition(LearnerScope $scope, string $workspaceId, ?string $moduleId, ?string $folderId): int

@@ -1711,6 +1711,31 @@
         background-color: var(--surface-raised);
     }
 
+    /* Word, PowerPoint or Excel as a PDF: the wait message sits under the frame until the PDF has come. */
+    .file-preview-office {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .file-preview-office > iframe {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+    }
+
+    .file-preview-wait {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        height: 100%;
+        padding: 1rem;
+        color: var(--text-muted);
+        text-align: center;
+    }
+
     .file-preview-image {
         display: grid;
         place-items: center;
@@ -1773,13 +1798,56 @@
         outline-offset: 1px;
     }
 
-    .drop-zone-input {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        opacity: 0;
-        cursor: pointer;
+    /* The files being uploaded, one line each: its path, then its size, its progress or why it wasn't taken. */
+    .upload-list {
+        max-height: min(22rem, 45dvh);
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+    }
+
+    .upload-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.625rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .upload-item + .upload-item {
+        border-top: 1px solid var(--divider);
+    }
+
+    .upload-icon {
+        display: inline-flex;
+        margin-top: 0.125rem;
+        color: var(--text-muted);
+    }
+
+    .upload-item[data-state='done'] .upload-icon {
+        color: var(--success);
+    }
+
+    .upload-item[data-state='refused'] .upload-icon,
+    .upload-item[data-state='refused'] .upload-note {
+        color: var(--danger);
+    }
+
+    .upload-name {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        overflow-wrap: anywhere;
+    }
+
+    .upload-note {
+        display: block;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .upload-item .upload-progress {
+        display: block;
+        margin-top: 0.25rem;
     }
 
     .upload-progress {

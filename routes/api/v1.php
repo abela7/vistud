@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\FileController;
 use App\Http\Controllers\Api\V1\JournalEntryController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\NoteController;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth')->group(function () {
     Route::get('/me', [MeController::class, 'show'])->name('me');
     Route::get('/journal/entries/{id}', [JournalEntryController::class, 'show'])->name('journal.entries.show');
+    Route::post('/files', [FileController::class, 'store'])->name('files.store');
     Route::post('/notes', [NoteController::class, 'store'])->name('notes.store');
     Route::post('/notes/images', [NoteImageController::class, 'store'])->name('notes.images.store');
     Route::get('/notes/{id}', [NoteController::class, 'show'])->name('notes.show');

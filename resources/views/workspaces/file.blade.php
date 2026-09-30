@@ -1,6 +1,7 @@
 {{--
     A file (App\Http\Controllers\FilePageController): a large preview where
-    the browser can show it (PDF, images, text), and its download. The bytes
+    the browser can show it (PDF, images, text, and Word, PowerPoint and Excel
+    as a PDF made by LibreOffice), and its download. The bytes
     come only from files.content, after the owner check.
 --}}
 @php
@@ -33,6 +34,9 @@
             </nav>
             <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
                 @if ($file->trashedAt === null)
+                    @if ($officePreview !== null)
+                        <a class="btn btn-ghost" href="{{ $officePreview }}" target="_blank" rel="noopener"><x-icon name="external-link" class="size-4" /><span class="max-sm:sr-only">Open in a new tab</span></a>
+                    @endif
                     @if ($file->previewable())
                         <a class="btn btn-ghost" href="{{ $content }}" target="_blank" rel="noopener"><x-icon name="external-link" class="size-4" /><span class="max-sm:sr-only">Open in a new tab</span></a>
                     @endif
@@ -62,6 +66,21 @@
             </x-alert>
         @elseif ($file->kind === 'pdf')
             <iframe class="file-preview" src="{{ $content }}" title="{{ $file->fileName() }}"></iframe>
+        @elseif ($officePreview !== null)
+            {{-- Word, PowerPoint or Excel as a PDF made by LibreOffice (App\Study\FilePreviews): a few seconds the first time. --}}
+            <div class="file-preview file-preview-office" x-data="{ ready: false }">
+                <p class="file-preview-wait" x-show="! ready" role="status">
+                    <x-icon name="loader-circle" class="size-5 animate-spin" />Preparing the preview. The first time takes a few seconds.
+                </p>
+                <iframe src="{{ $officePreview }}" title="{{ $file->fileName() }}" x-on:load="ready = true" x-bind:class="! ready && 'opacity-0'"></iframe>
+            </div>
+        @elseif ($office)
+            <section class="file-preview file-preview-none">
+                <span class="ws-chip size-14"><x-icon :name="$file->icon()" class="size-7" /></span>
+                <h2 class="text-lg font-semibold">{{ $file->typeLabel() }} files show here once LibreOffice is on this computer</h2>
+                <p class="max-w-md text-fg-muted">LibreOffice is free (libreoffice.org). Once it's installed, reload this page. Until then, download the file to open it in {{ $openWith }}.</p>
+                <a class="btn btn-primary" href="{{ route('files.content', [$file->id, 'download' => 1]) }}"><x-icon name="download" class="size-4" />Download</a>
+            </section>
         @elseif ($file->kind === 'image')
             <div class="file-preview file-preview-image">
                 <img src="{{ $content }}" alt="{{ $file->fileName() }}">
