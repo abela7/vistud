@@ -23,11 +23,52 @@ final class Index extends Component
         $this->principals = $principals;
     }
 
+    public ?string $deletingId = null;
+
+    public ?string $deletingName = null;
+
     public function restore(string $workspaceId): void
     {
         $by = $this->principals->fromRequest(request());
         $this->workspaces->restore($by, $workspaceId);
         $this->notice = $this->workspaces->find($by, $workspaceId)->name.' is back in your workspaces.';
+    }
+
+    public function archive(string $workspaceId): void
+    {
+        $by = $this->principals->fromRequest(request());
+        $workspace = $this->workspaces->find($by, $workspaceId);
+        $this->workspaces->archive($by, $workspaceId);
+        $this->notice = "{$workspace->name} is archived. You'll find it under Archived, where you can restore it.";
+    }
+
+    public function confirmDelete(string $workspaceId): void
+    {
+        $by = $this->principals->fromRequest(request());
+        $workspace = $this->workspaces->find($by, $workspaceId);
+        $this->deletingId = $workspaceId;
+        $this->deletingName = $workspace->name;
+        $this->dispatch('workspace-delete-dialog-open');
+    }
+
+    public function cancelDelete(): void
+    {
+        $this->deletingId = null;
+        $this->deletingName = null;
+    }
+
+    public function delete(): void
+    {
+        if ($this->deletingId === null) {
+            return;
+        }
+        $by = $this->principals->fromRequest(request());
+        $name = $this->deletingName ?? 'Workspace';
+        $this->workspaces->delete($by, $this->deletingId);
+        $this->deletingId = null;
+        $this->deletingName = null;
+        $this->notice = "{$name} was deleted.";
+        $this->dispatch('workspace-delete-dialog-close');
     }
 
     public function render(): View
@@ -37,6 +78,7 @@ final class Index extends Component
         return view('livewire.workspaces.index', [
             'active' => $this->workspaces->list($by),
             'archived' => $this->workspaces->list($by, archived: true),
+            'counts' => $this->workspaces->counts($by),
         ]);
     }
 }

@@ -92,6 +92,23 @@ test('editing, archiving and restoring a workspace', async ({ page }) => {
     expect(await wasReloaded(page)).toBe(false);
 });
 
+test('deleting a workspace from the card menu with confirmation modal', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openStudentHome(page, makeStudentWithWorkspaces([['Biology', 'green', 'microscope'], ['Spanish', 'amber', 'languages']]));
+
+    await page.getByRole('button', { name: 'Actions for Biology' }).click();
+    await page.getByRole('button', { name: 'Delete workspace' }).click();
+
+    const dialog = page.locator('#workspace-delete-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('Are you sure you want to delete Biology?')).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Delete workspace' }).click();
+    await expect(page.getByText('Biology was deleted.')).toBeVisible();
+    await expect(page.locator('main').getByRole('link', { name: 'Biology' })).toBeHidden();
+    await expect(page.locator('main').getByRole('link', { name: 'Spanish' })).toBeVisible();
+});
+
 test('phone: the sections sit in a bottom tab bar, and the menu holds the switcher', async ({ page }) => {
     await page.setViewportSize(phone);
     await openStudentHome(page, makeStudentWithWorkspaces([['Biology', 'green', 'microscope']]));

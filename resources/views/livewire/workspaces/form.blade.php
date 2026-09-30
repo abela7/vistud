@@ -66,11 +66,14 @@
 
             <div class="modal-actions">
                 @if ($workspaceId)
-                    @if ($archived)
-                        <x-button icon="archive-restore" class="sm:mr-auto" wire:click="restore" wire:loading.attr="aria-busy" wire:target="restore" busy-label="Restoring…">Restore workspace</x-button>
-                    @else
-                        <x-button variant="ghost" icon="archive" class="sm:mr-auto" wire:click="archive" wire:loading.attr="aria-busy" wire:target="archive" busy-label="Archiving…">Archive</x-button>
-                    @endif
+                    <div class="flex flex-wrap items-center gap-2 sm:mr-auto">
+                        @if ($archived)
+                            <x-button icon="archive-restore" wire:click="restore" wire:loading.attr="aria-busy" wire:target="restore" busy-label="Restoring…">Restore workspace</x-button>
+                        @else
+                            <x-button variant="ghost" icon="archive" wire:click="archive" wire:loading.attr="aria-busy" wire:target="archive" busy-label="Archiving…">Archive</x-button>
+                        @endif
+                        <x-button variant="danger" icon="trash-2" wire:click="delete" wire:confirm="Are you sure you want to delete this workspace? All its contents will be permanently deleted." wire:loading.attr="aria-busy" wire:target="delete" busy-label="Deleting…">Delete</x-button>
+                    </div>
                 @endif
                 <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
                 <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ $workspaceId ? 'Save changes' : 'Create workspace' }}</x-button>

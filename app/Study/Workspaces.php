@@ -118,6 +118,115 @@ final class Workspaces
         $this->setArchived($by, $id, false);
     }
 
+    /**
+     * Deletes the workspace and everything inside it: modules, folders, notes,
+     * files, flashcards, study sessions, and its instructions.
+     */
+    public function delete(Principal $by, string $id): void
+    {
+        $scope = Guard::learner($by);
+
+        DB::transaction(function () use ($by, $scope, $id) {
+            $row = $this->lock($scope, $id);
+
+            // Clean up uploaded files storage
+            $fileStorageKeys = LearnerTables::query($scope, 'files')->where('workspace_id', $id)->pluck('storage_key')->all();
+            if ($fileStorageKeys !== []) {
+                Files::disk()->delete($fileStorageKeys);
+            }
+
+            // Tombstone notes before deleting
+            $noteIds = LearnerTables::query($scope, 'notes')->where('workspace_id', $id)->pluck('id')->all();
+            foreach ($noteIds as $noteId) {
+                LearnerTables::insert($scope, 'content_tombstones', [
+                    'entity_type' => 'note',
+                    'entity_id' => $noteId,
+                    'kind' => 'deleted',
+                    'at' => now(),
+                ]);
+            }
+            if ($noteIds !== []) {
+                LearnerTables::query($scope, 'note_versions')->whereIn('note_id', $noteIds)->delete();
+                LearnerTables::query($scope, 'notes')->whereIn('id', $noteIds)->delete();
+            }
+
+            // Delete module instructions, then modules
+            $moduleIds = LearnerTables::query($scope, 'modules')->where('workspace_id', $id)->pluck('id')->all();
+            if ($moduleIds !== []) {
+                LearnerTables::query($scope, 'instructions')->whereIn('scope', array_map(fn ($mId) => "module:{$mId}", $moduleIds))->delete();
+            }
+
+            // Delete files, folders, modules
+            LearnerTables::query($scope, 'files')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'folders')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'modules')->where('workspace_id', $id)->delete();
+
+            // Delete study sessions, segments, flashcards
+            $sessionIds = LearnerTables::query($scope, 'study_sessions')->where('workspace_id', $id)->pluck('id')->all();
+            if ($sessionIds !== []) {
+                LearnerTables::query($scope, 'session_segments')->whereIn('session_id', $sessionIds)->delete();
+                LearnerTables::query($scope, 'study_sessions')->whereIn('id', $sessionIds)->delete();
+            }
+            LearnerTables::query($scope, 'flashcards')->where('workspace_id', $id)->delete();
+
+            // Delete topics, questions, findings, links, activities, instructions
+            LearnerTables::query($scope, 'topics')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'questions')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'findings')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'links')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'activities')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'instructions')->where('scope', "workspace:{$id}")->delete();
+
+            // Delete workspace
+            LearnerTables::query($scope, 'workspaces')->where('id', $id)->delete();
+
+            $fields = array_intersect_key((array) $row, array_flip(['name', 'code', 'term', 'starts_on', 'ends_on', 'colour', 'icon']));
+            $this->record($by, $scope, $id, $row->revision + 1, $fields, archived: false, deleted: true);
+        });
+    }
+
+    /**
+     * Item counts for workspaces (modules, notes, files).
+     *
+     * @return array<string, array{modules: int, notes: int, files: int}>
+     */
+    public function counts(Principal $by): array
+    {
+        $scope = Guard::learner($by);
+
+        $modules = LearnerTables::query($scope, 'modules')
+            ->selectRaw('workspace_id, count(*) as total')
+            ->groupBy('workspace_id')
+            ->pluck('total', 'workspace_id')
+            ->all();
+
+        $notes = LearnerTables::query($scope, 'notes')
+            ->whereNull('trashed_at')
+            ->selectRaw('workspace_id, count(*) as total')
+            ->groupBy('workspace_id')
+            ->pluck('total', 'workspace_id')
+            ->all();
+
+        $files = LearnerTables::query($scope, 'files')
+            ->whereNull('trashed_at')
+            ->selectRaw('workspace_id, count(*) as total')
+            ->groupBy('workspace_id')
+            ->pluck('total', 'workspace_id')
+            ->all();
+
+        $workspaceIds = LearnerTables::query($scope, 'workspaces')->pluck('id');
+        $counts = [];
+        foreach ($workspaceIds as $id) {
+            $counts[$id] = [
+                'modules' => (int) ($modules[$id] ?? 0),
+                'notes' => (int) ($notes[$id] ?? 0),
+                'files' => (int) ($files[$id] ?? 0),
+            ];
+        }
+
+        return $counts;
+    }
+
     private function setArchived(Principal $by, string $id, bool $archived): void
     {
         $scope = Guard::learner($by);
@@ -146,8 +255,13 @@ final class Workspaces
     }
 
     /** A new revision of the workspace's journal record, with its current details. */
-    private function record(Principal $by, LearnerScope $scope, string $id, int $revision, array $fields, bool $archived): void
+    private function record(Principal $by, LearnerScope $scope, string $id, int $revision, array $fields, bool $archived, bool $deleted = false): void
     {
+        $status = match (true) {
+            $deleted => 'deleted',
+            $archived => 'archived',
+            default => 'active',
+        };
         $this->journal->append($scope, [
             'id' => Ids::new(),
             'kind' => 'record',
@@ -163,7 +277,7 @@ final class Workspaces
                 'starts_on' => $fields['starts_on'] ?? null,
                 'ends_on' => $fields['ends_on'] ?? null,
                 'colour' => $fields['colour'],
-                'status' => $archived ? 'archived' : 'active',
+                'status' => $status,
             ], fn ($value) => $value !== null),
         ]);
     }

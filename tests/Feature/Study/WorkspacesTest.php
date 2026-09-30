@@ -120,6 +120,35 @@ class WorkspacesTest extends TestCase
         $this->assertSame(['active', 'archived', 'active'], array_map(fn ($r) => $r->body['status'], array_slice($this->workspaceRecords($this->ada), -3)));
     }
 
+    public function test_deleting_removes_the_workspace_and_records_deletion_in_journal(): void
+    {
+        $by = $this->principal($this->ada);
+        $biology = $this->workspaces->create($by, ['name' => 'Biology']);
+        $maths = $this->workspaces->create($by, ['name' => 'Mathematics']);
+
+        $this->workspaces->delete($by, $biology->id);
+
+        $this->assertSame(['Mathematics'], array_map(fn ($w) => $w->name, $this->workspaces->list($by)));
+        $this->assertThrows(fn () => $this->workspaces->find($by, $biology->id), NotFound::class);
+
+        $records = $this->workspaceRecords($this->ada);
+        $lastRecord = end($records);
+        $this->assertSame(['workspace', $biology->id, 2, 'deleted'], [
+            $lastRecord->body['record_type'], $lastRecord->body['record_id'],
+            $lastRecord->body['revision'], $lastRecord->body['status'],
+        ]);
+    }
+
+    public function test_counts_returns_item_totals(): void
+    {
+        $by = $this->principal($this->ada);
+        $biology = $this->workspaces->create($by, ['name' => 'Biology']);
+
+        $counts = $this->workspaces->counts($by);
+        $this->assertArrayHasKey($biology->id, $counts);
+        $this->assertSame(['modules' => 0, 'notes' => 0, 'files' => 0], $counts[$biology->id]);
+    }
+
     /** @return list<JournalEntry> */
     private function workspaceRecords(User $student): array
     {

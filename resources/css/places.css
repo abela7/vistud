@@ -27,16 +27,42 @@
     }
 
     /* A tile's own menu sits above its link, and an open menu above the tiles around it. */
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card) .relative:has(> [data-menu-button]) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card, .workspace-card) .relative:has(> [data-menu-button]) {
         z-index: 1;
     }
 
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card) .relative:has(> [data-menu-button][aria-expanded='true']) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card, .workspace-card) .relative:has(> [data-menu-button][aria-expanded='true']) {
         z-index: 30;
     }
 
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card):has([data-menu-button][aria-expanded='true']) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card, .workspace-card):has([data-menu-button][aria-expanded='true']) {
         z-index: 30;
+    }
+
+    /* ---------- Workspace cards (My workspaces) ---------- */
+
+    .workspace-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 0.875rem;
+        min-height: 10.5rem;
+        padding: 1.25rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+        box-shadow: inset 0 3px 0 var(--ws, var(--accent)), var(--elevation-sm);
+        transition:
+            border-color 0.15s ease,
+            box-shadow 0.15s ease;
+    }
+
+    .workspace-card:hover {
+        border-color: var(--border-strong);
+        box-shadow:
+            inset 0 3px 0 var(--ws, var(--accent)),
+            var(--elevation-md);
     }
 
     .tile-link:focus-visible::after {

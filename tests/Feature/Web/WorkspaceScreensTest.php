@@ -139,6 +139,46 @@ class WorkspaceScreensTest extends TestCase
         $this->assertFalse($this->find($biology->id)->archived());
     }
 
+    public function test_archiving_and_deleting_from_my_workspaces(): void
+    {
+        $biology = $this->create('Biology');
+        $maths = $this->create('Mathematics');
+
+        $this->livewire(Index::class)
+            ->call('archive', $biology->id)
+            ->assertSee('Biology is archived.')
+            ->call('confirmDelete', $maths->id)
+            ->assertSet('deletingId', $maths->id)
+            ->assertSet('deletingName', 'Mathematics')
+            ->call('delete')
+            ->assertSee('Mathematics was deleted.');
+
+        $this->assertThrows(fn () => $this->find($maths->id), \App\Platform\Errors\NotFound::class);
+        $this->assertTrue($this->find($biology->id)->archived());
+    }
+
+    public function test_deleting_through_the_form(): void
+    {
+        $biology = $this->create('Biology');
+
+        $this->form($biology->id)
+            ->call('delete')
+            ->assertRedirect(route('home'));
+
+        $this->assertThrows(fn () => $this->find($biology->id), \App\Platform\Errors\NotFound::class);
+        $this->assertSame('Biology was deleted.', session('workspace-notice'));
+    }
+
+    public function test_opening_form_for_edit_via_event(): void
+    {
+        $biology = $this->create('Biology');
+
+        $this->form()
+            ->dispatch('workspace-edit', workspaceId: $biology->id)
+            ->assertSet('workspaceId', $biology->id)
+            ->assertSet('name', 'Biology');
+    }
+
     public function test_the_browser_cannot_change_which_workspace_the_form_edits(): void
     {
         $this->expectException(CannotUpdateLockedPropertyException::class);
