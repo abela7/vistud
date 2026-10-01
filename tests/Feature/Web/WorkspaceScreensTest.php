@@ -5,6 +5,7 @@ namespace Tests\Feature\Web;
 use App\Livewire\Workspaces\Form;
 use App\Livewire\Workspaces\Index;
 use App\Models\User;
+use App\Platform\Errors\NotFound;
 use App\Study\Workspaces;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
@@ -153,7 +154,7 @@ class WorkspaceScreensTest extends TestCase
             ->call('delete')
             ->assertSee('Mathematics was deleted.');
 
-        $this->assertThrows(fn () => $this->find($maths->id), \App\Platform\Errors\NotFound::class);
+        $this->assertThrows(fn () => $this->find($maths->id), NotFound::class);
         $this->assertTrue($this->find($biology->id)->archived());
     }
 
@@ -165,7 +166,7 @@ class WorkspaceScreensTest extends TestCase
             ->call('delete')
             ->assertRedirect(route('home'));
 
-        $this->assertThrows(fn () => $this->find($biology->id), \App\Platform\Errors\NotFound::class);
+        $this->assertThrows(fn () => $this->find($biology->id), NotFound::class);
         $this->assertSame('Biology was deleted.', session('workspace-notice'));
     }
 

@@ -126,14 +126,10 @@ final class Workspaces
     {
         $scope = Guard::learner($by);
 
-        DB::transaction(function () use ($by, $scope, $id) {
+        // The stored files go only once the rows are gone for good: a failed delete keeps everything.
+        $storageKeys = DB::transaction(function () use ($by, $scope, $id) {
             $row = $this->lock($scope, $id);
-
-            // Clean up uploaded files storage
-            $fileStorageKeys = LearnerTables::query($scope, 'files')->where('workspace_id', $id)->pluck('storage_key')->all();
-            if ($fileStorageKeys !== []) {
-                Files::disk()->delete($fileStorageKeys);
-            }
+            $storageKeys = LearnerTables::query($scope, 'files')->where('workspace_id', $id)->pluck('storage_key')->all();
 
             // Tombstone notes before deleting
             $noteIds = LearnerTables::query($scope, 'notes')->where('workspace_id', $id)->pluck('id')->all();
@@ -182,7 +178,14 @@ final class Workspaces
 
             $fields = array_intersect_key((array) $row, array_flip(['name', 'code', 'term', 'starts_on', 'ends_on', 'colour', 'icon']));
             $this->record($by, $scope, $id, $row->revision + 1, $fields, archived: false, deleted: true);
+
+            return $storageKeys;
         });
+
+        foreach ($storageKeys as $key) {
+            Files::disk()->delete($key);
+            FilePreviews::forget($key);
+        }
     }
 
     /**

@@ -8,16 +8,22 @@ use App\Models\User;
 use App\Platform\Errors\Forbidden;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\Files;
+use App\Study\Modules;
+use App\Study\Notes;
 use App\Study\Workspaces;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\BuildsJournalEntries;
 use Tests\Concerns\CreatesAccounts;
+use Tests\Concerns\MakesStudyFiles;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
 /** A student's workspaces (docs/specs/workspaces.md, M2 step 1). */
 class WorkspacesTest extends TestCase
 {
-    use BuildsJournalEntries, CreatesAccounts, RefreshesDatabase;
+    use BuildsJournalEntries, CreatesAccounts, MakesStudyFiles, RefreshesDatabase;
 
     private Workspaces $workspaces;
 
@@ -137,6 +143,29 @@ class WorkspacesTest extends TestCase
             $lastRecord->body['record_type'], $lastRecord->body['record_id'],
             $lastRecord->body['revision'], $lastRecord->body['status'],
         ]);
+    }
+
+    public function test_deleting_takes_its_modules_notes_and_stored_files_with_it(): void
+    {
+        Storage::fake('local');
+        $by = $this->principal($this->ada);
+        $biology = $this->workspaces->create($by, ['name' => 'Biology']);
+        $maths = $this->workspaces->create($by, ['name' => 'Mathematics']);
+        $cells = app(Modules::class)->create($by, $biology->id, ['title' => 'Cells']);
+        $algebra = app(Modules::class)->create($by, $maths->id, ['title' => 'Algebra']);
+        app(Notes::class)->create($by, 'module', $cells->id, 'Mitosis');
+        $kept = app(Notes::class)->create($by, 'module', $algebra->id, 'Groups');
+        $file = app(Files::class)->upload($by, 'module', $cells->id, $this->temp($this->pdf()), 'cells.pdf');
+        $key = DB::table('files')->where('id', $file->id)->value('storage_key');
+        Storage::disk('local')->assertExists($key);
+
+        $this->workspaces->delete($by, $biology->id);
+
+        Storage::disk('local')->assertMissing($key);
+        $this->assertSame(0, DB::table('modules')->where('workspace_id', $biology->id)->count());
+        $this->assertSame(0, DB::table('notes')->where('workspace_id', $biology->id)->count());
+        $this->assertSame(0, DB::table('files')->where('workspace_id', $biology->id)->count());
+        $this->assertSame('Groups', app(Notes::class)->find($by, $kept->id)->title);
     }
 
     public function test_counts_returns_item_totals(): void

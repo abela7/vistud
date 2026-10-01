@@ -6,6 +6,7 @@ use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /** My workspaces: the student's workspaces as cards, and the archived ones to restore. */
@@ -23,8 +24,11 @@ final class Index extends Component
         $this->principals = $principals;
     }
 
+    /** The workspace the delete dialog asks about; only confirmDelete() sets it. */
+    #[Locked]
     public ?string $deletingId = null;
 
+    #[Locked]
     public ?string $deletingName = null;
 
     public function restore(string $workspaceId): void
