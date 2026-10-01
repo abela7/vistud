@@ -259,7 +259,7 @@
                         <p class="file-preview-wait" x-show="! ready" role="status">
                             <x-icon name="loader-circle" class="size-5 animate-spin" />Preparing the preview. The first time takes a few seconds.
                         </p>
-                        <iframe data-pdf-src="{{ $officePreview }}" title="{{ $file->fileName() }}" x-bind:class="! ready && 'opacity-0'"></iframe>
+                        <iframe data-pdf-src="{{ $officePreview }}" data-pdf-made title="{{ $file->fileName() }}" x-bind:class="! ready && 'opacity-0'"></iframe>
                     </div>
                 @elseif ($office)
                     <section class="file-preview file-preview-none">

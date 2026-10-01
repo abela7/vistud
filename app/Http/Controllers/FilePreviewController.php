@@ -10,15 +10,16 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * /files/{file}/preview: a Word, PowerPoint or Excel file as a PDF, for the browser's PDF viewer on the file's
- * page (App\Study\FilePreviews). Made the first time, which takes a few seconds. Only for its owner: anyone else
- * gets 404, like a missing file, and a trashed one 410.
+ * page (App\Study\FilePreviews). Made the first time, which takes a few seconds; 202 with Retry-After while it is
+ * being made elsewhere or every conversion slot is taken. Only for its owner: anyone else gets 404, like a missing
+ * file, and a trashed one 410.
  */
 class FilePreviewController
 {
     public function __invoke(Request $request, PrincipalFactory $principals, Files $files, FilePreviews $previews, string $file): Response
     {
-        // LibreOffice may take a while with a long deck, or wait its turn (FilePreviews); the PHP default of 30 seconds is too short.
-        set_time_limit(300);
+        // LibreOffice may take a while with a long deck; the PHP default of 30 seconds is too short.
+        set_time_limit(180);
         $by = $principals->fromRequest($request);
         $details = $files->find($by, $file);
         $key = $previews->pdf($by, $file);
@@ -29,6 +30,14 @@ class FilePreviewController
             'Cross-Origin-Resource-Policy' => 'same-origin',
             'Referrer-Policy' => 'no-referrer',
         ];
+        if ($key === FilePreviews::PREPARING) {
+            // Being made, or waiting for a free slot: the page asks again (resources/js/app.js), so no request waits here.
+            return response('The preview is being prepared.', 202, $headers + [
+                'Content-Type' => 'text/plain; charset=utf-8',
+                'Retry-After' => '2',
+                'Content-Security-Policy' => "default-src 'none'; sandbox",
+            ]);
+        }
         if ($key === null) {
             return response("This file can't be shown here. Download it to open it on your computer.", 422, $headers + [
                 'Content-Type' => 'text/plain; charset=utf-8',

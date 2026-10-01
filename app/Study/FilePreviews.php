@@ -4,7 +4,6 @@ namespace App\Study;
 
 use App\Platform\Access\Principal;
 use Illuminate\Contracts\Cache\Lock;
-use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
@@ -27,6 +26,9 @@ final class FilePreviews
     public const KINDS = ['document', 'slides', 'spreadsheet'];
 
     private const TIMEOUT_SECONDS = 120;
+
+    /** pdf(): the PDF is being made, or waits for a free slot; ask again in a moment. */
+    public const PREPARING = 'preparing';
 
     /** Why a conversion didn't run: every slot was taken (not the file's fault). */
     private const BUSY = 'busy: too many conversions at once';
@@ -63,8 +65,10 @@ final class FilePreviews
     }
 
     /**
-     * The file as a PDF to show: its key on the files disk, made the first time. Null when it can't be made here
-     * (no LibreOffice, or LibreOffice couldn't read it). Another student's file is 404, a trashed one 410.
+     * The file as a PDF to show: its key on the files disk, made the first time (a few seconds). PREPARING when
+     * it is being made by another request, or every conversion slot is taken: the page asks again shortly, so no
+     * request ever sits waiting on the server. Null when it can't be made here (no LibreOffice, or LibreOffice
+     * couldn't read it). Another student's file is 404, a trashed one 410.
      */
     public function pdf(Principal $by, string $id): ?string
     {
@@ -81,21 +85,23 @@ final class FilePreviews
             return null;
         }
 
-        // One conversion of a file at a time: a page asking twice, or two tabs, wait for it and take its PDF.
+        // One conversion of a file at a time: a page asking again, or a second tab, hears it is being made.
+        $lock = Cache::lock("vistud:preview:{$pdfKey}", self::TIMEOUT_SECONDS + 30);
+        if (! $lock->get()) {
+            return self::PREPARING;
+        }
         try {
-            return Cache::lock("vistud:preview:{$pdfKey}", self::TIMEOUT_SECONDS * 2)->block(self::TIMEOUT_SECONDS * 2, function () use ($disk, $pdfKey, $key, $file, $converter, $id) {
-                if ($disk->exists($pdfKey)) {
-                    return $pdfKey;
-                }
+            if ($disk->exists($pdfKey)) {
+                return $pdfKey;
+            }
 
-                return $disk->exists("{$pdfKey}.failed") ? null : $this->make($disk, $key, $pdfKey, $file, $converter, $id);
-            });
-        } catch (LockTimeoutException) {
-            return null;
+            return $disk->exists("{$pdfKey}.failed") ? null : $this->make($disk, $key, $pdfKey, $file, $converter, $id);
+        } finally {
+            $lock->release();
         }
     }
 
-    /** Makes the PDF of the file at $key with LibreOffice and keeps it at $pdfKey; null when LibreOffice can't read the file. */
+    /** Makes the PDF of the file at $key with LibreOffice and keeps it at $pdfKey; null when LibreOffice can't read the file, PREPARING when no slot is free. */
     private function make($disk, string $key, string $pdfKey, FileDetails $file, string $converter, string $id): ?string
     {
         $work = storage_path('app/private/previews-work/'.Str::random(20));
@@ -108,7 +114,7 @@ final class FilePreviews
             fclose($in);
             fclose($out);
 
-            $pdf = self::convert($converter, $work, $source, 'pdf', null, $problem);
+            $pdf = self::convert($converter, $work, $source, 'pdf', null, $problem, waitSeconds: 0);
             if ($pdf !== null && str_starts_with((string) file_get_contents($pdf, length: 5), '%PDF-')) {
                 $stream = fopen($pdf, 'rb');
                 $disk->writeStream($pdfKey, $stream);
@@ -122,9 +128,9 @@ final class FilePreviews
         } finally {
             File::deleteDirectory($work);
         }
-        // Too busy is not the file's fault: it is tried again next time.
+        // Every slot taken is not the file's fault: the page asks again shortly.
         if ($problem === self::BUSY) {
-            return null;
+            return self::PREPARING;
         }
 
         // Not tried again on every visit: a file LibreOffice can't read won't read next time either.
@@ -137,11 +143,12 @@ final class FilePreviews
     /**
      * LibreOffice turns $source, in the folder $work (which it fills, and the caller deletes), into $format: 'pdf',
      * or a format with its filter ('docx:MS Word 2007 XML'). A fresh profile each time, with macros off and links
-     * never updated. The file it made, or null, with $problem saying why not.
+     * never updated. Waits up to $waitSeconds for a free slot. The file it made, or null, with $problem saying
+     * why not (BUSY when no slot came free).
      */
-    public static function convert(string $converter, string $work, string $source, string $format, ?string $inputFilter, ?string &$problem): ?string
+    public static function convert(string $converter, string $work, string $source, string $format, ?string $inputFilter, ?string &$problem, int $waitSeconds = 30): ?string
     {
-        $slot = self::slot();
+        $slot = self::slot($waitSeconds);
         if ($slot === null) {
             $problem = self::BUSY;
 
@@ -156,13 +163,13 @@ final class FilePreviews
 
     /**
      * One of the few conversions allowed at once (vistud.files.office_at_once): each LibreOffice takes about
-     * 200 MB for a few seconds, so many students opening slides together never take all the memory. Waits for
-     * one to come free; null when none does in time.
+     * 200 MB for a few seconds, so many students opening slides together never take all the memory. Waits up to
+     * $waitSeconds for one to come free; null when none does.
      */
-    private static function slot(): ?Lock
+    private static function slot(int $waitSeconds): ?Lock
     {
         $slots = max(1, (int) config('vistud.files.office_at_once', 2));
-        $until = microtime(true) + self::TIMEOUT_SECONDS;
+        $until = microtime(true) + $waitSeconds;
         do {
             for ($slot = 1; $slot <= $slots; $slot++) {
                 $lock = Cache::lock("vistud:office-slot:{$slot}", self::TIMEOUT_SECONDS + 30);
@@ -170,8 +177,11 @@ final class FilePreviews
                     return $lock;
                 }
             }
+            if (microtime(true) >= $until) {
+                return null;
+            }
             usleep(250_000);
-        } while (microtime(true) < $until);
+        } while (true);
 
         return null;
     }

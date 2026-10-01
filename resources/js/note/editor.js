@@ -480,6 +480,17 @@ export async function mount(host) {
     const note = JSON.parse(host.querySelector('[data-note-doc]').textContent);
     const accountId = host.dataset.account;
     const titleField = host.querySelector('[data-note-title]');
+    // Started late (the tab was opened in the background, resources/js/app.js): another tab may have saved since.
+    if (host.hasAttribute('data-late') && host.dataset.saveUrl) {
+        try {
+            const response = await fetch(host.dataset.saveUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+            const current = response.ok ? await response.json() : null;
+            if (current && current.version > note.version) {
+                [note.version, note.doc] = [current.version, current.doc];
+                titleField.value = current.title;
+            }
+        } catch {}
+    }
     const status = document.querySelector('[data-save-status]');
     const alerts = document.querySelector('[data-note-alerts]');
     const heading = document.querySelector('[data-note-heading]');

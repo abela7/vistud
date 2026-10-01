@@ -14,6 +14,7 @@ use App\Study\Notes;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
@@ -105,7 +106,7 @@ class FilesScreenTest extends TestCase
         config(['vistud.files.office' => 'none']);
         $this->page($docx)->assertSee('Word document files show here once LibreOffice is on this computer')->assertDontSee('<iframe', false);
         config(['vistud.files.office' => PHP_BINARY]);
-        $this->page($docx)->assertSee('Preparing the preview')->assertSee('src="'.route('files.preview', $docx->id).'"', false);
+        $this->page($docx)->assertSee('Preparing the preview')->assertSee('data-pdf-src="'.route('files.preview', $docx->id).'" data-pdf-made', false);
         // Text is shown on the page, escaped.
         $this->page($text)->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)->assertDontSee('<script>alert(1)', false);
 
@@ -146,6 +147,21 @@ class FilesScreenTest extends TestCase
 
         app(Files::class)->trash($this->principal($this->ada), $file->id);
         $this->actingAs($this->ada)->get(route('files.content', $file->id))->assertStatus(410);
+    }
+
+    public function test_a_busy_computer_says_the_preview_is_being_prepared_at_once_and_never_gives_up_on_the_file(): void
+    {
+        config(['vistud.files.office' => PHP_BINARY, 'vistud.files.office_at_once' => 1]);
+        $docx = $this->stored('Essay.docx', $this->ooxml('word/document.xml'));
+        // The one conversion slot is taken by another student's file.
+        $slot = Cache::lock('vistud:office-slot:1', 60);
+        $slot->get();
+
+        $started = microtime(true);
+        $this->actingAs($this->ada)->get(route('files.preview', $docx->id))->assertStatus(202)->assertHeader('Retry-After', '2');
+        $this->actingAs($this->ada)->get(route('files.preview', $docx->id))->assertStatus(202);
+        $this->assertLessThan(5, microtime(true) - $started);
+        $slot->release();
     }
 
     public function test_a_markdown_file_is_shown_as_it_was_meant_to_look_and_opens_as_a_note(): void
