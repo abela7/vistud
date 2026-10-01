@@ -52,9 +52,10 @@ export function createAutosave(o) {
     const status = () => {
         if (halted) return halted;
         if (retryAt) return 'retrying';
+        // On the server is the truth even while offline: only unsent changes are "on this device".
+        if (rev === savedRev && !pending) return 'saved';
         if (!storageOk) return 'nostorage';
         if (!navigator.onLine) return 'offline';
-        if (rev === savedRev && !pending) return 'saved';
         return 'saving';
     };
 

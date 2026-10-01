@@ -4,7 +4,8 @@ import { openStudentHome, makeStudentWithNote, useTheme } from './support.js';
 
 const desktop = { width: 1440, height: 900 };
 const splitDesktop = { width: 1200, height: 850 };
-const artifactsDir = 'C:\\Users\\abelg\\.gemini\\antigravity\\brain\\202b53cc-a1a0-49f7-929b-2722878e5410';
+// Screenshots for a person to look at; test-results/ is never committed.
+const artifactsDir = path.join('test-results', 'screens');
 
 const samplePng = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAlgAAAGQCAYAAAByNR6YAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAGXRFWHRTb2Z0d2FyZQBHUFAgU3VyZmFjZQDt1Qd2AAAPVUlEQVR42u3BAQ0AAADCoPdPbQ43oAAAAAAAAAAAAAAA' +

@@ -25,13 +25,6 @@ class AppServiceProvider extends ServiceProvider
     {
         Model::shouldBeStrict(! $this->app->isProduction());
 
-        if ($this->app->runningInConsole()) {
-            \Illuminate\Foundation\Console\ServeCommand::$passthroughVariables = array_merge(
-                \Illuminate\Foundation\Console\ServeCommand::$passthroughVariables,
-                ['TEMP', 'TMP', 'USERPROFILE', 'LOCALAPPDATA', 'APPDATA']
-            );
-        }
-
         // A Livewire action re-runs its page's access checks, so an admin
         // component can't be reached by posting to Livewire's own endpoint
         // (ADR 0003 §10.3, T2). The services check again.

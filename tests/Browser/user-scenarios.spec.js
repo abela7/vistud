@@ -4,13 +4,17 @@ import fs from 'fs';
 import { openStudentHome, makeStudentWithWorkspaces } from './support.js';
 
 const desktop = { width: 1440, height: 900 };
-const artifactsDir = 'C:\\Users\\abelg\\.gemini\\antigravity\\brain\\202b53cc-a1a0-49f7-929b-2722878e5410';
-const osFolder = 'C:\\Users\\abelg\\.gemini\\antigravity\\brain\\202b53cc-a1a0-49f7-929b-2722878e5410\\scratch\\Operating Systems';
+// Screenshots for a person to look at; test-results/ is never committed.
+const artifactsDir = path.join('test-results', 'screens');
+// A real course folder on the tester's computer (VISTUD_COURSE_FOLDER=".../Operating Systems").
+// Without it these scenarios are skipped: the files are too big to keep in the repository.
+const osFolder = process.env.VISTUD_COURSE_FOLDER ?? '';
 const lecturePdf = path.join(osFolder, 'Week 1 - Architecture & System Calls', 'Lectures', 'Lecture 01 - Kernel and System Calls.pdf');
 const courseDocx = path.join(osFolder, 'Week 1 - Architecture & System Calls', 'Readings', 'Syllabus and Course Policies.docx');
 const coursePptx = path.join(osFolder, 'Week 2 - Processes & Scheduling', 'Slides', 'Lecture 02 - Process Management.pptx');
 
 test.describe.configure({ timeout: 90_000 });
+test.skip(!osFolder || !fs.existsSync(osFolder), 'Set VISTUD_COURSE_FOLDER to a real course folder to run these.');
 
 test('User testing: 1. Upload real lecture PDF (> 2 MB) and open it', async ({ page }) => {
     await page.setViewportSize(desktop);
