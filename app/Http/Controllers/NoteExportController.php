@@ -37,7 +37,7 @@ class NoteExportController
         [$type, $office] = NoteExports::FORMATS[$format];
         if ($office) {
             // LibreOffice takes a few seconds, more the first time.
-            @set_time_limit(180);
+            @set_time_limit(300);
         }
         $body = NoteExports::make(Guard::learner($by)->learnerId, $opened, $format);
         if ($body === null) {

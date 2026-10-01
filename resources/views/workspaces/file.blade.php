@@ -251,15 +251,15 @@
                         It can't be opened while it's there. Restore it to use it again; otherwise it's deleted 30 days after it was trashed.
                     </x-alert>
                 @elseif ($file->kind === 'pdf')
-                    {{-- data-pdf-frame: drawn by PDF.js where the browser can't show a PDF inside the page (resources/js/pdf-viewer.js). --}}
-                    <iframe class="file-preview" src="{{ $content }}" title="{{ $file->fileName() }}" data-pdf-frame></iframe>
+                    {{-- data-pdf-src: the browser's own PDF viewer, or PDF.js where it can't show a PDF inside the page (resources/js/app.js). --}}
+                    <iframe class="file-preview" data-pdf-src="{{ $content }}" title="{{ $file->fileName() }}"></iframe>
                 @elseif ($officePreview !== null)
-                    {{-- Word, PowerPoint or Excel as a PDF made by LibreOffice (App\Study\FilePreviews): a few seconds the first time. --}}
-                    <div class="file-preview file-preview-office" x-data="{ ready: false }" x-on:pdf-shown="ready = true" x-init="fetch('{{ $officePreview }}').then(r => { if (r.ok) ready = true; }).catch(() => {})">
+                    {{-- Word, PowerPoint or Excel as a PDF made by LibreOffice (App\Study\FilePreviews): a few seconds the first time. Asked for once. --}}
+                    <div class="file-preview file-preview-office" x-data="{ ready: false }" x-init="ready = $el.querySelector('[data-shown]') !== null" x-on:pdf-shown="ready = true">
                         <p class="file-preview-wait" x-show="! ready" role="status">
                             <x-icon name="loader-circle" class="size-5 animate-spin" />Preparing the preview. The first time takes a few seconds.
                         </p>
-                        <iframe src="{{ $officePreview }}" title="{{ $file->fileName() }}" x-on:load="ready = true" x-bind:class="! ready && 'opacity-0'" data-pdf-frame></iframe>
+                        <iframe data-pdf-src="{{ $officePreview }}" title="{{ $file->fileName() }}" x-bind:class="! ready && 'opacity-0'"></iframe>
                     </div>
                 @elseif ($office)
                     <section class="file-preview file-preview-none">

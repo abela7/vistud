@@ -42,6 +42,8 @@ return [
         // LibreOffice's soffice, which turns Word, PowerPoint and Excel files into a PDF to show (App\Study\FilePreviews).
         // Empty: found where LibreOffice installs itself, or on the PATH. "none": no previews.
         'office' => env('VISTUD_OFFICE_BINARY'),
+        // How many LibreOffice conversions may run at once (each about 200 MB for a few seconds); more wait their turn.
+        'office_at_once' => (int) env('VISTUD_OFFICE_AT_ONCE', 2),
     ],
 
     'invitations' => [

@@ -16,7 +16,7 @@ const MAX_SCALE = 2.5;
 
 /** Replaces the frame with the PDF drawn page by page. Says 'pdf-shown' (bubbling) once something is there. */
 export async function drawPdf(frame) {
-    const url = frame.getAttribute('src');
+    const url = frame.dataset.pdfSrc;
     const view = document.createElement('div');
     view.className = `${frame.getAttribute('class') ?? ''} pdf-view`.trim();
     view.setAttribute('role', 'document');

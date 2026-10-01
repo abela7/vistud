@@ -17,8 +17,8 @@ class FilePreviewController
 {
     public function __invoke(Request $request, PrincipalFactory $principals, Files $files, FilePreviews $previews, string $file): Response
     {
-        // LibreOffice may take a while with a long deck; the PHP default of 30 seconds is too short.
-        set_time_limit(180);
+        // LibreOffice may take a while with a long deck, or wait its turn (FilePreviews); the PHP default of 30 seconds is too short.
+        set_time_limit(300);
         $by = $principals->fromRequest($request);
         $details = $files->find($by, $file);
         $key = $previews->pdf($by, $file);

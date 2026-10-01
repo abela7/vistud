@@ -3,6 +3,9 @@
 namespace App\Study;
 
 use App\Platform\Access\Principal;
+use Illuminate\Contracts\Cache\Lock;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -24,6 +27,9 @@ final class FilePreviews
     public const KINDS = ['document', 'slides', 'spreadsheet'];
 
     private const TIMEOUT_SECONDS = 120;
+
+    /** Why a conversion didn't run: every slot was taken (not the file's fault). */
+    private const BUSY = 'busy: too many conversions at once';
 
     public function __construct(private Files $files) {}
 
@@ -75,6 +81,23 @@ final class FilePreviews
             return null;
         }
 
+        // One conversion of a file at a time: a page asking twice, or two tabs, wait for it and take its PDF.
+        try {
+            return Cache::lock("vistud:preview:{$pdfKey}", self::TIMEOUT_SECONDS * 2)->block(self::TIMEOUT_SECONDS * 2, function () use ($disk, $pdfKey, $key, $file, $converter, $id) {
+                if ($disk->exists($pdfKey)) {
+                    return $pdfKey;
+                }
+
+                return $disk->exists("{$pdfKey}.failed") ? null : $this->make($disk, $key, $pdfKey, $file, $converter, $id);
+            });
+        } catch (LockTimeoutException) {
+            return null;
+        }
+    }
+
+    /** Makes the PDF of the file at $key with LibreOffice and keeps it at $pdfKey; null when LibreOffice can't read the file. */
+    private function make($disk, string $key, string $pdfKey, FileDetails $file, string $converter, string $id): ?string
+    {
         $work = storage_path('app/private/previews-work/'.Str::random(20));
         File::ensureDirectoryExists("{$work}/in");
         try {
@@ -99,6 +122,10 @@ final class FilePreviews
         } finally {
             File::deleteDirectory($work);
         }
+        // Too busy is not the file's fault: it is tried again next time.
+        if ($problem === self::BUSY) {
+            return null;
+        }
 
         // Not tried again on every visit: a file LibreOffice can't read won't read next time either.
         Log::warning('A file preview could not be made.', ['file' => $id, 'problem' => Str::limit($problem, 500)]);
@@ -113,6 +140,43 @@ final class FilePreviews
      * never updated. The file it made, or null, with $problem saying why not.
      */
     public static function convert(string $converter, string $work, string $source, string $format, ?string $inputFilter, ?string &$problem): ?string
+    {
+        $slot = self::slot();
+        if ($slot === null) {
+            $problem = self::BUSY;
+
+            return null;
+        }
+        try {
+            return self::run($converter, $work, $source, $format, $inputFilter, $problem);
+        } finally {
+            $slot->release();
+        }
+    }
+
+    /**
+     * One of the few conversions allowed at once (vistud.files.office_at_once): each LibreOffice takes about
+     * 200 MB for a few seconds, so many students opening slides together never take all the memory. Waits for
+     * one to come free; null when none does in time.
+     */
+    private static function slot(): ?Lock
+    {
+        $slots = max(1, (int) config('vistud.files.office_at_once', 2));
+        $until = microtime(true) + self::TIMEOUT_SECONDS;
+        do {
+            for ($slot = 1; $slot <= $slots; $slot++) {
+                $lock = Cache::lock("vistud:office-slot:{$slot}", self::TIMEOUT_SECONDS + 30);
+                if ($lock->get()) {
+                    return $lock;
+                }
+            }
+            usleep(250_000);
+        } while (microtime(true) < $until);
+
+        return null;
+    }
+
+    private static function run(string $converter, string $work, string $source, string $format, ?string $inputFilter, ?string &$problem): ?string
     {
         File::ensureDirectoryExists("{$work}/out");
         File::ensureDirectoryExists("{$work}/profile/user");

@@ -99,7 +99,7 @@ class FilesScreenTest extends TestCase
             ->assertSee('<title>Lecture 2.pdf · Biology', false)
             ->assertSeeInOrder(['Where this file is', 'Modules', 'Cells'])
             ->assertSee(route('workspaces.modules.show', [$this->biology->id, $this->cells->id]), false)
-            ->assertSee('<iframe class="file-preview" src="'.route('files.content', $pdf->id).'"', false)
+            ->assertSee('<iframe class="file-preview" data-pdf-src="'.route('files.content', $pdf->id).'"', false)
             ->assertSee(route('files.content', [$pdf->id, 'download' => 1]), false);
         // Word, PowerPoint and Excel show as a PDF made by LibreOffice; without it, the page says how to get it.
         config(['vistud.files.office' => 'none']);

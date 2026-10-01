@@ -16,11 +16,23 @@ onPage(() => {
     if (noteEditor) import('./note/editor.js').then(({ mount }) => mount(noteEditor));
 });
 
-// A PDF (or an office file shown as one) where the browser can't show it inside the page, as on phones and tablets.
+// A PDF (or an office file shown as one), asked for once: in the browser's own viewer, or drawn by PDF.js where the
+// browser can't show a PDF inside the page (phones and tablets). Either says 'pdf-shown' once it is there.
 onPage(() => {
-    const frames = document.querySelectorAll('iframe[data-pdf-frame]');
+    const frames = document.querySelectorAll('iframe[data-pdf-src]');
+    if (frames.length === 0) return;
     const inline = navigator.pdfViewerEnabled !== false && !window.matchMedia('(hover: none) and (pointer: coarse)').matches;
-    if (frames.length > 0 && !inline) import('./pdf-viewer.js').then(({ drawPdf }) => frames.forEach(drawPdf));
+    if (!inline) {
+        import('./pdf-viewer.js').then(({ drawPdf }) => frames.forEach(drawPdf));
+        return;
+    }
+    frames.forEach((frame) => {
+        frame.addEventListener('load', () => {
+            frame.dataset.shown = '';
+            frame.dispatchEvent(new CustomEvent('pdf-shown', { bubbles: true }));
+        }, { once: true });
+        frame.src = frame.dataset.pdfSrc;
+    });
 });
 
 // A Markdown file shown on its page: its formulas are drawn only when it has any.
