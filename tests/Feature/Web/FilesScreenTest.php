@@ -10,6 +10,7 @@ use App\Study\Files;
 use App\Study\Folders;
 use App\Study\ModuleDetails;
 use App\Study\Modules;
+use App\Study\Notes;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Illuminate\Http\UploadedFile;
@@ -170,9 +171,15 @@ class FilesScreenTest extends TestCase
             ->assertDontSee('<pre class="file-preview file-text"', false);
         // Open as a note: a new note in the same place, made from the file (App\Http\Controllers\NotePageController).
         $page->assertSee(route('workspaces.notes.create', [$this->biology->id, 'from' => "file:{$file->id}", 'in' => "module:{$this->cells->id}"]));
-        // Take notes: a new note in the same place, in a window of its own beside the file.
-        $page->assertSee(route('workspaces.notes.create', [$this->biology->id, 'in' => "module:{$this->cells->id}", 'window' => 1]))
+        // Take notes: the file's own note, "Cells (notes)", in the same place, beside the file; made as soon as it opens.
+        $page->assertSee(route('workspaces.notes.create', [$this->biology->id, 'in' => "module:{$this->cells->id}", 'window' => 1, 'title' => 'Cells (notes)']))
             ->assertSee('target="_blank" data-note-window', false);
+        $this->get(route('workspaces.notes.create', [$this->biology->id, 'in' => "module:{$this->cells->id}", 'window' => 1, 'title' => 'Cells (notes)']))
+            ->assertOk()->assertSee('data-note-title>Cells (notes)</textarea>', false);
+        // Once it is there, Take notes opens that same note again, never a second one.
+        $note = app(Notes::class)->create($this->principal($this->ada), 'module', $this->cells->id, 'Cells (notes)');
+        $this->page($file)->assertSee(route('workspaces.notes.show', [$this->biology->id, $note->id, 'window' => 1]))
+            ->assertDontSee('title=Cells');
 
         $this->actions($file)->call('trash');
         $this->page($file)->assertOk()->assertDontSee('Open as a note')->assertDontSee('Take notes')->assertDontSee('<h1>Cells</h1>', false);

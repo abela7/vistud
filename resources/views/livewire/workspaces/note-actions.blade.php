@@ -10,9 +10,12 @@
                 <span class="max-sm:sr-only">{{ $note->isPinned() ? 'Unpin' : 'Pin' }}</span>
             </span>
         </button>
+        @php
+            $downloads = ['pdf' => ['Download as PDF', 'file-text'], 'docx' => ['Download as Word', 'file-type'], 'md' => ['Download as Markdown', 'file-code'], 'txt' => ['Download as text', 'file']];
+            $items = array_map(fn ($format) => [$downloads[$format][0], $downloads[$format][1], null, false, route('workspaces.notes.export', [$note->workspaceId, $note->id, $format])], \App\Study\NoteExports::available());
+        @endphp
         @include('livewire.workspaces.partials.row-menu', ['id' => 'note-'.$note->id, 'label' => $note->displayTitle(), 'items' => [
-            ['Download as Markdown', 'download', null, false, route('workspaces.notes.export', [$note->workspaceId, $note->id, 'md'])],
-            ['Download as text', 'file-text', null, false, route('workspaces.notes.export', [$note->workspaceId, $note->id, 'txt'])],
+            ...$items,
             ['Move to trash', 'trash-2', 'trash', false],
         ]])
     @endif

@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Identity\PrincipalFactory;
+use App\Platform\Access\Guard;
 use App\Platform\Errors\NotFound;
-use App\Study\NoteDoc;
+use App\Study\FilePreviews;
+use App\Study\NoteExports;
 use App\Study\Notes;
 use App\Study\Workspaces;
 use Illuminate\Http\Request;
@@ -13,12 +15,13 @@ use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\HeaderUtils;
 
 /**
- * A note as a file to keep, or to open elsewhere (the owner's review,
- * 2026-09-28): /workspaces/{workspace}/notes/{note}/export/md is Markdown
- * (the title as its heading, then App\Study\NoteDoc::markdown, which any
- * Markdown reader shows), /export/txt the same as plain text for Notepad.
- * Only the owner's note, in that workspace; anything else is 404, like a
- * missing one. Named after the note's title.
+ * A note as a file to keep, share, or open elsewhere (the owner's reviews,
+ * 2026-09-28 and 2026-10-01): /workspaces/{workspace}/notes/{note}/export/pdf
+ * and /export/docx are PDF and Word, made by LibreOffice when it is on this
+ * computer (App\Study\NoteExports); /export/md is Markdown (the title as its
+ * heading, then App\Study\NoteDoc::markdown), /export/txt the same as plain
+ * text. Only the owner's note, in that workspace; anything else is 404, like
+ * a missing one. Named after the note's title.
  */
 class NoteExportController
 {
@@ -31,11 +34,22 @@ class NoteExportController
             throw new NotFound;
         }
 
+        [$type, $office] = NoteExports::FORMATS[$format];
+        if ($office) {
+            // LibreOffice takes a few seconds, more the first time.
+            @set_time_limit(180);
+        }
+        $body = NoteExports::make(Guard::learner($by)->learnerId, $opened, $format);
+        if ($body === null) {
+            return response(FilePreviews::converter() === null
+                ? 'PDF and Word copies need LibreOffice on this computer. Markdown and text work without it.'
+                : 'This note couldn\'t be made into a '.($format === 'pdf' ? 'PDF' : 'Word document').'. Try Markdown or text.', 422, [
+                    'Content-Type' => 'text/plain; charset=utf-8',
+                    'Cache-Control' => 'no-store',
+                ]);
+        }
+
         $title = $opened->displayTitle();
-        [$body, $type] = $format === 'md'
-            ? ['# '.$title."\n\n".NoteDoc::markdown($opened->doc), 'text/markdown; charset=utf-8']
-            : [$title."\n\n".NoteDoc::plain($opened->doc), 'text/plain; charset=utf-8'];
-        $body = rtrim($body)."\n";
 
         return response($body, 200, [
             'Content-Type' => $type,

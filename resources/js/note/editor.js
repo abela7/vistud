@@ -833,6 +833,7 @@ export async function mount(host) {
                 }
             } catch {}
             host.dataset.saveUrl = data.save_url;
+            host.dataset.noteUrl = data.url;
             delete host.dataset.createUrl;
             // A new note in its own window stays there: the address keeps ?window=1 for a reload.
             history.replaceState(history.state, '', inWindow ? `${data.url}?window=1${inSplit ? '&split=1' : ''}` : data.url);
@@ -894,6 +895,8 @@ export async function mount(host) {
     loading = false;
     if (autosave) autosave.emit();
     else setStatus('draft');
+    // A new note that starts with its title (the notes beside a file) is made straight away, so it is in its folder.
+    if (!autosave && host.dataset.createUrl && titleField.value.trim() !== '') createNote();
 
     // ---------- Title ----------
     const titleStyleKey = () => `vistud.title-style.${note.id || 'draft'}`;
@@ -2732,6 +2735,73 @@ export async function mount(host) {
         createNote();
         return until(() => autosave?.isClean() ?? false);
     }
+    // In the pane beside a file, the file page moves this note to a window of its own (resources/js/note-window.js).
+    if (inSplit) {
+        window.vistudNotePane = {
+            /** Saves everything written, then gives the note's address for a window of its own; null when it can't be saved yet. */
+            async moveOut() {
+                if (!(await savedForMoving()) || left) return null;
+                const url = new URL(window.location.href);
+                url.searchParams.delete('split');
+                url.searchParams.set('window', '1');
+                return url.href;
+            },
+        };
+    }
+    // ---------- Share as a file ----------
+    // PDF, Word, Markdown or text (App\Http\Controllers\NoteExportController), with everything written in it: the device's
+    // share sheet where it can share files (phones, Windows), a download where it can't.
+    const sharedName = (response, format) => {
+        const header = response.headers.get('Content-Disposition') ?? '';
+        const utf8 = header.match(/filename\*=UTF-8''([^;]+)/i);
+        if (utf8) {
+            try {
+                return decodeURIComponent(utf8[1]);
+            } catch {}
+        }
+        return header.match(/filename="([^"]+)"/i)?.[1] ?? `${titleField.value.trim() || 'Untitled note'}.${format}`;
+    };
+    const download = (file) => {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(file);
+        link.download = file.name;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+        toast(`“${file.name}” is in your downloads.`, 'success');
+    };
+    const shareFile = (file) => navigator.share({ files: [file], title: file.name });
+    page.querySelectorAll('[data-share-format]').forEach((item) => item.addEventListener('click', async () => {
+        const format = item.dataset.shareFormat;
+        if (!(await savedForMoving()) || !host.dataset.noteUrl) {
+            toast(host.dataset.noteUrl ? 'This note isn\'t saved yet. Try again in a moment.' : 'Write a title or some text first: there\'s nothing to share yet.', 'info');
+            return;
+        }
+        if (format === 'pdf' || format === 'docx') toast(`Making the ${format === 'pdf' ? 'PDF' : 'Word document'}…`, 'info');
+        let response = null;
+        try {
+            response = await fetch(`${host.dataset.noteUrl}/export/${format}`, { credentials: 'same-origin' });
+        } catch {}
+        if (!response?.ok) {
+            const said = response?.status === 422 ? await response.text().catch(() => '') : '';
+            toast(said || 'The file couldn\'t be made. Check your connection, then try again.', 'info');
+            return;
+        }
+        const blob = await response.blob();
+        const file = new File([blob], sharedName(response, format), { type: blob.type });
+        if (!navigator.canShare?.({ files: [file] })) {
+            download(file);
+            return;
+        }
+        try {
+            await shareFile(file);
+        } catch (error) {
+            if (error?.name === 'AbortError') return;
+            // Too long after the press for the browser to open its share sheet: one more press does it.
+            toast(`“${file.name}” is ready.`, 'success', { label: 'Share', click: () => shareFile(file).catch((again) => again?.name === 'AbortError' || download(file)) });
+        }
+    }));
     page.querySelector('[data-note-pop-out]')?.addEventListener('click', async () => {
         // The window first: browsers allow one only straight after a press. The note goes into it once saved.
         const opened = openNoteWindow(null, note.id ? `vistud-note-${note.id}` : '_blank');

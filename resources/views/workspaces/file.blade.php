@@ -142,8 +142,9 @@
         @php
             [$backTo, $backUrl] = $trail !== [] ? end($trail) : [$inModule ? 'Modules' : 'Notes & files', route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes'])];
         @endphp
-        <header class="file-toolbar flex items-center justify-between gap-3 min-w-0 py-0.5">
-            <div class="flex min-w-0 items-center gap-2 flex-1">
+        {{-- On a narrow screen the buttons go under the name: the name never shrinks to nothing, and nothing scrolls sideways. --}}
+        <header class="file-toolbar flex flex-wrap items-center justify-between gap-x-3 gap-y-2 min-w-0 py-0.5">
+            <div class="flex min-w-0 basis-48 items-center gap-2 flex-1">
                 <x-back :href="$backUrl" :to="$backTo" compact class="size-8 shrink-0" />
                 <nav aria-label="Where this file is" class="min-w-0 hidden sm:flex items-center shrink-0">
                     <ol class="breadcrumbs text-xs text-fg-muted font-medium flex items-center gap-1.5 min-w-0">
@@ -173,7 +174,7 @@
                     </span>
                 </div>
             </div>
-            <div class="ml-auto flex items-center justify-end gap-1.5 sm:gap-2 shrink-0">
+            <div class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5 sm:gap-2">
                 @if ($file->trashedAt === null)
                     @if ($hasPreview)
                         <button
@@ -312,6 +313,8 @@
                 <div
                     x-show="splitOpen"
                     x-cloak
+                    data-note-pane
+                    x-on:note-pane-moved="closeSplit(); $refs.noteSlot.replaceChildren(); noteSrc = $event.detail.url"
                     class="file-pane-note"
                     x-bind:style="'width: calc(' + (100 - splitPercent) + '% - 12px);'"
                 >
@@ -334,13 +337,14 @@
                             >
                                 <x-icon name="arrow-left-right" class="size-3.5" />
                             </button>
+                            {{-- Saves the pane's note, then opens that same note in a window of its own (resources/js/note-window.js). --}}
                             <a
                                 class="topbar-button size-7"
                                 href="{{ $takeNotes }}"
                                 target="_blank"
-                                data-note-window
-                                title="Open note in separate window"
-                                x-on:click="closeSplit()"
+                                data-note-pane-pop-out
+                                title="Open this note in a window of its own"
+                                aria-label="Open this note in a window of its own"
                             >
                                 <x-icon name="external-link" class="size-3.5" />
                             </a>

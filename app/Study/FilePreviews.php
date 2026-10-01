@@ -77,8 +77,6 @@ final class FilePreviews
 
         $work = storage_path('app/private/previews-work/'.Str::random(20));
         File::ensureDirectoryExists("{$work}/in");
-        File::ensureDirectoryExists("{$work}/out");
-        File::ensureDirectoryExists("{$work}/profile/user");
         try {
             $source = "{$work}/in/source.{$file->extension}";
             $in = $disk->readStream($key);
@@ -86,25 +84,16 @@ final class FilePreviews
             stream_copy_to_stream($in, $out);
             fclose($in);
             fclose($out);
-            file_put_contents("{$work}/profile/user/registrymodifications.xcu", self::settings());
 
-            $process = new Process([
-                $converter, '-env:UserInstallation='.self::fileUrl("{$work}/profile"),
-                '--headless', '--norestore', '--nolockcheck', '--nodefault', '--nologo',
-                '--convert-to', 'pdf', '--outdir', "{$work}/out", $source,
-            ], null, PHP_OS_FAMILY === 'Windows' ? null : ['HOME' => $work]);
-            $process->setTimeout(self::TIMEOUT_SECONDS);
-            $process->run();
-
-            $pdf = "{$work}/out/source.pdf";
-            if (is_file($pdf) && str_starts_with((string) file_get_contents($pdf, length: 5), '%PDF-')) {
+            $pdf = self::convert($converter, $work, $source, 'pdf', null, $problem);
+            if ($pdf !== null && str_starts_with((string) file_get_contents($pdf, length: 5), '%PDF-')) {
                 $stream = fopen($pdf, 'rb');
                 $disk->writeStream($pdfKey, $stream);
                 fclose($stream);
 
                 return $pdfKey;
             }
-            $problem = trim($process->getErrorOutput().' '.$process->getOutput()) ?: 'no PDF';
+            $problem ??= 'no PDF';
         } catch (Throwable $e) {
             $problem = $e->getMessage();
         } finally {
@@ -114,6 +103,35 @@ final class FilePreviews
         // Not tried again on every visit: a file LibreOffice can't read won't read next time either.
         Log::warning('A file preview could not be made.', ['file' => $id, 'problem' => Str::limit($problem, 500)]);
         $disk->put("{$pdfKey}.failed", Str::limit($problem, 500));
+
+        return null;
+    }
+
+    /**
+     * LibreOffice turns $source, in the folder $work (which it fills, and the caller deletes), into $format: 'pdf',
+     * or a format with its filter ('docx:MS Word 2007 XML'). A fresh profile each time, with macros off and links
+     * never updated. The file it made, or null, with $problem saying why not.
+     */
+    public static function convert(string $converter, string $work, string $source, string $format, ?string $inputFilter, ?string &$problem): ?string
+    {
+        File::ensureDirectoryExists("{$work}/out");
+        File::ensureDirectoryExists("{$work}/profile/user");
+        file_put_contents("{$work}/profile/user/registrymodifications.xcu", self::settings());
+
+        $process = new Process([
+            $converter, '-env:UserInstallation='.self::fileUrl("{$work}/profile"),
+            '--headless', '--norestore', '--nolockcheck', '--nodefault', '--nologo',
+            ...($inputFilter === null ? [] : ["--infilter={$inputFilter}"]),
+            '--convert-to', $format, '--outdir', "{$work}/out", $source,
+        ], null, PHP_OS_FAMILY === 'Windows' ? null : ['HOME' => $work]);
+        $process->setTimeout(self::TIMEOUT_SECONDS);
+        $process->run();
+
+        $made = "{$work}/out/".pathinfo($source, PATHINFO_FILENAME).'.'.explode(':', $format)[0];
+        if (is_file($made) && filesize($made) > 0) {
+            return $made;
+        }
+        $problem = trim($process->getErrorOutput().' '.$process->getOutput()) ?: "no {$format}";
 
         return null;
     }

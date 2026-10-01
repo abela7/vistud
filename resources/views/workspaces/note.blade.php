@@ -123,6 +123,7 @@
                             <span class="when-focused"><x-icon name="minimize-2" class="size-4" /><span class="max-sm:sr-only">Exit full screen</span></span>
                         </button>
                     @endunless
+                    @include('workspaces.partials.note-share', ['id' => 'note-share-menu', 'compact' => false])
                     <button type="button" class="btn btn-ghost note-mode" onclick="window.print()" title="Print / Export PDF (Ctrl+P)" aria-label="Print or export PDF">
                         <x-icon name="printer" class="size-4" /><span class="max-sm:sr-only">Print</span>
                     </button>
@@ -190,7 +191,7 @@
 
             <article class="note-card" data-note-editor @if ($window) data-window @endif @if ($split) data-split @endif data-account="{{ auth()->id() }}" data-max-bytes="{{ \App\Study\NoteDoc::MAX_BYTES }}" data-image-upload-url="{{ route('api.v1.notes.images.store') }}"
                 @if ($import ?? null) data-import-url="{{ $import['url'] }}" data-import-name="{{ $import['name'] }}" data-import-kind="{{ $import['markdown'] ? 'markdown' : 'text' }}" @endif
-                @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" @endif>
+                @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" data-note-url="{{ route('workspaces.notes.show', [$workspace->id, $note->id]) }}" @endif>
                 <div class="note-toolbar" role="toolbar" aria-label="Formatting" aria-controls="note-body" data-note-toolbar>
                     <button type="button" class="toolbar-nav-button toolbar-nav-prev" data-toolbar-prev title="Previous tools" aria-label="Previous tools" hidden tabindex="-1">
                         <x-icon name="chevron-left" class="size-4" />
@@ -401,7 +402,7 @@
 
                 <div class="note-content">
                     <div class="note-sheet" data-note-sheet>
-                        <textarea class="note-title" rows="1" maxlength="{{ \App\Study\Notes::MAX_TITLE }}" placeholder="Untitled note" aria-label="Title" data-note-title>{{ $note?->title }}</textarea>
+                        <textarea class="note-title" rows="1" maxlength="{{ \App\Study\Notes::MAX_TITLE }}" placeholder="Untitled note" aria-label="Title" data-note-title>{{ $note?->title ?? ($startTitle ?? '') }}</textarea>
                         <div id="note-body" data-note-body></div>
                         {{-- The last page's number, at the foot of the sheet (the others are on the gaps: resources/css/editor.css). --}}
                         <div class="page-foot" aria-hidden="true"></div>
@@ -442,6 +443,7 @@
                             <span class="when-editing"><x-icon name="book-open-text" class="size-4" /><span class="sr-only">Read</span></span>
                             <span class="when-reading"><x-icon name="pencil" class="size-4" /><span class="sr-only">Edit</span></span>
                         </button>
+                        @include('workspaces.partials.note-share', ['id' => 'note-share-menu-small', 'compact' => true])
                         <button type="button" class="toolbar-button note-mode" onclick="window.print()" title="Print / Export PDF (Ctrl+P)" aria-label="Print or export PDF">
                             <x-icon name="printer" class="size-4" />
                         </button>

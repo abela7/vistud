@@ -8,6 +8,7 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Ids;
 use App\Study\Files;
 use App\Study\Input;
+use App\Study\NoteImages;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Number;
@@ -24,14 +25,6 @@ class NoteImageController
 {
     private const MAX_BYTES = 10 * 1024 * 1024;
 
-    /** @var array<int, array{0: string, 1: string}> the image type => [MIME type, extension] */
-    private const TYPES = [
-        IMAGETYPE_PNG => ['image/png', 'png'],
-        IMAGETYPE_JPEG => ['image/jpeg', 'jpg'],
-        IMAGETYPE_WEBP => ['image/webp', 'webp'],
-        IMAGETYPE_GIF => ['image/gif', 'gif'],
-    ];
-
     public function __construct(private PrincipalFactory $principals) {}
 
     public function store(Request $request): JsonResponse
@@ -47,12 +40,12 @@ class NoteImageController
             default => [],
         });
         $type = @getimagesize($path)[2] ?? null;
-        Input::refuse(isset(self::TYPES[$type]) ? [] : ['image' => 'Use a PNG, JPEG, WebP or GIF picture.']);
+        Input::refuse(isset(NoteImages::TYPES[$type]) ? [] : ['image' => 'Use a PNG, JPEG, WebP or GIF picture.']);
 
         $id = Ids::new();
         $stream = fopen($path, 'rb');
         try {
-            Files::disk()->writeStream(self::key($scope->learnerId, $id, self::TYPES[$type][1]), $stream) ?: throw new \RuntimeException('The picture could not be stored.');
+            Files::disk()->writeStream(NoteImages::key($scope->learnerId, $id, NoteImages::TYPES[$type][1]), $stream) ?: throw new \RuntimeException('The picture could not be stored.');
         } finally {
             fclose($stream);
         }
@@ -63,24 +56,19 @@ class NoteImageController
     public function show(Request $request, string $id): StreamedResponse
     {
         $scope = Guard::learner($this->principals->fromRequest($request));
-        foreach (self::TYPES as [$mime, $extension]) {
-            $key = self::key($scope->learnerId, $id, $extension);
-            if (Files::disk()->exists($key)) {
-                return Files::disk()->response($key, "{$id}.{$extension}", [
-                    'Content-Type' => $mime,
-                    'X-Content-Type-Options' => 'nosniff',
-                    'Cache-Control' => 'private, max-age=604800, immutable',
-                    'Cross-Origin-Resource-Policy' => 'same-origin',
-                    'Content-Security-Policy' => "default-src 'none'; sandbox",
-                ], 'inline');
-            }
+        $found = NoteImages::find($scope->learnerId, $id);
+        if ($found !== null) {
+            [$key, $mime, $extension] = $found;
+
+            return Files::disk()->response($key, "{$id}.{$extension}", [
+                'Content-Type' => $mime,
+                'X-Content-Type-Options' => 'nosniff',
+                'Cache-Control' => 'private, max-age=604800, immutable',
+                'Cross-Origin-Resource-Policy' => 'same-origin',
+                'Content-Security-Policy' => "default-src 'none'; sandbox",
+            ], 'inline');
         }
 
         throw new NotFound;
-    }
-
-    private static function key(string $learnerId, string $id, string $extension): string
-    {
-        return "learners/{$learnerId}/note-images/{$id}.{$extension}";
     }
 }

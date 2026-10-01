@@ -925,6 +925,11 @@
         padding: 0.375rem 1.25rem;
     }
 
+    /* In the pane beside a file, the pane's own header opens the note elsewhere: "Open in ViStud" would load the whole app inside the pane. */
+    .note-page[data-split] [data-note-pop-in] {
+        display: none;
+    }
+
     /* Split-screen note editor: hide the bottom status/count bar to maximize writing space */
     [data-split] .note-count-bar,
     .note-page[data-split] .note-count-bar,

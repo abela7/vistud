@@ -6,6 +6,8 @@
 | way; with Ctrl, Shift or the middle button they open as the browser would.
 */
 
+import { toast } from './toasts.js';
+
 const WIDE = '(pointer: fine) and (min-width: 1024px)';
 
 /** The features for a window on the right half of the screen, or '' where windows are tabs. */
@@ -58,4 +60,35 @@ document.addEventListener('click', (event) => {
     // Where windows are tabs, the link's own target opens one.
     if (!halfScreen()) return;
     if (openNoteWindow(link.href, link.target || '_blank')) event.preventDefault();
+});
+
+/*
+| The notes pane beside a file (resources/views/workspaces/file.blade.php): "Open in its own window" moves the
+| pane's note there, saved first, so the window shows everything written in the pane, and the pane closes.
+*/
+document.addEventListener('click', async (event) => {
+    const link = event.target instanceof Element ? event.target.closest('a[data-note-pane-pop-out]') : null;
+    if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const pane = link.closest('[data-note-pane]');
+    let note = null;
+    try {
+        note = pane?.querySelector('iframe')?.contentWindow?.vistudNotePane ?? null;
+    } catch {}
+    // The pane's note isn't open yet: the link opens it as it is.
+    if (!note) return;
+    event.preventDefault();
+    // The window first: browsers allow one only straight after a press. The note goes into it once saved.
+    const opened = openNoteWindow(null);
+    if (!opened) {
+        toast('Your browser blocked the new window. Allow pop-ups for ViStud, then try again.', 'info');
+        return;
+    }
+    const url = await note.moveOut();
+    if (!url) {
+        opened.close();
+        toast('This note isn\'t saved yet, so it can\'t move to its own window. Try again in a moment.', 'info');
+        return;
+    }
+    show(opened, url);
+    pane.dispatchEvent(new CustomEvent('note-pane-moved', { bubbles: true, detail: { url } }));
 });

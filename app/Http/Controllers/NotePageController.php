@@ -20,7 +20,8 @@ use Illuminate\Http\Request;
  * /workspaces/{workspace}/notes/new?in=module:{id} (or folder:{id}; the top
  * level without) is the editor for a note that doesn't exist yet: it is made
  * by its first words (POST /api/v1/notes), and never if none are written.
- * With &from=file:{id} it starts by importing that Markdown or text file.
+ * With &from=file:{id} it starts by importing that Markdown or text file;
+ * with &title=… it starts with that title, and is made straight away.
  * With ?window=1 either is only the note, in a window of its own beside the
  * study material (resources/js/note-window.js); a note in the trash opens
  * on its page instead, where it can be restored.
@@ -72,8 +73,11 @@ class NotePageController
         }
         $place = $folderId !== null ? ['folder', $folderId] : ($moduleId !== null ? ['module', $moduleId] : ['workspace', $details->id]);
 
+        // &title=…: a note that starts with its title (the notes beside a file), so it is made as soon as it opens.
+        $title = mb_substr(trim((string) $request->query('title', '')), 0, Notes::MAX_TITLE);
+
         return view('workspaces.note', [
-            'workspace' => $details, 'note' => null, 'place' => $place, 'import' => $import, 'window' => $request->boolean('window'),
+            'workspace' => $details, 'note' => null, 'place' => $place, 'import' => $import, 'window' => $request->boolean('window'), 'startTitle' => $title,
             'trail' => $this->trail($details->id, $moduleId, $folderId, $modules, $folders, $by), 'inModule' => $moduleId !== null,
         ]);
     }

@@ -6,6 +6,7 @@ use App\Livewire\Study\PinnedNotes;
 use App\Livewire\Workspaces\Contents;
 use App\Livewire\Workspaces\NoteActions;
 use App\Models\User;
+use App\Study\FilePreviews;
 use App\Study\Files;
 use App\Study\Folders;
 use App\Study\Modules;
@@ -13,6 +14,7 @@ use App\Study\NoteDetails;
 use App\Study\Notes;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
@@ -317,7 +319,7 @@ class NotesScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $untitled->id, 'txt']))
             ->assertOk()->assertHeader('Content-Disposition', 'attachment; filename="Untitled note.txt"')->assertContent("Untitled note\n");
 
-        // Only the owner's note, in that workspace, in one of the two formats.
+        // Only the owner's note, in that workspace, in one of its formats.
         $bob = $this->student();
         $theirs = app(Workspaces::class)->create($this->principal($bob), ['name' => 'Private']);
         $theirNote = $notes->create($this->principal($bob), 'workspace', $theirs->id, 'Secret');
@@ -325,8 +327,52 @@ class NotesScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$theirs->id, $theirNote->id, 'md']))->assertNotFound();
         $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $theirNote->id, 'md']))->assertNotFound();
         $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$maths->id, $note->id, 'md']))->assertNotFound();
-        $this->actingAs($this->ada)->get("/workspaces/{$this->biology->id}/notes/{$note->id}/export/pdf")->assertNotFound();
+        $this->actingAs($this->ada)->get("/workspaces/{$this->biology->id}/notes/{$note->id}/export/html")->assertNotFound();
         $this->actingAs($bob)->get(route('workspaces.notes.export', [$this->biology->id, $note->id, 'txt']))->assertNotFound();
+    }
+
+    public function test_without_libreoffice_a_note_is_shared_as_markdown_or_text_only(): void
+    {
+        config(['vistud.files.office' => 'none']);
+        $by = $this->principal($this->ada);
+        $note = app(Notes::class)->create($by, 'workspace', $this->biology->id, 'Kernel notes');
+
+        $page = $this->actingAs($this->ada)->get(route('workspaces.notes.show', [$this->biology->id, $note->id]))->assertOk();
+        $page->assertSee('data-share-format="md"', false)->assertSee('data-share-format="txt"', false)->assertDontSee('data-share-format="pdf"', false);
+        $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $note->id, 'pdf']))
+            ->assertStatus(422)->assertSee('PDF and Word copies need LibreOffice on this computer.');
+    }
+
+    public function test_with_libreoffice_a_note_is_shared_as_pdf_and_word_with_its_pictures(): void
+    {
+        if (FilePreviews::converter() === null) {
+            $this->markTestSkipped('LibreOffice is not on this computer.');
+        }
+        Storage::fake('local');
+        $by = $this->principal($this->ada);
+        $notes = app(Notes::class);
+        $note = $notes->create($by, 'workspace', $this->biology->id, 'Kernel notes');
+        $picture = $this->actingAs($this->ada)->post(route('api.v1.notes.images.store'), ['image' => UploadedFile::fake()->createWithContent('cell.png', $this->image())], ['Accept' => 'application/json'])->assertCreated()->json('url');
+        $notes->save($by, $note->id, ['base_version' => 1, 'save_id' => 'share-save-1', 'client_id' => 'share-tab-1', 'title' => 'Kernel notes', 'doc' => ['type' => 'doc', 'content' => [
+            ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'System calls cross into the kernel.']]],
+            ['type' => 'image', 'attrs' => ['src' => parse_url($picture, PHP_URL_PATH), 'alt' => 'A cell']],
+        ]]]);
+
+        $pdf = $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $note->id, 'pdf']))
+            ->assertOk()->assertHeader('Content-Type', 'application/pdf')->assertHeader('Content-Disposition', 'attachment; filename="Kernel notes.pdf"');
+        $this->assertStringStartsWith('%PDF-', $pdf->getContent());
+        $this->assertMatchesRegularExpression('~/Subtype\s*/Image~', $pdf->getContent());
+
+        $word = $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $note->id, 'docx']))
+            ->assertOk()->assertHeader('Content-Disposition', 'attachment; filename="Kernel notes.docx"');
+        $zip = tempnam(sys_get_temp_dir(), 'docx');
+        file_put_contents($zip, $word->getContent());
+        $archive = new \ZipArchive;
+        $archive->open($zip);
+        $this->assertStringContainsString('System calls cross into the kernel.', (string) $archive->getFromName('word/document.xml'));
+        $this->assertNotFalse($archive->locateName('word/media/image1.png'));
+        $archive->close();
+        unlink($zip);
     }
 
     public function test_a_new_note_can_start_from_a_markdown_or_text_file_in_the_workspace(): void

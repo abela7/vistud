@@ -31,22 +31,22 @@ async function withFiles(page) {
     await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
     await page.locator('#new-menu').getByRole('button', { name: 'Upload files' }).click();
     await expect(dialog(page).getByRole('heading', { name: 'Upload files to Week 1: Cells' })).toBeVisible();
-    await dialog(page).locator('input[type="file"]').setInputFiles([
+    // Chosen files go up one at a time, straight away (resources/js/uploader.js).
+    await dialog(page).locator('input[data-upload-files]').setInputFiles([
         fixture('Lecture 2 - cell division.pdf'),
         fixture('Essay - why cells divide.docx'),
         fixture('Onion cells.png'),
         fixture('Homework with macros.docx'),
     ]);
-    await expect(dialog(page).getByRole('list', { name: 'Chosen files' }).getByRole('listitem')).toHaveCount(4);
-    await dialog(page).getByRole('button', { name: 'Upload', exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: '3 files uploaded.' })).toBeVisible();
+    await expect(dialog(page)).toContainText('3 files uploaded, 1 not uploaded.');
 }
 
 test('a student uploads files; the ones that aren\'t safe are refused with the reason', async ({ page }) => {
     await page.setViewportSize(desktop);
     await withFiles(page);
 
-    await expect(dialog(page)).toContainText('Homework with macros.docx: This file contains macros');
+    const refused = dialog(page).locator('.upload-item').filter({ hasText: 'Homework with macros.docx' });
+    await expect(refused).toContainText('This file contains macros');
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toBeHidden();
     await expect(week1(page).locator('.item-row')).toHaveCount(3);
@@ -77,7 +77,8 @@ test('the file page previews a PDF or an image, and offers other files as a down
 
     await page.goBack();
     await week1(page).getByRole('link', { name: 'Essay - why cells divide.docx' }).click();
-    await expect(page.getByRole('heading', { name: 'No preview for Word document files yet' })).toBeVisible();
+    // Word is shown as a PDF made by LibreOffice where it is installed (App\Study\FilePreviews), and can always be downloaded.
+    await expect(page.locator('iframe[src$="/preview"]')).toHaveCount(1);
     const download = page.waitForEvent('download');
     await page.getByRole('main').getByRole('link', { name: 'Download' }).last().click();
     expect((await download).suggestedFilename()).toBe('Essay - why cells divide.docx');
@@ -138,12 +139,11 @@ test('a Markdown file is shown as it was meant to look, and opens as a note', as
     await expect(dialog(page)).toBeHidden();
     await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
     await page.locator('#new-menu').getByRole('button', { name: 'Upload files' }).click();
-    await dialog(page).locator('input[type="file"]').setInputFiles({
+    await dialog(page).locator('input[data-upload-files]').setInputFiles({
         name: 'Cells.md',
         mimeType: 'text/markdown',
         buffer: Buffer.from('# Cells\n\nA **bold** claim: $E = mc^2$.\n\n| Part | Job |\n|---|---|\n| Nucleus | DNA |\n\n<script>alert(1)</script>\n'),
     });
-    await dialog(page).getByRole('button', { name: 'Upload', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: '1 file uploaded.' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toBeHidden();
@@ -171,31 +171,44 @@ test('a Markdown file is shown as it was meant to look, and opens as a note', as
     await expect(page.locator('[data-save-status]')).toHaveText('Saved');
 });
 
-test('Take notes opens a new note in its own window, beside the file, kept in the same place', async ({ page }) => {
+test('Take notes opens the file\'s own note beside it, in the same place, and moves it to a window saved', async ({ page }) => {
     await page.setViewportSize(desktop);
     await withFiles(page);
     await page.keyboard.press('Escape');
     await week1(page).getByRole('link', { name: 'Lecture 2 - cell division.pdf' }).click();
     await page.getByRole('heading', { level: 1, name: 'Lecture 2 - cell division.pdf' }).waitFor();
 
-    const opening = page.waitForEvent('popup');
+    // On a computer the note opens in a pane beside the file, named after it, and is made straight away.
     await page.getByRole('link', { name: 'Take notes' }).click();
-    const win = await opening;
-    await win.locator('[data-note-editor][data-ready]').waitFor();
-    await expect(win.locator('.note-header-bar')).toBeHidden();
-    await win.getByLabel('Title').fill('Lecture 2 notes');
-    await win.keyboard.press('Enter');
-    await win.keyboard.type('Prophase comes first.');
-    // Made by its first words, and still in its window after a reload.
-    await win.waitForURL(/\/notes\/[0-9a-f-]+\?window=1$/);
-    await expect(win.locator('[data-save-status]')).toHaveText('Saved');
-    await win.reload();
-    await win.locator('[data-note-editor][data-ready]').waitFor();
-    await expect(win.locator('.app-topbar')).toHaveCount(0);
-    await expect(win.getByLabel('Title')).toHaveValue('Lecture 2 notes');
+    const pane = page.frameLocator('[data-note-pane] iframe');
+    await pane.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(pane.getByLabel('Title')).toHaveValue('Lecture 2 - cell division (notes)');
+    await expect(pane.locator('[data-save-status]')).toHaveText('Saved');
+    await pane.locator('.ProseMirror').click();
+    await page.keyboard.type('Prophase comes first.');
 
-    // The file stayed open in the main tab, and the note is in Week 1 with it.
-    await expect(page.getByRole('heading', { level: 1, name: 'Lecture 2 - cell division.pdf' })).toBeVisible();
+    // Its own window: everything written is saved first, and the window shows that same note.
+    const opening = page.waitForEvent('popup');
+    await page.locator('[data-note-pane-pop-out]').click();
+    const win = await opening;
+    await win.waitForURL(/\/notes\/[0-9a-f-]+\?window=1$/);
+    await win.locator('[data-note-editor][data-ready]').waitFor();
+    await expect(win.getByLabel('Title')).toHaveValue('Lecture 2 - cell division (notes)');
+    await expect(win.locator('.ProseMirror')).toContainText('Prophase comes first.');
+    await expect(page.locator('[data-note-pane]')).toBeHidden();
+
+    // Shared from its window: where the browser can't share files, the file is downloaded.
+    const downloading = win.waitForEvent('download');
+    await win.locator('.note-bar-tools').getByRole('button', { name: 'Share' }).click();
+    await win.locator('#note-share-menu-small').getByRole('button', { name: /Markdown/ }).click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toBe('Lecture 2 - cell division (notes).md');
+    await win.close();
+
+    // The note is in Week 1 with the file, and Take notes opens it again rather than a second one.
+    await page.reload();
+    await page.getByRole('link', { name: 'Take notes' }).click();
+    await expect(pane.locator('.ProseMirror')).toContainText('Prophase comes first.');
     await page.getByRole('link', { name: 'Back to Week 1: Cells' }).click();
-    await expect(week1(page).getByRole('link', { name: 'Lecture 2 notes' })).toBeVisible();
+    await expect(week1(page).getByRole('link', { name: 'Lecture 2 - cell division (notes)' })).toHaveCount(1);
 });
