@@ -96,6 +96,36 @@ final class Form extends Component
         return $this->redirectRoute('home', navigate: true);
     }
 
+    public function delete(): mixed
+    {
+        if ($this->workspaceId === null) {
+            return null;
+        }
+        $name = $this->name;
+        $this->workspaces->delete($this->principal(), $this->workspaceId);
+        session()->flash('workspace-notice', "{$name} was deleted.");
+
+        return $this->redirectRoute('home', navigate: true);
+    }
+
+    #[On('workspace-edit')]
+    public function openForEdit(string $workspaceId): void
+    {
+        $this->workspaceId = $workspaceId;
+        $this->resetErrorBag();
+        $this->loadFields();
+        $this->dispatch('workspace-form-open');
+    }
+
+    #[On('workspace-create')]
+    public function openForCreate(): void
+    {
+        $this->workspaceId = null;
+        $this->resetErrorBag();
+        $this->loadFields();
+        $this->dispatch('workspace-form-open');
+    }
+
     #[On('workspace-restore')]
     public function restore(): mixed
     {
