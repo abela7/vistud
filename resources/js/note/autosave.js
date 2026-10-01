@@ -51,12 +51,11 @@ export function createAutosave(o) {
 
     const status = () => {
         if (halted) return halted;
-        if (busy && pending) return 'saving';
         if (retryAt) return 'retrying';
-        if (rev === savedRev && !pending) return 'saved';
         if (!storageOk) return 'nostorage';
         if (!navigator.onLine) return 'offline';
-        return 'local';
+        if (rev === savedRev && !pending) return 'saved';
+        return 'saving';
     };
 
     const emit = () => o.onState({

@@ -12,12 +12,13 @@
     // In a window of its own (?window=1): only the note, beside the study material.
     $window ??= false;
     $shownTitle = $new ? 'New note' : $note->displayTitle();
+    $split = request()->boolean('split');
     $payload = $new ? ['id' => null, 'version' => 0, 'doc' => \App\Study\NoteDoc::empty()] : ['id' => $note->id, 'version' => $note->version, 'doc' => $note->doc];
     $statusIcons = [
         'pencil' => 'draft',
         'check' => 'saved',
-        'loader-circle' => 'saving',
-        'cloud-off' => 'local offline',
+        'loader-circle' => 'saving local',
+        'cloud-off' => 'offline',
         'triangle-alert' => 'retrying nostorage conflict gone session blocked deleted rejected account',
     ];
     // [command, icon, label, shows pressed]; null starts a new group.
@@ -58,7 +59,7 @@
     $mathTemplates = ['F⃗ = ma', 'E = mc²', 'v⃗', 'Δt', 'x²', 'H₂O', 'μm', 'm/s²'];
 @endphp
 <x-dynamic-component :component="$window ? 'layouts.note-window' : 'layouts.app'" :title="$shownTitle.' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'" :pinned-current="$note?->id">
-    <div class="note-page" data-note-page data-page-view="pages" @if ($window) data-focus data-window @endif>
+    <div class="note-page" data-note-page data-page-view="pages" @if ($window) data-focus data-window @endif @if ($split) data-split @endif>
         <div class="note-header-bar flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             @php
                 [$backTo, $backUrl] = $trail !== [] ? end($trail) : [$inModule ? 'Modules' : 'Notes & files', route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes'])];
@@ -187,7 +188,7 @@
                 </x-alert>
             </div>
 
-            <article class="note-card" data-note-editor @if ($window) data-window @endif data-account="{{ auth()->id() }}" data-max-bytes="{{ \App\Study\NoteDoc::MAX_BYTES }}" data-image-upload-url="{{ route('api.v1.notes.images.store') }}"
+            <article class="note-card" data-note-editor @if ($window) data-window @endif @if ($split) data-split @endif data-account="{{ auth()->id() }}" data-max-bytes="{{ \App\Study\NoteDoc::MAX_BYTES }}" data-image-upload-url="{{ route('api.v1.notes.images.store') }}"
                 @if ($import ?? null) data-import-url="{{ $import['url'] }}" data-import-name="{{ $import['name'] }}" data-import-kind="{{ $import['markdown'] ? 'markdown' : 'text' }}" @endif
                 @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" @endif>
                 <div class="note-toolbar" role="toolbar" aria-label="Formatting" aria-controls="note-body" data-note-toolbar>
@@ -643,6 +644,15 @@
                         </button>
                         <button type="button" class="toolbar-button" data-image-align="right" title="Align Right" aria-label="Align Right">
                             <x-icon name="align-right" class="size-4" />
+                        </button>
+                    </div>
+                    <span class="toolbar-separator" aria-hidden="true"></span>
+                    <div class="image-toolbar-group">
+                        <button type="button" class="toolbar-button" data-image-move="up" title="Move Up" aria-label="Move Up">
+                            <x-icon name="arrow-up" class="size-4" />
+                        </button>
+                        <button type="button" class="toolbar-button" data-image-move="down" title="Move Down" aria-label="Move Down">
+                            <x-icon name="arrow-down" class="size-4" />
                         </button>
                     </div>
                     <span class="toolbar-separator" aria-hidden="true"></span>

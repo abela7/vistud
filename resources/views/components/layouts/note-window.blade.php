@@ -12,14 +12,15 @@
     data-theme-light="{{ config('vistud.appearance.light') }}"
     data-theme-dark="{{ config('vistud.appearance.dark') }}"
     data-appearance="system"
-    data-note-full>
+    data-note-full
+    @if (request()->boolean('split')) data-split @endif>
 <head>
     @include('partials.head', ['title' => $title])
     {{-- Whose drafts this browser may hold and sync (resources/js/note/). --}}
     <meta name="vistud-account" content="{{ auth()->id() }}">
 </head>
 <body class="bg-canvas text-fg antialiased">
-    <main id="main" class="note-window" tabindex="-1">
+    <main id="main" class="note-window" tabindex="-1" @if (request()->boolean('split')) data-split @endif>
         {{ $slot }}
     </main>
 

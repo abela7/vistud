@@ -177,7 +177,7 @@ const NoteImage = Node.create({
             },
             width: {
                 default: '100%',
-                parseHTML: (el) => el.getAttribute('data-width') || '100%',
+                parseHTML: (el) => el.getAttribute('data-width') || el.style.width || '100%',
                 renderHTML: (attrs) => ({ 'data-width': attrs.width || '100%' }),
             },
             align: {
@@ -197,22 +197,40 @@ const NoteImage = Node.create({
 
     renderHTML({ HTMLAttributes }) {
         const { src, alt, title, 'data-width': width, 'data-align': align } = HTMLAttributes;
+        const widthVal = width || '100%';
+        const alignVal = align || 'center';
         const figAttrs = {
             'data-note-image': '',
-            'data-width': width || '100%',
-            'data-align': align || 'center',
+            'data-width': widthVal,
+            'data-align': alignVal,
+            style: `width: ${widthVal}; max-width: 100%;`,
             class: 'note-image-figure',
+            draggable: 'true',
         };
         const imgAttrs = {
             src,
             alt: alt || '',
             loading: 'lazy',
             class: 'note-image-img',
+            draggable: 'false',
         };
         const children = [
             ['div', { class: 'note-image-wrapper' },
+                ['div', { class: 'note-image-drag-pill', title: 'Drag to move image anywhere on canvas', 'aria-label': 'Drag to move' },
+                    ['svg', { class: 'note-image-drag-icon', viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': 'true' },
+                        ['circle', { cx: '9', cy: '5', r: '1.5' }],
+                        ['circle', { cx: '9', cy: '12', r: '1.5' }],
+                        ['circle', { cx: '9', cy: '19', r: '1.5' }],
+                        ['circle', { cx: '15', cy: '5', r: '1.5' }],
+                        ['circle', { cx: '15', cy: '12', r: '1.5' }],
+                        ['circle', { cx: '15', cy: '19', r: '1.5' }],
+                    ],
+                    'Move',
+                ],
                 ['img', imgAttrs],
-                ['span', { class: 'note-image-resize-handle', 'aria-hidden': 'true' }],
+                ['span', { class: 'note-image-resize-handle handle-se', 'data-handle': 'se', 'aria-hidden': 'true', title: 'Drag to resize' }],
+                ['span', { class: 'note-image-resize-handle handle-sw', 'data-handle': 'sw', 'aria-hidden': 'true', title: 'Drag to resize' }],
+                ['div', { class: 'note-image-size-indicator', 'aria-hidden': 'true', hidden: 'true' }],
             ],
         ];
         if (title) {
@@ -338,7 +356,7 @@ const NoteAutoPagination = Extension.create({
 const LABELS = {
     draft: 'Not saved yet',
     saved: 'Saved',
-    local: 'Saved on this device',
+    local: 'Saving…',
     offline: 'Saved on this device',
     saving: 'Saving…',
     retrying: 'Not saved, retrying in {s} s',
@@ -477,6 +495,12 @@ export async function mount(host) {
     let toolbarReady = false;
     // Only the note, in a window of its own beside the study material (resources/js/note-window.js).
     const inWindow = host.hasAttribute('data-window');
+    const inSplit = inWindow && (window.self !== window.top || new URLSearchParams(window.location.search).has('split') || host.hasAttribute('data-split') || document.documentElement.hasAttribute('data-split'));
+    if (inSplit) {
+        document.documentElement.setAttribute('data-split', '');
+        host.closest('[data-note-page]')?.setAttribute('data-split', '');
+        host.setAttribute('data-split', '');
+    }
     // Set up further down; the editor's callbacks wait for them.
     let viewReady = false;
     // The automatic pagination's state (Pages view): declared here, before the editor, because its
@@ -657,6 +681,38 @@ export async function mount(host) {
                 return false;
             },
             handleDrop: (view, event) => {
+                const movedPosStr = event.dataTransfer?.getData('application/x-vistud-image-pos');
+                if (movedPosStr !== undefined && movedPosStr !== '') {
+                    const fromPos = parseInt(movedPosStr, 10);
+                    const node = view.state.doc.nodeAt(fromPos);
+                    if (node && node.type.name === 'image') {
+                        event.preventDefault();
+                        const dropCoords = view.posAtCoords({ left: event.clientX, top: event.clientY });
+                        if (dropCoords) {
+                            const tr = view.state.tr;
+                            const nodeSize = node.nodeSize;
+                            tr.delete(fromPos, fromPos + nodeSize);
+                            let targetPos = tr.mapping.map(dropCoords.pos);
+                            targetPos = Math.max(0, Math.min(tr.doc.content.size, targetPos));
+                            tr.insert(targetPos, node);
+                            tr.setSelection(NodeSelection.create(tr.doc, targetPos));
+                            view.dispatch(tr);
+                            hideImageToolbar();
+                            requestAnimationFrame(() => {
+                                const newFig = view.nodeDOM(targetPos);
+                                if (newFig) {
+                                    activeFigureEl = newFig.matches?.('figure.note-image-figure') ? newFig : newFig.querySelector?.('figure.note-image-figure');
+                                    if (activeFigureEl) {
+                                        activeFigureEl.classList.add('is-selected');
+                                        selectedImagePos = targetPos;
+                                        positionImageToolbar(activeFigureEl);
+                                    }
+                                }
+                            });
+                            return true;
+                        }
+                    }
+                }
                 const files = Array.from(event.dataTransfer?.files || []);
                 const imageFile = files.find((file) => file.type.startsWith('image/'));
                 if (imageFile) {
@@ -779,7 +835,7 @@ export async function mount(host) {
             host.dataset.saveUrl = data.save_url;
             delete host.dataset.createUrl;
             // A new note in its own window stays there: the address keeps ?window=1 for a reload.
-            history.replaceState(history.state, '', inWindow ? `${data.url}?window=1` : data.url);
+            history.replaceState(history.state, '', inWindow ? `${data.url}?window=1${inSplit ? '&split=1' : ''}` : data.url);
             startAutosave();
             // Whatever was typed while it was being made is saved next.
             if (JSON.stringify(sent) !== JSON.stringify({ title: titleField.value, doc: compact(editor.getJSON()) })) autosave.changed();
@@ -2182,32 +2238,153 @@ export async function mount(host) {
     on(window, 'resize', followPicture);
     document.addEventListener('scroll', followPicture, { capture: true, signal: leaving.signal });
 
+    function findImagePos(figure) {
+        if (!figure) return null;
+        try {
+            if (editor.state.selection instanceof NodeSelection && editor.state.selection.node.type.name === 'image') {
+                const dom = editor.view.nodeDOM(editor.state.selection.from);
+                if (dom === figure || figure.contains(dom) || dom?.contains(figure)) {
+                    return editor.state.selection.from;
+                }
+            }
+            const pos = editor.view.posAtDOM(figure, 0);
+            if (typeof pos === 'number') {
+                const doc = editor.state.doc;
+                if (doc.nodeAt(pos)?.type?.name === 'image') return pos;
+                if (pos > 0 && doc.nodeAt(pos - 1)?.type?.name === 'image') return pos - 1;
+                const $pos = doc.resolve(pos);
+                for (let d = $pos.depth; d >= 0; d--) {
+                    if ($pos.node(d).type.name === 'image') return $pos.before(d);
+                }
+                if ($pos.nodeAfter?.type?.name === 'image') return $pos.pos;
+                if ($pos.nodeBefore?.type?.name === 'image') return $pos.pos - $pos.nodeBefore.nodeSize;
+            }
+        } catch {}
+        const imgEl = figure.querySelector('img');
+        const src = imgEl?.getAttribute('src');
+        if (src) {
+            let foundPos = null;
+            editor.state.doc.descendants((node, pos) => {
+                if (foundPos !== null) return false;
+                if (node.type.name === 'image' && node.attrs.src === src) {
+                    foundPos = pos;
+                    return false;
+                }
+            });
+            if (foundPos !== null) return foundPos;
+        }
+        return null;
+    }
+
+    function moveImageBlock(direction) {
+        if (!activeFigureEl) return;
+        selectedImagePos = findImagePos(activeFigureEl);
+        if (typeof selectedImagePos !== 'number' || selectedImagePos < 0) return;
+        const doc = editor.state.doc;
+        const $pos = doc.resolve(selectedImagePos);
+        const node = doc.nodeAt(selectedImagePos);
+        if (!node) return;
+        const index = $pos.index();
+        const parent = $pos.parent;
+        if (direction === 'up' && index > 0) {
+            const prevChild = parent.child(index - 1);
+            const prevPos = selectedImagePos - prevChild.nodeSize;
+            const tr = editor.state.tr;
+            tr.delete(selectedImagePos, selectedImagePos + node.nodeSize);
+            tr.insert(prevPos, node);
+            tr.setSelection(NodeSelection.create(tr.doc, prevPos));
+            editor.view.dispatch(tr);
+            requestAnimationFrame(() => {
+                const newFig = editor.view.nodeDOM(prevPos);
+                if (newFig) {
+                    activeFigureEl = newFig.matches?.('figure.note-image-figure') ? newFig : newFig.querySelector?.('figure.note-image-figure');
+                    if (activeFigureEl) {
+                        activeFigureEl.classList.add('is-selected');
+                        selectedImagePos = prevPos;
+                        positionImageToolbar(activeFigureEl);
+                    }
+                }
+            });
+        } else if (direction === 'down' && index < parent.childCount - 1) {
+            const nextChild = parent.child(index + 1);
+            const tr = editor.state.tr;
+            tr.delete(selectedImagePos, selectedImagePos + node.nodeSize);
+            const targetPos = selectedImagePos + nextChild.nodeSize;
+            tr.insert(targetPos, node);
+            tr.setSelection(NodeSelection.create(tr.doc, targetPos));
+            editor.view.dispatch(tr);
+            requestAnimationFrame(() => {
+                const newFig = editor.view.nodeDOM(targetPos);
+                if (newFig) {
+                    activeFigureEl = newFig.matches?.('figure.note-image-figure') ? newFig : newFig.querySelector?.('figure.note-image-figure');
+                    if (activeFigureEl) {
+                        activeFigureEl.classList.add('is-selected');
+                        selectedImagePos = targetPos;
+                        positionImageToolbar(activeFigureEl);
+                    }
+                }
+            });
+        }
+    }
+
     host.querySelector('[data-note-body]').addEventListener('click', (event) => {
         const figure = event.target.closest('figure.note-image-figure');
         if (figure) {
-            try {
-                const pos = editor.view.posAtDOM(figure, 0);
-                if (typeof pos === 'number' && pos >= 0) {
-                    if (activeFigureEl && activeFigureEl !== figure) activeFigureEl.classList.remove('is-selected');
-                    activeFigureEl = figure;
-                    activeFigureEl.classList.add('is-selected');
-                    selectedImagePos = pos;
-                    positionImageToolbar(figure);
-                    return;
-                }
-            } catch {}
+            const pos = findImagePos(figure);
+            if (typeof pos === 'number' && pos >= 0) {
+                if (activeFigureEl && activeFigureEl !== figure) activeFigureEl.classList.remove('is-selected');
+                activeFigureEl = figure;
+                activeFigureEl.classList.add('is-selected');
+                selectedImagePos = pos;
+                editor.commands.setNodeSelection(pos);
+                positionImageToolbar(figure);
+                return;
+            }
         }
         if (!event.target.closest('#note-image-toolbar')) {
             hideImageToolbar();
         }
     });
 
+    host.querySelector('[data-note-body]').addEventListener('dragstart', (event) => {
+        if (event.target.closest('.note-image-resize-handle')) {
+            event.preventDefault();
+            return;
+        }
+        const figure = event.target.closest('figure.note-image-figure');
+        if (figure) {
+            const pos = findImagePos(figure);
+            if (typeof pos === 'number' && pos >= 0) {
+                selectedImagePos = pos;
+                activeFigureEl = figure;
+                figure.classList.add('is-selected');
+                figure.classList.add('is-dragging');
+                editor.commands.setNodeSelection(pos);
+                if (event.dataTransfer) {
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('application/x-vistud-image-pos', String(pos));
+                    event.dataTransfer.setData('text/plain', `[Picture: ${figure.querySelector('img')?.alt || 'image'}]`);
+                }
+            }
+        }
+    });
+
+    host.querySelector('[data-note-body]').addEventListener('dragend', () => {
+        host.querySelectorAll('figure.note-image-figure.is-dragging').forEach((fig) => {
+            fig.classList.remove('is-dragging');
+        });
+    });
+
     imageToolbar?.addEventListener('click', (event) => {
         if (!activeFigureEl) return;
-        try {
-            selectedImagePos = editor.view.posAtDOM(activeFigureEl, 0);
-        } catch {}
+        selectedImagePos = findImagePos(activeFigureEl);
         if (typeof selectedImagePos !== 'number' || selectedImagePos < 0) return;
+
+        const moveBtn = event.target.closest('[data-image-move]');
+        if (moveBtn) {
+            moveImageBlock(moveBtn.dataset.imageMove);
+            return;
+        }
 
         const alignBtn = event.target.closest('[data-image-align]');
         if (alignBtn) {
@@ -2223,6 +2400,7 @@ export async function mount(host) {
             const width = widthBtn.dataset.imageWidth;
             editor.chain().setNodeSelection(selectedImagePos).updateAttributes('image', { width }).run();
             activeFigureEl.dataset.width = width;
+            activeFigureEl.style.width = width;
             positionImageToolbar(activeFigureEl);
             return;
         }
@@ -2247,7 +2425,7 @@ export async function mount(host) {
         }
     });
 
-    // Drag to resize handle
+    // Drag to resize handle: smooth continuous resizing with real-time feedback
     host.querySelector('[data-note-body]').addEventListener('mousedown', (event) => {
         const handle = event.target.closest('.note-image-resize-handle');
         if (!handle) return;
@@ -2260,27 +2438,51 @@ export async function mount(host) {
             pos = editor.view.posAtDOM(figure, 0);
         } catch {}
 
+        const handleType = handle.dataset.handle || (handle.classList.contains('handle-sw') ? 'sw' : 'se');
         const startX = event.clientX;
-        const containerWidth = figure.parentElement.offsetWidth || 800;
-        const initialWidth = figure.offsetWidth;
+        const containerWidth = figure.parentElement.clientWidth || 800;
+        const initialRect = figure.getBoundingClientRect();
+        const initialWidth = initialRect.width;
+        const align = figure.dataset.align || 'center';
+        const indicator = figure.querySelector('.note-image-size-indicator');
+        if (indicator) indicator.hidden = false;
+        figure.classList.add('is-resizing');
+        document.body.style.cursor = handleType === 'sw' ? 'nesw-resize' : 'nwse-resize';
+
+        let currentPct = parseInt(figure.dataset.width, 10) || Math.round((initialWidth / containerWidth) * 100);
 
         function onMouseMove(e) {
             const diffX = e.clientX - startX;
-            const newWidthPx = Math.max(120, Math.min(containerWidth, initialWidth + diffX * 2));
-            // The sizes a note keeps (app/Study/NoteDoc.php): the nearest one.
-            const pct = Math.round((newWidthPx / containerWidth) * 100);
-            const size = [25, 33, 50, 75, 100].reduce((best, w) => (Math.abs(w - pct) < Math.abs(best - pct) ? w : best));
-            figure.dataset.width = `${size}%`;
+            let effectiveDiff = diffX;
+            if (handleType === 'sw') {
+                effectiveDiff = -diffX;
+            }
+            if (align === 'center') {
+                effectiveDiff = effectiveDiff * 2;
+            }
+            const newWidthPx = Math.max(100, Math.min(containerWidth, initialWidth + effectiveDiff));
+            currentPct = Math.max(15, Math.min(100, Math.round((newWidthPx / containerWidth) * 100)));
+            figure.style.width = `${currentPct}%`;
+            figure.dataset.width = `${currentPct}%`;
+            if (indicator) {
+                indicator.textContent = `${currentPct}% · ${Math.round(newWidthPx)}px`;
+            }
             positionImageToolbar(figure);
         }
 
         function onMouseUp() {
             document.removeEventListener('mousemove', onMouseMove);
             document.removeEventListener('mouseup', onMouseUp);
-            const finalWidth = figure.dataset.width;
-            if (finalWidth && typeof pos === 'number' && pos >= 0) {
+            document.body.style.cursor = '';
+            figure.classList.remove('is-resizing');
+            if (indicator) indicator.hidden = true;
+            const finalWidth = `${currentPct}%`;
+            figure.style.width = finalWidth;
+            figure.dataset.width = finalWidth;
+            if (typeof pos === 'number' && pos >= 0) {
                 editor.chain().setNodeSelection(pos).updateAttributes('image', { width: finalWidth }).run();
             }
+            positionImageToolbar(figure);
         }
 
         document.addEventListener('mousemove', onMouseMove);

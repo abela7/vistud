@@ -428,11 +428,11 @@ final class NoteDoc
                     $kept['title'] = mb_substr($title, 0, 500);
                 }
                 $width = $attrs['width'] ?? null;
-                if (is_string($width) && preg_match('/^(100%|75%|50%|33%|25%|[1-9][0-9]{1,3}px)$/', $width)) {
+                if (is_string($width) && preg_match('/^(100%|[1-9][0-9]?%|[1-9][0-9]{1,3}px)$/', $width)) {
                     $kept['width'] = $width;
                 }
                 $align = $attrs['align'] ?? null;
-                if (in_array($align, ['left', 'center', 'right'], true)) {
+                if (in_array($align, ['left', 'center', 'right', 'float-left', 'float-right'], true)) {
                     $kept['align'] = $align;
                 }
                 break;
