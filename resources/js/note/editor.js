@@ -2428,10 +2428,10 @@ export async function mount(host) {
         }
     });
 
-    // Drag to resize handle: smooth continuous resizing with real-time feedback
-    host.querySelector('[data-note-body]').addEventListener('mousedown', (event) => {
+    // Drag a corner to resize: a mouse, a finger or a pen (pointer events), with the size shown as it changes.
+    host.querySelector('[data-note-body]').addEventListener('pointerdown', (event) => {
         const handle = event.target.closest('.note-image-resize-handle');
-        if (!handle) return;
+        if (!handle || (event.pointerType === 'mouse' && event.button !== 0)) return;
         event.preventDefault();
         event.stopPropagation();
         const figure = handle.closest('figure.note-image-figure');
@@ -2454,7 +2454,8 @@ export async function mount(host) {
 
         let currentPct = parseInt(figure.dataset.width, 10) || Math.round((initialWidth / containerWidth) * 100);
 
-        function onMouseMove(e) {
+        function onMove(e) {
+            if (e.pointerId !== event.pointerId) return;
             const diffX = e.clientX - startX;
             let effectiveDiff = diffX;
             if (handleType === 'sw') {
@@ -2473,9 +2474,11 @@ export async function mount(host) {
             positionImageToolbar(figure);
         }
 
-        function onMouseUp() {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
+        function onUp(e) {
+            if (e.pointerId !== event.pointerId) return;
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            document.removeEventListener('pointercancel', onUp);
             document.body.style.cursor = '';
             figure.classList.remove('is-resizing');
             if (indicator) indicator.hidden = true;
@@ -2488,8 +2491,9 @@ export async function mount(host) {
             positionImageToolbar(figure);
         }
 
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
     });
 
     on(window, 'resize', () => {

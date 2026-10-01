@@ -146,9 +146,9 @@
         <header class="file-toolbar flex flex-wrap items-center justify-between gap-x-3 gap-y-2 min-w-0 py-0.5">
             <div class="flex min-w-0 basis-48 items-center gap-2 flex-1">
                 <x-back :href="$backUrl" :to="$backTo" compact class="size-8 shrink-0" />
-                <nav aria-label="Where this file is" class="min-w-0 hidden sm:flex items-center shrink-0">
-                    <ol class="breadcrumbs text-xs text-fg-muted font-medium flex items-center gap-1.5 min-w-0">
-                        <li><a class="hover:text-fg transition-colors" href="{{ route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes']) }}">{{ $inModule ? 'Modules' : 'Notes & files' }}</a></li>
+                <nav aria-label="Where this file is" class="hidden min-w-0 max-w-[50%] items-center overflow-hidden xl:flex">
+                    <ol class="breadcrumbs text-xs text-fg-muted font-medium flex flex-nowrap items-center gap-1.5 min-w-0 whitespace-nowrap">
+                        <li class="shrink-0"><a class="hover:text-fg transition-colors" href="{{ route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes']) }}">{{ $inModule ? 'Modules' : 'Notes & files' }}</a></li>
                         @foreach ($trail as [$label, $url])
                             <li class="flex items-center gap-1.5 min-w-0">
                                 <x-icon name="chevron-right" class="size-3.5 shrink-0 text-fg-subtle" />
@@ -162,7 +162,7 @@
                     </ol>
                     <x-icon name="chevron-right" class="size-3.5 shrink-0 text-fg-subtle ml-1.5 mr-2" />
                 </nav>
-                <div class="flex min-w-0 items-center gap-1.5">
+                <div class="flex min-w-[min(8rem,50%)] flex-1 items-center gap-1.5">
                     <span class="ws-chip size-6 rounded shrink-0" aria-hidden="true">
                         <x-icon :name="$file->icon()" class="size-3.5" />
                     </span>
@@ -251,14 +251,15 @@
                         It can't be opened while it's there. Restore it to use it again; otherwise it's deleted 30 days after it was trashed.
                     </x-alert>
                 @elseif ($file->kind === 'pdf')
-                    <iframe class="file-preview" src="{{ $content }}" title="{{ $file->fileName() }}"></iframe>
+                    {{-- data-pdf-frame: drawn by PDF.js where the browser can't show a PDF inside the page (resources/js/pdf-viewer.js). --}}
+                    <iframe class="file-preview" src="{{ $content }}" title="{{ $file->fileName() }}" data-pdf-frame></iframe>
                 @elseif ($officePreview !== null)
                     {{-- Word, PowerPoint or Excel as a PDF made by LibreOffice (App\Study\FilePreviews): a few seconds the first time. --}}
-                    <div class="file-preview file-preview-office" x-data="{ ready: false }" x-init="fetch('{{ $officePreview }}').then(r => { if (r.ok) ready = true; }).catch(() => {})">
+                    <div class="file-preview file-preview-office" x-data="{ ready: false }" x-on:pdf-shown="ready = true" x-init="fetch('{{ $officePreview }}').then(r => { if (r.ok) ready = true; }).catch(() => {})">
                         <p class="file-preview-wait" x-show="! ready" role="status">
                             <x-icon name="loader-circle" class="size-5 animate-spin" />Preparing the preview. The first time takes a few seconds.
                         </p>
-                        <iframe src="{{ $officePreview }}" title="{{ $file->fileName() }}" x-on:load="ready = true" x-bind:class="! ready && 'opacity-0'"></iframe>
+                        <iframe src="{{ $officePreview }}" title="{{ $file->fileName() }}" x-on:load="ready = true" x-bind:class="! ready && 'opacity-0'" data-pdf-frame></iframe>
                     </div>
                 @elseif ($office)
                     <section class="file-preview file-preview-none">
@@ -323,7 +324,7 @@
                             <span class="ws-chip size-6 rounded shrink-0">
                                 <x-icon name="notebook-pen" class="size-3.5" />
                             </span>
-                            <span class="text-xs font-semibold text-fg">Notes</span>
+                            <span class="shrink-0 whitespace-nowrap text-xs font-semibold text-fg">Notes</span>
                             <span class="text-[11px] text-fg-muted font-normal truncate hidden sm:inline">
                                 · Beside {{ $file->fileName() }}
                             </span>

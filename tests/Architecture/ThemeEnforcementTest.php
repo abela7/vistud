@@ -42,7 +42,8 @@ class ThemeEnforcementTest extends TestCase
             'a named colour in an SVG paint attribute' => "/(?<![\\w-])(?:fill|stroke|stop-color|color)\\s*=\\s*[\"'](?:{$named})[\"']/i",
             'a Tailwind gradient utility' => '/(?<![\w:-])(?:bg-(?:linear|radial|conic|gradient)(?:-[\w\/\[\]().%-]+)?|(?:from|via|to)-(?:\[[^\]]*\]|(?:canvas|surface|fg|on|accent|border|divider|hover|pressed|selected|selection|danger|warning|success|info|role|logo|focus|overlay|drag|drop)[\w\/-]*))(?![\w-])/',
             'a Tailwind arbitrary colour' => "/-\\[(?:color:|image:)?(?:{$named}|var\\()/i",
-            'a colour string in JavaScript' => "/[\"'`](?:{$named})[\"'`]/i",
+            // Not a tag's name: document.createElement('canvas') makes an element, it isn't a colour.
+            'a colour string in JavaScript' => "/(?<!createElement\\()[\"'`](?:{$named})[\"'`]/i",
         ];
 
         $offenders = [];

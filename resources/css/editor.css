@@ -1885,6 +1885,44 @@
         border: 0;
     }
 
+    /* A PDF drawn by PDF.js (resources/js/pdf-viewer.js): its pages one under another, scrolled inside the frame. */
+    .pdf-view {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        background-color: var(--surface-sunken);
+    }
+
+    .file-preview-office > .pdf-view {
+        position: absolute;
+        inset: 0;
+    }
+
+    .pdf-page {
+        flex: none;
+        width: 100%;
+        border-radius: var(--radius-sm);
+        background-color: var(--surface);
+        box-shadow: var(--elevation-sm);
+        overflow: hidden;
+    }
+
+    .pdf-page canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+
+    .pdf-view-problem {
+        margin: auto;
+        padding: 1rem;
+        color: var(--text-muted);
+        text-align: center;
+    }
+
     .file-preview-wait {
         display: flex;
         align-items: center;
@@ -2773,7 +2811,27 @@
         box-shadow: var(--elevation-sm);
         z-index: 5;
         display: none;
+        /* A finger dragging the corner resizes the picture; it never scrolls the page. */
+        touch-action: none;
         transition: transform 0.12s ease, background-color 0.12s ease;
+    }
+
+    /* A finger needs more than the dot: a 44 px area around it takes the press (DESIGN.md §6.2). */
+    .note-image-resize-handle::after {
+        content: '';
+        position: absolute;
+        inset: -0.875rem;
+    }
+
+    @media (pointer: coarse) {
+        .note-image-resize-handle {
+            width: 1.375rem;
+            height: 1.375rem;
+        }
+
+        .note-image-resize-handle::after {
+            inset: -0.75rem;
+        }
     }
 
     .note-prose figure.note-image-figure.is-selected .note-image-resize-handle,

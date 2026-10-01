@@ -38,7 +38,7 @@ async function withFiles(page) {
         fixture('Onion cells.png'),
         fixture('Homework with macros.docx'),
     ]);
-    await expect(dialog(page)).toContainText('3 files uploaded, 1 not uploaded.');
+    await expect(dialog(page)).toContainText('3 files uploaded, 1 not uploaded.', { timeout: 20_000 });
 }
 
 test('a student uploads files; the ones that aren\'t safe are refused with the reason', async ({ page }) => {

@@ -2,6 +2,6 @@
 @props(['workspace', 'section'])
 @foreach (\App\Study\Workspaces::SECTIONS as [$key, $label, $icon])
     <a href="{{ route('workspaces.show', $key === 'overview' ? $workspace->id : [$workspace->id, $key]) }}" class="tab-item" @if ($key === $section) aria-current="page" @endif>
-        <x-icon :name="$icon" class="size-5" />{{ ['notes' => 'Notes', 'flashcards' => 'Cards'][$key] ?? $label }}
+        <x-icon :name="$icon" class="size-5" /><span>{{ ['notes' => 'Notes', 'flashcards' => 'Cards'][$key] ?? $label }}</span>
     </a>
 @endforeach

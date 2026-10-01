@@ -16,6 +16,13 @@ onPage(() => {
     if (noteEditor) import('./note/editor.js').then(({ mount }) => mount(noteEditor));
 });
 
+// A PDF (or an office file shown as one) where the browser can't show it inside the page, as on phones and tablets.
+onPage(() => {
+    const frames = document.querySelectorAll('iframe[data-pdf-frame]');
+    const inline = navigator.pdfViewerEnabled !== false && !window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (frames.length > 0 && !inline) import('./pdf-viewer.js').then(({ drawPdf }) => frames.forEach(drawPdf));
+});
+
 // A Markdown file shown on its page: its formulas are drawn only when it has any.
 onPage(() => {
     const preview = document.querySelector('[data-formulas]');

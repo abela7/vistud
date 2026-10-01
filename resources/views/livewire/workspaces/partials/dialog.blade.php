@@ -72,11 +72,12 @@
                         x-data="uploader({ url: @js(route('api.v1.files.store')), placeType: @js($targetType), placeId: @js($targetId), maxBytes: {{ $maxUpload }}, extensions: @js([...array_keys(\App\Study\FileTypes::TYPES), 'jpeg']) })">
                         <div class="drop-zone" x-bind:class="over && 'is-over'" x-on:dragover.prevent="over = true" x-on:dragleave="over = false" x-on:drop.prevent="drop($event)">
                             <x-icon name="upload" class="size-6 text-fg-muted" />
-                            <span class="font-semibold">Drop files or folders here</span>
-                            <span class="text-sm text-fg-muted">PDF, Word, PowerPoint, Excel, OpenDocument, text and images, up to {{ \Illuminate\Support\Number::fileSize($maxUpload) }} each. A folder keeps its folders.</span>
+                            <span class="font-semibold only-fine-pointer">Drop files or folders here</span>
+                            <span class="font-semibold only-touch">Choose files to upload</span>
+                            <span class="text-sm text-fg-muted">PDF, Word, PowerPoint, Excel, OpenDocument, text and images, up to {{ \Illuminate\Support\Number::fileSize($maxUpload) }} each.<span class="only-fine-pointer"> A folder keeps its folders.</span></span>
                             <div class="mt-2 flex flex-wrap justify-center gap-2">
                                 <x-button icon="file-up" x-on:click="$refs.files.click()">Choose files</x-button>
-                                <x-button icon="folder-input" x-on:click="$refs.folder.click()">Choose a folder</x-button>
+                                <x-button icon="folder-input" class="only-fine-pointer" x-on:click="$refs.folder.click()">Choose a folder</x-button>
                             </div>
                             <input type="file" multiple hidden x-ref="files" x-on:change="choose($event)" accept="{{ \App\Study\FileTypes::accept() }}" data-upload-files>
                             <input type="file" hidden webkitdirectory x-ref="folder" x-on:change="choose($event)" data-upload-folder>

@@ -1229,6 +1229,21 @@
         }
     }
 
+    /* What only a mouse can do (drop a folder, choose a folder), and what a touch screen says instead. */
+    .only-touch {
+        display: none;
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+        .only-fine-pointer {
+            display: none !important;
+        }
+
+        .only-touch {
+            display: inline;
+        }
+    }
+
     /* Touch: every control is at least 44 px tall (DESIGN.md §6.2). */
     @media (pointer: coarse), (max-width: 767px) {
         .btn,

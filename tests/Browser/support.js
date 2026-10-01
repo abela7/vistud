@@ -281,6 +281,36 @@ export function makeStudentWithEverything() {
 }
 
 /**
+ * A student with Operating Systems (and an empty Biology): a module, its Lectures folder holding a PDF and a
+ * Word file, and the note "Kernel summary" there with a picture. Returns the email and the pages' paths.
+ */
+export function makeStudentWithStudyFiles() {
+    const email = makeAccount(false);
+    const fixtures = "base_path('tests/Browser/fixtures/files/')";
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
+        `$w = app(\\App\\Study\\Workspaces::class)->create($p, ['name' => 'Operating Systems', 'colour' => 'blue', 'icon' => 'code']);`,
+        `app(\\App\\Study\\Workspaces::class)->create($p, ['name' => 'Biology', 'colour' => 'green', 'icon' => 'microscope']);`,
+        `$m = app(\\App\\Study\\Modules::class)->create($p, $w->id, ['title' => 'Week 1: Architecture and System Calls']);`,
+        `$lectures = app(\\App\\Study\\Folders::class)->create($p, 'module', $m->id, 'Lectures'); $files = app(\\App\\Study\\Files::class);`,
+        `$pdf = $files->upload($p, 'folder', $lectures->id, ${fixtures}.'Lecture 2 - cell division.pdf', 'Lecture 01 - Kernel and System Calls with a long name.pdf');`,
+        `$docx = $files->upload($p, 'folder', $lectures->id, ${fixtures}.'Essay - why cells divide.docx', 'Syllabus.docx');`,
+        `$learner = \\App\\Platform\\Access\\Guard::learner($p)->learnerId;`,
+        `\\App\\Study\\Files::disk()->put(\\App\\Study\\NoteImages::key($learner, 'device-pic', 'png'), file_get_contents(${fixtures}.'Onion cells.png'));`,
+        `$notes = app(\\App\\Study\\Notes::class); $n = $notes->create($p, 'folder', $lectures->id, 'Kernel summary');`,
+        `$notes->save($p, $n->id, ['base_version' => 1, 'save_id' => 'device-save-1', 'client_id' => 'device-tab-1', 'title' => 'Kernel summary', 'doc' => ['type' => 'doc', 'content' => [`,
+        `['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'System calls are the doorway into the kernel. '.str_repeat('More words here. ', 20)]]],`,
+        `['type' => 'image', 'attrs' => ['src' => '/notes/images/device-pic', 'alt' => 'Onion cells', 'width' => '60%', 'align' => 'center']],`,
+        `['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'After the picture.']]]]]]);`,
+        `echo json_encode(['folder' => route('workspaces.folders.show', [$w->id, $lectures->id], false), 'pdf' => route('workspaces.files.show', [$w->id, $pdf->id], false),`,
+        `'docx' => route('workspaces.files.show', [$w->id, $docx->id], false), 'note' => route('workspaces.notes.show', [$w->id, $n->id], false),`,
+        `'window' => route('workspaces.notes.show', [$w->id, $n->id, 'window' => 1], false)]);`,
+    ].join(' ');
+    const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
+    return { email, ...JSON.parse(out) };
+}
+
+/**
  * makeStudentWithTopics(), plus flashcards: three on Joins (one made with an
  * AI), one on keys, and one on keys already answered, due tomorrow.
  */
