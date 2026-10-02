@@ -43,6 +43,8 @@ final class Tasks extends Component
 
     public string $dueOn = '';
 
+    public string $dueTime = '';
+
     public string $moduleId = '';
 
     private Activities $activities;
@@ -72,7 +74,7 @@ final class Tasks extends Component
     {
         $task = $this->activities->find($this->principal(), $id);
         $this->open('task', $task->id);
-        [$this->kind, $this->title, $this->dueOn, $this->moduleId] = [$task->kind, $task->title, (string) $task->dueOn, (string) $task->moduleId];
+        [$this->kind, $this->title, $this->dueOn, $this->dueTime, $this->moduleId] = [$task->kind, $task->title, (string) $task->dueOn, (string) $task->dueTime, (string) $task->moduleId];
     }
 
     public function confirmDelete(string $id): void
@@ -154,7 +156,7 @@ final class Tasks extends Component
     {
         $by = $this->principal();
         $this->resetErrorBag();
-        $input = ['kind' => $this->kind, 'title' => $this->title, 'due_on' => $this->dueOn, 'module_id' => $this->moduleId];
+        $input = ['kind' => $this->kind, 'title' => $this->title, 'due_on' => $this->dueOn, 'due_time' => $this->dueTime, 'module_id' => $this->moduleId];
 
         try {
             $this->notice = match (true) {
@@ -165,7 +167,7 @@ final class Tasks extends Component
             };
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
-                $this->addError(['due_on' => 'dueOn', 'module_id' => 'moduleId'][$field] ?? $field, $messages[0]);
+                $this->addError(['due_on' => 'dueOn', 'due_time' => 'dueTime', 'module_id' => 'moduleId'][$field] ?? $field, $messages[0]);
             }
 
             return;
@@ -181,7 +183,7 @@ final class Tasks extends Component
 
     public function close(): void
     {
-        $this->reset('mode', 'targetId', 'kind', 'title', 'dueOn', 'moduleId');
+        $this->reset('mode', 'targetId', 'kind', 'title', 'dueOn', 'dueTime', 'moduleId');
         $this->resetErrorBag();
     }
 

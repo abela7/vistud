@@ -2,6 +2,7 @@
 
 use App\Brain\Store\JournalReader;
 use App\Http\Controllers\Api\V1\NoteImageController;
+use App\Http\Controllers\AssignmentPageController;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
 use App\Http\Controllers\FilePreviewController;
@@ -93,6 +94,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/workspaces/{workspace}/flashcards/review', FlashcardReviewController::class)
         ->where('workspace', '[A-Za-z0-9-]{1,64}')
         ->name('workspaces.flashcards.review');
+
+    // Assignments (the owner's review, 2026-10-02): a new one, and one on a page of its own with its files.
+    Route::get('/workspaces/{workspace}/assignments/new', [AssignmentPageController::class, 'create'])
+        ->where('workspace', '[A-Za-z0-9-]{1,64}')
+        ->name('workspaces.assignments.create');
+    Route::get('/workspaces/{workspace}/assignments/{assignment}', [AssignmentPageController::class, 'show'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'assignment' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.assignments.show');
 
     // A workspace and its sections (docs/specs/workspaces.md).
     Route::get('/workspaces/{workspace}/{section?}', WorkspacePageController::class)

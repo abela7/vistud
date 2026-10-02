@@ -847,6 +847,44 @@
         font-size: 0.875rem;
     }
 
+    /*
+    | An assignment (the owner's review, 2026-10-02): how long is left, large, with an icon in its deadline's
+    | colour (--ws: late red, within two days amber, done green); on a card it sits where a question's answer would.
+    */
+    .assignment-left {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.375rem;
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .assignment-left svg {
+        color: var(--ws, var(--accent));
+    }
+
+    .question-card > .assignment-left {
+        grid-area: answer;
+        align-self: start;
+        margin-top: 0;
+    }
+
+    .assignment-left-sm {
+        font-size: 0.9375rem;
+        font-weight: 600;
+    }
+
+    .assignment-deadline {
+        box-shadow: inset 0 3px 0 var(--ws, var(--accent));
+    }
+
+    .assignment-files {
+        display: grid;
+        gap: 0.25rem;
+    }
+
     /* A list's search, filter and sort, in one row that wraps. */
     .question-tools {
         display: flex;

@@ -53,8 +53,8 @@
                     @endif
                 </div>
             </div>
-        @elseif (! in_array($section, ['modules', 'notes'], true))
-            {{-- Modules and Notes & files draw this themselves, with their actions beside the title (livewire/workspaces/). --}}
+        @elseif (! in_array($section, ['modules', 'notes', 'assignments'], true))
+            {{-- Modules, Notes & files and Assignments draw this themselves, with their actions beside the title (livewire/workspaces/). --}}
             <x-workspace.section-header :workspace="$workspace" :title="$label" />
         @endif
 
@@ -111,6 +111,8 @@
         @elseif ($section === 'progress')
             <livewire:workspaces.progress :workspace-id="$workspace->id" />
             <livewire:workspaces.study-time :workspace-id="$workspace->id" />
+        @elseif ($section === 'assignments')
+            <livewire:workspaces.assignment-board :workspace-id="$workspace->id" />
         @elseif ($section === 'flashcards')
             <livewire:workspaces.deck :workspace-id="$workspace->id" />
         @else

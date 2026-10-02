@@ -37,6 +37,7 @@ final class Workspaces
         ['overview', 'Overview', 'layout-grid'],
         ['modules', 'Modules', 'layers'],
         ['notes', 'Notes & files', 'file-text'],
+        ['assignments', 'Assignments', 'clipboard-check'],
         ['flashcards', 'Flashcards', 'gallery-vertical-end'],
         ['calendar', 'Calendar', 'calendar'],
         ['progress', 'Progress', 'trending-up'],

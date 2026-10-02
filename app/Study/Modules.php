@@ -98,13 +98,22 @@ final class Modules
         });
     }
 
-    /** Only an empty module can go: its folders, notes, files and links must be moved or deleted first. What's in the trash doesn't count; its topics and tasks move out of it. */
+    /** Only an empty module can go: its folders, notes, files and links must be moved or deleted first. What's in the trash, and an assignment's empty folder, don't count; its topics and tasks move out of it. */
     public function delete(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
 
         DB::transaction(function () use ($scope, $id) {
             $row = $this->lock($scope, $id);
+            // An assignment's empty folder doesn't keep the module: it goes, and the assignment gets a new one when a file is added.
+            $empty = LearnerTables::query($scope, 'activities')->where('module_id', $id)->whereNotNull('folder_id')->pluck('folder_id')
+                ->filter(fn ($folderId) => ! LearnerTables::query($scope, 'folders')->where('parent_id', $folderId)->exists()
+                    && ! LearnerTables::query($scope, 'notes')->where('folder_id', $folderId)->whereNull('trashed_at')->exists()
+                    && ! LearnerTables::query($scope, 'files')->where('folder_id', $folderId)->whereNull('trashed_at')->exists()
+                    && ! LearnerTables::query($scope, 'links')->where('folder_id', $folderId)->exists())
+                ->values()->all();
+            LearnerTables::query($scope, 'folders')->whereIn('id', $empty)->delete();
+            LearnerTables::query($scope, 'activities')->whereIn('folder_id', $empty)->update(['folder_id' => null]);
             if (LearnerTables::query($scope, 'folders')->where('module_id', $id)->exists()
                 || LearnerTables::query($scope, 'notes')->where('module_id', $id)->whereNull('trashed_at')->exists()
                 || LearnerTables::query($scope, 'files')->where('module_id', $id)->whereNull('trashed_at')->exists()

@@ -37,9 +37,15 @@ async function filesIn(entry) {
     return found;
 }
 
-export function uploader({ url, placeType, placeId, maxBytes, extensions }) {
+/**
+ * With `hold`, chosen files wait until start(type, id) gives them their place (a new assignment's folder, made when
+ * it is created). With `placeFor`, the place is asked for when the first file goes up (an assignment's folder, made
+ * then if it has none). Without either, `placeType` and `placeId` are the place.
+ */
+export function uploader({ url, placeType = null, placeId = null, maxBytes, extensions, hold = false, placeFor = null }) {
     return {
         items: [],
+        held: hold,
         over: false,
         running: false,
         uploaded: 0,
@@ -94,12 +100,37 @@ export function uploader({ url, placeType, placeId, maxBytes, extensions }) {
                 if (item.state === 'refused') this.refused++;
                 this.items.push(item);
             }
-            this.run();
+            if (!this.held) this.run();
+        },
+
+        /** A file taken out before it went up. */
+        forget(key) {
+            const item = this.items.find((candidate) => candidate.key === key);
+            if (!item || item.state === 'sending' || item.state === 'done') return;
+            if (item.state === 'refused') this.refused--;
+            this.items = this.items.filter((candidate) => candidate !== item);
+        },
+
+        /** The held files go up, into the place given (or asked for with placeFor). Resolves once every one has gone. */
+        async start(type = null, id = null) {
+            if (type !== null) [placeType, placeId] = [type, id];
+            this.held = false;
+            await this.run();
         },
 
         async run() {
             if (this.running) return;
             this.running = true;
+            if (placeId === null && placeFor) {
+                try {
+                    [placeType, placeId] = await placeFor();
+                } catch {
+                    for (const waiting of this.items.filter((candidate) => candidate.state === 'waiting')) {
+                        [waiting.state, waiting.note] = ['refused', 'There was nowhere to put it. Reload the page and try again.'];
+                        this.refused++;
+                    }
+                }
+            }
             let item;
             while ((item = this.items.find((candidate) => candidate.state === 'waiting'))) {
                 await this.send(item);

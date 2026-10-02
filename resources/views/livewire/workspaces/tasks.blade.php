@@ -10,6 +10,7 @@
 <section aria-labelledby="tasks-heading" class="overview-card space-y-3" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 id="tasks-heading" class="font-semibold">Coming up</h2>
+        <a href="{{ route('workspaces.show', [$workspaceId, 'assignments']) }}" class="mr-auto text-sm font-medium text-fg-muted hover:text-fg">All assignments</a>
         <div class="flex flex-wrap items-center gap-2">
             @if ($open !== [] || $done !== [])
                 <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
@@ -87,6 +88,7 @@
                             </div>
                             <x-field name="dueOn" label="Due (optional)" type="date" wire:model="dueOn" />
                         </div>
+                        <x-field name="dueTime" label="At (optional)" type="time" wire:model="dueTime" hint="Without a time, it's due at the end of the day." />
                         @if ($modules !== [])
                             <div class="field">
                                 <label for="task-module" class="field-label">Module (optional)</label>

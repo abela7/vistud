@@ -13,7 +13,7 @@
         <span class="sr-only">Done: {{ $task->title }}</span>
     </button>
     <div class="min-w-0 flex-1">
-        <p @class(['break-words', 'font-medium' => ! $isDone, 'text-fg-muted line-through' => $isDone])>{{ $task->title }}</p>
+        <p @class(['break-words', 'font-medium' => ! $isDone, 'text-fg-muted line-through' => $isDone])><a href="{{ route('workspaces.assignments.show', [$task->workspaceId, $task->id]) }}" class="text-inherit no-underline hover:underline">{{ $task->title }}</a></p>
         <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-fg-muted">
             <span>{{ implode(' · ', $meta) }}</span>
             @if ($task->dueWords() && ! $isDone)

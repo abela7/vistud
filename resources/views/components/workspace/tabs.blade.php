@@ -1,7 +1,9 @@
 {{-- A workspace's sections as the bottom tab bar on phones. --}}
 @props(['workspace', 'section'])
+{{-- Six at most, with short names, so they fit the narrowest phone; the Calendar joins once it is built. --}}
 @foreach (\App\Study\Workspaces::SECTIONS as [$key, $label, $icon])
+    @continue($key === 'calendar')
     <a href="{{ route('workspaces.show', $key === 'overview' ? $workspace->id : [$workspace->id, $key]) }}" class="tab-item" @if ($key === $section) aria-current="page" @endif>
-        <x-icon :name="$icon" class="size-5" /><span>{{ ['notes' => 'Notes', 'flashcards' => 'Cards'][$key] ?? $label }}</span>
+        <x-icon :name="$icon" class="size-5" /><span>{{ ['notes' => 'Notes', 'assignments' => 'Tasks', 'flashcards' => 'Cards'][$key] ?? $label }}</span>
     </a>
 @endforeach
