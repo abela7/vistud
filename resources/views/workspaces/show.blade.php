@@ -13,9 +13,6 @@
 
     $sections = collect(Workspaces::SECTIONS)->keyBy(0);
     [, $label, $icon] = $sections[$section];
-    $upcoming = [
-        'calendar' => ['Calendar', 'Lectures, labs, quizzes, exams and deadlines, on a calendar.'],
-    ];
 @endphp
 <x-layouts.app :title="$section === 'overview' ? $workspace->name : $label.' · '.$workspace->name" :workspace="$workspace" :section="$section">
     <div class="mx-auto max-w-6xl space-y-6">
@@ -115,12 +112,8 @@
             <livewire:workspaces.assignment-board :workspace-id="$workspace->id" />
         @elseif ($section === 'flashcards')
             <livewire:workspaces.deck :workspace-id="$workspace->id" />
-        @else
-            <section class="empty-place">
-                <x-workspace.chip :workspace="$workspace" size="lg" />
-                <p class="font-semibold">{{ $label }} is coming next</p>
-                <p class="max-w-md text-sm text-fg-muted">{{ $upcoming[$section][1] }}</p>
-            </section>
+        @elseif ($section === 'calendar')
+            <livewire:workspaces.calendar-board :workspace-id="$workspace->id" />
         @endif
     </div>
 

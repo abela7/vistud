@@ -34,6 +34,13 @@ Route::middleware('auth')->group(function () {
         return view('journal.index', ['entries' => array_reverse($entries)]);
     })->name('journal.index');
 
+    // The calendar of every workspace; each workspace's own is its Calendar section.
+    Route::get('/calendar', function (Request $request, PrincipalFactory $principals) {
+        Guard::learner($principals->fromRequest($request));
+
+        return view('calendar.index');
+    })->name('calendar.index');
+
     // A new note: made by its first words (POST /api/v1/notes), never while empty.
     Route::get('/workspaces/{workspace}/notes/new', [NotePageController::class, 'create'])
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}'])

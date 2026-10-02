@@ -26,6 +26,7 @@ const icons = [
     'calculator',
     'calendar',
     'calendar-clock',
+    'calendar-days',
     'check',
     'chevron-down',
     'chevron-left',

@@ -10,7 +10,10 @@
 <section aria-labelledby="tasks-heading" class="overview-card space-y-3" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 id="tasks-heading" class="font-semibold">Coming up</h2>
-        <a href="{{ route('workspaces.show', [$workspaceId, 'assignments']) }}" class="mr-auto text-sm font-medium text-fg-muted hover:text-fg">All assignments</a>
+        <span class="mr-auto flex flex-wrap items-center gap-x-4 gap-y-1">
+            <a href="{{ route('workspaces.show', [$workspaceId, 'assignments']) }}" class="text-sm font-medium text-fg-muted hover:text-fg">All assignments</a>
+            <a href="{{ route('workspaces.show', [$workspaceId, 'calendar']) }}" class="text-sm font-medium text-fg-muted hover:text-fg">Calendar</a>
+        </span>
         <div class="flex flex-wrap items-center gap-2">
             @if ($open !== [] || $done !== [])
                 <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">

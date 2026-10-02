@@ -65,9 +65,7 @@ class WorkspaceScreensTest extends TestCase
             ->assertSee('class="app-tabbar"', false)
             ->assertSee('BIO101');
 
-        foreach (['calendar'] as $section) {
-            $this->actingAs($this->ada)->get(route('workspaces.show', [$biology->id, $section]))->assertOk()->assertSee('is coming next');
-        }
+        $this->actingAs($this->ada)->get(route('workspaces.show', [$biology->id, 'calendar']))->assertOk()->assertDontSee('is coming next')->assertSee('Cards');
         $this->actingAs($this->ada)->get("/workspaces/{$biology->id}/nonsense")->assertNotFound();
     }
 

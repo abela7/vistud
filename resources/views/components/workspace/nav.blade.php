@@ -41,6 +41,7 @@
         <p class="nav-section">Everywhere</p>
         <ul class="nav-list">
             <li><a href="{{ route('home') }}" class="nav-item" title="All workspaces"><x-icon name="house" /><span class="nav-label">All workspaces</span></a></li>
+            <li><a href="{{ route('calendar.index') }}" class="nav-item" title="Calendar of every workspace"><x-icon name="calendar-days" /><span class="nav-label">All calendars</span></a></li>
             <li><a href="{{ route('journal.index') }}" class="nav-item" title="Journal"><x-icon name="notebook-text" /><span class="nav-label">Journal</span></a></li>
         </ul>
     </div>

@@ -138,7 +138,7 @@ Each step ends with something the owner can try, tests, previews and a push.
 | 2 | **Modules and folders**: create, rename, reorder, move, nest | Architect, with Grok on the drag-and-drop polish |
 | 3 | **Notes**: the editor and draft-safe autosave, trash and restore | Architect |
 | 4 | **Files**: upload, preview, download, trash, once WP5's file storage exists | Architect (security), Grok (the screens) |
-| 5 | **Calendar**: activities per workspace and across all, "Coming up" on Overview | Grok, reviewed by the architect |
+| 5 | **Calendar**: activities per workspace and across all, "Coming up" on Overview (built 2026-10-03: month and agenda, from deadlines, plan dates, study time and cards; classes and events of one's own come next) | Grok, reviewed by the architect |
 | 6 | **Overview and Progress** | Architect |
 | 7 | **No reloads and the phone layout** (tab bar, drill-down), then ADR 0003 §14's checks, adjusted to this plan | Architect and Grok |
 
