@@ -35,7 +35,7 @@ final class Vocabulary
 
     public const RECORD_TYPES = ['source', 'extraction', 'activity', 'task', 'session', 'profile', 'consent', 'workspace', 'module'];
 
-    public const ACTIVITY_KINDS = ['lecture', 'lab', 'assignment', 'quiz', 'exam', 'problem_set', 'other'];
+    public const ACTIVITY_KINDS = ['lecture', 'lab', 'assignment', 'project', 'quiz', 'exam', 'problem_set', 'other'];
 
     public const TASK_STATUSES = ['active', 'retired'];
 

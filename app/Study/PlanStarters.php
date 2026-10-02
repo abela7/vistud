@@ -11,7 +11,7 @@ namespace App\Study;
 final class PlanStarters
 {
     /**
-     * @var array<string, array{label: string, icon: string, hint: string, parts: list<array{0: string, 1: list<string>}>, steps: list<string>, criteria: list<string>}>
+     * @var array<string, array{label: string, icon: string, hint: string, parts: list<array{0: string, 1: list<string>}>, steps: list<string>, criteria: list<string>, milestones?: list<string>}>
      */
     public const ALL = [
         'essay' => [
@@ -73,6 +73,36 @@ final class PlanStarters
             'steps' => [],
             'criteria' => ['Method', 'Results and analysis', 'Discussion', 'Presentation'],
         ],
+        'project' => [
+            'label' => 'Project',
+            'icon' => 'layers',
+            'hint' => 'Stages, milestones, a final hand-in',
+            'parts' => [
+                ['Initiate', ['Define the goal and the scope', 'List what is needed', 'Plan the stages']],
+                ['Research', ['Review what already exists', 'Decide the approach']],
+                ['Build', ['Set it up', 'The core of the work', 'The remaining work']],
+                ['Test and review', ['Check it against the goal', 'Fix what is found']],
+                ['Present and hand in', ['Write the report', 'Prepare the presentation', 'Submit']],
+            ],
+            'steps' => [],
+            'criteria' => ['Outcome', 'Process and planning', 'Quality', 'Reflection'],
+            'milestones' => ['Proposal agreed', 'Halfway review', 'Final hand-in'],
+        ],
+        'group' => [
+            'label' => 'Group project',
+            'icon' => 'users',
+            'hint' => 'Team set-up, shared work, hand-in',
+            'parts' => [
+                ['Team set-up', ['Agree who does what', 'Agree how to keep in touch', 'Split the work']],
+                ['Research', ['Everyone finds their sources', 'Share what was found']],
+                ['Build', ['Each does their part', 'Check in as a team']],
+                ['Bring it together', ['Combine the parts', 'Review it as a team']],
+                ['Present and hand in', ['Rehearse together', 'Submit']],
+            ],
+            'steps' => [],
+            'criteria' => ['Outcome', 'Teamwork and contribution', 'Quality', 'Presentation'],
+            'milestones' => ['Roles agreed', 'First draft together', 'Final hand-in'],
+        ],
         'exam' => [
             'label' => 'Exam revision',
             'icon' => 'graduation-cap',
@@ -87,7 +117,7 @@ final class PlanStarters
         ],
     ];
 
-    /** @return array{label: string, icon: string, hint: string, parts: list<array{0: string, 1: list<string>}>, steps: list<string>, criteria: list<string>}|null */
+    /** @return array{label: string, icon: string, hint: string, parts: list<array{0: string, 1: list<string>}>, steps: list<string>, criteria: list<string>, milestones?: list<string>}|null */
     public static function get(string $key): ?array
     {
         return self::ALL[$key] ?? null;

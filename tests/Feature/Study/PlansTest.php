@@ -282,10 +282,11 @@ class PlansTest extends TestCase
             'parts' => [['title' => 'Research', 'marks' => 20, 'steps' => ['Read the brief', 'Find 5 sources']], ['title' => 'Question 1', 'marks' => null, 'steps' => []]],
             'steps' => ['Email the tutor & ask'],
             'criteria' => [['title' => 'Critical analysis', 'marks' => 40], ['title' => 'Referencing', 'marks' => null]],
+            'milestones' => [],
         ], $read);
 
         $this->assertSame(7, $this->plans->addAll($this->by, $this->essay->id, $read));
         $this->assertSame(['Research', 'Question 1'], array_map(fn ($p) => $p->title, $this->plans->get($this->by, $this->essay->id)->parts()));
-        $this->assertSame(['parts' => [], 'steps' => [], 'criteria' => []], PlanMaker::read('Sorry, I can\'t help with that.'));
+        $this->assertSame(['parts' => [], 'steps' => [], 'criteria' => [], 'milestones' => []], PlanMaker::read('Sorry, I can\'t help with that.'));
     }
 }

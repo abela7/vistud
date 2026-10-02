@@ -42,6 +42,7 @@ final class LearnerTables
         'links',
         'activities',
         'activity_items',
+        'activity_members',
         'instructions',
         'study_sessions',
         'session_segments',

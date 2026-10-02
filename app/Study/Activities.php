@@ -35,6 +35,7 @@ final class Activities
     /** The kinds a student picks from, in plain words; lectures come with the calendar. */
     public const KINDS = [
         'assignment' => 'Assignment',
+        'project' => 'Project',
         'quiz' => 'Quiz',
         'exam' => 'Exam',
         'lab' => 'Lab',
@@ -155,6 +156,7 @@ final class Activities
         DB::transaction(function () use ($scope, $by, $id) {
             $row = $this->row($scope, $id, lock: true);
             LearnerTables::query($scope, 'activity_items')->where('activity_id', $id)->delete();
+            LearnerTables::query($scope, 'activity_members')->where('activity_id', $id)->delete();
             LearnerTables::query($scope, 'activities')->where('id', $id)->delete();
             $row->revision++;
             $this->record($scope, $by, $row, deleted: true);

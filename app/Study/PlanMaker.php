@@ -48,7 +48,7 @@ final class PlanMaker
      * The parts, steps and criteria in an AI's reply, ready to look at. Anything that isn't a mark is ignored;
      * text is cleaned and cut to a title's length, and an item without text is left out.
      *
-     * @return array{parts: list<array{title: string, marks: ?int, steps: list<string>}>, steps: list<string>, criteria: list<array{title: string, marks: ?int}>}
+     * @return array{parts: list<array{title: string, marks: ?int, steps: list<string>}>, steps: list<string>, criteria: list<array{title: string, marks: ?int}>, milestones: list<array{title: string, due_on: ?string}>}
      */
     public static function read(string $reply): array
     {
@@ -72,7 +72,17 @@ final class PlanMaker
             return '';
         }, $rest);
 
-        return ['parts' => $parts, 'steps' => self::steps($rest), 'criteria' => $criteria];
+        $milestones = [];
+        $rest = (string) preg_replace_callback('/<milestone\b([^>]*)>(.*?)<\/milestone\s*>/si', function (array $match) use (&$milestones) {
+            $title = self::clean($match[2]);
+            if ($title !== '') {
+                $milestones[] = ['title' => $title, 'due_on' => self::date(self::attributes($match[1])['date'] ?? null)];
+            }
+
+            return '';
+        }, $rest);
+
+        return ['parts' => $parts, 'steps' => self::steps($rest), 'criteria' => $criteria, 'milestones' => $milestones];
     }
 
     /** @return list<string> */
@@ -100,6 +110,14 @@ final class PlanMaker
         }
 
         return $attributes;
+    }
+
+    /** A date as Y-m-d, or null when it isn't one. */
+    private static function date(?string $value): ?string
+    {
+        $parsed = $value === null ? false : \DateTimeImmutable::createFromFormat('!Y-m-d', trim($value));
+
+        return $parsed !== false && $parsed->format('Y-m-d') === trim((string) $value) ? $parsed->format('Y-m-d') : null;
     }
 
     /** 40, "40" and "40%" are 40; anything else, or out of 1 to 100, is no marks. */

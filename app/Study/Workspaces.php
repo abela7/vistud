@@ -172,6 +172,7 @@ final class Workspaces
             LearnerTables::query($scope, 'findings')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'links')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'activity_items')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'activity_members')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'activities')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'instructions')->where('scope', "workspace:{$id}")->delete();
 
