@@ -42,7 +42,7 @@
                     @error('title') <p class="field-error mt-2">{{ $message }}</p> @enderror
                 </div>
 
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div class="field">
                         <label for="assignment-kind" class="field-label">Kind</label>
                         <select id="assignment-kind" class="input mt-2" wire:model="kind">
@@ -64,9 +64,9 @@
                     </div>
                 </div>
 
-                <fieldset>
+                <fieldset class="min-w-0">
                     <legend class="field-label">Deadline</legend>
-                    <div class="mt-2 grid gap-4 sm:grid-cols-2">
+                    <div class="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div class="field">
                             <label for="assignment-due-on" class="sr-only">Day</label>
                             <input id="assignment-due-on" type="date" class="input" wire:model="dueOn" aria-describedby="assignment-due-hint">
@@ -88,6 +88,10 @@
                     <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" :busy-label="$new ? 'Creating…' : 'Saving…'">{{ $new ? 'Create' : 'Save' }}</x-button>
                 </div>
             </form>
+
+            @unless ($new)
+                <livewire:workspaces.assignment-plan :workspace-id="$workspace->id" :activity-id="$assignment->id" :key="'plan-'.$assignment->id" />
+            @endunless
 
             <section class="question-panel space-y-4" aria-labelledby="assignment-files-heading">
                 <div class="flex flex-wrap items-center justify-between gap-2">
@@ -174,13 +178,17 @@
                             <span>{{ $assignment->timeLeft() ?? 'Done' }}</span>
                         </p>
                         <p class="text-sm text-fg-muted">{{ $assignment->dueWords() }}</p>
+                        @if ($progress->total > 0 && $assignment->status !== 'done')
+                            <div class="meter mt-3" role="progressbar" aria-label="Plan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $progress->percent }}"><span style="width: {{ $progress->percent }}%"></span></div>
+                            <p class="mt-1 text-sm text-fg-muted">{{ $progress->percent }}% of the plan{{ $pace ? ' · '.$pace['words'] : '' }}</p>
+                        @endif
                     @else
                         <p class="mt-1 text-sm text-fg-muted">No deadline yet. Add its day on the left.</p>
                     @endif
                 </section>
 
                 <section class="question-panel">
-                    <fieldset>
+                    <fieldset class="min-w-0">
                         <legend class="field-label mb-2">Where you are</legend>
                         <div class="status-choices">
                             @foreach (Activities::STATUSES as $key)

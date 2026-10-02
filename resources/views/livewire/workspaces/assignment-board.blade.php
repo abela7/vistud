@@ -53,8 +53,20 @@
                             @endif
                         </div>
                         <h3 class="question-card-text"><a href="{{ route('workspaces.assignments.show', [$workspace->id, $a->id]) }}" class="tile-link">{{ $a->title }}</a></h3>
-                        @if ($a->timeLeft())
-                            <p class="assignment-left assignment-left-sm"><x-icon :name="$a->overdue() ? 'circle-alert' : 'hourglass'" class="size-4 shrink-0" />{{ $a->timeLeft() }}</p>
+                        @php
+                            $progress = $plans[$a->id] ?? null;
+                            $pace = $progress?->pace($a);
+                        @endphp
+                        @if ($a->timeLeft() || $progress)
+                            <div class="plan-card">
+                                @if ($a->timeLeft())
+                                    <p class="assignment-left assignment-left-sm"><x-icon :name="$a->overdue() ? 'circle-alert' : 'hourglass'" class="size-4 shrink-0" />{{ $a->timeLeft() }}</p>
+                                @endif
+                                @if ($progress)
+                                    <div class="meter" role="progressbar" aria-label="Plan progress of {{ $a->title }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $progress->percent }}"><span style="width: {{ $progress->percent }}%"></span></div>
+                                    <p class="plan-card-words"><span class="tabular-nums">{{ $progress->percent }}% · {{ $progress->done }} of {{ $progress->total }} done</span>@if ($pace)<span>{{ $pace['words'] }}</span>@endif</p>
+                                @endif
+                            </div>
                         @endif
                         <p class="question-card-meta">
                             @if ($a->dueWords())

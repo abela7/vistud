@@ -154,6 +154,7 @@ final class Activities
 
         DB::transaction(function () use ($scope, $by, $id) {
             $row = $this->row($scope, $id, lock: true);
+            LearnerTables::query($scope, 'activity_items')->where('activity_id', $id)->delete();
             LearnerTables::query($scope, 'activities')->where('id', $id)->delete();
             $row->revision++;
             $this->record($scope, $by, $row, deleted: true);

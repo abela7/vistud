@@ -71,6 +71,72 @@ for (const [name, device] of Object.entries(devices)) {
     });
 }
 
+
+for (const [name, device] of Object.entries(devices)) {
+    test.describe(`plan on a ${name}`, () => {
+        test.use(device);
+
+        test(`an assignment's plan is made, ticked, checked and changed (${name})`, async ({ page }) => {
+            const onPhone = name === 'phone';
+            await openAssignments(page, onPhone);
+            await page.locator('main').getByRole('link', { name: 'New assignment' }).first().click();
+            await page.getByLabel('Name').fill('Coursework 2: osmosis report');
+            await page.getByLabel('Day').fill('2030-03-14');
+            await page.getByRole('button', { name: 'Create' }).click();
+            await page.getByRole('heading', { level: 1, name: 'Coursework 2: osmosis report' }).waitFor();
+
+            // Starters first: pick the nearest and change what doesn't fit.
+            await expect(page.getByText('How do you want to start?')).toBeVisible();
+            await page.getByRole('button', { name: /Essay or report/ }).click();
+            await expect(page.getByRole('heading', { level: 3, name: 'Research' })).toBeVisible();
+            await expect(page.locator('.plan-percent')).toHaveText('0%');
+            await expect(page.getByRole('group', { name: /Use of sources/ })).toBeVisible();
+
+            // Ticking the first step starts the assignment and moves the bar.
+            await page.getByRole('button', { name: 'Done: Find and read the sources' }).click();
+            await expect(page.getByText('1 of 12 done')).toBeVisible();
+            await expect(page.locator('.section-header').getByText('In progress')).toBeVisible();
+            await expect(page.locator('.plan-pace')).toContainText('left');
+
+            // A step added to a part, a criterion checked, a step renamed.
+            await page.getByLabel('Add a step to Research').fill('Check the library catalogue');
+            await page.getByLabel('Add a step to Research').press('Enter');
+            await expect(page.getByText('Check the library catalogue', { exact: true })).toBeVisible();
+            await expect(page.getByText('1 of 13 done')).toBeVisible();
+            await page.getByRole('group', { name: /Use of sources/ }).getByRole('button', { name: 'Partly' }).click();
+            await expect(page.getByRole('group', { name: /Use of sources/ }).getByRole('button', { name: 'Partly' })).toHaveAttribute('aria-pressed', 'true');
+            await page.getByRole('button', { name: 'Actions for Note the key points' }).click();
+            await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Edit' }).click();
+            await page.locator('#plan-edit-title').fill('Note the key points and quotes');
+            await page.locator('#plan-edit-title').press('Enter');
+            await expect(page.getByText('Note the key points and quotes', { exact: true })).toBeVisible();
+
+            // It is all still there after a reload, and nothing scrolls sideways.
+            await page.reload();
+            await expect(page.getByText('1 of 13 done')).toBeVisible();
+            await expect(page.getByRole('group', { name: /Use of sources/ }).getByRole('button', { name: 'Partly' })).toHaveAttribute('aria-pressed', 'true');
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+
+            // With an AI: the brief goes into the prompt, the reply is read, looked over and added.
+            await page.getByRole('button', { name: 'Plan it with an AI' }).first().click();
+            await page.getByLabel(/The assignment brief/).fill('Explain osmosis in 1500 words. Marked on accuracy (50%) and clarity (50%).');
+            await expect(page.getByLabel('The prompt', { exact: true })).toContainText('Explain osmosis in 1500 words.');
+            await page.getByLabel("The AI's reply").fill('Here you go:\n<part title="Lab write-up" marks="50"><step>Write the method</step></part><criterion marks="50">Accuracy</criterion>');
+            await page.getByRole('button', { name: 'Read the reply' }).click();
+            await expect(page.getByText('Look it over, then add it')).toBeVisible();
+            await page.getByRole('button', { name: 'Add to my plan' }).click();
+            await expect(page.getByRole('heading', { level: 3, name: 'Lab write-up' })).toBeVisible();
+            await expect(page.getByText('3 things added to your plan.')).toBeVisible();
+
+            // Its progress is on the card in the list.
+            await page.getByRole('link', { name: 'Back to Assignments' }).click();
+            const card = page.locator('.question-card').filter({ hasText: 'Coursework 2: osmosis report' });
+            await expect(card).toContainText('1 of 14 done');
+            await expect(card).toContainText('In progress');
+        });
+    });
+}
+
 test('axe finds no violations on the assignment pages', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openAssignments(page, false);
@@ -84,7 +150,28 @@ test('axe finds no violations on the assignment pages', async ({ page }) => {
     await page.getByRole('button', { name: 'Create' }).click();
     await page.getByRole('heading', { level: 1, name: 'Lab report 3' }).waitFor();
     expect(await analyse()).toEqual([]);
+    await page.getByRole('button', { name: /Lab report/ }).click();
+    await page.getByRole('heading', { level: 3, name: 'Data' }).waitFor();
+    expect(await analyse()).toEqual([]);
+    await page.getByRole('button', { name: 'Plan it with an AI' }).first().click();
+    await page.getByLabel('The prompt', { exact: true }).waitFor();
+    expect(await analyse()).toEqual([]);
     await page.getByRole('link', { name: 'Back to Assignments' }).click();
     await page.getByRole('heading', { level: 1, name: 'Assignments' }).waitFor();
     expect(await analyse()).toEqual([]);
+});
+
+test('the plan never scrolls sideways at 320 px, even with 200% text', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await openAssignments(page, true);
+    await page.locator('main').getByRole('link', { name: 'New assignment' }).first().click();
+    await page.getByLabel('Name').fill('Lab report with a rather long name that goes on and on');
+    await page.getByLabel('Day').fill('2030-03-14');
+    await page.getByRole('button', { name: 'Create' }).click();
+    await page.getByRole('heading', { level: 1, name: /Lab report with a rather long name/ }).waitFor();
+    await page.getByRole('button', { name: /Essay or report/ }).click();
+    await page.getByRole('heading', { level: 3, name: 'Research' }).waitFor();
+    await page.getByRole('button', { name: 'Plan it with an AI' }).first().click();
+    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });

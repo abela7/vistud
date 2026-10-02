@@ -885,6 +885,264 @@
         gap: 0.25rem;
     }
 
+    /*
+    | An assignment's plan (the owner's review, 2026-10-02): how far it has got in the colour of the pace (--ws:
+    | on track blue, a stretch amber, late red), parts as boxes with their steps, and the criteria in a list.
+    */
+    .plan-progress {
+        display: grid;
+        gap: 0.5rem;
+        padding: 0.875rem 1rem;
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+    }
+
+    .plan-percent {
+        font-size: 1.75rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .plan-pace {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text);
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .plan-pace svg {
+        color: var(--ws, var(--accent));
+    }
+
+    .plan-complete {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--success);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+    }
+
+    .plan-starters {
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    .plan-starter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 13.5rem), 1fr));
+        gap: 0.5rem;
+    }
+
+    .plan-starter {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-height: 3.25rem;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-raised);
+        text-align: left;
+        transition:
+            border-color 0.15s ease,
+            background-color 0.15s ease;
+    }
+
+    .plan-starter:hover {
+        border-color: var(--border-strong);
+        background-color: var(--hover);
+    }
+
+    .plan-starter svg {
+        color: var(--accent);
+    }
+
+    .plan-ai {
+        padding: 1rem;
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-lg);
+    }
+
+    .plan-preview {
+        display: grid;
+        gap: 0.375rem;
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+    }
+
+    .plan-preview-steps {
+        margin: 0 0 0.375rem;
+        padding-left: 1.25rem;
+        list-style: disc;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+
+    .plan-part {
+        padding: 0.375rem 0.75rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
+    }
+
+    .plan-part-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+        padding: 0.25rem 0;
+    }
+
+    .plan-part-title {
+        min-width: 0;
+        flex: 1 1 auto;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+    .plan-part-count {
+        flex: none;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .plan-marks-chip {
+        display: inline-flex;
+        align-items: center;
+        flex: none;
+        padding: 0 0.5rem;
+        border-radius: 9999px;
+        background-color: var(--accent-subtle);
+        color: var(--accent-contrast);
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1.5;
+        vertical-align: middle;
+    }
+
+    .plan-steps {
+        display: grid;
+        padding-left: 0.25rem;
+    }
+
+    .plan-steps .task-row {
+        flex-wrap: wrap;
+        align-items: center;
+        padding: 0.375rem 0;
+    }
+
+    /* Even at the largest text on the narrowest screen the words break and the menu drops under them, so nothing runs off. */
+    .plan-steps .task-row > p {
+        min-width: 0;
+        flex: 1 1 6rem;
+        overflow-wrap: anywhere;
+    }
+
+    .plan-subhead {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .plan-adders {
+        display: grid;
+        gap: 0.5rem;
+        justify-items: start;
+    }
+
+    .plan-adders > * {
+        max-width: 100%;
+    }
+
+    .plan-add {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        margin-top: 0.375rem;
+    }
+
+    /* The button keeps its word whole; on a narrow screen the marks and the button go under the name. */
+    .plan-add .btn {
+        flex: none;
+        white-space: nowrap;
+    }
+
+    .plan-adders .plan-add {
+        margin-top: 0;
+    }
+
+    .plan-add .input {
+        min-width: 0;
+        flex: 1 1 12rem;
+    }
+
+    .plan-edit {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.5rem;
+        width: 100%;
+    }
+
+    .plan-add .plan-marks-input,
+    .plan-marks-input {
+        width: 7.5rem;
+        flex: 0 0 7.5rem;
+    }
+
+    .plan-criteria {
+        display: grid;
+    }
+
+    .plan-criterion {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        padding: 0.625rem 0;
+        border-top: 1px solid var(--divider);
+    }
+
+    .plan-criterion:first-child {
+        border-top: 0;
+    }
+
+    /* The name takes a line of its own where it would otherwise be squeezed beside the three buttons. */
+    .plan-criterion > p {
+        min-width: 0;
+        flex: 1 1 14rem;
+        overflow-wrap: anywhere;
+    }
+
+    /* A card: its progress sits where a question's answer would, as a thin bar and the pace under it. */
+    .question-card > .plan-card {
+        grid-area: answer;
+        align-self: start;
+        display: grid;
+        gap: 0.375rem;
+    }
+
+    .plan-card-words {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.25rem 0.75rem;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
     /* A list's search, filter and sort, in one row that wraps. */
     .question-tools {
         display: flex;

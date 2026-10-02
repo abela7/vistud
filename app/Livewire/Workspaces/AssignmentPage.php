@@ -13,9 +13,11 @@ use App\Study\Files;
 use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Notes;
+use App\Study\Plans;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -58,14 +60,16 @@ final class AssignmentPage extends Component
 
     private Folders $folders;
 
+    private Plans $plans;
+
     private Workspaces $workspaces;
 
     private PrincipalFactory $principals;
 
-    public function boot(Activities $activities, Modules $modules, Files $files, Notes $notes, Folders $folders, Workspaces $workspaces, PrincipalFactory $principals): void
+    public function boot(Activities $activities, Modules $modules, Files $files, Notes $notes, Folders $folders, Plans $plans, Workspaces $workspaces, PrincipalFactory $principals): void
     {
-        [$this->activities, $this->modules, $this->files, $this->notes, $this->folders, $this->workspaces, $this->principals] =
-            [$activities, $modules, $files, $notes, $folders, $workspaces, $principals];
+        [$this->activities, $this->modules, $this->files, $this->notes, $this->folders, $this->plans, $this->workspaces, $this->principals] =
+            [$activities, $modules, $files, $notes, $folders, $plans, $workspaces, $principals];
     }
 
     /** A new one starts in `$inModule` when it is a module of this workspace. (Not named like a property: Livewire would assign it.) */
@@ -112,6 +116,15 @@ final class AssignmentPage extends Component
         $this->js('history.replaceState(history.state, "", '.json_encode(route('workspaces.assignments.show', [$this->workspaceId, $made->id])).')');
 
         return true;
+    }
+
+    /** The plan was ticked (App\Livewire\Workspaces\AssignmentPlan): the first tick starts the assignment, the last may finish it. */
+    #[On('plan-changed')]
+    public function planChanged(): void
+    {
+        if ($this->activityId !== null) {
+            $this->status = $this->assignment()->status;
+        }
     }
 
     /** To do, in progress or done, saved as soon as it is picked. */
@@ -167,8 +180,11 @@ final class AssignmentPage extends Component
         $workspace = $this->workspaces->find($by, $this->workspaceId);
         $assignment = $this->activityId === null ? null : $this->assignment();
         $folder = $assignment === null ? null : $this->folderOf($assignment);
+        $progress = $assignment === null ? null : $this->plans->get($by, $assignment->id)->progress();
 
         return view('livewire.workspaces.assignment-page', [
+            'progress' => $progress,
+            'pace' => $assignment === null ? null : $progress->pace($assignment),
             'workspace' => $workspace,
             'assignment' => $assignment,
             'modules' => $this->modules->list($by, $this->workspaceId),

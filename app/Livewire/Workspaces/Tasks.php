@@ -10,6 +10,7 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
 use App\Study\Modules;
+use App\Study\Plans;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -51,12 +52,15 @@ final class Tasks extends Component
 
     private Modules $modules;
 
+    private Plans $plans;
+
     private PrincipalFactory $principals;
 
-    public function boot(Activities $activities, Modules $modules, PrincipalFactory $principals): void
+    public function boot(Activities $activities, Modules $modules, Plans $plans, PrincipalFactory $principals): void
     {
         $this->activities = $activities;
         $this->modules = $modules;
+        $this->plans = $plans;
         $this->principals = $principals;
     }
 
@@ -202,6 +206,7 @@ final class Tasks extends Component
             'done' => array_values(array_filter($tasks, fn ($t) => $t->status === 'done')),
             'modules' => $modules,
             'moduleTitles' => $moduleTitles,
+            'plans' => $this->plans->summaries($by, $this->workspaceId),
             'target' => $this->targetId === null ? null : (collect($tasks)->firstWhere('id', $this->targetId)?->title),
         ]);
     }

@@ -7,6 +7,7 @@ use App\Platform\Access\Principal;
 use App\Study\Activities;
 use App\Study\Files;
 use App\Study\Modules;
+use App\Study\Plans;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
@@ -14,8 +15,8 @@ use Livewire\Component;
 
 /**
  * A workspace's assignments, its Assignments section (the owner's review, 2026-10-02): what's still to do as
- * cards, the soonest deadline first, each with how long is left and how many files it has; what's done on its
- * own tab. A card opens the assignment's own page (App\Livewire\Workspaces\AssignmentPage).
+ * cards, the soonest deadline first, each with how long is left, how far its plan has got and how many files it
+ * has; what's done on its own tab. A card opens the assignment's own page (App\Livewire\Workspaces\AssignmentPage).
  */
 final class AssignmentBoard extends Component
 {
@@ -31,13 +32,15 @@ final class AssignmentBoard extends Component
 
     private Files $files;
 
+    private Plans $plans;
+
     private Workspaces $workspaces;
 
     private PrincipalFactory $principals;
 
-    public function boot(Activities $activities, Modules $modules, Files $files, Workspaces $workspaces, PrincipalFactory $principals): void
+    public function boot(Activities $activities, Modules $modules, Files $files, Plans $plans, Workspaces $workspaces, PrincipalFactory $principals): void
     {
-        [$this->activities, $this->modules, $this->files, $this->workspaces, $this->principals] = [$activities, $modules, $files, $workspaces, $principals];
+        [$this->activities, $this->modules, $this->files, $this->plans, $this->workspaces, $this->principals] = [$activities, $modules, $files, $plans, $workspaces, $principals];
     }
 
     public function show(string $filter): void
@@ -64,6 +67,7 @@ final class AssignmentBoard extends Component
             'counts' => ['open' => count($open), 'done' => count($done)],
             'moduleTitles' => collect($this->modules->list($by, $this->workspaceId))->pluck('title', 'id')->all(),
             'filesIn' => $filesIn,
+            'plans' => $this->plans->summaries($by, $this->workspaceId),
         ]);
     }
 
