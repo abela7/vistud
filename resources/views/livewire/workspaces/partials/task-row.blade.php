@@ -24,7 +24,9 @@
             @if (! $isDone && isset($plans[$task->id]))
                 <span class="status-chip"><x-icon name="list-checks" class="size-3.5" />{{ $plans[$task->id]->percent }}% of the plan</span>
             @endif
-            @if ($task->status === 'doing')
+            @if (! $isDone && isset($healths[$task->id]) && $healths[$task->id]['state'] !== 'on_track')
+                <x-workspace.plan-health :health="$healths[$task->id]" />
+            @elseif ($task->status === 'doing')
                 <span class="status-chip status-covered"><x-icon name="clock" class="size-3.5" />In progress</span>
             @endif
         </p>

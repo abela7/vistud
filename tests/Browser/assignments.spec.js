@@ -175,3 +175,129 @@ test('the plan never scrolls sideways at 320 px, even with 200% text', async ({ 
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
+
+/* Projects, including group work: states, details, steps under steps, milestones and a team (the owner's review, 2026-10-03). */
+
+async function newProject(page, name) {
+    await page.locator('main').getByRole('link', { name: 'New assignment' }).first().click();
+    await page.getByLabel('Name').fill(name);
+    await page.getByLabel('Kind').selectOption({ label: 'Project' });
+    await page.getByLabel('Day').fill('2030-03-14');
+    await page.getByRole('button', { name: 'Create' }).click();
+    await page.getByRole('heading', { level: 1, name }).waitFor();
+}
+
+for (const [name, device] of Object.entries(devices)) {
+    test.describe(`project on a ${name}`, () => {
+        test.use(device);
+
+        test(`a group project is planned, shared out and watched (${name})`, async ({ page }) => {
+            const onPhone = name === 'phone';
+            await openAssignments(page, onPhone);
+            await newProject(page, 'Group project: library app');
+
+            // A project starts with its own starters, and has milestones and a team ready.
+            await expect(page.getByRole('button', { name: /Group project/ }).first()).toBeVisible();
+            await page.getByRole('button', { name: /Group project/ }).first().click();
+            await expect(page.getByRole('heading', { level: 3, name: 'Team set-up' })).toBeVisible();
+            await expect(page.getByRole('heading', { level: 2, name: /Milestones/ })).toBeVisible();
+            await expect(page.getByText('Roles agreed', { exact: true })).toBeVisible();
+
+            // The team: the student is one of them.
+            await page.getByLabel('Add a person').fill('Abel');
+            await page.getByText('This is me').click();
+            await page.getByLabel('Add a person').press('Enter');
+            await expect(page.locator('.plan-member').filter({ hasText: 'Abel' })).toContainText('You');
+            await page.getByLabel('Add a person').fill('Sara Bekele');
+            await page.getByLabel('Add a person').press('Enter');
+            await expect(page.locator('.plan-member').filter({ hasText: 'Sara Bekele' })).toContainText('Nothing yet');
+
+            // A step is given a person, dates and a priority in its details, and says so.
+            await page.getByRole('button', { name: 'Actions for Agree who does what' }).click();
+            await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Edit details' }).click();
+            await page.locator('#plan-edit-member').selectOption({ label: 'Sara Bekele' });
+            await page.locator('#plan-edit-start').fill('2030-03-01');
+            await page.locator('#plan-edit-due').fill('2030-03-05');
+            await page.locator('#plan-edit-priority').selectOption('high');
+            await page.locator('#plan-edit-labels').fill('team, planning');
+            await page.locator('#plan-edit-title').press('Enter');
+            const row = page.locator('.plan-step').filter({ hasText: 'Agree who does what' });
+            await expect(row).toContainText('Sara Bekele');
+            await expect(row).toContainText('1 Mar 2030 – 5 Mar 2030');
+            await expect(row).toContainText('High');
+            await expect(row).toContainText('planning');
+            await expect(page.locator('.plan-member').filter({ hasText: 'Sara Bekele' })).toContainText('0 of 1 done');
+
+            // Stuck: the step says so, and the work is at risk, with the reason.
+            await page.getByRole('button', { name: 'Actions for Agree who does what' }).click();
+            await page.locator('.row-menu:popover-open').getByRole('button', { name: 'I am stuck' }).click();
+            await expect(row).toContainText('Stuck');
+            await expect(page.locator('.plan-progress')).toContainText('At risk');
+            await expect(page.locator('.plan-progress')).toContainText('1 step is stuck');
+
+            // A step under a step, and done.
+            await page.getByRole('button', { name: 'Actions for Agree who does what' }).click();
+            await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Add a step under it' }).click();
+            await page.getByLabel('Add a step under Agree who does what').fill('Write the roles down');
+            await page.getByLabel('Add a step under Agree who does what').press('Enter');
+            await expect(page.getByText('Write the roles down', { exact: true })).toBeVisible();
+            await page.getByRole('button', { name: 'Done adding' }).click();
+            await page.getByRole('button', { name: 'Done: Write the roles down' }).click();
+            await expect(page.locator('.plan-progress')).not.toContainText('At risk');
+
+            // A milestone is reached.
+            await page.getByRole('button', { name: 'Reached: Roles agreed' }).click();
+            await expect(page.getByRole('button', { name: 'Reached: Roles agreed' })).toHaveAttribute('aria-pressed', 'true');
+
+            // After a reload it is all still there; the card and the page agree; nothing scrolls sideways.
+            await page.reload();
+            await expect(page.locator('.plan-member').filter({ hasText: 'Sara Bekele' })).toContainText('1 of 1 done');
+            await expect(page.getByText('Write the roles down', { exact: true })).toBeVisible();
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+            await page.getByRole('link', { name: 'Back to Assignments' }).click();
+            await expect(page.locator('.question-card').filter({ hasText: 'Group project: library app' })).toContainText('Project');
+        });
+    });
+}
+
+test('axe finds no violations on a project plan with its editor, milestones and team', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openAssignments(page, false);
+    await newProject(page, 'Project: axe');
+    await page.getByRole('button', { name: /^Project/ }).first().click();
+    await page.getByRole('heading', { level: 3, name: 'Initiate' }).waitFor();
+    await page.getByLabel('Add a person').fill('Sara Bekele');
+    await page.getByLabel('Add a person').press('Enter');
+    await page.getByRole('button', { name: 'Actions for Sara Bekele' }).waitFor();
+    await page.getByRole('button', { name: 'Actions for Define the goal and the scope' }).click();
+    await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Edit details' }).click();
+    await page.locator('#plan-edit-title').waitFor();
+    const analyse = async () => (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
+        .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
+    expect(await analyse()).toEqual([]);
+    await page.locator('#plan-edit-title').press('Escape');
+    await page.getByRole('button', { name: 'Actions for Define the goal and the scope' }).click();
+    await page.locator('.row-menu:popover-open').getByRole('button', { name: 'I am stuck' }).click();
+    await expect(page.locator('.plan-progress')).toContainText('At risk');
+    expect(await analyse()).toEqual([]);
+});
+
+test('a project plan never scrolls sideways at 320 px, even with 200% text and the editor open', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await openAssignments(page, true);
+    await newProject(page, 'A project with a rather long name that goes on and on');
+    await page.getByRole('button', { name: /Group project/ }).first().click();
+    await page.getByRole('heading', { level: 3, name: 'Team set-up' }).waitFor();
+    await page.getByLabel('Add a person').fill('Sara Bekele with a very long name indeed');
+    await page.getByLabel('Add a person').press('Enter');
+    await page.getByRole('button', { name: 'Actions for Agree who does what' }).click();
+    await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Edit details' }).click();
+    await page.locator('#plan-edit-title').waitFor();
+    await page.locator('#plan-edit-due').fill('2030-03-05');
+    await page.locator('#plan-edit-labels').fill('a-rather-long-label, another-long-label');
+    await page.locator('#plan-edit-title').press('Enter');
+    await page.getByRole('button', { name: 'Actions for Agree who does what' }).click();
+    await page.locator('.row-menu:popover-open').getByRole('button', { name: 'I am stuck' }).click();
+    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});

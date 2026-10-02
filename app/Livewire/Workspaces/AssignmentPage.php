@@ -180,11 +180,13 @@ final class AssignmentPage extends Component
         $workspace = $this->workspaces->find($by, $this->workspaceId);
         $assignment = $this->activityId === null ? null : $this->assignment();
         $folder = $assignment === null ? null : $this->folderOf($assignment);
-        $progress = $assignment === null ? null : $this->plans->get($by, $assignment->id)->progress();
+        $plan = $assignment === null ? null : $this->plans->get($by, $assignment->id);
+        $progress = $plan?->progress();
 
         return view('livewire.workspaces.assignment-page', [
             'progress' => $progress,
             'pace' => $assignment === null ? null : $progress->pace($assignment),
+            'health' => $assignment === null ? null : $plan->health($assignment),
             'workspace' => $workspace,
             'assignment' => $assignment,
             'modules' => $this->modules->list($by, $this->workspaceId),

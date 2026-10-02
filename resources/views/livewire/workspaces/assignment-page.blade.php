@@ -182,6 +182,7 @@
                             <div class="meter mt-3" role="progressbar" aria-label="Plan progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $progress->percent }}"><span style="width: {{ $progress->percent }}%"></span></div>
                             <p class="mt-1 text-sm text-fg-muted">{{ $progress->percent }}% of the plan{{ $pace ? ' · '.$pace['words'] : '' }}</p>
                         @endif
+                        <x-workspace.plan-health :health="$health" class="mt-3" />
                     @else
                         <p class="mt-1 text-sm text-fg-muted">No deadline yet. Add its day on the left.</p>
                     @endif

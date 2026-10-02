@@ -1035,15 +1035,101 @@
 
     .plan-steps .task-row {
         flex-wrap: wrap;
-        align-items: center;
+        align-items: flex-start;
         padding: 0.375rem 0;
     }
 
+    /* Steps under a step sit in, a level at a time (three at most), with a line to follow them down. */
+    .plan-substeps {
+        margin-left: 0.875rem;
+        padding-left: 0.625rem;
+        border-left: 1px solid var(--divider);
+    }
+
     /* Even at the largest text on the narrowest screen the words break and the menu drops under them, so nothing runs off. */
-    .plan-steps .task-row > p {
+    .plan-step-main {
+        display: grid;
+        gap: 0.25rem;
         min-width: 0;
         flex: 1 1 6rem;
+        padding-top: 0.0625rem;
+    }
+
+    .plan-step-title {
+        min-width: 0;
         overflow-wrap: anywhere;
+    }
+
+    /* Where a step is: the circle takes the colour of its state. The words are always there too. */
+    .task-check.is-doing {
+        color: var(--warning);
+    }
+
+    .task-check.is-stuck {
+        color: var(--danger);
+    }
+
+    .task-check.is-done {
+        color: var(--success);
+    }
+
+    /* Small chips under an item: its state, dates, priority, person and labels. */
+    .plan-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem 0.375rem;
+        min-width: 0;
+    }
+
+    .plan-part-meta {
+        padding-left: 0.125rem;
+    }
+
+    .plan-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        max-width: 100%;
+        padding: 0 0.5rem;
+        border-radius: 9999px;
+        background-color: var(--ws-subtle, var(--surface-sunken));
+        color: var(--text);
+        font-size: 0.75rem;
+        font-weight: 600;
+        line-height: 1.5rem;
+        overflow-wrap: anywhere;
+    }
+
+    .plan-chip svg {
+        flex: none;
+        color: var(--ws, var(--text-muted));
+    }
+
+    .plan-notes {
+        display: -webkit-box;
+        overflow: hidden;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+        white-space: pre-line;
+        overflow-wrap: anywhere;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+    }
+
+    .plan-health {
+        display: grid;
+        gap: 0.375rem;
+        justify-items: start;
+    }
+
+    .plan-health-reasons {
+        display: grid;
+        gap: 0.125rem;
+        padding-left: 1.125rem;
+        list-style: disc;
+        color: var(--text-muted);
+        font-size: 0.875rem;
     }
 
     .plan-subhead {
@@ -1088,12 +1174,53 @@
         flex: 1 1 12rem;
     }
 
+    /* Changing an item: the short fields side by side, the long ones (name, labels, notes) on a line of their own. */
     .plan-edit {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+        align-items: start;
+        gap: 0.75rem;
+        width: 100%;
+        padding: 0.5rem 0;
+    }
+
+    .plan-edit-wide {
+        grid-column: 1 / -1;
+    }
+
+    .plan-edit .plan-marks-input {
+        width: 100%;
+        flex: none;
+    }
+
+    .plan-date-input {
+        width: 11rem;
+        flex: 0 1 11rem;
+    }
+
+    /* The team: a person, how far their share is, and the menu. */
+    .plan-team {
+        display: grid;
+    }
+
+    .plan-member {
         display: flex;
         flex-wrap: wrap;
-        align-items: flex-start;
-        gap: 0.5rem;
-        width: 100%;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        padding: 0.625rem 0;
+        border-top: 1px solid var(--divider);
+    }
+
+    .plan-member:first-child {
+        border-top: 0;
+    }
+
+    .plan-member-main {
+        display: grid;
+        gap: 0.25rem;
+        min-width: 0;
+        flex: 1 1 10rem;
     }
 
     .plan-add .plan-marks-input,
@@ -1120,7 +1247,8 @@
     }
 
     /* The name takes a line of its own where it would otherwise be squeezed beside the three buttons. */
-    .plan-criterion > p {
+    .plan-criterion > p,
+    .plan-criterion > .plan-step-main {
         min-width: 0;
         flex: 1 1 14rem;
         overflow-wrap: anywhere;

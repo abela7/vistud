@@ -18,10 +18,11 @@ use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
- * An assignment's plan, on its page (the owner's review, 2026-10-02): the one way to track any assignment. Parts
- * (its sections or deliverables) with steps under them, steps on their own, and the marking criteria to check
- * oneself against, with the progress, and what is left against the time left. Made in a moment from a starter or
- * an AI's reply, or by hand. The assignment's ID is locked; the service checks everything.
+ * An assignment's plan, on its page (the owner's review, 2026-10-02): the one way to track any assignment, from an
+ * essay to a group project. Parts (its sections or deliverables) with steps under them (which can hold steps), steps
+ * on their own, milestones, the marking criteria to check oneself against and the team that shares the work, with
+ * the progress, how it is going and what is left against the time left. Made in a moment from a starter or an AI's
+ * reply, or by hand. The assignment's ID is locked; the service checks everything.
  */
 final class AssignmentPlan extends Component
 {
@@ -44,13 +45,47 @@ final class AssignmentPlan extends Component
 
     public string $criterionMarks = '';
 
-    /** The item being renamed or given marks, or null. */
+    /** The step that is being given a step of its own, or null. */
+    #[Locked]
+    public ?string $adding = null;
+
+    /** The item being changed (its name, marks, dates, priority, labels, notes, person), or null. */
     #[Locked]
     public ?string $editing = null;
 
     public string $editTitle = '';
 
     public string $editMarks = '';
+
+    public string $editStart = '';
+
+    public string $editDue = '';
+
+    public string $editPriority = '';
+
+    public string $editLabels = '';
+
+    public string $editNotes = '';
+
+    public string $editMember = '';
+
+    public string $milestoneText = '';
+
+    public string $milestoneDate = '';
+
+    public bool $showMilestones = false;
+
+    public bool $showTeam = false;
+
+    public string $memberName = '';
+
+    public bool $memberMe = false;
+
+    /** The person being renamed, or null. */
+    #[Locked]
+    public ?string $renamingMember = null;
+
+    public string $memberRename = '';
 
     public bool $showStarters = false;
 
@@ -83,14 +118,29 @@ final class AssignmentPlan extends Component
 
     // ---------- Adding ----------
 
-    /** A step under a part, or outside every part for no part. Its text box is stepText[the part's ID], or stepText.loose. */
-    public function addStep(string $partId = ''): void
+    /** A step under a part or a step, or outside every part for none. Its text box is stepText[that ID], or stepText.loose. */
+    public function addStep(string $parentId = ''): void
     {
-        $box = $partId === '' ? 'loose' : $partId;
+        $box = $parentId === '' ? 'loose' : $parentId;
         $text = $this->stepText[$box] ?? '';
-        $added = $this->attempt(['title' => "stepText.{$box}"], fn () => $this->plans->addStep($this->principal(), $this->activityId, $text, $partId === '' ? null : $partId));
+        $added = $this->attempt(['title' => "stepText.{$box}"], fn () => $this->plans->addStep($this->principal(), $this->activityId, $text, $parentId === '' ? null : $parentId));
         if ($added) {
             unset($this->stepText[$box]);
+            $this->changed();
+        }
+    }
+
+    /** Opens (or closes) the box for a step of a step. */
+    public function toggleSub(string $stepId): void
+    {
+        $this->adding = $this->adding === $stepId ? null : $stepId;
+        $this->resetErrorBag();
+    }
+
+    public function addMilestone(): void
+    {
+        if ($this->attempt(['title' => 'milestoneText', 'due_on' => 'milestoneDate'], fn () => $this->plans->addMilestone($this->principal(), $this->activityId, $this->milestoneText, $this->milestoneDate))) {
+            $this->reset('milestoneText', 'milestoneDate');
             $this->changed();
         }
     }
@@ -138,9 +188,9 @@ final class AssignmentPlan extends Component
     {
         $this->resetErrorBag('reply');
         $read = PlanMaker::read($this->reply);
-        if ($read['parts'] === [] && $read['steps'] === [] && $read['criteria'] === []) {
+        if ($read['parts'] === [] && $read['steps'] === [] && $read['criteria'] === [] && $read['milestones'] === []) {
             $this->reading = false;
-            $this->addError('reply', 'No parts, steps or criteria found in it. Paste the AI\'s whole reply, with the marks it wrote.');
+            $this->addError('reply', 'No parts, steps, milestones or criteria found in it. Paste the AI\'s whole reply, with the marks it wrote.');
 
             return;
         }
@@ -161,7 +211,7 @@ final class AssignmentPlan extends Component
 
     // ---------- Ticking, editing, ordering ----------
 
-    /** todo or done for a part or a step; not_yet, partly or met for a criterion. */
+    /** todo, doing, stuck or done for a part or a step; not_yet, partly or met for a criterion; pending or achieved for a milestone. */
     public function setState(string $id, string $state): void
     {
         if ($this->attempt([], fn () => $this->plans->setState($this->principal(), $id, $state))) {
@@ -176,15 +226,31 @@ final class AssignmentPlan extends Component
             return;
         }
         [$this->editing, $this->editTitle, $this->editMarks] = [$item->id, $item->title, (string) $item->weight];
+        [$this->editStart, $this->editDue, $this->editPriority] = [(string) $item->startOn, (string) $item->dueOn, (string) $item->priority];
+        [$this->editLabels, $this->editNotes, $this->editMember] = [implode(', ', $item->labels), (string) $item->notes, (string) $item->memberId];
         $this->resetErrorBag();
     }
 
     public function saveEdit(): void
     {
-        if ($this->editing === null) {
+        $item = $this->editing === null ? null : $this->find($this->editing);
+        if ($item === null) {
+            $this->cancelEdit();
+
             return;
         }
-        if ($this->attempt(['title' => 'editTitle', 'marks' => 'editMarks'], fn () => $this->plans->edit($this->principal(), $this->editing, $this->editTitle, $this->editMarks))) {
+        $fields = ['title' => $this->editTitle];
+        if (in_array($item->kind, ['part', 'criterion'], true)) {
+            $fields['marks'] = $this->editMarks;
+        }
+        if (in_array($item->kind, ['part', 'step', 'milestone'], true)) {
+            $fields += ['due_on' => $this->editDue, 'notes' => $this->editNotes];
+        }
+        if (in_array($item->kind, ['part', 'step'], true)) {
+            $fields += ['start_on' => $this->editStart, 'priority' => $this->editPriority, 'labels' => $this->editLabels, 'member_id' => $this->editMember];
+        }
+        $map = ['title' => 'editTitle', 'marks' => 'editMarks', 'start_on' => 'editStart', 'due_on' => 'editDue', 'priority' => 'editPriority', 'labels' => 'editLabels', 'notes' => 'editNotes', 'member' => 'editMember'];
+        if ($this->attempt($map, fn () => $this->plans->update($this->principal(), $item->id, $fields))) {
             $this->cancelEdit();
             $this->changed();
         }
@@ -192,7 +258,7 @@ final class AssignmentPlan extends Component
 
     public function cancelEdit(): void
     {
-        $this->reset('editing', 'editTitle', 'editMarks');
+        $this->reset('editing', 'editTitle', 'editMarks', 'editStart', 'editDue', 'editPriority', 'editLabels', 'editNotes', 'editMember');
         $this->resetErrorBag();
     }
 
@@ -206,6 +272,54 @@ final class AssignmentPlan extends Component
     public function remove(string $id): void
     {
         if ($this->attempt([], fn () => $this->plans->delete($this->principal(), $id))) {
+            $this->changed();
+        }
+    }
+
+    // ---------- The team ----------
+
+    public function addMember(): void
+    {
+        if ($this->attempt(['name' => 'memberName'], fn () => $this->plans->addMember($this->principal(), $this->activityId, $this->memberName, $this->memberMe))) {
+            $this->reset('memberName', 'memberMe');
+            $this->changed();
+        }
+    }
+
+    public function toggleMe(string $memberId, bool $me): void
+    {
+        if ($this->attempt([], fn () => $this->plans->markMe($this->principal(), $memberId, $me))) {
+            $this->changed();
+        }
+    }
+
+    public function startRename(string $memberId): void
+    {
+        $member = $this->plans->get($this->principal(), $this->activityId)->member($memberId);
+        if ($member !== null) {
+            [$this->renamingMember, $this->memberRename] = [$member->id, $member->name];
+            $this->resetErrorBag();
+        }
+    }
+
+    public function saveRename(): void
+    {
+        if ($this->renamingMember !== null && $this->attempt(['name' => 'memberRename'], fn () => $this->plans->renameMember($this->principal(), $this->renamingMember, $this->memberRename))) {
+            $this->cancelRename();
+            $this->changed();
+        }
+    }
+
+    public function cancelRename(): void
+    {
+        $this->reset('renamingMember', 'memberRename');
+        $this->resetErrorBag();
+    }
+
+    /** Takes a person out of the team: what was theirs goes back to nobody. */
+    public function removeMember(string $memberId): void
+    {
+        if ($this->attempt([], fn () => $this->plans->removeMember($this->principal(), $memberId))) {
             $this->changed();
         }
     }
@@ -225,6 +339,11 @@ final class AssignmentPlan extends Component
         $assignment = $this->activities->find($by, $this->activityId);
         $progress = $plan->progress();
         $read = $this->reading ? PlanMaker::read($this->reply) : null;
+        $starters = PlanStarters::ALL;
+        if ($assignment->kind === 'project') {
+            // A project's own starters first.
+            $starters = array_intersect_key($starters, ['project' => 1, 'group' => 1]) + $starters;
+        }
 
         return view('livewire.workspaces.assignment-plan', [
             'plan' => $plan,
@@ -232,7 +351,10 @@ final class AssignmentPlan extends Component
             'progress' => $progress,
             'pace' => $progress->pace($assignment),
             'criteria' => $plan->criteriaScore(),
-            'starters' => PlanStarters::ALL,
+            'starters' => $starters,
+            'health' => $plan->health($assignment),
+            'workload' => $plan->workload(),
+            'today' => now($assignment->zone)->toDateString(),
             'prompt' => $this->aiOpen ? $this->maker->prompt($by, $this->activityId, $this->brief) : '',
             'read' => $read,
         ]);
@@ -241,6 +363,10 @@ final class AssignmentPlan extends Component
     /** Runs a change; true when it was made. A refusal goes to the field it names ($fields maps the service's field to a property). */
     private function attempt(array $fields, callable $change): bool
     {
+        // What was refused before is cleared as the same fields are sent again.
+        foreach ($fields as $property) {
+            $this->resetErrorBag($property);
+        }
         try {
             $change();
 

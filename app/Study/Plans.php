@@ -104,6 +104,35 @@ final class Plans
         return $summaries;
     }
 
+    /**
+     * How each of the given assignments stands, for the cards and the Overview, from one read of the workspace's
+     * plans: how far it has got, and how the work is going. Left out are the ones with nothing to tick, and the
+     * ones with nothing to judge (done, or no plan).
+     *
+     * @param  list<ActivityDetails>  $activities
+     * @return array{progress: array<string, PlanProgress>, health: array<string, array{state: string, reasons: list<string>}>}
+     */
+    public function standing(Principal $by, string $workspaceId, array $activities): array
+    {
+        $plans = $this->plans($by, $workspaceId);
+        $standing = ['progress' => [], 'health' => []];
+        foreach ($activities as $activity) {
+            $plan = $plans[$activity->id] ?? null;
+            if ($plan === null) {
+                continue;
+            }
+            $progress = $plan->progress();
+            if ($progress->total > 0) {
+                $standing['progress'][$activity->id] = $progress;
+            }
+            if (($health = $plan->health($activity)) !== null) {
+                $standing['health'][$activity->id] = $health;
+            }
+        }
+
+        return $standing;
+    }
+
     // ---------- Adding ----------
 
     public function addPart(Principal $by, string $activityId, mixed $title, mixed $marks = null): PlanItem

@@ -2,6 +2,8 @@
 
 namespace App\Study;
 
+use Carbon\CarbonImmutable;
+
 /**
  * One line of an assignment's plan (App\Study\Plans): a part (a section or a deliverable), a step (a small thing
  * to do, under a part, under another step, or on its own), a criterion (what it is marked on) or a milestone (a
@@ -33,5 +35,18 @@ final readonly class PlanItem
     public function done(): bool
     {
         return in_array($this->state, ['done', 'achieved'], true);
+    }
+
+    /** Its dates in words: "5 Oct – 9 Oct", "Due 9 Oct", "From 5 Oct"; a milestone has just its day. Null with none. */
+    public function when(): ?string
+    {
+        $word = fn (string $date) => CarbonImmutable::parse($date)->format(CarbonImmutable::parse($date)->year === now()->year ? 'j M' : 'j M Y');
+
+        return match (true) {
+            $this->startOn !== null && $this->dueOn !== null => $word($this->startOn).' – '.$word($this->dueOn),
+            $this->dueOn !== null => ($this->kind === 'milestone' ? '' : 'Due ').$word($this->dueOn),
+            $this->startOn !== null => 'From '.$word($this->startOn),
+            default => null,
+        };
     }
 }

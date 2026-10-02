@@ -201,12 +201,15 @@ final class Tasks extends Component
             $moduleTitles[$module->id] = $module->title;
         }
 
+        $standing = $this->plans->standing($by, $this->workspaceId, $tasks);
+
         return view('livewire.workspaces.tasks', [
             'open' => array_values(array_filter($tasks, fn ($t) => $t->status !== 'done')),
             'done' => array_values(array_filter($tasks, fn ($t) => $t->status === 'done')),
             'modules' => $modules,
             'moduleTitles' => $moduleTitles,
-            'plans' => $this->plans->summaries($by, $this->workspaceId),
+            'plans' => $standing['progress'],
+            'healths' => $standing['health'],
             'target' => $this->targetId === null ? null : (collect($tasks)->firstWhere('id', $this->targetId)?->title),
         ]);
     }

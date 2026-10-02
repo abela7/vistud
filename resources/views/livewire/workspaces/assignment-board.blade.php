@@ -48,7 +48,9 @@
                             <span class="question-status">
                                 <x-icon :name="match ($colour) { 'red' => 'circle-alert', 'green' => 'circle-check', default => 'clipboard-check' }" class="size-4" />{{ $a->kindLabel() }}
                             </span>
-                            @if ($a->status === 'doing')
+                            @if (isset($healths[$a->id]) && $healths[$a->id]['state'] !== 'on_track')
+                                <x-workspace.plan-health :health="$healths[$a->id]" />
+                            @elseif ($a->status === 'doing')
                                 <span class="text-sm text-fg-muted">In progress</span>
                             @endif
                         </div>
