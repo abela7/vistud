@@ -71,10 +71,11 @@ test('a note opened in a background tab starts when seen, with what another tab 
 });
 
 test('when every conversion slot is taken the server says so at once, and the page asks again', async ({ page }) => {
-    const student = makeStudentWithStudyFiles();
-    await openStudentHome(page, student.email);
+    // The slots are taken before the files are uploaded: an upload queues its preview straight away (App\Jobs\MakeFilePreview).
     tinker("Cache::lock('vistud:office-slot:1', 120)->get(); Cache::lock('vistud:office-slot:2', 120)->get();");
     try {
+        const student = makeStudentWithStudyFiles();
+        await openStudentHome(page, student.email);
         const answers = [];
         page.on('response', (response) => {
             if (response.url().endsWith('/preview') && response.request().method() === 'HEAD') answers.push(response.status());

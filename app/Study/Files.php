@@ -111,7 +111,11 @@ final class Files
             throw $e;
         }
 
-        return $this->find($by, $id);
+        $file = $this->find($by, $id);
+        // A Word, PowerPoint or Excel file's preview is made now, in the background, so it is ready when opened.
+        FilePreviews::prepare($file, $key);
+
+        return $file;
     }
 
     /** A new name; the extension stays, since it says what the file is. */

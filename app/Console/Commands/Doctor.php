@@ -65,6 +65,13 @@ class Doctor extends Command
             needed: false,
         );
 
+        $check(
+            'Previews made in the background (queue: '.config('queue.default').')',
+            config('queue.default') !== 'sync',
+            'Set QUEUE_CONNECTION=database in .env. `php artisan serve` starts the worker beside it; on a server, keep `php artisan queue:work` running.',
+            needed: false,
+        );
+
         $this->table(['', 'Check', 'How to fix'], $rows);
         $this->line($failed ? 'Something ViStud needs is missing: fix the MISSING rows, then run this again.' : 'ViStud has what it needs.');
 

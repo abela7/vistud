@@ -67,6 +67,16 @@ php artisan serve        # http://localhost:8000; /login is the login screen
 npm run dev              # optional, in a second terminal: rebuilds and reloads as you edit
 ```
 
+`php artisan serve` also starts the queue's worker beside the server (`--no-queue` leaves it out), and Ctrl+C stops both. Word, PowerPoint and Excel previews are made on that worker (`App\Jobs\MakeFilePreview`) as soon as such a file is uploaded, never inside a page's request: PHP's built-in server answers one request at a time (on Windows it can't run more), so a request busy with LibreOffice used to hold up every other page. This needs `QUEUE_CONNECTION=database` in `.env` (the default in `.env.example`; `php artisan vistud:doctor` checks it). After changing the job's code, restart `php artisan serve`.
+
+**On a server** (PHP-FPM behind Nginx or Apache), keep one worker running beside the web server, under a process manager such as systemd or Supervisor, restarted after each deployment with `php artisan queue:restart`:
+
+```bash
+php artisan queue:work --sleep=1
+```
+
+Without a worker, a new Word, PowerPoint or Excel file shows "Preparing the preview" until one runs; PDFs, images and downloads are unaffected. At most `VISTUD_OFFICE_AT_ONCE` conversions (2 by default) run at once, whatever the number of workers; each takes about 200 MB for a few seconds.
+
 WP6 adds minimal authentication and admin screens: login, two-factor authentication, invitation acceptance, and the admin pages the security tests need. By the PM's decision they use the shared visual foundation in [DESIGN.md](../../DESIGN.md) instead of unstyled markup. The login screen is built; the other screens are not, and are listed in [LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md#4-what-is-left-in-wp6). The persistent workspace shell (the sidebar, top bar and editor host that stay in place while the main area changes) belongs to M2. The rest of M1 is exercised through tests, the console and the JSON endpoints.
 
 ## Themes and front-end assets

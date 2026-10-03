@@ -2,10 +2,12 @@
 
 namespace Tests\Feature\Web;
 
+use App\Jobs\MakeFilePreview;
 use App\Livewire\Workspaces\Contents;
 use App\Livewire\Workspaces\FileActions;
 use App\Models\User;
 use App\Study\FileDetails;
+use App\Study\FilePreviews;
 use App\Study\Files;
 use App\Study\Folders;
 use App\Study\ModuleDetails;
@@ -15,6 +17,7 @@ use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
@@ -162,6 +165,47 @@ class FilesScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('files.preview', $docx->id))->assertStatus(202);
         $this->assertLessThan(5, microtime(true) - $started);
         $slot->release();
+    }
+
+    public function test_a_preview_is_made_on_the_queue_and_never_inside_the_request_that_asks_for_it(): void
+    {
+        // Gemini's report, 2026-10-03: the first request ran LibreOffice itself, and held up every other page.
+        config(['vistud.files.office' => PHP_BINARY, 'queue.default' => 'database']);
+        Queue::fake();
+
+        // Uploading a Word, PowerPoint or Excel file queues its preview at once; any other file doesn't.
+        $docx = $this->stored('Essay.docx', $this->ooxml('word/document.xml'));
+        $this->stored('Paper.pdf', $this->pdf());
+        Queue::assertPushed(MakeFilePreview::class, 1);
+        Queue::assertPushed(MakeFilePreview::class, fn ($job) => $job->fileId === $docx->id && $job->extension === 'docx');
+
+        // Asking for it answers at once while it waits, and doesn't queue it twice.
+        $started = microtime(true);
+        $this->actingAs($this->ada)->get(route('files.preview', $docx->id))->assertStatus(202)->assertHeader('Retry-After', '2');
+        $this->actingAs($this->ada)->get(route('files.preview', $docx->id))->assertStatus(202);
+        $this->assertLessThan(2, microtime(true) - $started);
+        Queue::assertPushed(MakeFilePreview::class, 1);
+
+        // Without LibreOffice nothing is queued, and the page offers the download.
+        config(['vistud.files.office' => 'none']);
+        $this->stored('Slides.pptx', $this->ooxml('ppt/presentation.xml'));
+        Queue::assertPushed(MakeFilePreview::class, 1);
+    }
+
+    public function test_the_job_comes_back_while_every_slot_is_taken_and_remembers_a_file_libreoffice_cannot_read(): void
+    {
+        config(['vistud.files.office' => PHP_BINARY, 'vistud.files.office_at_once' => 1]);
+        $docx = $this->stored('Essay.docx', $this->ooxml('word/document.xml'));
+        [, $key] = app(Files::class)->content($this->principal($this->ada), $docx->id);
+
+        $slot = Cache::lock('vistud:office-slot:1', 60);
+        $slot->get();
+        $this->assertFalse(FilePreviews::make($docx->id, $key, 'docx'), 'Every slot taken: try again later.');
+        $slot->release();
+
+        // "LibreOffice" here is PHP, which can't read a Word file: noted, and not tried on every visit.
+        $this->assertTrue(FilePreviews::make($docx->id, $key, 'docx'));
+        $this->actingAs($this->ada)->get(route('files.preview', $docx->id))->assertStatus(422);
     }
 
     public function test_a_markdown_file_is_shown_as_it_was_meant_to_look_and_opens_as_a_note(): void

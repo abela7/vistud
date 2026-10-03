@@ -2,6 +2,7 @@
 
 namespace App\Study;
 
+use App\Jobs\MakeFilePreview;
 use App\Platform\Access\Principal;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Facades\Cache;
@@ -14,8 +15,9 @@ use Throwable;
 
 /**
  * Word, PowerPoint and Excel files shown in the browser (the owner's review, 2026-09-30). LibreOffice turns the
- * file into a PDF the first time it is opened (a few seconds), and the PDF is kept beside it on the files disk,
- * so the browser's own PDF viewer shows it after that. LibreOffice runs with a fresh profile for each file, with
+ * file into a PDF (a few seconds), and the PDF is kept beside it on the files disk, so the browser's own PDF viewer
+ * shows it. The PDF is made on the queue's worker (App\Jobs\MakeFilePreview), as soon as the file is uploaded or
+ * when its page first asks: never inside a request, so no page waits for LibreOffice. LibreOffice runs with a fresh profile for each file, with
  * macros off and links never updated, so a document can't run anything or pull in anything from outside; the
  * file was checked by FileTypes before it was kept. Without LibreOffice on this computer there is no preview,
  * and the file page says how to get one.
@@ -65,10 +67,10 @@ final class FilePreviews
     }
 
     /**
-     * The file as a PDF to show: its key on the files disk, made the first time (a few seconds). PREPARING when
-     * it is being made by another request, or every conversion slot is taken: the page asks again shortly, so no
-     * request ever sits waiting on the server. Null when it can't be made here (no LibreOffice, or LibreOffice
-     * couldn't read it). Another student's file is 404, a trashed one 410.
+     * The file as a PDF to show: its key on the files disk once it is made. PREPARING while it is being made (it is
+     * queued now if it isn't yet): the page asks again shortly, so no request ever waits for LibreOffice. Null when
+     * it can't be made here (no LibreOffice, or LibreOffice couldn't read it). Another student's file is 404, a
+     * trashed one 410.
      */
     public function pdf(Principal $by, string $id): ?string
     {
@@ -81,63 +83,88 @@ final class FilePreviews
         if ($disk->exists($pdfKey)) {
             return $pdfKey;
         }
-        if ($disk->exists("{$pdfKey}.failed") || ($converter = self::converter()) === null) {
+        if ($disk->exists("{$pdfKey}.failed") || self::converter() === null) {
             return null;
         }
 
-        // One conversion of a file at a time: a page asking again, or a second tab, hears it is being made.
-        $lock = Cache::lock("vistud:preview:{$pdfKey}", self::TIMEOUT_SECONDS + 30);
-        if (! $lock->get()) {
-            return self::PREPARING;
-        }
-        try {
-            if ($disk->exists($pdfKey)) {
-                return $pdfKey;
-            }
+        // Queued once for a file (the job is unique); with the sync queue it has been made by now.
+        MakeFilePreview::dispatch($file->id, $key, $file->extension);
 
-            return $disk->exists("{$pdfKey}.failed") ? null : $this->make($disk, $key, $pdfKey, $file, $converter, $id);
-        } finally {
-            $lock->release();
+        return match (true) {
+            $disk->exists($pdfKey) => $pdfKey,
+            $disk->exists("{$pdfKey}.failed") => null,
+            default => self::PREPARING,
+        };
+    }
+
+    /**
+     * A Word, PowerPoint or Excel file just uploaded: its PDF is queued now, so it is ready when the file is opened.
+     * Not with the sync queue, which would make it inside the upload: then its page makes it when first opened.
+     */
+    public static function prepare(FileDetails $file, string $key): void
+    {
+        if (self::converts($file) && self::converter() !== null && config('queue.default') !== 'sync') {
+            MakeFilePreview::dispatch($file->id, $key, $file->extension);
         }
     }
 
-    /** Makes the PDF of the file at $key with LibreOffice and keeps it at $pdfKey; null when LibreOffice can't read the file, PREPARING when no slot is free. */
-    private function make($disk, string $key, string $pdfKey, FileDetails $file, string $converter, string $id): ?string
+    /**
+     * Makes the PDF of the file whose bytes are at $key and keeps it beside them (run by App\Jobs\MakeFilePreview).
+     * False when every conversion slot is taken: try again in a moment. True otherwise: made, made already, being made
+     * by another worker, or not to be made (no LibreOffice, the file gone, or LibreOffice couldn't read it, which is
+     * noted so it isn't tried on every visit).
+     */
+    public static function make(string $id, string $key, string $extension): bool
     {
-        $work = storage_path('app/private/previews-work/'.Str::random(20));
-        File::ensureDirectoryExists("{$work}/in");
+        $disk = Files::disk();
+        $pdfKey = self::key($key);
+        // One conversion of a file at a time.
+        $lock = Cache::lock("vistud:preview:{$pdfKey}", self::TIMEOUT_SECONDS + 30);
+        if (! $lock->get()) {
+            return true;
+        }
         try {
-            $source = "{$work}/in/source.{$file->extension}";
-            $in = $disk->readStream($key);
-            $out = fopen($source, 'wb');
-            stream_copy_to_stream($in, $out);
-            fclose($in);
-            fclose($out);
-
-            $pdf = self::convert($converter, $work, $source, 'pdf', null, $problem, waitSeconds: 0);
-            if ($pdf !== null && str_starts_with((string) file_get_contents($pdf, length: 5), '%PDF-')) {
-                $stream = fopen($pdf, 'rb');
-                $disk->writeStream($pdfKey, $stream);
-                fclose($stream);
-
-                return $pdfKey;
+            if ($disk->exists($pdfKey) || $disk->exists("{$pdfKey}.failed") || ! $disk->exists($key) || ($converter = self::converter()) === null) {
+                return true;
             }
-            $problem ??= 'no PDF';
-        } catch (Throwable $e) {
-            $problem = $e->getMessage();
+
+            $work = storage_path('app/private/previews-work/'.Str::random(20));
+            File::ensureDirectoryExists("{$work}/in");
+            try {
+                $source = "{$work}/in/source.{$extension}";
+                $in = $disk->readStream($key);
+                $out = fopen($source, 'wb');
+                stream_copy_to_stream($in, $out);
+                fclose($in);
+                fclose($out);
+
+                $pdf = self::convert($converter, $work, $source, 'pdf', null, $problem, waitSeconds: 0);
+                if ($pdf !== null && str_starts_with((string) file_get_contents($pdf, length: 5), '%PDF-')) {
+                    $stream = fopen($pdf, 'rb');
+                    $disk->writeStream($pdfKey, $stream);
+                    fclose($stream);
+
+                    return true;
+                }
+                $problem ??= 'no PDF';
+            } catch (Throwable $e) {
+                $problem = $e->getMessage();
+            } finally {
+                File::deleteDirectory($work);
+            }
+            // Every slot taken is not the file's fault: the job comes back shortly.
+            if ($problem === self::BUSY) {
+                return false;
+            }
+
+            // Not tried again on every visit: a file LibreOffice can't read won't read next time either.
+            Log::warning('A file preview could not be made.', ['file' => $id, 'problem' => Str::limit($problem, 500)]);
+            $disk->put("{$pdfKey}.failed", Str::limit($problem, 500));
+
+            return true;
         } finally {
-            File::deleteDirectory($work);
+            $lock->release();
         }
-        // Every slot taken is not the file's fault: the page asks again shortly.
-        if ($problem === self::BUSY) {
-            return self::PREPARING;
-        }
-
-        // Not tried again on every visit: a file LibreOffice can't read won't read next time either.
-        Log::warning('A file preview could not be made.', ['file' => $id, 'problem' => Str::limit($problem, 500)]);
-        $disk->put("{$pdfKey}.failed", Str::limit($problem, 500));
-
-        return null;
     }
 
     /**

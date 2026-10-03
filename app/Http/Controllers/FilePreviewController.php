@@ -10,15 +10,15 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * /files/{file}/preview: a Word, PowerPoint or Excel file as a PDF, for the browser's PDF viewer on the file's
- * page (App\Study\FilePreviews). Made the first time, which takes a few seconds; 202 with Retry-After while it is
- * being made elsewhere or every conversion slot is taken. Only for its owner: anyone else gets 404, like a missing
- * file, and a trashed one 410.
+ * page (App\Study\FilePreviews). The PDF is made on the queue's worker (App\Jobs\MakeFilePreview); until it is
+ * there this answers 202 with Retry-After at once, and the page asks again. Only for its owner: anyone else gets
+ * 404, like a missing file, and a trashed one 410.
  */
 class FilePreviewController
 {
     public function __invoke(Request $request, PrincipalFactory $principals, Files $files, FilePreviews $previews, string $file): Response
     {
-        // LibreOffice may take a while with a long deck; the PHP default of 30 seconds is too short.
+        // With the sync queue (tests) the PDF is made in this request, and a long deck takes more than PHP's 30 seconds.
         set_time_limit(180);
         $by = $principals->fromRequest($request);
         $details = $files->find($by, $file);
@@ -31,7 +31,7 @@ class FilePreviewController
             'Referrer-Policy' => 'no-referrer',
         ];
         if ($key === FilePreviews::PREPARING) {
-            // Being made, or waiting for a free slot: the page asks again (resources/js/app.js), so no request waits here.
+            // Queued or being made: the page asks again (resources/js/app.js), so no request waits here.
             return response('The preview is being prepared.', 202, $headers + [
                 'Content-Type' => 'text/plain; charset=utf-8',
                 'Retry-After' => '2',
