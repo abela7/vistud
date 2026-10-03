@@ -31,7 +31,7 @@ test('the Overview is short: the rhythm, what to continue, what\'s coming up', a
     // Topics live in Progress now.
     await expect(page.getByText('Primary and foreign keys')).toHaveCount(0);
 
-    const todo = page.getByRole('list', { name: 'To do' });
+    const todo = page.getByRole('group', { name: 'To do' });
     await expect(todo.getByRole('listitem')).toHaveCount(3);
     await expect(todo.getByRole('listitem').first()).toContainText('SQL lab 2');
     await expect(todo.getByRole('listitem').first()).toContainText('In progress');

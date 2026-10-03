@@ -60,6 +60,32 @@ class TrackerScreensTest extends TestCase
             ->assertDontSee('Teach slide by slide.');
     }
 
+    public function test_coming_up_groups_what_is_due_late_first_and_shows_six_at_most(): void
+    {
+        Carbon::setTestNow('2026-10-01 09:00');
+        $by = $this->principal($this->ada);
+        foreach ([
+            'Overdue essay' => '2026-09-28', 'Overdue lab' => '2026-09-30',
+            'Soon quiz' => '2026-10-02', 'Soon essay' => '2026-10-04', 'Soon lab' => '2026-10-07',
+            'Distant a' => '2026-10-20', 'Distant b' => '2026-10-25', 'Distant c' => '2026-11-10', 'Distant d' => '2026-11-20',
+        ] as $title => $due) {
+            app(Activities::class)->create($by, $this->databases->id, ['title' => $title, 'due_on' => $due]);
+        }
+
+        $this->livewire(Tasks::class)
+            ->assertSeeInOrder(['Coming up', '2 late', 'Late', 'Overdue essay', 'Overdue lab', 'Next 7 days', 'Soon quiz', 'Soon essay', 'Soon lab', 'Later', 'Distant a'])
+            ->assertDontSee('Distant b')->assertDontSee('Distant c')->assertDontSee('Distant d')
+            ->assertSee('3 more · All assignments');
+
+        // With nothing late there is no late mark, and with few tasks nothing is hidden.
+        foreach (app(Activities::class)->list($by, $this->databases->id) as $task) {
+            if ($task->dueOn < '2026-10-01' || $task->dueOn > '2026-10-02') {
+                app(Activities::class)->delete($by, $task->id);
+            }
+        }
+        $this->livewire(Tasks::class)->assertSee('Soon quiz')->assertDontSee('late')->assertDontSee('more ·')->assertDontSee('Later');
+    }
+
     public function test_a_new_course_overview_points_to_the_first_module_and_tasks(): void
     {
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))

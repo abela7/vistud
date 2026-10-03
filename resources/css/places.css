@@ -97,24 +97,118 @@
     }
 
     /*
-    | The Overview's Coming up (the owner's review, 2026-10-04): a small heading with its actions as icon buttons,
-    | then one list like Continue beside it. A row: the circle, the name and a line of what it is (with a small bar
-    | for its plan), and on the right how long is left over its date, red when late and amber when near.
+    | The Overview's boxes (the owner's review, 2026-10-05): Coming up and Continue are each a box with a head: the
+    | icon badge, the name, and on the right small buttons. The rows sit flush inside it, and Coming up's rows are in
+    | groups (Late, the next 7 days, later), each with a small band naming it, so a long list is easy to scan.
+    | A row: the circle, the name and a line of what it is (with a small bar for its plan), and on the right how
+    | long is left over its date, red when late and amber when near.
     */
-    .coming-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
+    .ov-panel {
+        min-width: 0;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
     }
 
-    /* The buttons stand out of the heading's line, so the heading sits level with Continue's. */
+    .ov-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.375rem 0.625rem;
+        min-height: 3.5rem;
+        padding: 0.625rem 0.75rem 0.625rem 1rem;
+    }
+
+    .ov-head .item-icon {
+        width: 2rem;
+        height: 2rem;
+    }
+
+    .ov-head .item-icon svg {
+        width: 1.125rem;
+        height: 1.125rem;
+    }
+
+    .ov-head .panel-title {
+        min-width: 0;
+        flex: 1 1 7rem;
+    }
+
+    .ov-panel .item-list {
+        border: 0;
+        border-top: 1px solid var(--divider);
+        border-radius: 0;
+        background-color: transparent;
+    }
+
+    .ov-panel > .item-list:last-child {
+        border-radius: 0 0 calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px);
+    }
+
+    .ov-panel > .empty-place {
+        margin: 0 0.75rem 0.75rem;
+    }
+
     .coming-actions {
         display: flex;
+        flex: none;
         align-items: center;
         gap: 0.125rem;
-        margin-block: -0.375rem;
-        margin-right: -0.375rem;
+        margin-left: auto;
+    }
+
+    /* How many are late, by the name: the one thing to look at first. */
+    .coming-late {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: 9999px;
+        background-color: var(--danger-subtle);
+        color: var(--text);
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .coming-late svg {
+        color: var(--danger);
+    }
+
+    /* A group's band: its name and how many it holds. */
+    .coming-group-name {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.3125rem 1rem;
+        border-top: 1px solid var(--divider);
+        background-color: var(--surface-sunken);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .coming-group.is-late .coming-group-name {
+        color: var(--text);
+    }
+
+    .coming-group-count {
+        font-variant-numeric: tabular-nums;
+        font-weight: 500;
+    }
+
+    .coming-group .item-list {
+        border-top: 1px solid var(--divider);
+    }
+
+    .coming-clear {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.875rem 1rem;
+        border-top: 1px solid var(--divider);
+        color: var(--text-muted);
     }
 
     .coming-row {
@@ -220,6 +314,8 @@
         align-items: center;
         justify-content: space-between;
         gap: 0.25rem;
+        padding: 0.5rem 0.75rem 0.5rem 1rem;
+        border-top: 1px solid var(--divider);
     }
 
     .coming-all {
@@ -591,16 +687,27 @@
 
     /* ---------- The Overview's tiles ---------- */
 
-    /* Phones: the streak and the cards side by side, the week below; wider: one row. */
+    /*
+    | The week in one box (the owner's review, 2026-10-05), three cells with a line between them. Phones: the streak
+    | and the cards side by side, the week below; wider: one row.
+    */
     .stat-row {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.75rem;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
     }
 
     .stat-row > :nth-child(2) {
         grid-column: 1 / -1;
         order: 3;
+        border-top: 1px solid var(--divider);
+    }
+
+    .stat-row > :nth-child(3) {
+        border-left: 1px solid var(--divider);
     }
 
     @media (max-width: 767.98px) {
@@ -617,6 +724,8 @@
         .stat-row > :nth-child(2) {
             grid-column: auto;
             order: 0;
+            border-top: 0;
+            border-left: 1px solid var(--divider);
         }
     }
 
@@ -628,27 +737,21 @@
         gap: 0.875rem;
         min-width: 0;
         padding: 1rem 1.125rem;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-xl);
-        background-color: var(--surface-raised);
         color: var(--text);
         text-decoration: none;
     }
 
     .stat-tile.is-link {
-        transition:
-            border-color 0.15s ease,
-            box-shadow 0.15s ease;
+        transition: background-color 0.15s ease;
     }
 
     .stat-tile.is-link:hover {
-        border-color: var(--border-strong);
-        box-shadow: var(--elevation-sm);
+        background-color: var(--hover);
     }
 
     .stat-tile.is-link:focus-visible {
         outline: 2px solid var(--focus-ring);
-        outline-offset: 2px;
+        outline-offset: -2px;
     }
 
     .stat-label {

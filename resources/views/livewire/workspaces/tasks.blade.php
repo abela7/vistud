@@ -1,16 +1,43 @@
 {{--
-    A workspace's assignments and tasks, on its Overview (App\Livewire\Workspaces\Tasks): Coming up, the soonest
-    first, laid out like Continue beside it (a small heading, then one list). Its own actions are small buttons by
-    the heading: the calendar, select several, add one. The circle on a row marks it done; its ⋯ starts it, edits or
-    deletes it.
+    A workspace's assignments and tasks, on its Overview (App\Livewire\Workspaces\Tasks): Coming up, a box with a head
+    (its icon, its name, how many are late, and small buttons for the calendar, selecting several and adding one),
+    holding the soonest first in groups: Late, the next 7 days, then later (the owner's review, 2026-10-05: one long
+    list was too much to take in). At most six show; "All assignments" has the rest. The circle on a row marks it
+    done; its ⋯ starts it, edits or deletes it.
 --}}
 @php
     use App\Study\Activities;
     use Illuminate\Support\Str;
+
+    $buckets = ['late' => [], 'soon' => [], 'later' => []];
+    foreach ($open as $task) {
+        $buckets[match (true) {
+            $task->overdue() => 'late',
+            $task->dueOn !== null && $task->dueAt()->lessThan(now()->addDays(7)) => 'soon',
+            default => 'later',
+        }][] = $task;
+    }
+    $names = ['late' => 'Late', 'soon' => 'Next 7 days', 'later' => 'Later'];
+    $room = 6;
+    $groups = [];
+    foreach ($buckets as $key => $list) {
+        $take = array_slice($list, 0, $room);
+        $room -= count($take);
+        if ($take !== []) {
+            $groups[$key] = $take;
+        }
+    }
+    $hidden = count($open) - array_sum(array_map('count', $groups));
 @endphp
-<section aria-labelledby="tasks-heading" class="min-w-0 space-y-2" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
-    <div class="coming-head">
-        <h2 id="tasks-heading" class="section-title">Coming up</h2>
+<section aria-labelledby="tasks-heading" class="ov-panel" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
+    <div class="ov-head">
+        <span class="item-icon" aria-hidden="true"><x-icon name="calendar-clock" class="size-5" /></span>
+        <h2 id="tasks-heading" class="panel-title">
+            Coming up
+            @if ($buckets['late'] !== [])
+                <span class="coming-late"><x-icon name="circle-alert" class="size-3.5" />{{ count($buckets['late']) }} late</span>
+            @endif
+        </h2>
         <div class="coming-actions">
             <a href="{{ route('workspaces.show', [$workspaceId, 'calendar']) }}" class="topbar-button size-8" title="Calendar"><x-icon name="calendar" class="size-4" /><span class="sr-only">Calendar</span></a>
             @if ($open !== [] || $done !== [])
@@ -37,19 +64,29 @@
             <button type="button" class="btn btn-secondary" wire:click="newTask"><x-icon name="plus" class="size-4" />Add an assignment</button>
         </div>
     @else
-        <ul class="item-list coming-list" role="list" aria-label="To do">
-            @forelse ($open as $task)
-                @include('livewire.workspaces.partials.task-row')
+        <div role="group" aria-label="To do">
+            @forelse ($groups as $key => $list)
+                <div @class(['coming-group', "is-{$key}"])>
+                    <h3 class="coming-group-name">{{ $names[$key] }}<span class="coming-group-count">{{ count($buckets[$key]) }}</span></h3>
+                    <ul class="item-list coming-list" role="list" aria-label="{{ $names[$key] }}">
+                        @foreach ($list as $task)
+                            @include('livewire.workspaces.partials.task-row')
+                        @endforeach
+                    </ul>
+                </div>
             @empty
-                <li class="item-row text-sm text-fg-muted">All done.</li>
+                <p class="coming-clear"><x-icon name="circle-check" class="size-5" />All done.</p>
             @endforelse
-        </ul>
+        </div>
         @if ($showDone && $done !== [])
-            <ul id="done-tasks" class="item-list coming-list" role="list" aria-label="Done">
-                @foreach ($done as $task)
-                    @include('livewire.workspaces.partials.task-row')
-                @endforeach
-            </ul>
+            <div class="coming-group is-done">
+                <h3 class="coming-group-name">Done<span class="coming-group-count">{{ count($done) }}</span></h3>
+                <ul id="done-tasks" class="item-list coming-list" role="list" aria-label="Done">
+                    @foreach ($done as $task)
+                        @include('livewire.workspaces.partials.task-row')
+                    @endforeach
+                </ul>
+            </div>
         @endif
         <div class="coming-foot">
             @if ($done !== [])
@@ -57,7 +94,7 @@
                     {{ $showDone ? 'Hide' : 'Show' }} {{ count($done) }} done
                 </button>
             @endif
-            <a href="{{ route('workspaces.show', [$workspaceId, 'assignments']) }}" class="quiet-link coming-all">All assignments<x-icon name="chevron-right" class="size-4" /></a>
+            <a href="{{ route('workspaces.show', [$workspaceId, 'assignments']) }}" class="quiet-link coming-all">{{ $hidden > 0 ? "{$hidden} more · " : '' }}All assignments<x-icon name="chevron-right" class="size-4" /></a>
         </div>
     @endif
 

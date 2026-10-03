@@ -1,8 +1,8 @@
 {{--
     A workspace's pages (App\Http\Controllers\WorkspacePageController).
     The Overview is short on purpose: a greeting and Start studying, the
-    student's rhythm (streak, last 7 days, cards to review), what to pick up
-    again, and what's coming up. Modules, Notes & files, Flashcards and
+    student's rhythm (streak, last 7 days, cards to review in one box), what's
+    coming up (the soonest first, grouped) and what to pick up again, each its own box. Modules, Notes & files, Flashcards and
     Progress are their own pages; the Calendar says what it will hold until
     its step arrives (docs/specs/workspaces.md §6).
 --}}
@@ -59,8 +59,15 @@
             <livewire:workspaces.study-time :workspace-id="$workspace->id" :stats="true" />
 
             <div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-5">
-                <section aria-labelledby="continue-heading" class="min-w-0 space-y-2 lg:col-span-3">
-                    <h2 id="continue-heading" class="section-title">Continue</h2>
+                <div class="min-w-0 lg:col-span-3">
+                    <livewire:workspaces.tasks :workspace-id="$workspace->id" />
+                </div>
+
+                <section aria-labelledby="continue-heading" class="ov-panel min-w-0 lg:col-span-2">
+                    <div class="ov-head">
+                        <span class="item-icon" aria-hidden="true"><x-icon name="history" class="size-5" /></span>
+                        <h2 id="continue-heading" class="panel-title">Continue</h2>
+                    </div>
                     @if ($lastSession === null && $recent === [])
                         <div class="empty-place">
                             <span class="item-icon" aria-hidden="true"><x-icon name="layers" class="size-5" /></span>
@@ -96,10 +103,6 @@
                         </ul>
                     @endif
                 </section>
-
-                <div class="min-w-0 lg:col-span-2">
-                    <livewire:workspaces.tasks :workspace-id="$workspace->id" />
-                </div>
             </div>
 
             <livewire:workspaces.instructions :workspace-id="$workspace->id" />
