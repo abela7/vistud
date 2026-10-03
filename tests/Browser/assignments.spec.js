@@ -13,6 +13,12 @@ const devices = {
 
 test.use({ reducedMotion: 'reduce' });
 
+/** The plan's ⋯ menu: Add a pre-made plan, Clear the plan. */
+async function planMenu(page, item) {
+    await page.getByRole('button', { name: 'Actions for the plan' }).click();
+    await page.locator('.row-menu:popover-open').getByRole('button', { name: item }).click();
+}
+
 /** Biology's Assignments section, reached the way a student would. */
 async function openAssignments(page, onPhone) {
     await openStudentHome(page, makeStudentWithModules());
@@ -85,10 +91,10 @@ for (const [name, device] of Object.entries(devices)) {
             await page.getByRole('button', { name: 'Create' }).click();
             await page.getByRole('heading', { level: 1, name: 'Coursework 2: osmosis report' }).waitFor();
 
-            // An empty plan is calm: the AI first, and the pre-made plans only when asked for.
-            await expect(page.getByText('Break it down')).toBeVisible();
+            // An empty plan is calm: a new section is one form away, and the pre-made plans wait in the menu.
+            await expect(page.getByText('Split the work into sections')).toBeVisible();
             await expect(page.getByRole('button', { name: /Essay or report/ })).toHaveCount(0);
-            await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
+            await planMenu(page, 'Add a pre-made plan');
             await page.getByRole('button', { name: /Essay or report/ }).click();
             await expect(page.getByRole('heading', { level: 3, name: 'Research' })).toBeVisible();
             await expect(page.locator('.plan-percent')).toHaveText('0%');
@@ -140,16 +146,30 @@ for (const [name, device] of Object.entries(devices)) {
             // A plan that isn't wanted is cleared, after asking.
             await card.getByRole('link', { name: 'Coursework 2: osmosis report' }).click();
             await page.getByRole('heading', { level: 1, name: 'Coursework 2: osmosis report' }).waitFor();
-            await page.getByRole('button', { name: 'Actions for the plan' }).click();
-            await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Clear the plan' }).click();
+            await planMenu(page, 'Clear the plan');
             await expect(page.getByText('Remove everything in the plan?')).toBeVisible();
             await page.getByRole('button', { name: 'Keep it', exact: true }).click();
             await expect(page.getByRole('heading', { level: 3, name: 'Research' })).toBeVisible();
-            await page.getByRole('button', { name: 'Actions for the plan' }).click();
-            await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Clear the plan' }).click();
+            await planMenu(page, 'Clear the plan');
             await page.getByRole('button', { name: 'Remove it all' }).click();
             await expect(page.getByText('The plan is cleared.')).toBeVisible();
-            await expect(page.getByText('Break it down')).toBeVisible();
+            await expect(page.getByText('Split the work into sections')).toBeVisible();
+
+            // Built by hand: sections with their weights, checked to add up to 100, and a weight changed in place.
+            await page.getByLabel('Name of the section').fill('Method');
+            await page.getByLabel('Weight, out of 100 (optional)').fill('40');
+            await page.getByLabel('Name of the section').press('Enter');
+            await expect(page.locator('.plan-facts')).toContainText('Weights add up to 40%: 60% is in no section');
+            await page.getByLabel('Name of the section').fill('Results');
+            await page.getByLabel('Weight, out of 100 (optional)').fill('50');
+            await page.getByLabel('Name of the section').press('Enter');
+            await page.getByRole('button', { name: /Weight of Results: 50%/ }).click();
+            await page.getByLabel('Weight of Results, out of 100 (empty for none)').fill('60');
+            await page.getByLabel('Weight of Results, out of 100 (empty for none)').press('Enter');
+            await expect(page.locator('.plan-facts')).toContainText('Weights add up to 100%');
+            await page.getByRole('button', { name: 'Done: Method' }).click();
+            await expect(page.locator('.plan-percent')).toHaveText('40%');
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
         });
     });
 }
@@ -171,7 +191,7 @@ test('axe finds no violations on the assignment pages', async ({ page }) => {
     await page.getByLabel('Name', { exact: true }).waitFor();
     expect(await analyse()).toEqual([]);
     await page.getByRole('button', { name: 'Close', exact: true }).click();
-    await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
+    await planMenu(page, 'Add a pre-made plan');
     expect(await analyse()).toEqual([]);
     await page.getByRole('button', { name: /Lab report/ }).click();
     await page.getByRole('heading', { level: 3, name: 'Data' }).waitFor();
@@ -193,7 +213,7 @@ test('the plan never scrolls sideways at 320 px, even with 200% text', async ({ 
     await page.getByLabel('Day').fill('2030-03-14');
     await page.getByRole('button', { name: 'Create' }).click();
     await page.getByRole('heading', { level: 1, name: /Lab report with a rather long name/ }).waitFor();
-    await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
+    await planMenu(page, 'Add a pre-made plan');
     await page.getByRole('button', { name: /Essay or report/ }).click();
     await page.getByRole('heading', { level: 3, name: 'Research' }).waitFor();
     await page.getByRole('button', { name: 'Plan with an AI' }).click();
@@ -222,7 +242,7 @@ for (const [name, device] of Object.entries(devices)) {
             await newProject(page, 'Group project: library app');
 
             // A project has its own pre-made plans, first in the list, when they are asked for.
-            await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
+            await planMenu(page, 'Add a pre-made plan');
             await page.getByRole('button', { name: /Group project/ }).first().click();
             await expect(page.getByRole('heading', { level: 3, name: 'Team set-up' })).toBeVisible();
             await expect(page.getByRole('heading', { level: 3, name: /Milestones/ })).toBeVisible();
@@ -291,7 +311,7 @@ test('axe finds no violations on a project plan with its editor, milestones and 
     await page.setViewportSize({ width: 1440, height: 900 });
     await openAssignments(page, false);
     await newProject(page, 'Project: axe');
-    await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
+    await planMenu(page, 'Add a pre-made plan');
     await page.getByRole('button', { name: /^Project/ }).first().click();
     await page.getByRole('heading', { level: 3, name: 'Initiate' }).waitFor();
     await page.getByRole('button', { name: 'Team', exact: true }).click();
@@ -316,7 +336,7 @@ test('a project plan never scrolls sideways at 320 px, even with 200% text and t
     await page.setViewportSize({ width: 320, height: 640 });
     await openAssignments(page, true);
     await newProject(page, 'A project with a rather long name that goes on and on');
-    await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
+    await planMenu(page, 'Add a pre-made plan');
     await page.getByRole('button', { name: /Group project/ }).first().click();
     await page.getByRole('heading', { level: 3, name: 'Team set-up' }).waitFor();
     await page.getByRole('button', { name: 'Team', exact: true }).click();

@@ -49,12 +49,12 @@ class AssignmentPlanScreensTest extends TestCase
 
     public function test_an_empty_plan_is_calm_the_pre_made_ones_wait_to_be_asked_for_and_the_page_shows_the_plan_only_once_it_exists(): void
     {
-        $this->plan()->assertSee('Break it down')->assertSee('Plan it with an AI')->assertSee('Add a section')->assertSee('Add a pre-made plan')
+        $this->plan()->assertSee('Split the work into sections')->assertSee('Plan with an AI')->assertSee('New section')->assertSee('Add a pre-made plan')->assertDontSee('Clear the plan')
             ->assertDontSee('Essay or report')->assertDontSee('Also track')->assertDontSee('Marking criteria')
             ->call('toggleStarters')->assertSet('showStarters', true)->assertSee('Essay or report')->assertSee('Problem set')->assertSee('Group project')
             ->call('toggleStarters')->assertDontSee('Essay or report');
-        $this->get(route('workspaces.assignments.show', [$this->databases->id, $this->essay->id]))->assertOk()->assertSee('Break it down')->assertSee('Edit details');
-        $this->get(route('workspaces.assignments.create', $this->databases->id))->assertOk()->assertDontSee('Break it down')->assertDontSee('Edit details');
+        $this->get(route('workspaces.assignments.show', [$this->databases->id, $this->essay->id]))->assertOk()->assertSee('Split the work into sections')->assertSee('Edit details');
+        $this->get(route('workspaces.assignments.create', $this->databases->id))->assertOk()->assertDontSee('Split the work into sections')->assertDontSee('Edit details');
     }
 
     public function test_the_pre_made_plans_the_ai_and_clearing_take_turns_and_clearing_asks_first(): void
@@ -73,7 +73,7 @@ class AssignmentPlanScreensTest extends TestCase
         $this->assertNotSame([], $plans->get($by, $this->essay->id)->items);
 
         // Clearing takes the parts, steps and criteria, and leaves the team, and the plan starts over.
-        $component->call('askClear')->call('clearPlan')->assertSet('confirmClear', false)->assertSee('The plan is cleared.')->assertSee('Break it down')->assertDispatched('plan-changed');
+        $component->call('askClear')->call('clearPlan')->assertSet('confirmClear', false)->assertSee('The plan is cleared.')->assertSee('Split the work into sections')->assertDispatched('plan-changed');
         $plan = $plans->get($by, $this->essay->id);
         $this->assertSame([[], [$team->id]], [$plan->items, array_map(fn ($m) => $m->id, $plan->members)]);
         $component->call('clearPlan')->assertSee('The plan was already empty.');
@@ -85,12 +85,39 @@ class AssignmentPlanScreensTest extends TestCase
         $by = $this->principal($this->ada);
         $part = $plans->addPart($by, $this->essay->id, 'Research');
 
-        $component = $this->plan()->assertSee('Research')->assertSee('Add a step')->assertSee('Add a section')->assertSee('Also track')->assertSee('Milestones')->assertSee('Team')->assertSee('Marking criteria')
+        $component = $this->plan()->assertSee('Research')->assertSee('Add a step')->assertSee('New section')->assertSee('Clear the plan')->assertSee('Also track')->assertSee('Milestones')->assertSee('Team')->assertSee('Marking criteria')
             ->assertDontSee('Add a milestone')->assertDontSee('Add a person')->assertDontSee('Add a criterion')->assertDontSee('Days to reach')->assertDontSee('Who shares the work');
         $component->call('$set', 'showMilestones', true)->assertSee('Add a milestone')->assertDontSee('Add a person');
         $component->call('$set', 'showTeam', true)->assertSee('Add a person');
         $component->call('$set', 'showCriteria', true)->assertSee('Add a criterion')->assertDontSee('Also track');
         $this->assertSame('Research', $plans->get($by, $this->essay->id)->item($part->id)->title);
+    }
+
+    public function test_sections_are_added_with_their_weight_and_the_weights_are_checked(): void
+    {
+        $plans = app(Plans::class);
+        $by = $this->principal($this->ada);
+
+        $component = $this->plan()->set('partText', 'Research')->set('partMarks', '30')->call('addPart')->assertHasNoErrors()->assertSet('partMarks', '')
+            ->assertSee('30%')->assertSee('Weights add up to 30%: 70% is in no section')->assertSee('0 of 30%')->assertSee('70% left');
+        $component->set('partText', 'Writing')->call('addPart')->assertSee('30% given · 70% shared by the section without a weight')->assertSee('0 of 70%');
+        $writing = $plans->get($by, $this->essay->id)->parts()[1];
+
+        // The weight is changed where it is shown; nonsense says so on that section; empty takes it away.
+        $component->call('setWeight', $writing->id, '70')->assertSee('Weights add up to 100%')->assertDispatched('plan-changed');
+        $this->assertSame(70, $plans->get($by, $this->essay->id)->item($writing->id)->weight);
+        $component->call('setWeight', $writing->id, '500')->assertHasErrors(["weight.{$writing->id}"])->assertSee('Enter a number from 1 to 100');
+        $component->call('setWeight', $writing->id, '90')->assertSee('Weights add up to 120%: 20% too many');
+        $component->call('setWeight', $writing->id, '')->assertSee('shared by the section without a weight');
+        $this->assertNull($plans->get($by, $this->essay->id)->item($writing->id)->weight);
+
+        // Ticking a section with no steps earns its weight.
+        $research = $plans->get($by, $this->essay->id)->parts()[0];
+        $component->call('setState', $research->id, 'done')->assertSee('30%')->assertSee('30 of 30%');
+
+        // Without weights, it counts the steps and says so.
+        $component->call('setWeight', $research->id, '');
+        $component->assertSee('Counting steps');
     }
 
     public function test_an_ais_prompt_is_strong_and_carries_the_time_left(): void

@@ -476,7 +476,7 @@ final class Plans
             $marks = is_string($input['marks']) ? trim($input['marks']) : $input['marks'];
             $weight = $marks === null || $marks === '' ? null : (is_numeric($marks) && (int) $marks == $marks ? (int) $marks : false);
             if ($weight === false || (is_int($weight) && ($weight < 1 || $weight > 100))) {
-                $errors['marks'] = 'Enter marks from 1 to 100, or leave it empty.';
+                $errors['marks'] = 'Enter a number from 1 to 100, or leave it empty.';
             } else {
                 $out['weight'] = $weight;
             }

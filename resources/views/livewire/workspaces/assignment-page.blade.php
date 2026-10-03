@@ -21,50 +21,41 @@
     };
     $backUrl = route('workspaces.show', [$workspace->id, 'assignments']);
 @endphp
-<div class="mx-auto max-w-3xl space-y-5" x-data="{ edit: {{ $new ? 'true' : 'false' }}, sure: false }" x-on:details-saved.window="edit = false">
+<div class="mx-auto max-w-7xl space-y-5" x-data="{ edit: {{ $new ? 'true' : 'false' }}, sure: false }" x-on:details-saved.window="edit = false">
     <x-workspace.section-header :workspace="$workspace" :title="$new ? 'New assignment' : $assignment->title" :back-href="$backUrl" back-to="Assignments"
-        :eyebrow="$workspace->name.($moduleTitle ? ' · '.$moduleTitle : '')" />
-
-    @unless ($new)
-        <section class="asg-summary" aria-label="Summary">
-            <div class="asg-summary-main">
-                @if ($assignment->dueOn !== null)
-                    <div @class(['assignment-deadline', 'asg-due', "ws-colour-{$urgency}"])>
-                        <p class="asg-left">
-                            <x-icon :name="$assignment->overdue() ? 'circle-alert' : ($assignment->status === 'done' ? 'circle-check' : 'hourglass')" class="size-5 shrink-0" />
-                            <span>{{ $assignment->timeLeft() ?? 'Done' }}</span>
-                        </p>
-                        <p class="text-sm text-fg-muted">{{ $assignment->dueWords() }}</p>
-                    </div>
-                @else
-                    <p class="text-sm text-fg-muted">No deadline yet.</p>
-                @endif
-                @if ($health && $health['state'] !== 'on_track')
-                    <x-workspace.plan-health :health="$health" class="mt-1" />
-                @endif
-                <p class="item-meta">{{ $assignment->kindLabel() }}{{ $moduleTitle ? ' · '.$moduleTitle : '' }}</p>
+        :eyebrow="$workspace->name.($moduleTitle ? ' · '.$moduleTitle : '').($new ? '' : ' · '.$assignment->kindLabel())">
+        @unless ($new)
+            @if ($assignment->dueOn !== null)
+                <span @class(['assignment-deadline', 'asg-due', "ws-colour-{$urgency}"])>
+                    <x-icon :name="$assignment->overdue() ? 'circle-alert' : ($assignment->status === 'done' ? 'circle-check' : 'hourglass')" class="size-4 shrink-0" />
+                    <span class="font-semibold">{{ $assignment->timeLeft() ?? 'Done' }}</span>
+                    <span class="text-fg-muted">· {{ $assignment->dueWords() }}</span>
+                </span>
+            @else
+                <span class="asg-due text-fg-muted">No deadline yet</span>
+            @endif
+            @if ($health && $health['state'] !== 'on_track')
+                <x-workspace.plan-health :health="$health" />
+            @endif
+            <div class="segmented segmented-sm" role="group" aria-label="Where you are">
+                @foreach ($moods as $key => $word)
+                    <button type="button" @class(['segmented-option', 'is-current' => $status === $key]) wire:click="$set('status', '{{ $key }}')" aria-pressed="{{ $status === $key ? 'true' : 'false' }}">{{ $word }}</button>
+                @endforeach
             </div>
-            <div class="asg-summary-actions">
-                <div class="segmented segmented-sm" role="group" aria-label="Where you are">
-                    @foreach ($moods as $key => $word)
-                        <button type="button" @class(['segmented-option', 'is-current' => $status === $key]) wire:click="$set('status', '{{ $key }}')" aria-pressed="{{ $status === $key ? 'true' : 'false' }}">{{ $word }}</button>
-                    @endforeach
-                </div>
-                <button type="button" class="btn btn-ghost btn-sm" x-on:click="edit = ! edit" x-bind:aria-expanded="edit.toString()" aria-controls="assignment-details"><x-icon name="pencil" class="size-4" />Edit details</button>
-            </div>
-        </section>
-    @endunless
+            <button type="button" class="btn btn-ghost btn-sm" x-on:click="edit = ! edit" x-bind:aria-expanded="edit.toString()" aria-controls="assignment-details"><x-icon name="pencil" class="size-4" />Edit details</button>
+        @endunless
+    </x-workspace.section-header>
 
-    <form id="assignment-details" class="question-panel space-y-4" novalidate aria-label="{{ $new ? 'New assignment' : 'Details' }}" @unless ($new) x-show="edit" x-cloak @endunless
+    <form id="assignment-details" class="question-panel asg-details" novalidate aria-label="{{ $new ? 'New assignment' : 'Details' }}" @unless ($new) x-show="edit" x-cloak @endunless
         x-on:submit.prevent="if (await $wire.save()) $dispatch('assignment-created')">
-        <div class="field">
+        <div class="field asg-details-name">
             <label for="assignment-title" class="field-label">Name</label>
             <input id="assignment-title" type="text" class="input mt-2" wire:model="title" maxlength="{{ Activities::MAX_TITLE }}" autocomplete="off"
                 placeholder="Like “Coursework 1: ER diagram” or “Lab report 3”" @if ($new) autofocus @endif>
             @error('title') <p class="field-error mt-2">{{ $message }}</p> @enderror
         </div>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div class="asg-details-row">
             <div class="field">
                 <label for="assignment-kind" class="field-label">Kind</label>
                 <select id="assignment-kind" class="input mt-2" wire:model="kind">
@@ -88,7 +79,7 @@
 
         <fieldset class="min-w-0">
             <legend class="field-label">Deadline</legend>
-            <div class="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="mt-2 asg-details-row">
                 <div class="field">
                     <label for="assignment-due-on" class="sr-only">Day</label>
                     <input id="assignment-due-on" type="date" class="input" wire:model="dueOn">
@@ -102,7 +93,7 @@
             </div>
         </fieldset>
 
-        <div class="flex flex-wrap justify-end gap-3">
+        <div class="asg-details-actions">
             @if ($new)
                 <a href="{{ $backUrl }}" class="btn btn-secondary">Cancel</a>
             @else

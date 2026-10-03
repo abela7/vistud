@@ -124,6 +124,7 @@ const icons = [
     'redo-2',
     'remove-formatting',
     'rotate-ccw',
+    'scale',
     'scan-text',
     'scroll-text',
     'search',

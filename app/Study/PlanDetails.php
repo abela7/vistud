@@ -118,49 +118,91 @@ final readonly class PlanDetails
         return [count(array_filter($units, fn (PlanItem $unit) => $unit->state === 'done')), count($units)];
     }
 
-    /** Every part has its marks: progress then counts a part for as much as it is worth. */
+    /** Some section has a weight: progress then counts each section for what it is worth, out of 100. */
     public function weighted(): bool
     {
-        $parts = $this->parts();
+        foreach ($this->parts() as $part) {
+            if ($part->weight !== null) {
+                return true;
+            }
+        }
 
-        return $parts !== [] && array_reduce($parts, fn (bool $all, PlanItem $part) => $all && $part->weight !== null, true);
+        return false;
+    }
+
+    /**
+     * The weights, as the student set them: how much of 100 the sections (parts) were given, what is left or over,
+     * and what each counts for. A section without a weight shares what is left equally with the others without one;
+     * the steps outside every section count as one such section. Keyed by part ID, '' for those steps.
+     *
+     * @return array{given: int, left: int, over: int, unweighted: int, shares: array<string, float>}
+     */
+    public function weights(): array
+    {
+        $groups = $this->groups();
+        $given = array_sum(array_map(fn (array $group) => $group['weight'] ?? 0, $groups));
+        $unweighted = count(array_filter($groups, fn (array $group) => $group['weight'] === null));
+        $left = max(0, 100 - $given);
+        $shares = [];
+        foreach ($groups as $key => $group) {
+            $shares[$key] = (float) ($group['weight'] ?? ($unweighted > 0 ? $left / $unweighted : 0));
+        }
+
+        return ['given' => $given, 'left' => $left, 'over' => max(0, $given - 100), 'unweighted' => $unweighted, 'shares' => $shares];
+    }
+
+    /**
+     * How far one section has got, and what that is worth: its share of 100 and the part of it earned so far.
+     *
+     * @return array{done: int, total: int, percent: int, share: float, earned: float}
+     */
+    public function standing(PlanItem $part): array
+    {
+        [$done, $total] = $this->counts($part);
+        $share = $this->weighted() ? ($this->weights()['shares'][$part->id] ?? 0.0) : 0.0;
+
+        return ['done' => $done, 'total' => $total, 'percent' => (int) round($done / max(1, $total) * 100), 'share' => $share, 'earned' => $share * $done / max(1, $total)];
     }
 
     public function progress(): PlanProgress
     {
+        $groups = $this->groups();
+        $done = array_sum(array_column($groups, 'done'));
+        $total = array_sum(array_column($groups, 'total'));
+        if ($total === 0) {
+            return new PlanProgress(0, 0, 0);
+        }
+        if (! $this->weighted()) {
+            return new PlanProgress($done, $total, (int) round($done / $total * 100));
+        }
+        // Out of 100, or of what was given when it is more: marks given to no section can't be earned.
+        $weights = $this->weights();
+        $earned = 0.0;
+        foreach ($groups as $key => $group) {
+            $earned += $weights['shares'][$key] * $group['done'] / $group['total'];
+        }
+
+        return new PlanProgress($done, $total, (int) min(100, round($earned / max(100, $weights['given']) * 100)), weighted: true);
+    }
+
+    /** @return array<string, array{weight: ?int, done: int, total: int}> each section, and '' for the steps outside them */
+    private function groups(): array
+    {
         $groups = [];
         foreach ($this->parts() as $part) {
             [$done, $total] = $this->counts($part);
-            $groups[] = [$part->weight ?? 0, $done, $total];
+            $groups[$part->id] = ['weight' => $part->weight, 'done' => $done, 'total' => $total];
         }
         $looseDone = $looseTotal = 0;
         foreach ($this->steps() as $step) {
             [$done, $total] = $this->counts($step);
-            $looseDone += $done;
-            $looseTotal += $total;
-        }
-        $done = array_sum(array_column($groups, 1)) + $looseDone;
-        $total = array_sum(array_column($groups, 2)) + $looseTotal;
-        if ($total === 0) {
-            return new PlanProgress(0, 0, 0);
-        }
-
-        if (! $this->weighted()) {
-            return new PlanProgress($done, $total, (int) round($done / $total * 100));
-        }
-        // By the marks: what the parts leave of 100 goes to the steps outside them.
-        $weights = array_column($groups, 0);
-        $looseWeight = $looseTotal === 0 ? 0 : max(0, 100 - array_sum($weights));
-        $sum = array_sum($weights) + $looseWeight;
-        $earned = 0.0;
-        foreach ($groups as [$weight, $groupDone, $groupTotal]) {
-            $earned += $weight * $groupDone / $groupTotal;
+            [$looseDone, $looseTotal] = [$looseDone + $done, $looseTotal + $total];
         }
         if ($looseTotal > 0) {
-            $earned += $looseWeight * $looseDone / $looseTotal;
+            $groups[''] = ['weight' => null, 'done' => $looseDone, 'total' => $looseTotal];
         }
 
-        return new PlanProgress($done, $total, (int) round($earned / $sum * 100), weighted: true);
+        return $groups;
     }
 
     /**

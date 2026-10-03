@@ -16,7 +16,7 @@
     </div>
     @if ($marks)
         <div class="field">
-            <label for="plan-edit-marks" class="field-label">Marks %</label>
+            <label for="plan-edit-marks" class="field-label">{{ $item->kind === 'part' ? 'Weight %' : 'Marks %' }}</label>
             <input id="plan-edit-marks" type="number" class="input plan-marks-input mt-1" wire:model="editMarks" min="1" max="100" inputmode="numeric" placeholder="Optional">
             @error('editMarks') <p class="field-error mt-1">{{ $message }}</p> @enderror
         </div>

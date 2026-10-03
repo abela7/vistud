@@ -11,6 +11,6 @@
     <form wire:submit="{{ $submit }}" novalidate class="plan-add" x-show="open" x-cloak x-ref="fields">
         {{ $slot }}
         <button type="submit" class="btn btn-secondary btn-sm">Add</button>
-        <button type="button" class="btn btn-ghost btn-sm" x-on:click="open = false">Close</button>
+        <button type="button" class="topbar-button size-9" x-on:click="open = false" title="Close"><x-icon name="x" class="size-4" /><span class="sr-only">Close</span></button>
     </form>
 </div>

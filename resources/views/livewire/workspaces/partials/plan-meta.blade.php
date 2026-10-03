@@ -10,11 +10,15 @@
     $person = $item->memberId === null ? null : $plan->member($item->memberId);
     $priorities = ['low' => ['Low', 'blue'], 'medium' => ['Medium', 'teal'], 'high' => ['High', 'amber'], 'urgent' => ['Urgent', 'red']];
 @endphp
-@if (in_array($state, ['doing', 'stuck'], true) || $when || $item->priority || $person || $item->labels !== [])
+@php
+    // A section's own bar already says how far it is: only "stuck" is worth a chip there.
+    $chipState = $item->kind === 'part' && $state === 'doing' ? null : $state;
+@endphp
+@if (in_array($chipState, ['doing', 'stuck'], true) || $when || $item->priority || $person || $item->labels !== [])
     <p class="plan-meta">
-        @if ($state === 'doing')
+        @if ($chipState === 'doing')
             <span class="plan-chip ws-colour-amber"><x-icon name="circle-dot" class="size-3.5" />In progress</span>
-        @elseif ($state === 'stuck')
+        @elseif ($chipState === 'stuck')
             <span class="plan-chip ws-colour-red"><x-icon name="circle-alert" class="size-3.5" />Stuck</span>
         @endif
         @if ($when)

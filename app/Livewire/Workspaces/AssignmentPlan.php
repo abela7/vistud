@@ -260,6 +260,15 @@ final class AssignmentPlan extends Component
         }
     }
 
+    /** A section's weight, out of 100, changed where it is shown; empty takes it away. */
+    public function setWeight(string $id, mixed $weight): void
+    {
+        $value = is_scalar($weight) ? trim((string) $weight) : '';
+        if ($this->attempt(['marks' => "weight.{$id}"], fn () => $this->plans->update($this->principal(), $id, ['marks' => $value]))) {
+            $this->changed();
+        }
+    }
+
     public function startEdit(string $id): void
     {
         $item = $this->find($id);

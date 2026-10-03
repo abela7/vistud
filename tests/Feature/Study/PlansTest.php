@@ -94,7 +94,7 @@ class PlansTest extends TestCase
         $this->assertSame([1, 4, 25], [$progress->done, $progress->total, $progress->percent]);
     }
 
-    public function test_when_every_part_has_marks_progress_follows_the_marks_and_loose_steps_share_what_is_left(): void
+    public function test_weights_out_of_100_drive_progress_and_sections_without_one_share_what_is_left(): void
     {
         $essay = $this->plans->addPart($this->by, $this->essay->id, 'Essay', '60');
         $talk = $this->plans->addPart($this->by, $this->essay->id, 'Talk', 30);
@@ -107,12 +107,41 @@ class PlansTest extends TestCase
         $this->plans->setState($this->by, $talk->id, 'done');
         $this->plans->setState($this->by, $loose->id, 'done');
         // Essay half done (30 of 60), the talk done (30), the loose step done for the 10 left: 70 of 100; 3 of 4 things.
-        $progress = $this->plans->get($this->by, $this->essay->id)->progress();
+        $plan = $this->plans->get($this->by, $this->essay->id);
+        $progress = $plan->progress();
         $this->assertSame([3, 4, 70, true], [$progress->done, $progress->total, $progress->percent, $progress->weighted]);
+        $this->assertSame(['given' => 90, 'left' => 10, 'over' => 0, 'unweighted' => 1], array_diff_key($plan->weights(), ['shares' => 1]));
+        $this->assertSame(['done' => 1, 'total' => 2, 'percent' => 50, 'share' => 60.0, 'earned' => 30.0], $plan->standing($plan->item($essay->id)));
 
-        // A part without marks puts it back to counting things.
-        $this->plans->addPart($this->by, $this->essay->id, 'Reflection');
-        $this->assertFalse($this->plans->get($this->by, $this->essay->id)->progress()->weighted);
+        // A section without a weight shares what is left with the loose steps: 5 each, and it isn't done.
+        $reflection = $this->plans->addPart($this->by, $this->essay->id, 'Reflection');
+        $plan = $this->plans->get($this->by, $this->essay->id);
+        $this->assertSame([65, true, 2, 5.0], [$plan->progress()->percent, $plan->progress()->weighted, $plan->weights()['unweighted'], $plan->weights()['shares'][$reflection->id]]);
+
+        // Over 100: it counts out of what was given, and says by how much it is over.
+        $this->plans->update($this->by, $reflection->id, ['marks' => 40]);
+        $plan = $this->plans->get($this->by, $this->essay->id);
+        $this->assertSame([130, 30, 0.0], [$plan->weights()['given'], $plan->weights()['over'], $plan->weights()['shares']['']]);
+        $this->assertSame(46, $plan->progress()->percent);
+    }
+
+    public function test_marks_given_to_no_section_cannot_be_earned_and_no_weights_at_all_counts_the_steps(): void
+    {
+        $a = $this->plans->addPart($this->by, $this->essay->id, 'Part A', 30);
+        $b = $this->plans->addPart($this->by, $this->essay->id, 'Part B', 50);
+        $this->plans->setState($this->by, $a->id, 'done');
+        $this->plans->setState($this->by, $b->id, 'done');
+        // Everything ticked, but 20 of the 100 belong to no section: 80%, and the plan is complete.
+        $plan = $this->plans->get($this->by, $this->essay->id);
+        $this->assertSame([80, true, 20], [$plan->progress()->percent, $plan->progress()->complete(), $plan->weights()['left']]);
+
+        // Without any weight, every step counts the same.
+        $this->plans->update($this->by, $a->id, ['marks' => '']);
+        $this->plans->update($this->by, $b->id, ['marks' => '']);
+        $this->plans->addStep($this->by, $this->essay->id, 'Email the tutor');
+        $plan = $this->plans->get($this->by, $this->essay->id);
+        $this->assertSame([67, false], [$plan->progress()->percent, $plan->progress()->weighted]);
+        $this->assertSame(0.0, $plan->standing($plan->item($a->id))['share']);
     }
 
     public function test_criteria_are_checked_not_yet_partly_or_met_and_scored_by_marks_or_equally(): void
