@@ -9,6 +9,7 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Number;
 use Illuminate\Support\Str;
 use Throwable;
@@ -65,6 +66,27 @@ class Doctor extends Command
             'Install LibreOffice (free, libreoffice.org; on Windows: winget install TheDocumentFoundation.LibreOffice). If it is somewhere unusual, set VISTUD_OFFICE_BINARY in .env to its soffice.',
             needed: false,
         );
+
+        if ($office !== null) {
+            // A real conversion of a tiny file: shows that LibreOffice runs from PHP here, and how long it takes.
+            $work = storage_path('app/private/previews-work/doctor-'.Str::random(8));
+            File::ensureDirectoryExists("{$work}/in");
+            file_put_contents("{$work}/in/test.txt", "ViStud checks that LibreOffice makes a PDF.\n");
+            $started = microtime(true);
+            try {
+                $made = FilePreviews::convert($office, $work, "{$work}/in/test.txt", 'pdf', null, $problem) !== null;
+            } catch (Throwable $e) {
+                [$made, $problem] = [false, $e->getMessage()];
+            }
+            $seconds = number_format(microtime(true) - $started, 1);
+            File::deleteDirectory($work);
+            $check(
+                "LibreOffice makes a PDF (a small test file took {$seconds} s)",
+                $made,
+                'LibreOffice said: '.Str::limit((string) $problem, 200),
+                needed: false,
+            );
+        }
 
         $failures = $office === null ? [] : FilePreviews::failures();
         $check(

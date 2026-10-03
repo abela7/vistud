@@ -28,7 +28,11 @@ final class FilePreviews
     /** The kinds that are turned into a PDF to show. */
     public const KINDS = ['document', 'slides', 'spreadsheet'];
 
+    /** How long LibreOffice gets for a note shared as PDF or Word, which the student waits for. */
     private const TIMEOUT_SECONDS = 120;
+
+    /** How long it gets for a preview, made in the background (a slow computer took more than 120 seconds on a deck). */
+    public const PREVIEW_SECONDS = 300;
 
     /** pdf(): the PDF is being made, or waits for a free slot; ask again in a moment. */
     public const PREPARING = 'preparing';
@@ -121,7 +125,7 @@ final class FilePreviews
         $disk = Files::disk();
         $pdfKey = self::key($key);
         // One conversion of a file at a time.
-        $lock = Cache::lock("vistud:preview:{$pdfKey}", self::TIMEOUT_SECONDS + 30);
+        $lock = Cache::lock("vistud:preview:{$pdfKey}", self::PREVIEW_SECONDS + 30);
         if (! $lock->get()) {
             return null;
         }
@@ -140,7 +144,7 @@ final class FilePreviews
                 fclose($in);
                 fclose($out);
 
-                $pdf = self::convert($converter, $work, $source, 'pdf', null, $problem, waitSeconds: 0);
+                $pdf = self::convert($converter, $work, $source, 'pdf', null, $problem, waitSeconds: 0, timeoutSeconds: self::PREVIEW_SECONDS);
                 if ($pdf !== null && str_starts_with((string) file_get_contents($pdf, length: 5), '%PDF-')) {
                     $stream = fopen($pdf, 'rb');
                     $disk->writeStream($pdfKey, $stream);
@@ -150,7 +154,7 @@ final class FilePreviews
                 }
                 $problem ??= 'no PDF';
             } catch (ProcessTimedOutException) {
-                $problem = 'LibreOffice took more than '.self::TIMEOUT_SECONDS.' seconds.';
+                $problem = 'LibreOffice took more than '.intdiv(self::PREVIEW_SECONDS, 60).' minutes.';
             } catch (Throwable $e) {
                 // LibreOffice couldn't be started, or a file couldn't be written: this computer's fault, not the file's.
                 Log::warning('A file preview could not be made; it is tried again shortly.', ['file' => $id, 'problem' => Str::limit($e->getMessage(), 500)]);
@@ -201,10 +205,10 @@ final class FilePreviews
     /**
      * LibreOffice turns $source, in the folder $work (which it fills, and the caller deletes), into $format: 'pdf',
      * or a format with its filter ('docx:MS Word 2007 XML'). A fresh profile each time, with macros off and links
-     * never updated. Waits up to $waitSeconds for a free slot. The file it made, or null, with $problem saying
-     * why not (BUSY when no slot came free).
+     * never updated. Waits up to $waitSeconds for a free slot, and gives LibreOffice $timeoutSeconds. The file it
+     * made, or null, with $problem saying why not (BUSY when no slot came free).
      */
-    public static function convert(string $converter, string $work, string $source, string $format, ?string $inputFilter, ?string &$problem, int $waitSeconds = 30): ?string
+    public static function convert(string $converter, string $work, string $source, string $format, ?string $inputFilter, ?string &$problem, int $waitSeconds = 30, int $timeoutSeconds = self::TIMEOUT_SECONDS): ?string
     {
         $slot = self::slot($waitSeconds);
         if ($slot === null) {
@@ -213,7 +217,7 @@ final class FilePreviews
             return null;
         }
         try {
-            return self::run($converter, $work, $source, $format, $inputFilter, $problem);
+            return self::run($converter, $work, $source, $format, $inputFilter, $problem, $timeoutSeconds);
         } finally {
             $slot->release();
         }
@@ -230,7 +234,7 @@ final class FilePreviews
         $until = microtime(true) + $waitSeconds;
         do {
             for ($slot = 1; $slot <= $slots; $slot++) {
-                $lock = Cache::lock("vistud:office-slot:{$slot}", self::TIMEOUT_SECONDS + 30);
+                $lock = Cache::lock("vistud:office-slot:{$slot}", self::PREVIEW_SECONDS + 30);
                 if ($lock->get()) {
                     return $lock;
                 }
@@ -244,7 +248,7 @@ final class FilePreviews
         return null;
     }
 
-    private static function run(string $converter, string $work, string $source, string $format, ?string $inputFilter, ?string &$problem): ?string
+    private static function run(string $converter, string $work, string $source, string $format, ?string $inputFilter, ?string &$problem, int $timeoutSeconds): ?string
     {
         File::ensureDirectoryExists("{$work}/out");
         File::ensureDirectoryExists("{$work}/profile/user");
@@ -256,7 +260,7 @@ final class FilePreviews
             ...($inputFilter === null ? [] : ["--infilter={$inputFilter}"]),
             '--convert-to', $format, '--outdir', "{$work}/out", $source,
         ], null, PHP_OS_FAMILY === 'Windows' ? null : ['HOME' => $work]);
-        $process->setTimeout(self::TIMEOUT_SECONDS);
+        $process->setTimeout($timeoutSeconds);
         $process->run();
 
         $made = "{$work}/out/".pathinfo($source, PATHINFO_FILENAME).'.'.explode(':', $format)[0];

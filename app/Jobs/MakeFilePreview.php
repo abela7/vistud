@@ -20,8 +20,8 @@ final class MakeFilePreview implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
-    /** LibreOffice gets 120 seconds for a file (FilePreviews); the worker waits a little longer. */
-    public int $timeout = 180;
+    /** LibreOffice gets five minutes for a file (FilePreviews::PREVIEW_SECONDS); the worker waits a little longer. */
+    public int $timeout = 360;
 
     /** If a worker dies holding it, the file can be queued again after this long. */
     public int $uniqueFor = 900;
