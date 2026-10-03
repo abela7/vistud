@@ -96,6 +96,136 @@
         text-transform: uppercase;
     }
 
+    /*
+    | The Overview's Coming up (the owner's review, 2026-10-04): a small heading with its actions as icon buttons,
+    | then one list like Continue beside it. A row: the circle, the name and a line of what it is (with a small bar
+    | for its plan), and on the right how long is left over its date, red when late and amber when near.
+    */
+    .coming-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    /* The buttons stand out of the heading's line, so the heading sits level with Continue's. */
+    .coming-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.125rem;
+        margin-block: -0.375rem;
+        margin-right: -0.375rem;
+    }
+
+    .coming-row {
+        align-items: flex-start;
+        gap: 0.625rem;
+        padding-left: 0.75rem;
+    }
+
+    .coming-row .task-check {
+        position: relative;
+        z-index: 1;
+        margin-top: 0.0625rem;
+    }
+
+    .coming-title {
+        display: block;
+        line-height: 1.4;
+    }
+
+    .coming-title.is-done {
+        color: var(--text-muted);
+        font-weight: 500;
+        text-decoration: line-through;
+    }
+
+    .coming-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem 0.625rem;
+        margin-top: 0.125rem;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .coming-plan {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .coming-plan .meter {
+        width: 3.5rem;
+        height: 0.3125rem;
+    }
+
+    .coming-due {
+        display: grid;
+        flex: none;
+        justify-items: end;
+        max-width: 45%;
+        text-align: right;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+        line-height: 1.35;
+    }
+
+    .coming-left {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        color: var(--text);
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .coming-left svg {
+        color: var(--ws, var(--text-subtle));
+    }
+
+    .coming-day {
+        font-size: 0.75rem;
+    }
+
+    /* A narrow list (a phone, a small window) puts how long is left under the name, so the name keeps its width. */
+    .coming-list {
+        container-type: inline-size;
+    }
+
+    @container (max-width: 25rem) {
+        .coming-row {
+            flex-wrap: wrap;
+            row-gap: 0.25rem;
+        }
+
+        .coming-due {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            order: 1;
+            flex-basis: 100%;
+            gap: 0 0.5rem;
+            max-width: none;
+            padding-left: 2.125rem;
+            text-align: left;
+        }
+    }
+
+    .coming-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.25rem;
+    }
+
+    .coming-all {
+        margin-left: auto;
+    }
+
     /* ---------- Rows and tiles ---------- */
 
     .item-icon,
@@ -1339,6 +1469,7 @@
         color: var(--text-muted);
         font-size: 0.875rem;
         font-weight: 500;
+        text-decoration: none;
         cursor: pointer;
         transition:
             background-color 0.15s ease,

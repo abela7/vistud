@@ -66,7 +66,7 @@ class TrackerScreensTest extends TestCase
             ->assertOk()
             ->assertSee('Add your first module, like “Week 1”', false)
             ->assertSee(route('workspaces.show', [$this->databases->id, 'modules']), false)
-            ->assertSee('Nothing due.');
+            ->assertSee('Nothing due')->assertSee('Add an assignment');
     }
 
     public function test_assignments_and_tasks_are_added_edited_ticked_and_deleted(): void

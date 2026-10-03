@@ -1,27 +1,22 @@
 {{--
-    A workspace's assignments and tasks, on its Overview
-    (App\Livewire\Workspaces\Tasks). The round button marks one done or not;
-    "Start it" puts it in progress.
+    A workspace's assignments and tasks, on its Overview (App\Livewire\Workspaces\Tasks): Coming up, the soonest
+    first, laid out like Continue beside it (a small heading, then one list). Its own actions are small buttons by
+    the heading: the calendar, select several, add one. The circle on a row marks it done; its ⋯ starts it, edits or
+    deletes it.
 --}}
 @php
     use App\Study\Activities;
     use Illuminate\Support\Str;
 @endphp
-<section aria-labelledby="tasks-heading" class="overview-card space-y-3" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="tasks-heading" class="font-semibold">Coming up</h2>
-        <span class="mr-auto flex flex-wrap items-center gap-x-4 gap-y-1">
-            <a href="{{ route('workspaces.show', [$workspaceId, 'assignments']) }}" class="text-sm font-medium text-fg-muted hover:text-fg">All assignments</a>
-            <a href="{{ route('workspaces.show', [$workspaceId, 'calendar']) }}" class="text-sm font-medium text-fg-muted hover:text-fg">Calendar</a>
-        </span>
-        <div class="flex flex-wrap items-center gap-2">
+<section aria-labelledby="tasks-heading" class="min-w-0 space-y-2" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
+    <div class="coming-head">
+        <h2 id="tasks-heading" class="section-title">Coming up</h2>
+        <div class="coming-actions">
+            <a href="{{ route('workspaces.show', [$workspaceId, 'calendar']) }}" class="topbar-button size-8" title="Calendar"><x-icon name="calendar" class="size-4" /><span class="sr-only">Calendar</span></a>
             @if ($open !== [] || $done !== [])
-                <button type="button" class="btn btn-sm btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
-                    <x-icon name="list-checks" class="size-4" />
-                    <span class="max-sm:sr-only" x-text="isSelecting ? 'Done' : 'Select'">Select</span>
-                </button>
+                <button type="button" class="topbar-button size-8" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'" title="Select several"><x-icon name="list-checks" class="size-4" /><span class="sr-only">Select</span></button>
             @endif
-            <x-button variant="ghost" icon="plus" wire:click="newTask" aria-label="Add a task">Add</x-button>
+            <button type="button" class="topbar-button size-8" wire:click="newTask" title="Add an assignment or task"><x-icon name="plus" class="size-4" /><span class="sr-only">Add a task</span></button>
         </div>
     </div>
 
@@ -35,27 +30,35 @@
     </x-selection-bar>
 
     @if ($open === [] && $done === [])
-        <p class="text-sm text-fg-muted">Nothing due. Add assignments, quizzes and exams here.</p>
+        <div class="empty-place">
+            <span class="item-icon" aria-hidden="true"><x-icon name="calendar-clock" class="size-5" /></span>
+            <p class="font-medium">Nothing due</p>
+            <p class="text-sm text-fg-muted">Add assignments, quizzes and exams, and the soonest shows here.</p>
+            <button type="button" class="btn btn-secondary" wire:click="newTask"><x-icon name="plus" class="size-4" />Add an assignment</button>
+        </div>
     @else
-        <ul class="divide-y divide-divider" role="list" aria-label="To do">
+        <ul class="item-list coming-list" role="list" aria-label="To do">
             @forelse ($open as $task)
                 @include('livewire.workspaces.partials.task-row')
             @empty
-                <li class="py-2 text-sm text-fg-muted">All done.</li>
+                <li class="item-row text-sm text-fg-muted">All done.</li>
             @endforelse
         </ul>
-        @if ($done !== [])
-            <x-button variant="ghost" wire:click="toggleDone" aria-expanded="{{ $showDone ? 'true' : 'false' }}" aria-controls="done-tasks">
-                {{ $showDone ? 'Hide' : 'Show' }} {{ count($done) }} done
-            </x-button>
-            @if ($showDone)
-                <ul id="done-tasks" class="divide-y divide-divider" role="list" aria-label="Done">
-                    @foreach ($done as $task)
-                        @include('livewire.workspaces.partials.task-row')
-                    @endforeach
-                </ul>
-            @endif
+        @if ($showDone && $done !== [])
+            <ul id="done-tasks" class="item-list coming-list" role="list" aria-label="Done">
+                @foreach ($done as $task)
+                    @include('livewire.workspaces.partials.task-row')
+                @endforeach
+            </ul>
         @endif
+        <div class="coming-foot">
+            @if ($done !== [])
+                <button type="button" class="quiet-link" wire:click="toggleDone" aria-expanded="{{ $showDone ? 'true' : 'false' }}" aria-controls="done-tasks">
+                    {{ $showDone ? 'Hide' : 'Show' }} {{ count($done) }} done
+                </button>
+            @endif
+            <a href="{{ route('workspaces.show', [$workspaceId, 'assignments']) }}" class="quiet-link coming-all">All assignments<x-icon name="chevron-right" class="size-4" /></a>
+        </div>
     @endif
 
     <dialog id="tasks-dialog" class="modal" aria-labelledby="tasks-dialog-title"
