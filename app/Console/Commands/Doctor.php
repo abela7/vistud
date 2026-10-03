@@ -10,6 +10,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Number;
+use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -62,6 +63,14 @@ class Doctor extends Command
             'LibreOffice, to show Word, PowerPoint and Excel files'.($office ? " ({$office})" : ''),
             $office !== null,
             'Install LibreOffice (free, libreoffice.org; on Windows: winget install TheDocumentFoundation.LibreOffice). If it is somewhere unusual, set VISTUD_OFFICE_BINARY in .env to its soffice.',
+            needed: false,
+        );
+
+        $failures = $office === null ? [] : FilePreviews::failures();
+        $check(
+            'Word, PowerPoint and Excel previews that could not be made: '.count($failures),
+            $failures === [],
+            'LibreOffice said: '.Str::limit((string) reset($failures), 200).' Fix that, then run php artisan vistud:previews:retry.',
             needed: false,
         );
 

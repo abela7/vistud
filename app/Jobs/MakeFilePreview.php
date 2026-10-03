@@ -12,9 +12,9 @@ use Illuminate\Foundation\Queue\Queueable;
  * Makes the PDF that shows a Word, PowerPoint or Excel file in the browser (App\Study\FilePreviews), on the queue's
  * worker and never inside a request (Gemini's report, 2026-10-03: a deck being converted held the only PHP process,
  * and Back waited). Queued when such a file is uploaded, and when its page asks for a preview that isn't made yet;
- * one job for a file at a time. When every conversion slot is taken it comes back a few seconds later, for up to
- * ten minutes; the page keeps asking while it waits. It carries only where the file's bytes are kept: whoever
- * queued it was allowed to see the file.
+ * one job for a file at a time. When every conversion slot is taken, or LibreOffice can't be run at all, it comes
+ * back a little later, for up to ten minutes; the page keeps asking while it waits. It carries only where the
+ * file's bytes are kept: whoever queued it was allowed to see the file.
  */
 final class MakeFilePreview implements ShouldBeUnique, ShouldQueue
 {
@@ -33,7 +33,7 @@ final class MakeFilePreview implements ShouldBeUnique, ShouldQueue
         return $this->fileId;
     }
 
-    /** Tried again for as long as the slots stay taken, up to ten minutes. */
+    /** Tried again for as long as it can't be made yet, up to ten minutes. */
     public function retryUntil(): DateTimeInterface
     {
         return now()->addMinutes(10);
@@ -41,8 +41,9 @@ final class MakeFilePreview implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
-        if (! FilePreviews::make($this->fileId, $this->storageKey, $this->extension)) {
-            $this->release(3);
+        $wait = FilePreviews::make($this->fileId, $this->storageKey, $this->extension);
+        if ($wait !== null) {
+            $this->release($wait);
         }
     }
 }

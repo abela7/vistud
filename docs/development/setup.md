@@ -75,7 +75,7 @@ npm run dev              # optional, in a second terminal: rebuilds and reloads 
 php artisan queue:work --sleep=1
 ```
 
-Without a worker, a new Word, PowerPoint or Excel file shows "Preparing the preview" until one runs; PDFs, images and downloads are unaffected. At most `VISTUD_OFFICE_AT_ONCE` conversions (2 by default) run at once, whatever the number of workers; each takes about 200 MB for a few seconds.
+A file LibreOffice can't read is noted so it isn't tried on every visit: `php artisan vistud:doctor` counts them and shows what LibreOffice said, and `php artisan vistud:previews:retry` tries them again. Without a worker, a new Word, PowerPoint or Excel file shows "Preparing the preview" until one runs; PDFs, images and downloads are unaffected. At most `VISTUD_OFFICE_AT_ONCE` conversions (2 by default) run at once, whatever the number of workers; each takes about 200 MB for a few seconds.
 
 WP6 adds minimal authentication and admin screens: login, two-factor authentication, invitation acceptance, and the admin pages the security tests need. By the PM's decision they use the shared visual foundation in [DESIGN.md](../../DESIGN.md) instead of unstyled markup. The login screen is built; the other screens are not, and are listed in [LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md#4-what-is-left-in-wp6). The persistent workspace shell (the sidebar, top bar and editor host that stay in place while the main area changes) belongs to M2. The rest of M1 is exercised through tests, the console and the JSON endpoints.
 

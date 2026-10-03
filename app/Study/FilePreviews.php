@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 use Throwable;
@@ -110,22 +111,23 @@ final class FilePreviews
 
     /**
      * Makes the PDF of the file whose bytes are at $key and keeps it beside them (run by App\Jobs\MakeFilePreview).
-     * False when every conversion slot is taken: try again in a moment. True otherwise: made, made already, being made
-     * by another worker, or not to be made (no LibreOffice, the file gone, or LibreOffice couldn't read it, which is
-     * noted so it isn't tried on every visit).
+     * Null when there is nothing more to do: made, made already, being made by another worker, or not to be made (no
+     * LibreOffice, the file gone, or LibreOffice ran and couldn't read it, or took too long, which is noted so it
+     * isn't tried on every visit). Otherwise the seconds to wait before trying again: every conversion slot is taken,
+     * or LibreOffice couldn't be run at all, which is not the file's fault and is logged.
      */
-    public static function make(string $id, string $key, string $extension): bool
+    public static function make(string $id, string $key, string $extension): ?int
     {
         $disk = Files::disk();
         $pdfKey = self::key($key);
         // One conversion of a file at a time.
         $lock = Cache::lock("vistud:preview:{$pdfKey}", self::TIMEOUT_SECONDS + 30);
         if (! $lock->get()) {
-            return true;
+            return null;
         }
         try {
             if ($disk->exists($pdfKey) || $disk->exists("{$pdfKey}.failed") || ! $disk->exists($key) || ($converter = self::converter()) === null) {
-                return true;
+                return null;
             }
 
             $work = storage_path('app/private/previews-work/'.Str::random(20));
@@ -144,27 +146,56 @@ final class FilePreviews
                     $disk->writeStream($pdfKey, $stream);
                     fclose($stream);
 
-                    return true;
+                    return null;
                 }
                 $problem ??= 'no PDF';
+            } catch (ProcessTimedOutException) {
+                $problem = 'LibreOffice took more than '.self::TIMEOUT_SECONDS.' seconds.';
             } catch (Throwable $e) {
-                $problem = $e->getMessage();
+                // LibreOffice couldn't be started, or a file couldn't be written: this computer's fault, not the file's.
+                Log::warning('A file preview could not be made; it is tried again shortly.', ['file' => $id, 'problem' => Str::limit($e->getMessage(), 500)]);
+
+                return 30;
             } finally {
                 File::deleteDirectory($work);
             }
             // Every slot taken is not the file's fault: the job comes back shortly.
             if ($problem === self::BUSY) {
-                return false;
+                return 3;
             }
 
             // Not tried again on every visit: a file LibreOffice can't read won't read next time either.
             Log::warning('A file preview could not be made.', ['file' => $id, 'problem' => Str::limit($problem, 500)]);
             $disk->put("{$pdfKey}.failed", Str::limit($problem, 500));
 
-            return true;
+            return null;
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * The previews that could not be made, newest first: what LibreOffice said, by the key of the note beside the
+     * file. For `php artisan vistud:doctor` and `vistud:previews:retry`.
+     *
+     * @return array<string, string>
+     */
+    public static function failures(): array
+    {
+        $disk = Files::disk();
+        $failed = array_filter($disk->allFiles('learners'), fn (string $path) => str_ends_with($path, '.pdf.failed') && str_contains($path, '/previews/'));
+        usort($failed, fn ($a, $b) => $disk->lastModified($b) <=> $disk->lastModified($a));
+
+        return array_combine($failed, array_map(fn ($path) => trim((string) $disk->get($path)), $failed)) ?: [];
+    }
+
+    /** Forgets every preview that could not be made, so each is tried again when its file is next opened. How many. */
+    public static function retryFailed(): int
+    {
+        $failed = array_keys(self::failures());
+        Files::disk()->delete($failed);
+
+        return count($failed);
     }
 
     /**

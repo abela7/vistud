@@ -200,12 +200,22 @@ class FilesScreenTest extends TestCase
 
         $slot = Cache::lock('vistud:office-slot:1', 60);
         $slot->get();
-        $this->assertFalse(FilePreviews::make($docx->id, $key, 'docx'), 'Every slot taken: try again later.');
+        $this->assertSame(3, FilePreviews::make($docx->id, $key, 'docx'), 'Every slot taken: try again in a few seconds.');
         $slot->release();
 
         // "LibreOffice" here is PHP, which can't read a Word file: noted, and not tried on every visit.
-        $this->assertTrue(FilePreviews::make($docx->id, $key, 'docx'));
+        $this->assertNull(FilePreviews::make($docx->id, $key, 'docx'));
         $this->actingAs($this->ada)->get(route('files.preview', $docx->id))->assertStatus(422);
+        $this->assertCount(1, FilePreviews::failures());
+
+        // Once what stopped it is fixed, the note is forgotten, and the preview is made again when the file is opened.
+        config(['queue.default' => 'database']);
+        Queue::fake();
+        $this->artisan('vistud:previews:retry')->expectsOutputToContain('1 preview will be made again')->assertSuccessful();
+        $this->assertSame([], FilePreviews::failures());
+        $this->actingAs($this->ada)->get(route('files.preview', $docx->id))->assertStatus(202);
+        Queue::assertPushed(MakeFilePreview::class, 1);
+        $this->artisan('vistud:previews:retry')->expectsOutputToContain('nothing to try again')->assertSuccessful();
     }
 
     public function test_a_markdown_file_is_shown_as_it_was_meant_to_look_and_opens_as_a_note(): void
