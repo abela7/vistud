@@ -382,7 +382,7 @@ for (const [name, device] of Object.entries(devices)) {
             await expect(page.getByText('Roles agreed', { exact: true })).toBeVisible();
 
             // The team is added when wanted: the student is one of them.
-            await page.getByRole('button', { name: 'Team', exact: true }).click();
+            await page.getByRole('button', { name: /^Team/ }).click();
             await page.getByRole('button', { name: 'Add a person' }).click();
             await page.getByLabel('Add a person').fill('Abel');
             await page.getByText('This is me').click();
@@ -456,7 +456,7 @@ test('axe finds no violations on a project plan with its editor, milestones and 
     await planMenu(page, 'Add a pre-made plan');
     await page.getByRole('button', { name: /^Project/ }).first().click();
     await page.getByRole('heading', { level: 3, name: 'Initiate' }).waitFor();
-    await page.getByRole('button', { name: 'Team', exact: true }).click();
+    await page.getByRole('button', { name: /^Team/ }).click();
     await page.getByRole('button', { name: 'Add a person' }).click();
     await page.getByLabel('Add a person').fill('Sara Bekele');
     await page.getByLabel('Add a person').press('Enter');
@@ -486,7 +486,7 @@ test('a project plan never scrolls sideways at 320 px, even with 200% text and t
     await planMenu(page, 'Add a pre-made plan');
     await page.getByRole('button', { name: /Group project/ }).first().click();
     await page.getByRole('heading', { level: 3, name: 'Team set-up' }).waitFor();
-    await page.getByRole('button', { name: 'Team', exact: true }).click();
+    await page.getByRole('button', { name: /^Team/ }).click();
     await page.getByRole('button', { name: 'Add a person' }).click();
     await page.getByLabel('Add a person').fill('Sara Bekele with a very long name indeed');
     await page.getByLabel('Add a person').press('Enter');

@@ -116,19 +116,23 @@
             $choices[] = ['New folder', 'folder-plus', "adding = 'folder'; \$nextTick(() => document.getElementById('assignment-folder-name')?.focus())"];
         }
     @endphp
-    <section class="asg-files space-y-3" aria-labelledby="assignment-files-heading" x-data="{ adding: null, over: false }" x-bind:class="{ 'is-over': over }"
+    <section class="question-panel asg-files space-y-4" aria-labelledby="assignment-files-heading" x-data="{ adding: null, over: false }" x-bind:class="{ 'is-over': over }"
         x-on:dragover.prevent="over = true" x-on:dragleave.self="over = false"
         x-on:drop.prevent="over = false; Alpine.$data($el.querySelector('[data-assignment-upload]')).drop($event)">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="assignment-files-heading" class="flex items-center gap-2 font-semibold">
-                Files and notes
-                @if ($kept > 0)
-                    <span class="count-pill">{{ $kept }}</span>
-                @endif
-            </h2>
-            <div class="flex items-center gap-1">
+        <div class="panel-head">
+            <span class="item-icon" aria-hidden="true"><x-icon name="paperclip" class="size-5" /></span>
+            <div class="panel-head-text">
+                <h2 id="assignment-files-heading" class="panel-title">
+                    Files and notes
+                    @if ($kept > 0)
+                        <span class="count-pill">{{ $kept }}</span>
+                    @endif
+                </h2>
+                <p class="panel-hint">The brief, your files, notes and folders for this assignment.</p>
+            </div>
+            <div class="panel-head-actions">
                 @if ($folder)
-                    <a href="{{ route('workspaces.folders.show', [$workspace->id, $folder->id]) }}" class="btn btn-ghost btn-sm" title="Open its folder"><x-icon name="folder-open" class="size-4" /><span class="max-sm:sr-only">Its folder</span></a>
+                    <a href="{{ route('workspaces.folders.show', [$workspace->id, $folder->id]) }}" class="btn btn-secondary btn-sm" title="Open its folder"><x-icon name="folder-open" class="size-4" /><span class="max-sm:sr-only">Its folder</span></a>
                 @endif
                 @include('livewire.workspaces.partials.add-menu', ['id' => 'assignment-add', 'items' => $choices])
             </div>
@@ -183,7 +187,12 @@
                 @endforeach
             </ul>
         @else
-            <p class="text-sm text-fg-muted">Nothing yet. Add the brief, your files or a note<span class="only-fine-pointer">, or drop files here</span>.</p>
+            <div class="empty-place empty-place-slim" x-bind:class="{ 'is-over': over }">
+                <span class="item-icon" aria-hidden="true"><x-icon name="file-up" class="size-5" /></span>
+                <p class="font-medium">Nothing here yet</p>
+                <p class="max-w-md text-sm text-fg-muted">Add the brief or your files, or write a note<span class="only-fine-pointer">. You can also drop files here</span>.</p>
+                <button type="button" class="btn btn-secondary btn-sm" x-on:click="$dispatch('assignment-files')"><x-icon name="file-up" class="size-4" />Upload files</button>
+            </div>
         @endif
 
         {{-- resources/js/uploader.js: Livewire leaves the list alone. On a new one the files wait for Create. --}}
@@ -208,14 +217,18 @@
     </section>
 
     @unless ($new)
-        <div class="asg-delete">
-            <button type="button" class="quiet-link" x-show="! sure" x-on:click="sure = true"><x-icon name="trash-2" class="size-4" />Delete this assignment</button>
-            <div class="flex flex-wrap items-center gap-2" x-show="sure" x-cloak>
-                <p class="text-sm text-fg-muted">Delete it? Its folder and files stay where they are.</p>
-                <button type="button" class="btn btn-danger btn-sm" wire:click="delete">Delete it</button>
-                <button type="button" class="btn btn-ghost btn-sm" x-on:click="sure = false">Keep it</button>
+        <section class="asg-delete" aria-labelledby="assignment-delete-heading">
+            <div class="min-w-0">
+                <h2 id="assignment-delete-heading" class="font-semibold">Delete this assignment</h2>
+                <p class="text-sm text-fg-muted" x-show="! sure">Its plan goes. Its folder and files stay where they are.</p>
+                <p class="text-sm" x-show="sure" x-cloak>Really delete it? This can't be undone.</p>
             </div>
-        </div>
+            <div class="asg-delete-actions">
+                <button type="button" class="btn btn-secondary btn-sm" x-show="! sure" x-on:click="sure = true"><x-icon name="trash-2" class="size-4" />Delete</button>
+                <button type="button" class="btn btn-danger btn-sm" x-show="sure" x-cloak wire:click="delete">Yes, delete it</button>
+                <button type="button" class="btn btn-secondary btn-sm" x-show="sure" x-cloak x-on:click="sure = false">Keep it</button>
+            </div>
+        </section>
     @endunless
 
     <div role="status" aria-live="polite" class="empty:hidden">

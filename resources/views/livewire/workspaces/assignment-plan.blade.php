@@ -63,7 +63,15 @@
     @endif
 
     <div class="plan-toolbar">
-        <h2 id="plan-heading" class="font-semibold">Sections</h2>
+        <div class="plan-toolbar-title">
+            <span class="item-icon" aria-hidden="true"><x-icon name="layers" class="size-5" /></span>
+            <h2 id="plan-heading" class="panel-title">
+                Sections
+                @if ($parts !== [])
+                    <span class="count-pill">{{ count($parts) }}</span>
+                @endif
+            </h2>
+        </div>
         <div class="plan-toolbar-actions">
             @unless ($blank)
                 <div class="segmented segmented-sm" role="group" aria-label="Show the sections as">
@@ -263,18 +271,35 @@
 
     @unless ($blank)
         @if (! $milestonesShown || ! $teamShown || ! $criteriaShown)
-            <div class="plan-also">
-                <span class="text-sm text-fg-muted">Also track</span>
-                @unless ($milestonesShown)
-                    <button type="button" class="quiet-link" wire:click="$set('showMilestones', true)"><x-icon name="flag" class="size-4" />Milestones</button>
-                @endunless
-                @unless ($teamShown)
-                    <button type="button" class="quiet-link" wire:click="$set('showTeam', true)"><x-icon name="users" class="size-4" />Team</button>
-                @endunless
-                @unless ($criteriaShown)
-                    <button type="button" class="quiet-link" wire:click="$set('showCriteria', true)"><x-icon name="clipboard-check" class="size-4" />Marking criteria</button>
-                @endunless
-            </div>
+            <section class="question-panel space-y-4" aria-labelledby="plan-also-heading">
+                <div class="panel-head">
+                    <span class="item-icon" aria-hidden="true"><x-icon name="plus" class="size-5" /></span>
+                    <div class="panel-head-text">
+                        <h2 id="plan-also-heading" class="panel-title">Also track</h2>
+                        <p class="panel-hint">Optional. Add only what this assignment needs.</p>
+                    </div>
+                </div>
+                <div class="track-tiles">
+                    @unless ($milestonesShown)
+                        <button type="button" class="track-tile" wire:click="$set('showMilestones', true)">
+                            <span class="item-icon" aria-hidden="true"><x-icon name="flag" class="size-5" /></span>
+                            <span class="min-w-0"><span class="track-tile-name">Milestones</span><span class="track-tile-hint">Days you want to reach</span></span>
+                        </button>
+                    @endunless
+                    @unless ($teamShown)
+                        <button type="button" class="track-tile" wire:click="$set('showTeam', true)">
+                            <span class="item-icon" aria-hidden="true"><x-icon name="users" class="size-5" /></span>
+                            <span class="min-w-0"><span class="track-tile-name">Team</span><span class="track-tile-hint">Who does which part</span></span>
+                        </button>
+                    @endunless
+                    @unless ($criteriaShown)
+                        <button type="button" class="track-tile" wire:click="$set('showCriteria', true)">
+                            <span class="item-icon" aria-hidden="true"><x-icon name="clipboard-check" class="size-5" /></span>
+                            <span class="min-w-0"><span class="track-tile-name">Marking criteria</span><span class="track-tile-hint">What it is marked on</span></span>
+                        </button>
+                    @endunless
+                </div>
+            </section>
         @endif
     @endunless
 

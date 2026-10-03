@@ -132,7 +132,7 @@ class AssignmentPlanScreensTest extends TestCase
         $sectionFolder = app(Plans::class)->folder($by, $section->id);
 
         $page = Livewire::test(AssignmentPage::class, ['workspaceId' => $this->databases->id, 'activityId' => $this->essay->id])
-            ->assertSee('Nothing yet. Add the brief, your files or a note')->assertSee('Upload files')->assertSee('Write a note')->assertSee('New folder')
+            ->assertSee('Nothing here yet')->assertSee('Add the brief or your files, or write a note')->assertSee('Upload files')->assertSee('Write a note')->assertSee('New folder')
             ->call('addFolder')->assertHasErrors(['folderName'])
             ->set('folderName', 'Brief and rubric')->call('addFolder')->assertHasNoErrors()->assertSee('Folder “Brief and rubric” added.')->assertSee('Brief and rubric')->assertSet('folderName', '');
         // A section's folder is on the section's page, not here.
