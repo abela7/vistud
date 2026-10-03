@@ -1347,7 +1347,7 @@
 
     .plan-extras {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
         align-items: start;
         gap: 1rem;
     }
@@ -1537,26 +1537,154 @@
         margin-bottom: 0.5rem;
     }
 
-    /* Milestones, the team and the marking criteria: sections under the plan, only once there is something to say. */
+    /*
+    | Milestones, the team and the marking criteria (the owner's review, 2026-10-04): boxes under the plan, side by
+    | side as the width allows, each with its head, its rows divided by lines, and a dashed row to add one.
+    */
     .plan-extra {
         display: grid;
-        gap: 0.25rem;
+        align-content: start;
+        gap: 1rem;
     }
 
-    .plan-extra-title {
+    .extra-list {
+        display: grid;
+    }
+
+    .extra-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+        padding: 0.75rem 0;
+    }
+
+    .extra-row + .extra-row {
+        border-top: 1px solid var(--divider);
+    }
+
+    .extra-row:first-child {
+        padding-top: 0;
+    }
+
+    .extra-title {
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+    .extra-meta {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .extra-meta svg {
+        display: inline;
+        margin-right: 0.25rem;
+        vertical-align: -0.125rem;
+    }
+
+    /* A milestone: its day as a small calendar leaf, red when missed, amber when today or tomorrow, green when reached. */
+    .milestone-date {
+        display: grid;
+        flex: none;
+        place-items: center;
+        align-content: center;
+        width: 3rem;
+        height: 3rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+        color: var(--text-muted);
+        line-height: 1.1;
+    }
+
+    .milestone-month {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .milestone-day {
+        color: var(--text);
+        font-size: 1.125rem;
+        font-weight: 700;
+    }
+
+    .milestone.is-done .milestone-date {
+        border-color: var(--success);
+        background-color: var(--success-subtle);
+    }
+
+    .milestone.is-late .milestone-date {
+        border-color: var(--danger);
+        background-color: var(--danger-subtle);
+    }
+
+    .milestone.is-soon .milestone-date {
+        border-color: var(--warning);
+        background-color: var(--warning-subtle);
+    }
+
+    .milestone.is-done .extra-title {
+        color: var(--text-muted);
+        text-decoration: line-through;
+    }
+
+    .milestone.is-late .extra-meta svg {
+        color: var(--danger);
+    }
+
+    /* A criterion: its state as a coloured circle, its name and marks, and Not yet / Partly / Met on the same line. */
+    .criterion {
+        flex-wrap: wrap;
+    }
+
+    .criterion-icon {
+        display: inline-flex;
+        flex: none;
+        color: var(--text-subtle);
+    }
+
+    .criterion.is-partly .criterion-icon {
+        color: var(--warning);
+    }
+
+    .criterion.is-met .criterion-icon {
+        color: var(--success);
+    }
+
+    /* The name keeps at least 10rem; on a narrow screen Not yet / Partly / Met goes under it. */
+    .criterion-text {
+        min-width: 0;
+        flex: 1 1 10rem;
+    }
+
+    .criterion-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        margin-left: auto;
+    }
+
+    /* Adding one: a dashed row with its boxes, always there. */
+    .extra-add {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 0.5rem;
-        font-size: 0.9375rem;
-        font-weight: 600;
+        padding: 0.625rem;
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-lg);
     }
 
-    .plan-extra-note {
-        margin-left: auto;
-        color: var(--text-muted);
-        font-size: 0.8125rem;
-        font-weight: 400;
+    .extra-add-name {
+        min-width: 0;
+        flex: 1 1 12rem;
+    }
+
+    .extra-add-small {
+        flex: 0 1 10rem;
     }
 
     /*
@@ -1774,31 +1902,6 @@
     .plan-marks-input {
         width: 7.5rem;
         flex: 0 0 7.5rem;
-    }
-
-    .plan-criteria {
-        display: grid;
-    }
-
-    .plan-criterion {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem 0.75rem;
-        padding: 0.625rem 0;
-        border-top: 1px solid var(--divider);
-    }
-
-    .plan-criterion:first-child {
-        border-top: 0;
-    }
-
-    /* The name takes a line of its own where it would otherwise be squeezed beside the three buttons. */
-    .plan-criterion > p,
-    .plan-criterion > .plan-step-main {
-        min-width: 0;
-        flex: 1 1 14rem;
-        overflow-wrap: anywhere;
     }
 
     /* A card: its progress sits where a question's answer would, as a thin bar and the pace under it. */

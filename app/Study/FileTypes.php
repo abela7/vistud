@@ -67,6 +67,12 @@ final class FileTypes
 
         // Word, PowerPoint, Excel and OpenDocument files are ZIP files inside: without PHP's zip extension they
         // can't be checked, which is this server's problem, not the file's (php artisan vistud:doctor says so).
+        // A picture is taken for what it really is: one saved as .jpg is often really WebP or PNG (from a phone, a
+        // chat or the web), and the browser shows it once it is served as that.
+        if ($type[0] === 'image') {
+            return ['image', self::imageMime($path), $type[2]];
+        }
+
         if (in_array($extension, ['docx', 'pptx', 'xlsx', 'odt', 'odp', 'ods'], true) && ! class_exists(ZipArchive::class)) {
             Input::refuse(['file' => 'This computer can\'t check '.$type[2].' files yet: PHP\'s zip extension is off. Run php artisan vistud:doctor to see how to turn it on.']);
         }
@@ -76,8 +82,7 @@ final class FileTypes
             'docx', 'pptx', 'xlsx' => self::ooxml($path, self::OOXML_MAIN[$extension]),
             'odt', 'odp', 'ods' => self::odf($path, $type[1]),
             'doc', 'ppt', 'xls' => self::ole($path),
-            'txt', 'md', 'csv' => self::text($path),
-            default => self::image($path, $type[1]),
+            default => self::text($path),
         };
         if ($problem !== null) {
             Input::refuse(['file' => $problem]);
@@ -161,11 +166,22 @@ final class FileTypes
             : null;
     }
 
-    private static function image(string $path, string $mime): ?string
+    /** What kind of picture the file really is (PNG, JPEG, GIF or WebP), or a refusal that says why not. */
+    private static function imageMime(string $path): string
     {
         $info = @getimagesize($path);
+        $mime = is_array($info) ? ($info['mime'] ?? null) : null;
+        if (in_array($mime, ['image/png', 'image/jpeg', 'image/gif', 'image/webp'], true)) {
+            return $mime;
+        }
+        // An iPhone photo: HEIC inside, whatever its name. Browsers can't show it.
+        $head = (string) file_get_contents($path, length: 12);
+        if (substr($head, 4, 4) === 'ftyp' && in_array(substr($head, 8, 4), ['heic', 'heix', 'hevc', 'heim', 'heis', 'mif1', 'msf1'], true)) {
+            Input::refuse(['file' => 'This photo is in Apple\'s HEIC format, which browsers can\'t show. Save it as JPG first (on an iPhone: Settings, Camera, Formats, Most Compatible), then upload it.']);
+        }
+        Input::refuse(['file' => 'This file isn\'t really a picture. Use PNG, JPG, GIF or WebP.']);
 
-        return is_array($info) && ($info['mime'] ?? null) === $mime ? null : 'This file isn\'t really an image of that kind.';
+        return '';
     }
 
     /** The names inside a ZIP file, or null when it isn't one (or this server can't read ZIP files). */

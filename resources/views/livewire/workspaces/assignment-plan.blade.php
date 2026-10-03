@@ -306,42 +306,82 @@
     @if ($milestonesShown || $teamShown || $criteriaShown)
         <div class="plan-extras">
         @if ($milestonesShown)
+            @php
+                // In date order, the ones without a day last: a timeline to the deadline.
+                $timeline = collect($milestones)->sortBy(fn ($m) => [$m->dueOn === null ? 1 : 0, (string) $m->dueOn, $m->position])->values()->all();
+                $reached = count(array_filter($milestones, fn ($m) => $m->done()));
+                $next = collect($timeline)->first(fn ($m) => ! $m->done());
+                $day = fn (string $date) => \Carbon\CarbonImmutable::parse($date);
+            @endphp
             <section class="plan-extra question-panel" aria-labelledby="milestones-heading">
-                <h3 id="milestones-heading" class="plan-extra-title"><x-icon name="flag" class="size-4 text-fg-muted" />Milestones
-                    @if ($milestones !== [])
-                        <span class="count-pill" title="{{ count(array_filter($milestones, fn ($m) => $m->done())) }} of {{ count($milestones) }} reached">{{ count(array_filter($milestones, fn ($m) => $m->done())) }}/{{ count($milestones) }}</span>
-                    @endif
-                </h3>
-                @if ($milestones !== [])
-                    <ul class="plan-criteria" role="list" aria-label="Milestones">
-                        @foreach ($milestones as $milestone)
-                            <li wire:key="plan-milestone-{{ $milestone->id }}" class="plan-criterion">
+                <div class="panel-head">
+                    <span class="item-icon" aria-hidden="true"><x-icon name="flag" class="size-5" /></span>
+                    <div class="panel-head-text">
+                        <h3 id="milestones-heading" class="panel-title">Milestones</h3>
+                        <p class="panel-hint">
+                            @if ($milestones === [])
+                                Dates you want to reach on the way to the deadline.
+                            @else
+                                {{ $reached }} of {{ count($milestones) }} reached{{ $next ? ' · next: '.$next->title : '' }}
+                            @endif
+                        </p>
+                    </div>
+                </div>
+
+                @if ($timeline !== [])
+                    <ol class="extra-list" role="list" aria-label="Milestones">
+                        @foreach ($timeline as $milestone)
+                            @php
+                                $days = $milestone->dueOn === null ? null : (int) $day($today)->diffInDays($day($milestone->dueOn), false);
+                                [$when, $tone] = match (true) {
+                                    $milestone->done() => ['Reached', 'is-done'],
+                                    $days === null => ['No date yet', ''],
+                                    $days < 0 => [$days === -1 ? 'Missed yesterday' : 'Missed '.abs($days).' days ago', 'is-late'],
+                                    $days === 0 => ['Today', 'is-soon'],
+                                    $days === 1 => ['Tomorrow', 'is-soon'],
+                                    default => ["In {$days} days", ''],
+                                };
+                            @endphp
+                            <li wire:key="plan-milestone-{{ $milestone->id }}" @class(['extra-row', 'milestone', $tone])>
                                 @if ($editing === $milestone->id)
                                     @include('livewire.workspaces.partials.plan-edit', ['item' => $milestone])
                                 @else
-                                    <button type="button" class="task-check is-{{ $milestone->done() ? 'done' : 'todo' }}" wire:click="setState('{{ $milestone->id }}', '{{ $milestone->done() ? 'pending' : 'achieved' }}')" aria-pressed="{{ $milestone->done() ? 'true' : 'false' }}">
-                                        <x-icon :name="$milestone->done() ? 'circle-check' : 'circle'" class="size-5" />
+                                    <span class="milestone-date" aria-hidden="true">
+                                        @if ($milestone->dueOn !== null)
+                                            <span class="milestone-month">{{ $day($milestone->dueOn)->format('M') }}</span>
+                                            <span class="milestone-day">{{ $day($milestone->dueOn)->format('j') }}</span>
+                                        @else
+                                            <x-icon name="calendar" class="size-4" />
+                                        @endif
+                                    </span>
+                                    <div class="min-w-0 flex-1">
+                                        <p class="extra-title">{{ $milestone->title }}</p>
+                                        <p class="extra-meta">
+                                            @if ($tone === 'is-late')<x-icon name="circle-alert" class="size-3.5" />@endif
+                                            {{ $milestone->dueOn !== null ? $day($milestone->dueOn)->format('D j M').' · ' : '' }}{{ $when }}
+                                        </p>
+                                    </div>
+                                    <button type="button" class="task-check is-{{ $milestone->done() ? 'done' : 'todo' }}" wire:click="setState('{{ $milestone->id }}', '{{ $milestone->done() ? 'pending' : 'achieved' }}')" aria-pressed="{{ $milestone->done() ? 'true' : 'false' }}" title="{{ $milestone->done() ? 'Reached' : 'Mark it reached' }}">
+                                        <x-icon :name="$milestone->done() ? 'circle-check' : 'circle'" class="size-6" />
                                         <span class="sr-only">Reached: {{ $milestone->title }}</span>
                                     </button>
-                                    <div class="plan-step-main">
-                                        <p @class(['plan-step-title', 'text-fg-muted line-through' => $milestone->done()])>{{ $milestone->title }}</p>
-                                        @include('livewire.workspaces.partials.plan-meta', ['item' => $milestone])
-                                    </div>
                                     @include('livewire.workspaces.partials.row-menu', ['id' => 'plan-'.$milestone->id, 'label' => $milestone->title, 'items' => [
-                                        ['Edit details', 'pencil', "startEdit('{$milestone->id}')", false],
+                                        ['Edit', 'pencil', "startEdit('{$milestone->id}')", false],
                                         ['Delete', 'trash-2', "remove('{$milestone->id}')", false],
                                     ]])
                                 @endif
                             </li>
                         @endforeach
-                    </ul>
+                    </ol>
                 @endif
-                <x-workspace.quiet-add label="Add a milestone" icon="flag" submit="addMilestone">
+
+                <form wire:submit="addMilestone" novalidate class="extra-add">
                     <label for="plan-milestone" class="sr-only">Add a milestone</label>
-                    <input id="plan-milestone" type="text" class="input" wire:model="milestoneText" maxlength="{{ \App\Study\Plans::MAX_TITLE }}" placeholder="Like “First draft done”" autocomplete="off">
+                    <input id="plan-milestone" type="text" class="input extra-add-name" wire:model="milestoneText" maxlength="{{ \App\Study\Plans::MAX_TITLE }}" placeholder="Add a milestone, like “First draft done”" autocomplete="off">
                     <label for="plan-milestone-date" class="sr-only">Its day (optional)</label>
-                    <input id="plan-milestone-date" type="date" class="input plan-date-input" wire:model="milestoneDate">
-                </x-workspace.quiet-add>
+                    <input id="plan-milestone-date" type="date" class="input extra-add-small" wire:model="milestoneDate">
+                    <button type="submit" class="btn btn-secondary btn-sm"><x-icon name="plus" class="size-4" />Add</button>
+                </form>
                 @error('milestoneText') <p class="field-error">{{ $message }}</p> @enderror
                 @error('milestoneDate') <p class="field-error">{{ $message }}</p> @enderror
             </section>
@@ -354,11 +394,17 @@
                 $anyMe = collect($plan->members)->contains(fn ($m) => $m->me);
             @endphp
             <section class="plan-extra question-panel" aria-labelledby="team-heading">
-                <h3 id="team-heading" class="plan-extra-title"><x-icon name="users" class="size-4 text-fg-muted" />Team
-                    @if ($plan->members !== [])
-                        <span class="count-pill">{{ count($plan->members) }}</span>
-                    @endif
-                </h3>
+                <div class="panel-head">
+                    <span class="item-icon" aria-hidden="true"><x-icon name="users" class="size-5" /></span>
+                    <div class="panel-head-text">
+                        <h3 id="team-heading" class="panel-title">Team
+                            @if ($plan->members !== [])
+                                <span class="count-pill">{{ count($plan->members) }}</span>
+                            @endif
+                        </h3>
+                        <p class="panel-hint">The people sharing the work, and how far each has got.</p>
+                    </div>
+                </div>
                 @if ($plan->members !== [])
                     <ul class="plan-team" role="list" aria-label="The team">
                         @foreach ($plan->members as $member)
@@ -412,43 +458,65 @@
         @endif
 
         @if ($criteriaShown)
+            @php
+                $stateIcons = ['not_yet' => 'circle', 'partly' => 'circle-dot', 'met' => 'circle-check'];
+            @endphp
             <section class="plan-extra question-panel" aria-labelledby="criteria-heading">
-                <h3 id="criteria-heading" class="plan-extra-title"><x-icon name="clipboard-check" class="size-4 text-fg-muted" />Marking criteria
-                    @if ($criteria['total'] > 0)
-                        <span class="count-pill" title="{{ $criteria['met'] }} of {{ $criteria['total'] }} met">{{ $criteria['met'] }}/{{ $criteria['total'] }}</span>
-                        <span class="plan-extra-note">about {{ $criteria['percent'] }}%</span>
-                    @endif
-                </h3>
+                <div class="panel-head">
+                    <span class="item-icon" aria-hidden="true"><x-icon name="clipboard-check" class="size-5" /></span>
+                    <div class="panel-head-text">
+                        <h3 id="criteria-heading" class="panel-title">Marking criteria</h3>
+                        <p class="panel-hint">
+                            @if ($criteria['total'] === 0)
+                                What your work is marked on. Check each one as you go.
+                            @else
+                                {{ $criteria['met'] }} of {{ $criteria['total'] }} met · about {{ $criteria['percent'] }}% ready
+                            @endif
+                        </p>
+                    </div>
+                </div>
+                @if ($criteria['total'] > 0)
+                    <div class="meter" role="progressbar" aria-label="How ready it is against the marking criteria" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $criteria['percent'] }}"><span style="width: {{ $criteria['percent'] }}%"></span></div>
+                @endif
+
                 @if ($items !== [])
-                    <ul class="plan-criteria" role="list" aria-label="Marking criteria">
+                    <ul class="extra-list" role="list" aria-label="Marking criteria">
                         @foreach ($items as $criterion)
-                            <li wire:key="plan-criterion-{{ $criterion->id }}" class="plan-criterion">
+                            <li wire:key="plan-criterion-{{ $criterion->id }}" class="extra-row criterion is-{{ $criterion->state }}">
                                 @if ($editing === $criterion->id)
                                     @include('livewire.workspaces.partials.plan-edit', ['item' => $criterion])
                                 @else
-                                    <p class="break-words font-medium">{{ $criterion->title }}@if ($criterion->weight !== null) <span class="plan-marks-chip">{{ $criterion->weight }}%</span>@endif</p>
-                                    <div class="segmented segmented-sm" role="group" aria-label="How well “{{ $criterion->title }}” is met">
-                                        @foreach ($states as $key => $word)
-                                            <button type="button" @class(['segmented-option', 'is-current' => $criterion->state === $key]) wire:click="setState('{{ $criterion->id }}', '{{ $key }}')" aria-pressed="{{ $criterion->state === $key ? 'true' : 'false' }}">{{ $word }}</button>
-                                        @endforeach
+                                    <span class="criterion-icon" aria-hidden="true"><x-icon :name="$stateIcons[$criterion->state] ?? 'circle'" class="size-5" /></span>
+                                    <div class="criterion-text">
+                                        <p class="extra-title">{{ $criterion->title }}</p>
+                                        <p class="extra-meta">{{ $criterion->weight !== null ? $criterion->weight.'% of the marks' : 'No marks given' }}</p>
                                     </div>
-                                    @include('livewire.workspaces.partials.row-menu', ['id' => 'plan-'.$criterion->id, 'label' => $criterion->title, 'items' => [
-                                        ['Rename or give marks', 'pencil', "startEdit('{$criterion->id}')", false],
-                                        ['Move up', 'arrow-up', "move('{$criterion->id}', 'up')", $loop->first],
-                                        ['Move down', 'arrow-down', "move('{$criterion->id}', 'down')", $loop->last],
-                                        ['Delete', 'trash-2', "remove('{$criterion->id}')", false],
-                                    ]])
+                                    <div class="criterion-actions">
+                                        <div class="segmented segmented-sm" role="group" aria-label="How well “{{ $criterion->title }}” is met">
+                                            @foreach ($states as $key => $word)
+                                                <button type="button" @class(['segmented-option', 'is-current' => $criterion->state === $key]) wire:click="setState('{{ $criterion->id }}', '{{ $key }}')" aria-pressed="{{ $criterion->state === $key ? 'true' : 'false' }}">{{ $word }}</button>
+                                            @endforeach
+                                        </div>
+                                        @include('livewire.workspaces.partials.row-menu', ['id' => 'plan-'.$criterion->id, 'label' => $criterion->title, 'items' => [
+                                            ['Rename or give marks', 'pencil', "startEdit('{$criterion->id}')", false],
+                                            ['Move up', 'arrow-up', "move('{$criterion->id}', 'up')", $loop->first],
+                                            ['Move down', 'arrow-down', "move('{$criterion->id}', 'down')", $loop->last],
+                                            ['Delete', 'trash-2', "remove('{$criterion->id}')", false],
+                                        ]])
+                                    </div>
                                 @endif
                             </li>
                         @endforeach
                     </ul>
                 @endif
-                <x-workspace.quiet-add label="Add a criterion" icon="clipboard-check" submit="addCriterion">
+
+                <form wire:submit="addCriterion" novalidate class="extra-add">
                     <label for="plan-criterion" class="sr-only">Add a criterion</label>
-                    <input id="plan-criterion" type="text" class="input" wire:model="criterionText" maxlength="{{ \App\Study\Plans::MAX_TITLE }}" placeholder="Like “Use of sources”" autocomplete="off">
-                    <label for="plan-criterion-marks" class="sr-only">Marks, as a percentage (optional)</label>
-                    <input id="plan-criterion-marks" type="number" class="input plan-marks-input" wire:model="criterionMarks" min="1" max="100" inputmode="numeric" placeholder="Marks %">
-                </x-workspace.quiet-add>
+                    <input id="plan-criterion" type="text" class="input extra-add-name" wire:model="criterionText" maxlength="{{ \App\Study\Plans::MAX_TITLE }}" placeholder="Add a criterion, like “Use of sources”" autocomplete="off">
+                    <label for="plan-criterion-marks" class="sr-only">Its marks, as a percentage (optional)</label>
+                    <input id="plan-criterion-marks" type="number" class="input extra-add-small" wire:model="criterionMarks" min="1" max="100" inputmode="numeric" placeholder="Marks %">
+                    <button type="submit" class="btn btn-secondary btn-sm"><x-icon name="plus" class="size-4" />Add</button>
+                </form>
                 @error('criterionText') <p class="field-error">{{ $message }}</p> @enderror
                 @error('criterionMarks') <p class="field-error">{{ $message }}</p> @enderror
             </section>

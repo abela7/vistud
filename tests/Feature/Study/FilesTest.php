@@ -84,7 +84,8 @@ class FilesTest extends TestCase
             'Lecture.pdf' => "MZ\x90\x00a program renamed",
             'Essay.docx' => $this->pdf(),
             'Essay 2.docx' => $this->ooxml('ppt/presentation.xml'),
-            'Photo.png' => $this->image('jpeg'),
+            'Photo.png' => "MZ\x90\x00a program named like a picture",
+            'iPhone photo.jpg' => "\0\0\0\x18ftypheic\0\0\0\0mif1heic",
             'Notes.txt' => "binary\0data",
             'Latin1.txt' => "caf\xE9",
             'Empty.pdf' => '',
@@ -94,6 +95,24 @@ class FilesTest extends TestCase
         }
 
         $this->assertSame([], Storage::disk('local')->allFiles());
+    }
+
+    public function test_a_picture_is_kept_as_what_it_really_is_whatever_its_name_says(): void
+    {
+        // A JPEG named .png, and a WebP named .jpg (what phones, chats and the web often give): kept, served as what they are.
+        $webp = imagecreatetruecolor(4, 3);
+        ob_start();
+        imagewebp($webp);
+        $kept = [$this->upload('Photo.png', $this->image('jpeg')), $this->upload('Chat photo.jpg', (string) ob_get_clean())];
+        $this->assertSame([['image', 'image/jpeg', 'png'], ['image', 'image/webp', 'jpg']], array_map(fn ($file) => [$file->kind, $file->mime, $file->extension], $kept));
+
+        // An iPhone photo says how to make it one a browser can show.
+        try {
+            $this->upload('IMG_0042.jpg', "\0\0\0\x18ftypheic\0\0\0\0mif1heic");
+            $this->fail('A HEIC photo was kept.');
+        } catch (Unprocessable $e) {
+            $this->assertStringContainsString('HEIC', $e->details['fields']['file'][0]);
+        }
     }
 
     public function test_macros_and_scripts_are_refused(): void

@@ -122,7 +122,7 @@ class ProjectPlanScreensTest extends TestCase
         $this->plans->update($this->by(), $step->id, ['due_on' => '2026-10-01']);
         $milestone = $this->plans->addMilestone($this->by(), $this->project->id, 'Proposal agreed', '2026-10-01');
 
-        $component = $this->plan()->assertSee('Overdue · Due 1 Oct')->assertSee('Missed · 1 Oct')->assertSee('1 thing is overdue')->assertSee('A milestone was missed');
+        $component = $this->plan()->assertSee('Overdue · Due 1 Oct')->assertSee('Thu 1 Oct · Missed yesterday')->assertSee('1 thing is overdue')->assertSee('A milestone was missed');
         $component->call('setState', $milestone->id, 'achieved')->assertDontSee('Missed')->assertDontSee('A milestone was missed');
         $this->assertSame('achieved', $this->plans->get($this->by(), $this->project->id)->item($milestone->id)->state);
     }
@@ -130,11 +130,11 @@ class ProjectPlanScreensTest extends TestCase
     public function test_milestones_are_added_ticked_changed_and_deleted(): void
     {
         $component = $this->plan()->call('addMilestone')->assertHasErrors(['milestoneText'])
-            ->set('milestoneText', 'First draft done')->set('milestoneDate', '2026-10-12')->call('addMilestone')->assertHasNoErrors()->assertSet('milestoneText', '')->assertSee('First draft done')->assertSee('12 Oct')->assertSee('0/1');
+            ->set('milestoneText', 'First draft done')->set('milestoneDate', '2026-10-12')->call('addMilestone')->assertHasNoErrors()->assertSet('milestoneText', '')->assertSee('First draft done')->assertSee('Mon 12 Oct · In 10 days')->assertSee('0 of 1 reached · next: First draft done');
         $milestone = $this->plans->get($this->by(), $this->project->id)->milestones()[0];
 
         $component->set('milestoneText', 'x')->set('milestoneDate', '2026-02-30')->call('addMilestone')->assertHasErrors(['milestoneDate']);
-        $component->call('setState', $milestone->id, 'achieved')->assertSee('1/1');
+        $component->call('setState', $milestone->id, 'achieved')->assertSee('1 of 1 reached')->assertSee('Reached');
         $component->call('startEdit', $milestone->id)->assertSee('Day')->assertDontSee('Priority')->set('editTitle', 'Draft in')->set('editDue', '2026-10-14')->call('saveEdit')->assertSee('Draft in')->assertSee('14 Oct');
         $component->call('remove', $milestone->id)->assertDontSee('Draft in');
     }
