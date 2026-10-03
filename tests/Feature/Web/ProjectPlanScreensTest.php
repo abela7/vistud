@@ -72,7 +72,7 @@ class ProjectPlanScreensTest extends TestCase
         $component = $this->plan()->call('setState', $step->id, 'doing')->assertSee('In progress')->assertSee('Mark done');
         $this->assertSame('doing', app(Activities::class)->find($this->by(), $this->project->id)->status);
 
-        $component->call('setState', $step->id, 'stuck')->assertSee('Stuck')->assertSee('1 step is stuck')->assertSee('At risk');
+        $component->call('setState', $step->id, 'stuck')->assertSee('Stuck')->assertSee('1 task is stuck')->assertSee('At risk');
         $component->call('setState', $step->id, 'done')->assertDontSee('Stuck')->assertDontSee('At risk')->assertSee('100%');
         $component->call('setState', $step->id, 'someday');
         $this->assertSame('done', $this->plans->get($this->by(), $this->project->id)->item($step->id)->state);

@@ -187,7 +187,7 @@ class ProjectPlansTest extends TestCase
         $this->assertSame(['on_track', []], [$health()['state'], $health()['reasons']]);
 
         $this->plans->setState($this->by, $steps[0]->id, 'stuck');
-        $this->assertSame(['at_risk', ['1 step is stuck']], [$health()['state'], $health()['reasons']]);
+        $this->assertSame(['at_risk', ['1 task is stuck']], [$health()['state'], $health()['reasons']]);
         $this->plans->setState($this->by, $steps[0]->id, 'doing');
 
         $this->plans->update($this->by, $steps[1]->id, ['title' => 'Step 2', 'due_on' => '2026-10-01']);

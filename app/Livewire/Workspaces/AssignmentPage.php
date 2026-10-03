@@ -5,6 +5,7 @@ namespace App\Livewire\Workspaces;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
+use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
@@ -49,6 +50,9 @@ final class AssignmentPage extends Component
     public string $moduleId = '';
 
     public string $status = 'todo';
+
+    /** The name typed for a new folder in the assignment's folder. */
+    public string $folderName = '';
 
     private Activities $activities;
 
@@ -149,6 +153,29 @@ final class AssignmentPage extends Component
         return ['folder', $this->activities->folder($this->principal(), (string) $this->activityId)->id];
     }
 
+    /** A folder in the assignment's own folder (made now if it has none). */
+    public function addFolder(): void
+    {
+        if ($this->activityId === null) {
+            return;
+        }
+        $this->resetErrorBag('folderName');
+        $by = $this->principal();
+        try {
+            $made = $this->folders->create($by, 'folder', $this->activities->folder($by, $this->activityId)->id, $this->folderName);
+        } catch (Unprocessable $e) {
+            $this->addError('folderName', $e->details['fields']['name'][0] ?? 'Name the folder.');
+
+            return;
+        } catch (Conflict $e) {
+            $this->addError('folderName', $e->getMessage());
+
+            return;
+        }
+        $this->reset('folderName');
+        $this->notify("Folder “{$made->name}” added.");
+    }
+
     /** Called by resources/js/uploader.js once a round of files has gone up. */
     public function uploadsFinished(int $uploaded, int $refused): void
     {
@@ -195,6 +222,11 @@ final class AssignmentPage extends Component
             'folder' => $folder,
             'files' => $folder === null ? [] : array_values(array_filter($this->files->list($by, $this->workspaceId), fn ($file) => $file->folderId === $folder->id)),
             'notes' => $folder === null ? [] : array_values(array_filter($this->notes->list($by, $this->workspaceId), fn ($note) => $note->folderId === $folder->id)),
+            // Its own folders; each section's folder is shown in its section.
+            'subfolders' => $folder === null ? [] : array_values(array_filter(
+                $this->folders->tree($by, $this->workspaceId),
+                fn ($child) => $child->parentId === $folder->id && ! in_array($child->id, array_map(fn ($part) => $part->folderId, $plan->parts()), true),
+            )),
             'maxUpload' => Files::maxBytes(),
         ]);
     }

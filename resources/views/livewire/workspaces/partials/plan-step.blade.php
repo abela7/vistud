@@ -18,11 +18,11 @@
     }
     $actions[] = ['Edit details', 'pencil', "startEdit('{$step->id}')", false];
     if ($depth < \App\Study\Plans::MAX_DEPTH) {
-        $actions[] = ['Add a step under it', 'corner-down-right', "toggleSub('{$step->id}')", false];
+        $actions[] = ['Add a task under it', 'corner-down-right', "toggleSub('{$step->id}')", false];
     }
     $actions[] = ['Move up', 'arrow-up', "move('{$step->id}', 'up')", $first];
     $actions[] = ['Move down', 'arrow-down', "move('{$step->id}', 'down')", $last];
-    $actions[] = [$kids === [] ? 'Delete' : 'Delete it and its steps', 'trash-2', "remove('{$step->id}')", false];
+    $actions[] = [$kids === [] ? 'Delete' : 'Delete it and its tasks', 'trash-2', "remove('{$step->id}')", false];
 @endphp
 <li wire:key="plan-step-{{ $step->id }}" class="plan-step-item">
     @if ($editing === $step->id)
@@ -44,7 +44,7 @@
             @include('livewire.workspaces.partials.row-menu', ['id' => 'plan-'.$step->id, 'label' => $step->title, 'items' => $actions])
         </div>
         @if ($kids !== [])
-            <ul class="plan-steps plan-substeps" role="list" aria-label="Steps of {{ $step->title }}">
+            <ul class="plan-steps plan-substeps" role="list" aria-label="Tasks of {{ $step->title }}">
                 @foreach ($kids as $kid)
                     @include('livewire.workspaces.partials.plan-step', ['step' => $kid, 'first' => $loop->first, 'last' => $loop->last, 'depth' => $depth + 1])
                 @endforeach
@@ -52,9 +52,9 @@
         @endif
         @if ($adding === $step->id)
             <form wire:submit="addStep('{{ $step->id }}')" novalidate class="plan-add plan-substeps" x-on:keydown.escape="$wire.toggleSub('{{ $step->id }}')">
-                <label for="plan-step-{{ $step->id }}" class="sr-only">Add a step under {{ $step->title }}</label>
-                <input id="plan-step-{{ $step->id }}" type="text" class="input" wire:model="stepText.{{ $step->id }}" maxlength="{{ \App\Study\Plans::MAX_TITLE }}" placeholder="A step under “{{ \Illuminate\Support\Str::limit($step->title, 30) }}”" autocomplete="off" autofocus>
-                <button type="submit" class="btn btn-secondary btn-sm" aria-label="Add the step under {{ $step->title }}"><x-icon name="plus" class="size-4" /><span class="max-sm:sr-only">Add</span></button>
+                <label for="plan-step-{{ $step->id }}" class="sr-only">Add a task under {{ $step->title }}</label>
+                <input id="plan-step-{{ $step->id }}" type="text" class="input" wire:model="stepText.{{ $step->id }}" maxlength="{{ \App\Study\Plans::MAX_TITLE }}" placeholder="A task under “{{ \Illuminate\Support\Str::limit($step->title, 30) }}”" autocomplete="off" autofocus>
+                <button type="submit" class="btn btn-secondary btn-sm" aria-label="Add the task under {{ $step->title }}"><x-icon name="plus" class="size-4" /><span class="max-sm:sr-only">Add</span></button>
                 <button type="button" class="btn btn-ghost btn-sm" wire:click="toggleSub('{{ $step->id }}')">Done adding</button>
             </form>
             @error('stepText.'.$step->id) <p class="field-error plan-substeps">{{ $message }}</p> @enderror

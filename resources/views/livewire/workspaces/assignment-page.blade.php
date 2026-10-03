@@ -110,9 +110,9 @@
     <section class="question-panel space-y-3" aria-labelledby="assignment-files-heading">
         <div class="flex flex-wrap items-center justify-between gap-2">
             <h2 id="assignment-files-heading" class="flex items-center gap-2 font-semibold">
-                <x-icon name="paperclip" class="size-4 text-fg-muted" />Files
-                @if (count($files) + count($notes) > 0)
-                    <span class="count-pill">{{ count($files) + count($notes) }}</span>
+                <x-icon name="paperclip" class="size-4 text-fg-muted" />Files and notes
+                @if (count($files) + count($notes) + count($subfolders) > 0)
+                    <span class="count-pill">{{ count($files) + count($notes) + count($subfolders) }}</span>
                 @endif
             </h2>
             @if ($folder)
@@ -123,8 +123,18 @@
             @endif
         </div>
 
-        @if ($files !== [] || $notes !== [])
+        @if ($files !== [] || $notes !== [] || $subfolders !== [])
             <ul class="assignment-files" role="list">
+                @foreach ($subfolders as $child)
+                    <li wire:key="assignment-folder-{{ $child->id }}" class="item-row">
+                        <span class="item-icon ws-colour-amber" aria-hidden="true"><x-icon name="folder" class="size-5" /></span>
+                        <span class="min-w-0 flex-1">
+                            <a href="{{ route('workspaces.folders.show', [$workspace->id, $child->id]) }}" class="tile-link">{{ $child->name }}</a>
+                            <span class="item-meta">Folder</span>
+                        </span>
+                        <x-icon name="chevron-right" class="size-5 shrink-0 text-fg-subtle" />
+                    </li>
+                @endforeach
                 @foreach ($files as $file)
                     <li wire:key="assignment-file-{{ $file->id }}" class="item-row">
                         <span class="item-icon" aria-hidden="true"><x-icon :name="$file->icon()" class="size-5" /></span>
@@ -147,6 +157,14 @@
                 @endforeach
             </ul>
         @endif
+
+        @unless ($new)
+            <x-workspace.quiet-add label="New folder" icon="folder-plus" submit="addFolder">
+                <label for="assignment-folder-name" class="sr-only">Name of the new folder</label>
+                <input id="assignment-folder-name" type="text" class="input" wire:model="folderName" maxlength="{{ \App\Study\Folders::MAX_NAME }}" placeholder="Folder name" autocomplete="off">
+            </x-workspace.quiet-add>
+            @error('folderName') <p class="field-error">{{ $message }}</p> @enderror
+        @endunless
 
         {{-- resources/js/uploader.js: Livewire leaves the list alone. On a new one the files wait for Create. --}}
         <div wire:ignore class="space-y-3"

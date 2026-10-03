@@ -10,7 +10,7 @@ use Carbon\CarbonImmutable;
  * date to reach). $weight is the marks a part or a criterion is worth, as a percentage, or null. $state is todo,
  * doing, stuck or done for a part or a step; not_yet, partly or met for a criterion; pending or achieved for a
  * milestone. $startOn and $dueOn are dates (Y-m-d) or null; $priority is low, medium, high, urgent or null;
- * $labels are short words; $memberId is the team member it is for.
+ * $labels are short words; $memberId is the team member it is for; $folderId is a section's own folder.
  */
 final readonly class PlanItem
 {
@@ -30,6 +30,7 @@ final readonly class PlanItem
         public array $labels = [],
         public ?string $memberId = null,
         public ?string $doneAt = null,
+        public ?string $folderId = null,
     ) {}
 
     public function done(): bool

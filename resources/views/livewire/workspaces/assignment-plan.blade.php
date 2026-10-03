@@ -22,7 +22,10 @@
     $states = ['not_yet' => 'Not yet', 'partly' => 'Partly', 'met' => 'Met'];
     $icons = ['todo' => 'circle', 'doing' => 'circle-dot', 'stuck' => 'circle-alert', 'done' => 'circle-check'];
 @endphp
-<div class="plan space-y-4">
+<div class="plan space-y-4" x-data="{
+    view: (() => { try { return localStorage.getItem('vistud.sections.view') === 'list' ? 'list' : 'cards'; } catch (e) { return 'cards'; } })(),
+    show(view) { this.view = view; try { localStorage.setItem('vistud.sections.view', view); } catch (e) {} },
+}">
     @if ($progress->total > 0)
         <section @class(['question-panel', 'plan-progress', "ws-colour-{$tone}"]) aria-label="Progress">
             <div class="plan-progress-row">
@@ -34,7 +37,7 @@
             </div>
             <div class="plan-facts">
                 @if (! $weighted)
-                    <span class="plan-fact"><x-icon name="list-checks" class="size-4" />Counting steps · give sections a weight to count by marks</span>
+                    <span class="plan-fact"><x-icon name="list-checks" class="size-4" />Counting tasks · give sections a weight to count by marks</span>
                 @elseif ($weights['over'] > 0)
                     <span class="plan-fact ws-colour-red"><x-icon name="triangle-alert" class="size-4" />Weights add up to {{ $weights['given'] }}%: {{ $weights['over'] }}% too many</span>
                 @elseif ($weights['left'] > 0 && $weights['unweighted'] === 0)
@@ -61,6 +64,12 @@
     <div class="plan-toolbar">
         <h2 id="plan-heading" class="font-semibold">Sections</h2>
         <div class="plan-toolbar-actions">
+            @unless ($blank)
+                <div class="segmented segmented-sm" role="group" aria-label="Show the sections as">
+                    <button type="button" class="segmented-option is-current" x-bind:class="view === 'cards' && 'is-current'" x-bind:aria-pressed="(view === 'cards').toString()" aria-pressed="true" x-on:click="show('cards')"><x-icon name="layout-grid" class="size-4" />Cards</button>
+                    <button type="button" class="segmented-option" x-bind:class="view === 'list' && 'is-current'" x-bind:aria-pressed="(view === 'list').toString()" aria-pressed="false" x-on:click="show('list')"><x-icon name="list" class="size-4" />List</button>
+                </div>
+            @endunless
             <button type="button" class="quiet-link" wire:click="toggleAi" aria-expanded="{{ $aiOpen ? 'true' : 'false' }}"><x-icon name="brain" class="size-4" />Plan with an AI</button>
             @include('livewire.workspaces.partials.row-menu', ['id' => 'plan-head', 'label' => 'the plan', 'items' => array_values(array_filter([
                 ['Add a pre-made plan', 'layout-grid', 'toggleStarters', false],
@@ -176,15 +185,17 @@
     @endif
 
     @if ($blank)
-        <p class="text-sm text-fg-muted">Split the work into sections, give each a weight out of 100, and tick the steps as you go.</p>
+        <p class="text-sm text-fg-muted">Split the work into sections and give each a weight out of 100. Each section keeps its tasks, notes, files and folders.</p>
     @endif
 
-    <div class="plan-grid">
+    <div class="plan-grid" x-bind:class="view === 'list' && 'is-list'">
         @foreach ($parts as $part)
             @php
                 $steps = $plan->steps($part->id);
                 $standing = $plan->standing($part);
                 $partState = $plan->stateOf($part);
+                $things = $part->folderId === null ? [] : ($materials[$part->folderId] ?? []);
+                $thingCount = count($things['folders'] ?? []) + count($things['files'] ?? []) + count($things['notes'] ?? []);
                 $actions = [];
                 if ($steps === []) {
                     foreach ([['doing', 'Start it', 'play'], ['stuck', 'I am stuck', 'circle-alert'], ['todo', 'Back to to do', 'circle'], ['done', 'Mark done', 'circle-check']] as [$to, $text, $icon]) {
@@ -194,11 +205,19 @@
                     }
                 }
                 $actions[] = ['Edit details', 'pencil', "startEdit('{$part->id}')", false];
+                if ($part->folderId !== null) {
+                    $actions[] = ['Open its folder', 'folder-open', null, false, route('workspaces.folders.show', [$workspaceId, $part->folderId])];
+                }
                 $actions[] = ['Move earlier', 'arrow-left', "move('{$part->id}', 'up')", $loop->first];
                 $actions[] = ['Move later', 'arrow-right', "move('{$part->id}', 'down')", $loop->last];
-                $actions[] = [$steps === [] ? 'Delete section' : 'Delete section and its steps', 'trash-2', "remove('{$part->id}')", false];
+                $actions[] = [$steps === [] ? 'Delete section' : 'Delete section and its tasks', 'trash-2', "remove('{$part->id}')", false];
+                $summary = ($steps !== [] ? $standing['done'].'/'.$standing['total'] : ($part->done() ? 'Done' : 'Not done'))
+                    .($weighted ? ' · '.$pct($standing['earned']).' of '.$pct($standing['share']).'%' : '');
             @endphp
-            <section wire:key="plan-part-{{ $part->id }}" class="plan-section" aria-label="Part: {{ $part->title }}">
+            <section wire:key="plan-part-{{ $part->id }}" class="plan-section" x-bind:class="over && 'is-over'" aria-label="Part: {{ $part->title }}"
+                x-data="{ open: false, adding: null, over: false }" x-on:folder-added.window="if ($event.detail.part === @js($part->id)) adding = null"
+                x-on:dragover.prevent="over = true" x-on:dragleave.self="over = false"
+                x-on:drop.prevent="over = false; Alpine.$data($el.querySelector('[data-section-upload]')).drop($event)">
                 @if ($editing === $part->id)
                     @include('livewire.workspaces.partials.plan-edit', ['item' => $part])
                 @else
@@ -210,55 +229,127 @@
                             </button>
                         @endif
                         <h3 @class(['plan-part-title', 'text-fg-muted line-through' => $steps === [] && $part->done()])>{{ $part->title }}</h3>
-                        <span class="plan-weight" x-data="{ open: false, value: @js((string) $part->weight) }">
-                            <button type="button" @class(['plan-weight-chip', 'is-unset' => $part->weight === null]) x-show="! open" x-on:click="open = true; $nextTick(() => $refs.weight.select())"
-                                aria-label="Weight of {{ $part->title }}: {{ $part->weight === null ? 'not set' : $part->weight.'%' }}. Change it">{{ $part->weight === null ? 'Weight' : $part->weight.'%' }}</button>
-                            <input type="number" min="1" max="100" inputmode="numeric" class="input plan-weight-input" x-ref="weight" x-model="value" x-show="open" x-cloak
-                                aria-label="Weight of {{ $part->title }}, out of 100 (empty for none)"
-                                x-on:keydown.enter.prevent="open = false; $wire.setWeight('{{ $part->id }}', value)"
-                                x-on:keydown.escape.prevent="open = false; value = @js((string) $part->weight)"
-                                x-on:blur="if (open) { open = false; $wire.setWeight('{{ $part->id }}', value) }">
+                        <span class="plan-section-summary" aria-hidden="true">
+                            <span class="meter"><span style="width: {{ $standing['percent'] }}%"></span></span>
+                            <span class="tabular-nums">{{ $summary }}{{ $thingCount > 0 ? ' · '.$thingCount.' '.($thingCount === 1 ? 'item' : 'items') : '' }}</span>
                         </span>
+                        <span class="plan-weight" x-data="{ editing: false, value: @js((string) $part->weight) }">
+                            <button type="button" @class(['plan-weight-chip', 'is-unset' => $part->weight === null]) x-show="! editing" x-on:click="editing = true; $nextTick(() => $refs.weight.select())"
+                                aria-label="Weight of {{ $part->title }}: {{ $part->weight === null ? 'not set' : $part->weight.'%' }}. Change it">{{ $part->weight === null ? 'Weight' : $part->weight.'%' }}</button>
+                            <input type="number" min="1" max="100" inputmode="numeric" class="input plan-weight-input" x-ref="weight" x-model="value" x-show="editing" x-cloak
+                                aria-label="Weight of {{ $part->title }}, out of 100 (empty for none)"
+                                x-on:keydown.enter.prevent="editing = false; $wire.setWeight('{{ $part->id }}', value)"
+                                x-on:keydown.escape.prevent="editing = false; value = @js((string) $part->weight)"
+                                x-on:blur="if (editing) { editing = false; $wire.setWeight('{{ $part->id }}', value) }">
+                        </span>
+                        <button type="button" class="topbar-button plan-section-toggle" x-on:click="open = ! open" x-bind:aria-expanded="open.toString()" aria-expanded="false">
+                            <x-icon name="chevron-down" class="size-5" /><span class="sr-only">What is in {{ $part->title }}</span>
+                        </button>
                         @include('livewire.workspaces.partials.row-menu', ['id' => 'plan-'.$part->id, 'label' => $part->title, 'items' => $actions])
                     </div>
+                @endif
+                <div class="plan-section-body" x-show="view === 'cards' || open">
                     @error('weight.'.$part->id) <p class="field-error">{{ $message }}</p> @enderror
-                    <div class="plan-section-standing">
-                        <div class="meter" role="progressbar" aria-label="Progress of {{ $part->title }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $standing['percent'] }}"><span style="width: {{ $standing['percent'] }}%"></span></div>
-                        <p class="text-sm text-fg-muted tabular-nums">
-                            @if ($steps !== []){{ $standing['done'] }}/{{ $standing['total'] }}@else{{ $part->done() ? 'Done' : 'Not done' }}@endif
-                            @if ($weighted) · {{ $pct($standing['earned']) }} of {{ $pct($standing['share']) }}%@endif
-                        </p>
+                    @if ($editing !== $part->id)
+                        <div class="plan-section-standing">
+                            <div class="meter" role="progressbar" aria-label="Progress of {{ $part->title }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $standing['percent'] }}"><span style="width: {{ $standing['percent'] }}%"></span></div>
+                            <p class="text-sm text-fg-muted tabular-nums">{{ $summary }}</p>
+                        </div>
+                        @include('livewire.workspaces.partials.plan-meta', ['item' => $part])
+                    @endif
+                    @if ($steps !== [])
+                        <ul class="plan-steps" role="list" aria-label="Tasks of {{ $part->title }}">
+                            @foreach ($steps as $step)
+                                @include('livewire.workspaces.partials.plan-step', ['step' => $step, 'first' => $loop->first, 'last' => $loop->last, 'depth' => 1])
+                            @endforeach
+                        </ul>
+                    @endif
+                    @if ($thingCount > 0)
+                        <ul class="plan-things" role="list" aria-label="Kept in {{ $part->title }}">
+                            @foreach ($things['folders'] ?? [] as $folder)
+                                <li wire:key="thing-folder-{{ $folder->id }}" class="plan-thing">
+                                    <x-icon name="folder" class="size-4 shrink-0" />
+                                    <a href="{{ route('workspaces.folders.show', [$workspaceId, $folder->id]) }}" class="plan-thing-link">{{ $folder->name }}</a>
+                                </li>
+                            @endforeach
+                            @foreach ($things['notes'] ?? [] as $note)
+                                <li wire:key="thing-note-{{ $note->id }}" class="plan-thing">
+                                    <x-icon name="file-text" class="size-4 shrink-0" />
+                                    <a href="{{ route('workspaces.notes.show', [$workspaceId, $note->id]) }}" class="plan-thing-link">{{ $note->displayTitle() }}</a>
+                                    <span class="plan-thing-meta">Note</span>
+                                </li>
+                            @endforeach
+                            @foreach ($things['files'] ?? [] as $file)
+                                <li wire:key="thing-file-{{ $file->id }}" class="plan-thing">
+                                    <x-icon :name="$file->icon()" class="size-4 shrink-0" />
+                                    <a href="{{ route('workspaces.files.show', [$workspaceId, $file->id]) }}" class="plan-thing-link">{{ $file->fileName() }}</a>
+                                    <span class="plan-thing-meta">{{ $file->humanSize() }}</span>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+
+                    <div class="plan-section-actions">
+                        <button type="button" class="quiet-add-button" x-on:click="adding = adding === 'task' ? null : 'task'; $nextTick(() => $refs.task?.focus())"><x-icon name="list-checks" class="size-4" /><span class="sr-only">Add a </span>Task<span class="sr-only"> to {{ $part->title }}</span></button>
+                        <button type="button" class="quiet-add-button" wire:click="writeNote('{{ $part->id }}')"><x-icon name="notebook-pen" class="size-4" /><span class="sr-only">Write a </span>Note<span class="sr-only"> in {{ $part->title }}</span></button>
+                        <button type="button" class="quiet-add-button" x-on:click="$dispatch('section-files', '{{ $part->id }}')"><x-icon name="file-up" class="size-4" /><span class="sr-only">Add </span>Files<span class="sr-only"> to {{ $part->title }}</span></button>
+                        <button type="button" class="quiet-add-button" x-on:click="adding = adding === 'folder' ? null : 'folder'; $nextTick(() => $refs.folder?.focus())"><x-icon name="folder-plus" class="size-4" /><span class="sr-only">New </span>Folder<span class="sr-only"> in {{ $part->title }}</span></button>
                     </div>
-                    @include('livewire.workspaces.partials.plan-meta', ['item' => $part])
-                @endif
-                @if ($steps !== [])
-                    <ul class="plan-steps" role="list" aria-label="Steps of {{ $part->title }}">
-                        @foreach ($steps as $step)
-                            @include('livewire.workspaces.partials.plan-step', ['step' => $step, 'first' => $loop->first, 'last' => $loop->last, 'depth' => 1])
-                        @endforeach
-                    </ul>
-                @endif
-                <x-workspace.quiet-add label="Add a step" :submit="'addStep(\''.$part->id.'\')'">
-                    <label for="plan-step-{{ $part->id }}" class="sr-only">Add a step to {{ $part->title }}</label>
-                    <input id="plan-step-{{ $part->id }}" type="text" class="input" wire:model="stepText.{{ $part->id }}" maxlength="{{ \App\Study\Plans::MAX_TITLE }}" placeholder="What is the step?" autocomplete="off">
-                </x-workspace.quiet-add>
-                @error('stepText.'.$part->id) <p class="field-error">{{ $message }}</p> @enderror
+                    <form wire:submit="addStep('{{ $part->id }}')" novalidate class="plan-add" x-show="adding === 'task'" x-cloak x-on:keydown.escape="adding = null">
+                        <label for="plan-step-{{ $part->id }}" class="sr-only">Add a task to {{ $part->title }}</label>
+                        <input id="plan-step-{{ $part->id }}" type="text" class="input" x-ref="task" wire:model="stepText.{{ $part->id }}" maxlength="{{ \App\Study\Plans::MAX_TITLE }}" placeholder="What is the task?" autocomplete="off">
+                        <button type="submit" class="btn btn-secondary btn-sm">Add</button>
+                        <button type="button" class="topbar-button size-9" x-on:click="adding = null" title="Close"><x-icon name="x" class="size-4" /><span class="sr-only">Close</span></button>
+                    </form>
+                    @error('stepText.'.$part->id) <p class="field-error">{{ $message }}</p> @enderror
+                    <form wire:submit="addFolder('{{ $part->id }}')" novalidate class="plan-add" x-show="adding === 'folder'" x-cloak x-on:keydown.escape="adding = null">
+                        <label for="plan-folder-{{ $part->id }}" class="sr-only">Name of the new folder in {{ $part->title }}</label>
+                        <input id="plan-folder-{{ $part->id }}" type="text" class="input" x-ref="folder" wire:model="folderText.{{ $part->id }}" maxlength="{{ \App\Study\Folders::MAX_NAME }}" placeholder="Folder name" autocomplete="off">
+                        <button type="submit" class="btn btn-secondary btn-sm">Add</button>
+                        <button type="button" class="topbar-button size-9" x-on:click="adding = null" title="Close"><x-icon name="x" class="size-4" /><span class="sr-only">Close</span></button>
+                    </form>
+                    @error('folderText.'.$part->id) <p class="field-error">{{ $message }}</p> @enderror
+
+                    {{-- resources/js/uploader.js: the files go up into the section's folder, made when the first one goes. Livewire leaves the list alone. --}}
+                    <div wire:ignore data-section-upload
+                        x-data="uploader({ url: @js(route('api.v1.files.store')), maxBytes: {{ $maxUpload }}, extensions: @js($extensions), placeFor: () => $wire.sectionFolder('{{ $part->id }}') })"
+                        x-on:section-files.window="if ($event.detail === @js($part->id)) $refs.files.click()">
+                        <input type="file" multiple hidden x-ref="files" x-on:change="choose($event)" accept="{{ \App\Study\FileTypes::accept() }}">
+                        <ul class="upload-list" role="list" aria-label="Files going to {{ $part->title }}" x-show="items.some((item) => item.state !== 'done')" x-cloak>
+                            <template x-for="item in items.filter((item) => item.state !== 'done')" :key="item.key">
+                                <li class="upload-item" x-bind:data-state="item.state">
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block truncate font-medium" x-text="item.path"></span>
+                                        <span class="block text-sm text-fg-muted" x-text="item.state === 'sending' ? `Uploading… ${item.progress}%` : item.note"></span>
+                                    </span>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
             </section>
         @endforeach
 
         @if ($loose !== [])
-            <section class="plan-section" aria-label="Steps outside a section">
-                <div class="plan-section-head"><h3 class="plan-part-title">Other steps</h3></div>
-                <ul class="plan-steps" role="list" aria-label="Steps outside a section">
-                    @foreach ($loose as $step)
-                        @include('livewire.workspaces.partials.plan-step', ['step' => $step, 'first' => $loop->first, 'last' => $loop->last, 'depth' => 1])
-                    @endforeach
-                </ul>
-                <x-workspace.quiet-add label="Add a step" submit="addStep('')">
-                    <label for="plan-step-loose" class="sr-only">Add a step</label>
-                    <input id="plan-step-loose" type="text" class="input" wire:model="stepText.loose" maxlength="{{ \App\Study\Plans::MAX_TITLE }}" placeholder="What is the step?" autocomplete="off">
-                </x-workspace.quiet-add>
-                @error('stepText.loose') <p class="field-error">{{ $message }}</p> @enderror
+            <section class="plan-section" aria-label="Tasks outside a section" x-data="{ open: false }">
+                <div class="plan-section-head">
+                    <h3 class="plan-part-title">Other tasks</h3>
+                    <button type="button" class="topbar-button plan-section-toggle" x-on:click="open = ! open" x-bind:aria-expanded="open.toString()" aria-expanded="false">
+                        <x-icon name="chevron-down" class="size-5" /><span class="sr-only">Show the other tasks</span>
+                    </button>
+                </div>
+                <div class="plan-section-body" x-show="view === 'cards' || open">
+                    <ul class="plan-steps" role="list" aria-label="Tasks outside a section">
+                        @foreach ($loose as $step)
+                            @include('livewire.workspaces.partials.plan-step', ['step' => $step, 'first' => $loop->first, 'last' => $loop->last, 'depth' => 1])
+                        @endforeach
+                    </ul>
+                    <x-workspace.quiet-add label="Task" submit="addStep('')">
+                        <label for="plan-step-loose" class="sr-only">Add a task</label>
+                        <input id="plan-step-loose" type="text" class="input" wire:model="stepText.loose" maxlength="{{ \App\Study\Plans::MAX_TITLE }}" placeholder="What is the task?" autocomplete="off">
+                    </x-workspace.quiet-add>
+                    @error('stepText.loose') <p class="field-error">{{ $message }}</p> @enderror
+                </div>
             </section>
         @endif
 

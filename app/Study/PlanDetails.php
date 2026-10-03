@@ -307,7 +307,7 @@ final readonly class PlanDetails
         }
         $stuck = count(array_filter($this->unitsOfAll(), fn (PlanItem $unit) => $unit->state === 'stuck'));
         if ($stuck > 0) {
-            $reasons[] = $stuck === 1 ? '1 step is stuck' : "{$stuck} steps are stuck";
+            $reasons[] = $stuck === 1 ? '1 task is stuck' : "{$stuck} tasks are stuck";
         }
         $overdue = count(array_filter($this->overdueItems($today), fn (PlanItem $item) => $item->kind !== 'milestone'));
         if ($overdue > 0) {

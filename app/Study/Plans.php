@@ -53,7 +53,7 @@ final class Plans
 
     public const PRIORITIES = ['low' => 'Low', 'medium' => 'Medium', 'high' => 'High', 'urgent' => 'Urgent'];
 
-    public function __construct(private Activities $activities) {}
+    public function __construct(private Activities $activities, private Folders $folders) {}
 
     public function get(Principal $by, string $activityId): PlanDetails
     {
@@ -176,13 +176,49 @@ final class Plans
     {
         $scope = Guard::learner($by);
 
-        DB::transaction(function () use ($scope, $itemId, $fields) {
+        $before = DB::transaction(function () use ($scope, $itemId, $fields) {
             $row = $this->row($scope, $itemId, lock: true);
             $changes = $this->fields($scope, $row->activity_id, $row->kind, $fields + ['title' => $row->title], $row);
             LearnerTables::query($scope, 'activity_items')->where('id', $itemId)->update($changes + ['updated_at' => now()]);
-        });
 
-        return self::item($this->row($scope, $itemId));
+            return $row;
+        });
+        $item = self::item($this->row($scope, $itemId));
+
+        // A section's folder keeps its name.
+        if ($item->title !== $before->title && $this->folderRow($scope, $item->folderId) !== null) {
+            $this->folders->rename($by, (string) $item->folderId, mb_substr($item->title, 0, Folders::MAX_NAME));
+        }
+
+        return $item;
+    }
+
+    /**
+     * A section's own folder, inside the assignment's folder, for the notes, files and folders added to it: made
+     * the first time it is needed (and again if it was deleted). Only a section has one.
+     */
+    public function folder(Principal $by, string $itemId): FolderDetails
+    {
+        $scope = Guard::learner($by);
+        $row = $this->row($scope, $itemId);
+        if ($row->kind !== 'part') {
+            throw new Conflict('not_a_section', 'Only a section has a folder.');
+        }
+        if (($folder = $this->folderRow($scope, $row->folder_id)) !== null) {
+            return $this->folders->find($by, $folder->id);
+        }
+        $parent = $this->activities->folder($by, $row->activity_id);
+
+        return DB::transaction(function () use ($scope, $by, $itemId, $parent) {
+            $row = $this->row($scope, $itemId, lock: true);
+            if (($folder = $this->folderRow($scope, $row->folder_id)) !== null) {
+                return $this->folders->find($by, $folder->id);
+            }
+            $folder = $this->folders->create($by, 'folder', $parent->id, mb_substr($row->title, 0, Folders::MAX_NAME));
+            LearnerTables::query($scope, 'activity_items')->where('id', $itemId)->update(['folder_id' => $folder->id, 'updated_at' => now()]);
+
+            return $folder;
+        });
     }
 
     /**
@@ -241,19 +277,27 @@ final class Plans
     }
 
     /** Deletes an item; a part or a step takes the steps under it with it. */
-    public function delete(Principal $by, string $itemId): void
+    /**
+     * Deletes an item and everything under it. A section's folder goes with it when it is empty; when it holds
+     * something, it stays where it is (in the assignment's folder), with what is in it, and its name is returned.
+     */
+    public function delete(Principal $by, string $itemId): ?string
     {
         $scope = Guard::learner($by);
 
-        DB::transaction(function () use ($scope, $itemId) {
-            $this->row($scope, $itemId, lock: true);
+        $folderId = DB::transaction(function () use ($scope, $itemId) {
+            $row = $this->row($scope, $itemId, lock: true);
             $gone = [$itemId];
             for ($frontier = [$itemId]; $frontier !== [];) {
                 $frontier = LearnerTables::query($scope, 'activity_items')->whereIn('parent_id', $frontier)->pluck('id')->all();
                 array_push($gone, ...$frontier);
             }
             LearnerTables::query($scope, 'activity_items')->whereIn('id', $gone)->delete();
+
+            return $row->folder_id;
         });
+
+        return $this->dropFolder($by, $scope, $folderId);
     }
 
     /**
@@ -266,11 +310,17 @@ final class Plans
     {
         $scope = Guard::learner($by);
 
-        return DB::transaction(function () use ($scope, $activityId) {
+        [$removed, $folders] = DB::transaction(function () use ($scope, $activityId) {
             $this->activity($scope, $activityId, lock: true);
+            $folders = LearnerTables::query($scope, 'activity_items')->where('activity_id', $activityId)->whereNotNull('folder_id')->pluck('folder_id')->all();
 
-            return LearnerTables::query($scope, 'activity_items')->where('activity_id', $activityId)->delete();
+            return [LearnerTables::query($scope, 'activity_items')->where('activity_id', $activityId)->delete(), $folders];
         });
+        foreach ($folders as $folderId) {
+            $this->dropFolder($by, $scope, $folderId);
+        }
+
+        return $removed;
     }
 
     // ---------- Starters and an AI's reply ----------
@@ -649,6 +699,28 @@ final class Plans
         return self::member(LearnerTables::query($scope, 'activity_members')->where('id', $id)->first() ?? throw new NotFound);
     }
 
+    /** A section's folder, when it has one that still exists. */
+    private function folderRow(LearnerScope $scope, ?string $folderId): ?object
+    {
+        return $folderId === null ? null : LearnerTables::query($scope, 'folders')->where('id', $folderId)->first();
+    }
+
+    /** Removes a section's folder when it is empty; returns its name when it stays, holding something. */
+    private function dropFolder(Principal $by, LearnerScope $scope, ?string $folderId): ?string
+    {
+        $folder = $this->folderRow($scope, $folderId);
+        if ($folder === null) {
+            return null;
+        }
+        try {
+            $this->folders->delete($by, $folder->id);
+
+            return null;
+        } catch (Conflict) {
+            return $folder->name;
+        }
+    }
+
     private static function item(object $row): PlanItem
     {
         $labels = $row->labels === null ? [] : (json_decode((string) $row->labels, true) ?: []);
@@ -662,6 +734,7 @@ final class Plans
             labels: array_values(array_filter($labels, 'is_string')),
             memberId: $row->member_id,
             doneAt: $row->done_at === null ? null : (string) $row->done_at,
+            folderId: $row->folder_id ?? null,
         );
     }
 

@@ -9,6 +9,8 @@ use App\Livewire\Workspaces\Tasks;
 use App\Models\User;
 use App\Study\Activities;
 use App\Study\ActivityDetails;
+use App\Study\Folders;
+use App\Study\Notes;
 use App\Study\PlanMaker;
 use App\Study\Plans;
 use App\Study\WorkspaceDetails;
@@ -85,7 +87,7 @@ class AssignmentPlanScreensTest extends TestCase
         $by = $this->principal($this->ada);
         $part = $plans->addPart($by, $this->essay->id, 'Research');
 
-        $component = $this->plan()->assertSee('Research')->assertSee('Add a step')->assertSee('New section')->assertSee('Clear the plan')->assertSee('Also track')->assertSee('Milestones')->assertSee('Team')->assertSee('Marking criteria')
+        $component = $this->plan()->assertSee('Research')->assertSee('Add a task to Research')->assertSee('New section')->assertSee('Clear the plan')->assertSee('Also track')->assertSee('Milestones')->assertSee('Team')->assertSee('Marking criteria')
             ->assertDontSee('Add a milestone')->assertDontSee('Add a person')->assertDontSee('Add a criterion')->assertDontSee('Days to reach')->assertDontSee('Who shares the work');
         $component->call('$set', 'showMilestones', true)->assertSee('Add a milestone')->assertDontSee('Add a person');
         $component->call('$set', 'showTeam', true)->assertSee('Add a person');
@@ -117,7 +119,51 @@ class AssignmentPlanScreensTest extends TestCase
 
         // Without weights, it counts the steps and says so.
         $component->call('setWeight', $research->id, '');
-        $component->assertSee('Counting steps');
+        $component->assertSee('Counting tasks');
+    }
+
+    public function test_a_section_keeps_notes_files_and_folders_in_its_own_folder_and_lists_them(): void
+    {
+        $plans = app(Plans::class);
+        $by = $this->principal($this->ada);
+        $research = $plans->addPart($by, $this->essay->id, 'Research', 40);
+
+        $component = $this->plan()->assertSeeText('Add a Task to Research')->assertSeeText('Write a Note in Research')->assertSeeText('Add Files to Research')->assertSeeText('New Folder in Research')
+            ->assertDontSee('Open its folder');
+
+        // Its folder is made the first time something goes in: inside the assignment's folder.
+        $component->call('addFolder', $research->id)->assertHasErrors(["folderText.{$research->id}"]);
+        $component->set("folderText.{$research->id}", 'Sources')->call('addFolder', $research->id)->assertHasNoErrors()->assertSee('Folder “Sources” added.')
+            ->assertSet('folderText', [])->assertSee('Sources')->assertSee('Open its folder')->assertSee('1 item');
+        $section = $plans->get($by, $this->essay->id)->item($research->id);
+        $folder = app(Folders::class)->find($by, $section->folderId);
+        $this->assertSame(['Research', app(Activities::class)->find($by, $this->essay->id)->folderId], [$folder->name, $folder->parentId]);
+
+        // Files go up into it (the uploader asks for the place), and a note is written there.
+        $component->call('sectionFolder', $research->id)->assertReturned(['folder', $folder->id]);
+        $component->call('uploadsFinished', 2, 0)->assertSee('2 files added.');
+        $component->call('writeNote', $research->id)->assertRedirect(route('workspaces.notes.create', [$this->databases->id, 'in' => "folder:{$folder->id}"]));
+        $note = app(Notes::class)->create($by, 'folder', $folder->id, 'Reading list');
+        $component->call('$refresh')->assertSee('Reading list')->assertSee('2 items');
+
+        // Deleting the section keeps its folder, with what is in it, and says so.
+        $component->call('remove', $research->id)->assertSee('Deleted. Its folder “Research” stays in the assignment');
+        $this->assertSame('Research', app(Folders::class)->find($by, $folder->id)->name);
+        $this->assertNotNull($note);
+    }
+
+    public function test_the_assignment_itself_takes_folders_beside_its_files_and_notes(): void
+    {
+        $by = $this->principal($this->ada);
+        $section = app(Plans::class)->addPart($by, $this->essay->id, 'Research');
+        $sectionFolder = app(Plans::class)->folder($by, $section->id);
+
+        $page = Livewire::test(AssignmentPage::class, ['workspaceId' => $this->databases->id, 'activityId' => $this->essay->id])
+            ->call('addFolder')->assertHasErrors(['folderName'])
+            ->set('folderName', 'Brief and rubric')->call('addFolder')->assertHasNoErrors()->assertSee('Folder “Brief and rubric” added.')->assertSee('Brief and rubric')->assertSet('folderName', '');
+        // A section's folder is shown in its section, not here.
+        $page->assertDontSee('>Research</a>', false);
+        $this->assertSame('Research', $sectionFolder->name);
     }
 
     public function test_an_ais_prompt_is_strong_and_carries_the_time_left(): void

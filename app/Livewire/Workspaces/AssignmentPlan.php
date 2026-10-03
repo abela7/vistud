@@ -9,6 +9,10 @@ use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
+use App\Study\Files;
+use App\Study\FileTypes;
+use App\Study\Folders;
+use App\Study\Notes;
 use App\Study\PlanItem;
 use App\Study\PlanMaker;
 use App\Study\Plans;
@@ -34,8 +38,11 @@ final class AssignmentPlan extends Component
     #[Locked]
     public string $activityId;
 
-    /** What is typed in each "Add a step" box, by part ID; `loose` is the box for steps outside any part. */
+    /** What is typed in each "Add a task" box, by part ID; `loose` is the box for tasks outside any section. */
     public array $stepText = [];
+
+    /** What is typed in each section's "New folder" box, by part ID. */
+    public array $folderText = [];
 
     public string $partText = '';
 
@@ -109,11 +116,17 @@ final class AssignmentPlan extends Component
 
     private Activities $activities;
 
+    private Folders $folders;
+
+    private Files $files;
+
+    private Notes $notes;
+
     private PrincipalFactory $principals;
 
-    public function boot(Plans $plans, PlanMaker $maker, Activities $activities, PrincipalFactory $principals): void
+    public function boot(Plans $plans, PlanMaker $maker, Activities $activities, Folders $folders, Files $files, Notes $notes, PrincipalFactory $principals): void
     {
-        [$this->plans, $this->maker, $this->activities, $this->principals] = [$plans, $maker, $activities, $principals];
+        [$this->plans, $this->maker, $this->activities, $this->folders, $this->files, $this->notes, $this->principals] = [$plans, $maker, $activities, $folders, $files, $notes, $principals];
     }
 
     public function mount(string $workspaceId, string $activityId): void
@@ -140,6 +153,48 @@ final class AssignmentPlan extends Component
     {
         $this->adding = $this->adding === $stepId ? null : $stepId;
         $this->resetErrorBag();
+    }
+
+    // ---------- A section's own things: notes, files and folders, kept in its folder ----------
+
+    /** The section's folder, made now if it has none: where its files go up (resources/js/uploader.js). @return array{0: string, 1: string} */
+    public function sectionFolder(string $partId): array
+    {
+        return ['folder', $this->plans->folder($this->principal(), $partId)->id];
+    }
+
+    /** A new note in the section's folder, in the editor. */
+    public function writeNote(string $partId): void
+    {
+        $folder = null;
+        if ($this->attempt([], function () use ($partId, &$folder) {
+            $folder = $this->plans->folder($this->principal(), $partId);
+        })) {
+            $this->redirect(route('workspaces.notes.create', [$this->workspaceId, 'in' => "folder:{$folder->id}"]), navigate: true);
+        }
+    }
+
+    /** A folder inside the section's folder; its box is folderText[the part's ID]. */
+    public function addFolder(string $partId): void
+    {
+        $name = (string) ($this->folderText[$partId] ?? '');
+        $made = null;
+        if ($this->attempt(['name' => "folderText.{$partId}"], function () use ($partId, $name, &$made) {
+            $by = $this->principal();
+            $made = $this->folders->create($by, 'folder', $this->plans->folder($by, $partId)->id, $name);
+        })) {
+            unset($this->folderText[$partId]);
+            $this->notify("Folder “{$made->name}” added.");
+            $this->dispatch('folder-added', part: $partId);
+        }
+    }
+
+    /** Called by resources/js/uploader.js once a round of files has gone up into a section. */
+    public function uploadsFinished(int $uploaded, int $refused): void
+    {
+        if ($uploaded > 0) {
+            $this->notify(($uploaded === 1 ? '1 file' : "{$uploaded} files").' added.');
+        }
     }
 
     public function addMilestone(): void
@@ -212,10 +267,15 @@ final class AssignmentPlan extends Component
         $this->cancelEdit();
         $this->adding = null;
         $removed = 0;
+        $folders = collect($this->plans->get($this->principal(), $this->activityId)->parts())->contains(fn (PlanItem $part) => $part->folderId !== null);
         if ($this->attempt([], function () use (&$removed) {
             $removed = $this->plans->clear($this->principal(), $this->activityId);
         })) {
-            $this->notify($removed === 0 ? 'The plan was already empty.' : 'The plan is cleared.');
+            $this->notify(match (true) {
+                $removed === 0 => 'The plan was already empty.',
+                $folders => 'The plan is cleared. What you added to its sections stays in the assignment\'s folder.',
+                default => 'The plan is cleared.',
+            });
             $this->changed();
         }
     }
@@ -321,7 +381,13 @@ final class AssignmentPlan extends Component
 
     public function remove(string $id): void
     {
-        if ($this->attempt([], fn () => $this->plans->delete($this->principal(), $id))) {
+        $kept = null;
+        if ($this->attempt([], function () use ($id, &$kept) {
+            $kept = $this->plans->delete($this->principal(), $id);
+        })) {
+            if ($kept !== null) {
+                $this->notify("Deleted. Its folder “{$kept}” stays in the assignment's folder, with what is in it.");
+            }
             $this->changed();
         }
     }
@@ -395,7 +461,32 @@ final class AssignmentPlan extends Component
             $starters = array_intersect_key($starters, ['project' => 1, 'group' => 1]) + $starters;
         }
 
+        // What each section keeps in its folder: its folders, files and notes.
+        $materials = [];
+        $sectionFolders = array_filter(array_map(fn (PlanItem $part) => $part->folderId, $plan->parts()));
+        if ($sectionFolders !== []) {
+            $wanted = array_flip($sectionFolders);
+            foreach ($this->folders->tree($by, $this->workspaceId) as $folder) {
+                if ($folder->parentId !== null && isset($wanted[$folder->parentId])) {
+                    $materials[$folder->parentId]['folders'][] = $folder;
+                }
+            }
+            foreach ($this->files->list($by, $this->workspaceId) as $file) {
+                if ($file->folderId !== null && isset($wanted[$file->folderId])) {
+                    $materials[$file->folderId]['files'][] = $file;
+                }
+            }
+            foreach ($this->notes->list($by, $this->workspaceId) as $note) {
+                if ($note->folderId !== null && isset($wanted[$note->folderId])) {
+                    $materials[$note->folderId]['notes'][] = $note;
+                }
+            }
+        }
+
         return view('livewire.workspaces.assignment-plan', [
+            'materials' => $materials,
+            'maxUpload' => Files::maxBytes(),
+            'extensions' => [...array_keys(FileTypes::TYPES), 'jpeg'],
             'plan' => $plan,
             'assignment' => $assignment,
             'progress' => $progress,

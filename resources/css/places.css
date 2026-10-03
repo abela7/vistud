@@ -1039,6 +1039,7 @@
 
     .plan-section-head {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         gap: 0.5rem;
         min-width: 0;
@@ -1053,6 +1054,130 @@
         align-content: start;
         border-style: dashed;
         background-color: transparent;
+    }
+
+    .plan-section.is-over {
+        border-color: var(--accent);
+        background-color: var(--drag-target);
+    }
+
+    .plan-section-head .plan-part-title {
+        flex: 1 1 8rem;
+    }
+
+    .plan-section-body {
+        display: grid;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    /* What a section keeps: its folders, notes and files, one line each. */
+    .plan-things {
+        display: grid;
+        gap: 0.125rem;
+        padding-top: 0.375rem;
+        border-top: 1px solid var(--divider);
+    }
+
+    .plan-thing {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+        min-height: 2rem;
+        color: var(--text-muted);
+    }
+
+    .plan-thing-link {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+        color: var(--text);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .plan-thing-link:hover {
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    .plan-thing-meta {
+        flex: none;
+        font-size: 0.75rem;
+    }
+
+    /* Add to a section: a task, a note, files or a folder. */
+    .plan-section-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0 0.125rem;
+        margin-left: -0.5rem;
+    }
+
+    /* The list: each section one line (its name, a small bar, how far, its weight), opened to show the rest. */
+    .plan-section-summary,
+    .plan-section-toggle {
+        display: none;
+    }
+
+    .plan-grid.is-list {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.5rem;
+    }
+
+    .plan-grid.is-list .plan-section {
+        padding: 0.5rem 0.875rem;
+    }
+
+    .plan-grid.is-list .plan-section-summary {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .plan-grid.is-list .plan-section-summary .meter {
+        width: 6rem;
+        flex: none;
+    }
+
+    .plan-grid.is-list .plan-section-toggle {
+        display: inline-grid;
+    }
+
+    .plan-section-toggle svg {
+        transition: transform 0.15s ease;
+    }
+
+    .plan-section-toggle[aria-expanded='true'] svg {
+        transform: rotate(180deg);
+    }
+
+    .plan-grid.is-list .plan-section-standing {
+        display: none;
+    }
+
+    .plan-grid.is-list .plan-section-new {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+    }
+
+    .plan-grid.is-list .plan-section-new > .input {
+        min-width: 0;
+        flex: 1 1 14rem;
+    }
+
+    /* On a narrow screen the list's line keeps the name whole and puts the bar under it. */
+    @media (max-width: 40rem) {
+        .plan-grid.is-list .plan-section-summary {
+            order: 5;
+            flex-basis: 100%;
+        }
     }
 
     .plan-new-weight {
@@ -1115,8 +1240,11 @@
 
     .plan-toolbar-actions {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 0.25rem;
+        justify-content: flex-end;
+        gap: 0.25rem 0.5rem;
+        min-width: 0;
     }
 
     .plan-extras {
