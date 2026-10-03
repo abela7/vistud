@@ -15,20 +15,40 @@
         : null;
 @endphp
 <div class="space-y-6" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
-    <div class="space-y-3">
-        @if ($trail !== [])
-            <x-back :href="end($trail)[1]" :to="end($trail)[0]" />
-        @endif
-        {{-- The whole path, once it says more than the Back link does. --}}
-        @if (count($trail) > 1)
-            <nav aria-label="Path" class="crumbs">
-                <ol role="list">
-                    @foreach ($trail as [$label, $url])
-                        <li><a href="{{ $url }}">{{ $label }}</a></li>
-                    @endforeach
-                </ol>
-            </nav>
-        @endif
+    <div class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-3">
+                @if ($trail !== [])
+                    <x-back :href="end($trail)[1]" :to="end($trail)[0]" />
+                @endif
+                {{-- The whole path, once it says more than the Back link does. --}}
+                @if (count($trail) > 1)
+                    <nav aria-label="Path" class="crumbs">
+                        <ol role="list">
+                            @foreach ($trail as [$label, $url])
+                                <li><a href="{{ $url }}">{{ $label }}</a></li>
+                            @endforeach
+                        </ol>
+                    </nav>
+                @endif
+            </div>
+            @if ($isModule)
+                <div class="flex flex-wrap items-center gap-2">
+                    <a href="{{ route('workspaces.modules.questions', [$workspaceId, $place->id]) }}" class="btn btn-secondary">
+                        <x-icon name="circle-help" class="size-4" />Questions
+                        @if ($questions['open'] > 0)
+                            <span class="tab-count">{{ $questions['open'] }}<span class="sr-only"> open{{ $questions['stuck'] > 0 ? ', '.$questions['stuck'].' stuck' : '' }}</span></span>
+                        @endif
+                    </a>
+                    <a href="{{ route('workspaces.modules.sessions', [$workspaceId, $place->id]) }}" class="btn btn-secondary">
+                        <x-icon name="history" class="size-4" />Study sessions
+                        @if ($sessionsCount > 0)
+                            <span class="tab-count">{{ $sessionsCount }}<span class="sr-only"> {{ Str::plural('session', $sessionsCount) }}</span></span>
+                        @endif
+                    </a>
+                </div>
+            @endif
+        </div>
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="flex min-w-0 items-center gap-3">
                 @if ($isModule)
@@ -49,20 +69,6 @@
                     <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
                 </button>
                 @include('livewire.workspaces.partials.new-menu', ['placeId' => $place->id, 'folders' => $isModule || $place->depth < Folders::MAX_DEPTH, 'questionUrl' => $isModule ? route('workspaces.questions.create', [$workspaceId, 'module' => $place->id]) : null])
-                @if ($isModule)
-                    <a href="{{ route('workspaces.modules.questions', [$workspaceId, $place->id]) }}" class="btn btn-secondary">
-                        <x-icon name="circle-help" class="size-4" />Questions
-                        @if ($questions['open'] > 0)
-                            <span class="tab-count">{{ $questions['open'] }}<span class="sr-only"> open{{ $questions['stuck'] > 0 ? ', '.$questions['stuck'].' stuck' : '' }}</span></span>
-                        @endif
-                    </a>
-                    <a href="{{ route('workspaces.modules.sessions', [$workspaceId, $place->id]) }}" class="btn btn-secondary">
-                        <x-icon name="history" class="size-4" />Study sessions
-                        @if ($sessionsCount > 0)
-                            <span class="tab-count">{{ $sessionsCount }}<span class="sr-only"> {{ Str::plural('session', $sessionsCount) }}</span></span>
-                        @endif
-                    </a>
-                @endif
                 @if ($isModule || $place->moduleId !== null)
                     <x-button variant="primary" icon="play" wire:click="studyHere">Study this</x-button>
                 @endif

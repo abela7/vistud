@@ -209,6 +209,8 @@ The cloud check (2026-09-25) was a fresh clone of `m1/wp6-web-adapters` at `8ac9
 | `npm run dev` | Not run | — | Not verified |
 | Preview regeneration | Ran | — | Not verified |
 
+**Windows re-check on a new PC (2026-10-03, Gemini), at `2e9d468`.** The owner's old computer was lost; the project folder, with its ignored `.tools/` and the dev database in it, came across intact. On the new PC: `composer migrate` applied the assignments, plan and project migrations (additive; the existing 39 tables and their data were left alone), `php artisan vistud:db:grants` granted 41 tables, `npm run build` ran, `php artisan vistud:doctor` reported all 13 checks OK, and `php artisan test` ran 502 tests: 501 passed and 1 was skipped (the concurrency test, no `pcntl` on Windows). The login page loaded on `php artisan serve`. The toolchain in `.tools/` is PHP 8.4.26, Composer 2.10.3, Node 22.23.3, MySQL 8.4.11 (started with `mysqld.exe --defaults-file=...\my.ini` on port 3307, `DB_PORT=3307`) and LibreOffice 24.8 (`VISTUD_OFFICE_BINARY` in `.env`); a `.tools\env.ps1` puts them on the PATH for a PowerShell session. Git for Windows is installed separately, and a push needs the owner to sign in to GitHub once in a window of their own (an agent's background shell can't show the sign-in).
+
 ## 10. Tests and CI
 
 **Commands:**
