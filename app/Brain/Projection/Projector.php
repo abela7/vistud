@@ -52,6 +52,7 @@ final class Projector
             'profile' => $derivation->profile(),
             'attempts' => $derivation->attempts(),
             'rejected_pairs' => $replay->rejectedPairs,
+            'invalid_splits' => $replay->invalidSplits,
         ];
     }
 }

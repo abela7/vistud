@@ -199,6 +199,43 @@ class JournalWriterTest extends TestCase
         $this->assertSame(0, (int) DB::table('learners')->where('id', $this->scope->learnerId)->value('journal_position'));
     }
 
+    public function test_an_incomplete_split_is_refused_when_it_would_take_effect(): void
+    {
+        // Contract change approved in the WP4 review: a split may only become
+        // effective when complete. As a pending proposal it may be incomplete.
+        $this->writer->appendBatch($this->scope, [
+            ...$this->setupEntries(),
+            $this->attempt($this->scope, 'E1', 'TK-1', 'correct', '2026-10-15T14:12:00+01:00'),
+            $this->attempt($this->scope, 'E2', 'TK-1', 'incorrect', '2026-10-16T14:12:00+01:00'),
+            $this->definesTopic('K-IN', 'T-INNER'),
+            $this->definesTopic('K-OUT', 'T-OUTER'),
+        ]);
+        $split = fn (string $state, array $assignments) => [
+            'id' => 'SPLIT-'.$state.'-'.count($assignments), 'kind' => 'claim', 'actor' => $this->learnerActor($this->scope), 'occurred_at' => '2026-10-17T10:00:00+01:00',
+            'body' => [
+                'type' => 'splits_into', 'targets' => ['topic:T-LEFT'],
+                'value' => ['into' => ['topic:T-INNER', 'topic:T-OUTER'], 'assignments' => $assignments],
+                'confidence' => null, 'method' => ['kind' => 'person', 'id' => $this->scope->learnerId, 'version' => '1'], 'review' => ['state' => $state],
+            ],
+        ];
+        $partial = [['ref' => 'event:E1', 'to' => 'topic:T-INNER']];
+
+        $this->assertRefused(fn () => $this->writer->append($this->scope, $split('accepted', $partial)), 'split_incomplete', [
+            'problems' => ['unassigned_evidence'],
+            'unassigned' => ['event:E2'],
+        ]);
+
+        // Pending, it's only a proposal; accepting it is what gets refused.
+        $this->writer->append($this->scope, $split('pending', $partial));
+        $this->assertRefused(
+            fn () => $this->writer->append($this->scope, $this->learnerReview($this->scope, 'YES', 'claim:SPLIT-pending-1', 'accept', '2026-10-17T11:00:00+01:00')),
+            'split_incomplete',
+        );
+
+        $complete = [...$partial, ['ref' => 'event:E2', 'to' => 'topic:T-OUTER']];
+        $this->assertSame(AppendResult::RECORDED, $this->writer->append($this->scope, $split('accepted', $complete))->status);
+    }
+
     public function test_a_learner_that_does_not_exist_is_not_found(): void
     {
         $this->assertThrows(fn () => $this->writer->append(LearnerScope::forJob('no-such-learner'), $this->definesTopic('K1', 'T-1')), NotFound::class);
