@@ -52,7 +52,7 @@ for (const [name, device] of Object.entries(devices)) {
             await expect(page.locator('.assignment-deadline')).toContainText('Due 14 Mar 2030, 23:59');
 
             // Where the student is with it.
-            await page.locator('.status-choice').filter({ hasText: 'In progress' }).click();
+            await page.getByRole('group', { name: 'Where you are' }).getByRole('button', { name: 'In progress' }).click();
             await expect(page.getByText('In progress.', { exact: true })).toBeVisible();
 
             // Nothing on the page scrolls sideways.
@@ -85,8 +85,10 @@ for (const [name, device] of Object.entries(devices)) {
             await page.getByRole('button', { name: 'Create' }).click();
             await page.getByRole('heading', { level: 1, name: 'Coursework 2: osmosis report' }).waitFor();
 
-            // Starters first: pick the nearest and change what doesn't fit.
-            await expect(page.getByText('How do you want to start?')).toBeVisible();
+            // An empty plan is calm: the AI first, and the pre-made plans only when asked for.
+            await expect(page.getByText('Break it down')).toBeVisible();
+            await expect(page.getByRole('button', { name: /Essay or report/ })).toHaveCount(0);
+            await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
             await page.getByRole('button', { name: /Essay or report/ }).click();
             await expect(page.getByRole('heading', { level: 3, name: 'Research' })).toBeVisible();
             await expect(page.locator('.plan-percent')).toHaveText('0%');
@@ -95,10 +97,11 @@ for (const [name, device] of Object.entries(devices)) {
             // Ticking the first step starts the assignment and moves the bar.
             await page.getByRole('button', { name: 'Done: Find and read the sources' }).click();
             await expect(page.getByText('1 of 12 done')).toBeVisible();
-            await expect(page.locator('.section-header').getByText('In progress')).toBeVisible();
+            await expect(page.getByRole('group', { name: 'Where you are' }).getByRole('button', { name: 'In progress' })).toHaveAttribute('aria-pressed', 'true');
             await expect(page.locator('.plan-pace')).toContainText('left');
 
             // A step added to a part, a criterion checked, a step renamed.
+            await page.locator('section[aria-label="Part: Research"]').getByRole('button', { name: 'Add a step' }).click();
             await page.getByLabel('Add a step to Research').fill('Check the library catalogue');
             await page.getByLabel('Add a step to Research').press('Enter');
             await expect(page.getByText('Check the library catalogue', { exact: true })).toBeVisible();
@@ -118,7 +121,7 @@ for (const [name, device] of Object.entries(devices)) {
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 
             // With an AI: the brief goes into the prompt, the reply is read, looked over and added.
-            await page.getByRole('button', { name: 'Plan it with an AI' }).first().click();
+            await page.getByRole('button', { name: 'Plan with an AI' }).click();
             await page.getByLabel(/The assignment brief/).fill('Explain osmosis in 1500 words. Marked on accuracy (50%) and clarity (50%).');
             await expect(page.getByLabel('The prompt', { exact: true })).toContainText('Explain osmosis in 1500 words.');
             await page.getByLabel("The AI's reply").fill('Here you go:\n<part title="Lab write-up" marks="50"><step>Write the method</step></part><criterion marks="50">Accuracy</criterion>');
@@ -133,6 +136,20 @@ for (const [name, device] of Object.entries(devices)) {
             const card = page.locator('.question-card').filter({ hasText: 'Coursework 2: osmosis report' });
             await expect(card).toContainText('1 of 14 done');
             await expect(card).toContainText('In progress');
+
+            // A plan that isn't wanted is cleared, after asking.
+            await card.getByRole('link', { name: 'Coursework 2: osmosis report' }).click();
+            await page.getByRole('heading', { level: 1, name: 'Coursework 2: osmosis report' }).waitFor();
+            await page.getByRole('button', { name: 'Actions for the plan' }).click();
+            await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Clear the plan' }).click();
+            await expect(page.getByText('Remove everything in the plan?')).toBeVisible();
+            await page.getByRole('button', { name: 'Keep it', exact: true }).click();
+            await expect(page.getByRole('heading', { level: 3, name: 'Research' })).toBeVisible();
+            await page.getByRole('button', { name: 'Actions for the plan' }).click();
+            await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Clear the plan' }).click();
+            await page.getByRole('button', { name: 'Remove it all' }).click();
+            await expect(page.getByText('The plan is cleared.')).toBeVisible();
+            await expect(page.getByText('Break it down')).toBeVisible();
         });
     });
 }
@@ -150,10 +167,17 @@ test('axe finds no violations on the assignment pages', async ({ page }) => {
     await page.getByRole('button', { name: 'Create' }).click();
     await page.getByRole('heading', { level: 1, name: 'Lab report 3' }).waitFor();
     expect(await analyse()).toEqual([]);
+    await page.getByRole('button', { name: 'Edit details' }).click();
+    await page.getByLabel('Name', { exact: true }).waitFor();
+    expect(await analyse()).toEqual([]);
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
+    expect(await analyse()).toEqual([]);
     await page.getByRole('button', { name: /Lab report/ }).click();
     await page.getByRole('heading', { level: 3, name: 'Data' }).waitFor();
     expect(await analyse()).toEqual([]);
-    await page.getByRole('button', { name: 'Plan it with an AI' }).first().click();
+    await page.getByRole('button', { name: 'Plan with an AI' }).click();
+    await page.getByText('See the prompt').click();
     await page.getByLabel('The prompt', { exact: true }).waitFor();
     expect(await analyse()).toEqual([]);
     await page.getByRole('link', { name: 'Back to Assignments' }).click();
@@ -169,9 +193,10 @@ test('the plan never scrolls sideways at 320 px, even with 200% text', async ({ 
     await page.getByLabel('Day').fill('2030-03-14');
     await page.getByRole('button', { name: 'Create' }).click();
     await page.getByRole('heading', { level: 1, name: /Lab report with a rather long name/ }).waitFor();
+    await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
     await page.getByRole('button', { name: /Essay or report/ }).click();
     await page.getByRole('heading', { level: 3, name: 'Research' }).waitFor();
-    await page.getByRole('button', { name: 'Plan it with an AI' }).first().click();
+    await page.getByRole('button', { name: 'Plan with an AI' }).click();
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
@@ -196,14 +221,16 @@ for (const [name, device] of Object.entries(devices)) {
             await openAssignments(page, onPhone);
             await newProject(page, 'Group project: library app');
 
-            // A project starts with its own starters, and has milestones and a team ready.
-            await expect(page.getByRole('button', { name: /Group project/ }).first()).toBeVisible();
+            // A project has its own pre-made plans, first in the list, when they are asked for.
+            await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
             await page.getByRole('button', { name: /Group project/ }).first().click();
             await expect(page.getByRole('heading', { level: 3, name: 'Team set-up' })).toBeVisible();
-            await expect(page.getByRole('heading', { level: 2, name: /Milestones/ })).toBeVisible();
+            await expect(page.getByRole('heading', { level: 3, name: /Milestones/ })).toBeVisible();
             await expect(page.getByText('Roles agreed', { exact: true })).toBeVisible();
 
-            // The team: the student is one of them.
+            // The team is added when wanted: the student is one of them.
+            await page.getByRole('button', { name: 'Team', exact: true }).click();
+            await page.getByRole('button', { name: 'Add a person' }).click();
             await page.getByLabel('Add a person').fill('Abel');
             await page.getByText('This is me').click();
             await page.getByLabel('Add a person').press('Enter');
@@ -264,8 +291,11 @@ test('axe finds no violations on a project plan with its editor, milestones and 
     await page.setViewportSize({ width: 1440, height: 900 });
     await openAssignments(page, false);
     await newProject(page, 'Project: axe');
+    await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
     await page.getByRole('button', { name: /^Project/ }).first().click();
     await page.getByRole('heading', { level: 3, name: 'Initiate' }).waitFor();
+    await page.getByRole('button', { name: 'Team', exact: true }).click();
+    await page.getByRole('button', { name: 'Add a person' }).click();
     await page.getByLabel('Add a person').fill('Sara Bekele');
     await page.getByLabel('Add a person').press('Enter');
     await page.getByRole('button', { name: 'Actions for Sara Bekele' }).waitFor();
@@ -286,8 +316,11 @@ test('a project plan never scrolls sideways at 320 px, even with 200% text and t
     await page.setViewportSize({ width: 320, height: 640 });
     await openAssignments(page, true);
     await newProject(page, 'A project with a rather long name that goes on and on');
+    await page.getByRole('button', { name: 'Add a pre-made plan' }).click();
     await page.getByRole('button', { name: /Group project/ }).first().click();
     await page.getByRole('heading', { level: 3, name: 'Team set-up' }).waitFor();
+    await page.getByRole('button', { name: 'Team', exact: true }).click();
+    await page.getByRole('button', { name: 'Add a person' }).click();
     await page.getByLabel('Add a person').fill('Sara Bekele with a very long name indeed');
     await page.getByLabel('Add a person').press('Enter');
     await page.getByRole('button', { name: 'Actions for Agree who does what' }).click();

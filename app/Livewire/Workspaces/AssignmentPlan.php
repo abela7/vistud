@@ -75,6 +75,11 @@ final class AssignmentPlan extends Component
 
     public bool $showMilestones = false;
 
+    public bool $showCriteria = false;
+
+    /** Asking whether to remove everything in the plan. */
+    public bool $confirmClear = false;
+
     public bool $showTeam = false;
 
     public string $memberName = '';
@@ -176,7 +181,43 @@ final class AssignmentPlan extends Component
     {
         $this->aiOpen = ! $this->aiOpen;
         $this->showStarters = false;
+        $this->confirmClear = false;
         $this->reading = false;
+    }
+
+    /** The pre-made plans, shown only when asked for. */
+    public function toggleStarters(): void
+    {
+        $this->showStarters = ! $this->showStarters;
+        $this->aiOpen = false;
+        $this->confirmClear = false;
+    }
+
+    public function askClear(): void
+    {
+        $this->confirmClear = true;
+        $this->showStarters = false;
+        $this->aiOpen = false;
+    }
+
+    public function cancelClear(): void
+    {
+        $this->confirmClear = false;
+    }
+
+    /** Takes everything out of the plan (not the team), for a pre-made plan or a reply that was not wanted. */
+    public function clearPlan(): void
+    {
+        $this->confirmClear = false;
+        $this->cancelEdit();
+        $this->adding = null;
+        $removed = 0;
+        if ($this->attempt([], function () use (&$removed) {
+            $removed = $this->plans->clear($this->principal(), $this->activityId);
+        })) {
+            $this->notify($removed === 0 ? 'The plan was already empty.' : 'The plan is cleared.');
+            $this->changed();
+        }
     }
 
     public function updatedReply(): void

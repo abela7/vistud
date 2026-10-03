@@ -230,6 +230,30 @@ class PlansTest extends TestCase
         $this->assertSame(0, DB::table('activity_items')->count());
     }
 
+    public function test_clearing_a_plan_takes_everything_out_but_the_team_and_other_assignments_plans(): void
+    {
+        $other = $this->activities->create($this->by, $this->databases->id, ['title' => 'Lab report']);
+        $this->plans->applyStarter($this->by, $this->essay->id, 'essay');
+        $this->plans->addMilestone($this->by, $this->essay->id, 'Draft done', '2026-10-04');
+        $this->plans->addStep($this->by, $this->essay->id, 'Email the tutor');
+        $this->plans->addStep($this->by, $other->id, 'Write the method');
+        $sara = $this->plans->addMember($this->by, $this->essay->id, 'Sara');
+        $count = count($this->plans->get($this->by, $this->essay->id)->items);
+        $this->assertGreaterThan(10, $count);
+
+        $this->assertSame($count, $this->plans->clear($this->by, $this->essay->id));
+        $cleared = $this->plans->get($this->by, $this->essay->id);
+        $this->assertSame([[], [$sara->id]], [$cleared->items, array_map(fn ($m) => $m->id, $cleared->members)]);
+        $this->assertCount(1, $this->plans->get($this->by, $other->id)->items);
+        $this->assertSame(0, $this->plans->clear($this->by, $this->essay->id));
+
+        // It can be filled again, and another student can't clear it.
+        $this->plans->applyStarter($this->by, $this->essay->id, 'problems');
+        $bob = $this->principal($this->student());
+        $this->assertThrows(fn () => $this->plans->clear($bob, $this->essay->id), NotFound::class);
+        $this->assertNotSame([], $this->plans->get($this->by, $this->essay->id)->items);
+    }
+
     public function test_summaries_give_each_assignments_progress_and_leave_out_those_without_a_plan(): void
     {
         $lab = $this->activities->create($this->by, $this->databases->id, ['title' => 'Lab 1', 'kind' => 'lab']);

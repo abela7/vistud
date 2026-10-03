@@ -53,21 +53,17 @@ class ProjectPlanScreensTest extends TestCase
         return $this->principal($this->ada);
     }
 
-    public function test_a_project_offers_its_own_starters_first_and_shows_milestones_and_the_team(): void
+    public function test_a_project_offers_its_own_pre_made_plans_first_when_asked(): void
     {
-        $this->plan()->assertSeeInOrder(['Project', 'Group project', 'Essay or report'])->assertSee('Milestones')->assertSee('Team');
+        $this->plan()->assertDontSee('Group project')->call('toggleStarters')->assertSeeInOrder(['Project', 'Group project', 'Essay or report']);
 
-        $this->plan()->call('useStarter', 'group')->assertSee('Team set-up')->assertSee('Roles agreed')->assertSee('Teamwork and contribution');
+        $this->plan()->call('useStarter', 'group')->assertSee('Team set-up')->assertSee('Roles agreed')->assertSee('Teamwork and contribution')->assertSee('Also track');
         $this->assertSame(['Roles agreed', 'First draft together', 'Final hand-in'], array_map(fn ($m) => $m->title, $this->plans->get($this->by(), $this->project->id)->milestones()));
     }
 
-    public function test_an_essay_shows_neither_milestones_nor_the_team_until_asked(): void
+    public function test_milestones_and_the_team_are_not_forced_on_a_project_either(): void
     {
-        $essay = app(Activities::class)->create($this->by(), $this->databases->id, ['title' => 'Essay', 'kind' => 'assignment']);
-        $component = Livewire::test(AssignmentPlan::class, ['workspaceId' => $this->databases->id, 'activityId' => $essay->id])->assertDontSee('Days to reach on the way')->assertDontSee('Who shares the work');
-
-        $component->call('addPart')->set('partText', 'Draft')->call('addPart')->assertSee('Add a milestone')->assertSee('Share the work with a team')
-            ->set('showMilestones', true)->assertSee('Days to reach on the way')->set('showTeam', true)->assertSee('Who shares the work');
+        $this->plan()->assertDontSee('Add a milestone')->assertDontSee('Add a person')->call('useStarter', 'project')->assertSee('Proposal agreed')->assertSee('Add a milestone')->assertDontSee('Add a person')->assertSee('Team');
     }
 
     public function test_a_step_is_started_stuck_and_done_and_says_where_it_is(): void
@@ -173,7 +169,8 @@ class ProjectPlanScreensTest extends TestCase
     {
         $step = $this->plans->addStep($this->by(), $this->project->id, 'Build it');
         $this->plans->addStep($this->by(), $this->project->id, 'Test it');
-        $page = Livewire::test(AssignmentPage::class, ['workspaceId' => $this->databases->id, 'activityId' => $this->project->id])->assertSee('On track');
+        $this->plan()->assertSee('On track');
+        $page = Livewire::test(AssignmentPage::class, ['workspaceId' => $this->databases->id, 'activityId' => $this->project->id])->assertDontSee('At risk');
         $board = Livewire::test(AssignmentBoard::class, ['workspaceId' => $this->databases->id])->assertDontSee('At risk');
 
         $this->plans->setState($this->by(), $step->id, 'stuck');

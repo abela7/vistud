@@ -21,9 +21,9 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
- * An assignment on a page of its own (the owner's review, 2026-10-02): its name, kind, deadline (a day and a
- * time) and module on the left with its files below them; on the right how long is left, where the student is
- * with it (to do, in progress, done) and deleting it. Also the page for a new one: Create makes it, with its
+ * An assignment on a page of its own (the owner's review, 2026-10-02), in one calm column: a summary (how long is
+ * left, where the student is with it: to do, in progress, done), its details (name, kind, deadline and module)
+ * folded behind Edit, its plan, its files, and deleting it at the bottom. Also the page for a new one: Create makes it, with its
  * own folder, and the page becomes its page, where any files chosen before go up into that folder. The
  * assignment's ID is locked; the service checks everything.
  */
@@ -94,6 +94,7 @@ final class AssignmentPage extends Component
             if ($this->activityId !== null) {
                 $this->showDetails($this->activities->update($by, $this->activityId, $input));
                 $this->notify('Saved.');
+                $this->dispatch('details-saved');
 
                 return false;
             }
@@ -113,6 +114,7 @@ final class AssignmentPage extends Component
         $this->activityId = $made->id;
         $this->showDetails($made);
         $this->notify("“{$made->title}” is added.");
+        $this->dispatch('details-saved');
         $this->js('history.replaceState(history.state, "", '.json_encode(route('workspaces.assignments.show', [$this->workspaceId, $made->id])).')');
 
         return true;

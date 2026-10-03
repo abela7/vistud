@@ -256,6 +256,23 @@ final class Plans
         });
     }
 
+    /**
+     * Takes everything out of an assignment's plan: its parts, steps, milestones and criteria. The team stays.
+     * For a pre-made plan or an AI's reply that was not what the student wanted.
+     *
+     * @return int how many things went
+     */
+    public function clear(Principal $by, string $activityId): int
+    {
+        $scope = Guard::learner($by);
+
+        return DB::transaction(function () use ($scope, $activityId) {
+            $this->activity($scope, $activityId, lock: true);
+
+            return LearnerTables::query($scope, 'activity_items')->where('activity_id', $activityId)->delete();
+        });
+    }
+
     // ---------- Starters and an AI's reply ----------
 
     /**

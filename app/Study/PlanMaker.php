@@ -3,6 +3,7 @@
 namespace App\Study;
 
 use App\Platform\Access\Principal;
+use Carbon\CarbonImmutable;
 
 /**
  * Making an assignment's plan with any AI (the owner's review, 2026-10-02): the student copies a prompt
@@ -27,6 +28,16 @@ final class PlanMaker
             ? 'none given'
             : ($assignment->dueAt()->format('l j F Y').($assignment->dueTime === null ? '' : ' at '.$assignment->dueTime));
 
+        $now = CarbonImmutable::now($assignment->zone);
+        $days = $assignment->dueOn === null ? null : (int) $now->startOfDay()->diffInDays(CarbonImmutable::parse($assignment->dueOn, $assignment->zone), false);
+        $timeLeft = match (true) {
+            $days === null => 'no deadline given',
+            $days < 0 => 'the deadline has passed',
+            $days === 0 => 'due today',
+            $days < 14 => $days === 1 ? '1 day' : "{$days} days",
+            default => "{$days} days (about ".round($days / 7).' weeks)',
+        };
+
         $template = (string) file_get_contents(base_path(self::PROMPT));
         $template = (string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', $template);
         $prompt = trim(strtr($template, [
@@ -34,6 +45,8 @@ final class PlanMaker
             '{{assignment}}' => $assignment->title,
             '{{kind}}' => strtolower($assignment->kindLabel()),
             '{{deadline}}' => $deadline,
+            '{{today}}' => $now->format('l j F Y'),
+            '{{time_left}}' => $timeLeft,
         ]));
 
         $brief = trim($brief);
