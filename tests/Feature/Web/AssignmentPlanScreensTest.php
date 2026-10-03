@@ -93,6 +93,15 @@ class AssignmentPlanScreensTest extends TestCase
         $component->call('$set', 'showMilestones', true)->assertSee('Add a milestone')->assertDontSee('Add a person');
         $component->call('$set', 'showTeam', true)->assertSee('Add a person');
         $component->call('$set', 'showCriteria', true)->assertSee('Add a criterion')->assertDontSee('Also track');
+
+        // An opened box that holds nothing can be closed again: the tile comes back. Once it holds something it stays,
+        // and each thing is deleted from its own ⋯ menu.
+        $component->assertSee('Close milestones')->assertSee('Close team')->assertSee('Close marking criteria')
+            ->call('$set', 'showMilestones', false)->assertDontSee('Add a milestone')->assertSee('Days you want to reach')->assertSee('Also track');
+        $component->call('$set', 'showMilestones', true)->set('milestoneText', 'Outline in')->call('addMilestone')->assertSee('Outline in')->assertDontSee('Close milestones');
+        $milestone = $plans->get($by, $this->essay->id)->milestones()[0];
+        $component->call('remove', $milestone->id)->assertDontSee('Outline in');
+        $this->assertSame([], $plans->get($by, $this->essay->id)->milestones());
         $this->assertSame('Research', $plans->get($by, $this->essay->id)->item($part->id)->title);
     }
 

@@ -326,6 +326,13 @@
                             @endif
                         </p>
                     </div>
+                    @if ($milestones === [])
+                        <div class="panel-head-actions">
+                            <button type="button" class="topbar-button size-9" wire:click="$set('showMilestones', false)" title="Close: nothing added yet">
+                                <x-icon name="x" class="size-4" /><span class="sr-only">Close milestones</span>
+                            </button>
+                        </div>
+                    @endif
                 </div>
 
                 @if ($timeline !== [])
@@ -404,6 +411,13 @@
                         </h3>
                         <p class="panel-hint">The people sharing the work, and how far each has got.</p>
                     </div>
+                    @if ($plan->members === [])
+                        <div class="panel-head-actions">
+                            <button type="button" class="topbar-button size-9" wire:click="$set('showTeam', false)" title="Close: nothing added yet">
+                                <x-icon name="x" class="size-4" /><span class="sr-only">Close team</span>
+                            </button>
+                        </div>
+                    @endif
                 </div>
                 @if ($plan->members !== [])
                     <ul class="plan-team" role="list" aria-label="The team">
@@ -474,6 +488,13 @@
                             @endif
                         </p>
                     </div>
+                    @if ($items === [])
+                        <div class="panel-head-actions">
+                            <button type="button" class="topbar-button size-9" wire:click="$set('showCriteria', false)" title="Close: nothing added yet">
+                                <x-icon name="x" class="size-4" /><span class="sr-only">Close marking criteria</span>
+                            </button>
+                        </div>
+                    @endif
                 </div>
                 @if ($criteria['total'] > 0)
                     <div class="meter" role="progressbar" aria-label="How ready it is against the marking criteria" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $criteria['percent'] }}"><span style="width: {{ $criteria['percent'] }}%"></span></div>
