@@ -13,10 +13,29 @@ const devices = {
 
 test.use({ reducedMotion: 'reduce' });
 
-/** A section's ⋯ menu. */
+/** A section's ⋯ menu (Edit and Open its folder are links). */
 async function planMenuOf(page, section, item) {
     await page.getByRole('button', { name: `Actions for ${section}` }).click();
-    await page.locator('.row-menu:popover-open').getByRole(item === 'Open its folder' ? 'link' : 'button', { name: item }).click();
+    await page.locator('.row-menu:popover-open').getByRole(['Edit', 'Open its folder'].includes(item) ? 'link' : 'button', { name: item, exact: true }).click();
+}
+
+/** The "+ Add" menu on the page, then one of its choices. */
+async function addMenu(page, item) {
+    await page.locator('main').getByRole('button', { name: 'Add', exact: true }).click();
+    await page.locator('.row-menu:popover-open').getByRole('button', { name: item }).click();
+}
+
+/** A section's line on the assignment page. */
+const sectionLine = (page, title) => page.locator('.plan-section').filter({ has: page.getByRole('link', { name: title, exact: true }) });
+
+/** Makes a section on its own page, and lands on that section's page. */
+async function newSection(page, title, weight) {
+    await page.getByRole('link', { name: 'New section' }).click();
+    await page.getByRole('heading', { level: 1, name: 'New section' }).waitFor();
+    await page.getByLabel('Name', { exact: true }).fill(title);
+    if (weight) await page.getByLabel(/Weight/).fill(String(weight));
+    await page.getByRole('button', { name: 'Add the section' }).click();
+    await page.getByRole('heading', { level: 1, name: title }).waitFor();
 }
 
 /** The plan's ⋯ menu: Add a pre-made plan, Clear the plan. */
@@ -50,15 +69,17 @@ for (const [name, device] of Object.entries(devices)) {
             await page.getByLabel('Module').selectOption({ label: 'Week 1: Cells' });
             await page.getByLabel('Day').fill('2030-03-14');
             await page.getByLabel('Time (optional)').fill('23:59');
-            // Files chosen before it exists wait, and go up once it is created.
-            await page.locator('input[data-upload-files]').setInputFiles([fixture('Lecture 2 - cell division.pdf'), fixture('Onion cells.png')]);
-            await expect(page.getByRole('list', { name: 'Chosen files' }).getByText('Ready to add')).toHaveCount(2);
+            // Files chosen before it exists (Add, then Upload files) wait, and go up once it is created.
+            const chooser = page.waitForEvent('filechooser');
+            await addMenu(page, 'Upload files');
+            await (await chooser).setFiles([fixture('Lecture 2 - cell division.pdf'), fixture('Onion cells.png')]);
+            await expect(page.getByRole('list', { name: 'Chosen files' }).getByText('Added when you create it')).toHaveCount(2);
             await page.getByRole('button', { name: 'Create' }).click();
 
             await expect(page).toHaveURL(/\/assignments\/[0-9a-f-]+$/);
             await expect(page.getByRole('heading', { level: 1, name: 'Coursework 1: cell report' })).toBeVisible();
             await expect(page.getByText('2 files added.')).toBeVisible();
-            const files = page.locator('.assignment-files');
+            const files = page.getByRole('list', { name: 'Files and notes of the assignment' });
             await expect(files.getByRole('link', { name: 'Lecture 2 - cell division.pdf' })).toBeVisible();
             await expect(files.getByRole('link', { name: 'Onion cells.png' })).toBeVisible();
             await expect(page.locator('.assignment-deadline')).toContainText('Due 14 Mar 2030, 23:59');
@@ -76,7 +97,7 @@ for (const [name, device] of Object.entries(devices)) {
             await expect(card).toContainText('2 files');
             await expect(card).toContainText('In progress');
             await card.getByRole('link', { name: 'Coursework 1: cell report' }).click();
-            await page.getByRole('link', { name: 'Open its folder' }).click();
+            await page.getByRole('link', { name: 'Its folder' }).click();
             await expect(page.getByRole('heading', { level: 1, name: 'Coursework 1: cell report' })).toBeVisible();
             await expect(page.locator('main').getByRole('link', { name: 'Onion cells.png' })).toBeVisible();
         });
@@ -97,7 +118,7 @@ for (const [name, device] of Object.entries(devices)) {
             await page.getByRole('button', { name: 'Create' }).click();
             await page.getByRole('heading', { level: 1, name: 'Coursework 2: osmosis report' }).waitFor();
 
-            // An empty plan is calm: a new section is one form away, and the pre-made plans wait in the menu.
+            // An empty plan is calm: a new section is one button away, and the pre-made plans wait in the menu.
             await expect(page.getByText('Split the work into sections')).toBeVisible();
             await expect(page.getByRole('button', { name: /Essay or report/ })).toHaveCount(0);
             await planMenu(page, 'Add a pre-made plan');
@@ -106,31 +127,89 @@ for (const [name, device] of Object.entries(devices)) {
             await expect(page.locator('.plan-percent')).toHaveText('0%');
             await expect(page.getByRole('group', { name: /Use of sources/ })).toBeVisible();
 
-            // Ticking the first step starts the assignment and moves the bar.
-            await page.getByRole('button', { name: 'Done: Find and read the sources' }).click();
-            await expect(page.getByText('1 of 12 done')).toBeVisible();
-            await expect(page.getByRole('group', { name: 'Where you are' }).getByRole('button', { name: 'In progress' })).toHaveAttribute('aria-pressed', 'true');
-            await expect(page.locator('.plan-pace')).toContainText('left');
+            // The sections are a list at first, and only List is marked as chosen.
+            const views = page.getByRole('group', { name: 'Show the sections as' });
+            await expect(views.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
+            await expect(views.locator('.is-current')).toHaveCount(1);
+            await expect(views.locator('.is-current')).toHaveText('List');
+            await expect(sectionLine(page, 'Research')).toContainText('0/3 tasks');
+            await expect(page.getByText('Find and read the sources')).toHaveCount(0);
 
-            // A step added to a part, a criterion checked, a step renamed.
-            await page.locator('section[aria-label="Part: Research"]').getByRole('button', { name: /Add a task/i }).click();
+            // A section opens on a page of its own: its tasks, ticked there, move it.
+            await page.getByRole('link', { name: 'Research', exact: true }).click();
+            await page.getByRole('heading', { level: 1, name: 'Research' }).waitFor();
+            await page.getByRole('button', { name: 'Done: Find and read the sources' }).click();
+            await expect(page.getByText('1 of 3 tasks done')).toBeVisible();
+            await expect(page.locator('.plan-percent')).toHaveText('33%');
+
+            // A task added; sub-tasks under it move it, and it moves the section.
             await page.getByLabel('Add a task to Research').fill('Check the library catalogue');
             await page.getByLabel('Add a task to Research').press('Enter');
             await expect(page.getByText('Check the library catalogue', { exact: true })).toBeVisible();
-            await expect(page.getByText('1 of 13 done')).toBeVisible();
-            await page.getByRole('group', { name: /Use of sources/ }).getByRole('button', { name: 'Partly' }).click();
-            await expect(page.getByRole('group', { name: /Use of sources/ }).getByRole('button', { name: 'Partly' })).toHaveAttribute('aria-pressed', 'true');
+            await expect(page.getByText('1 of 4 tasks done')).toBeVisible();
+            await page.getByRole('button', { name: 'Actions for Check the library catalogue' }).click();
+            await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Add a task under it' }).click();
+            await page.getByLabel('Add a task under Check the library catalogue').fill('Search by author');
+            await page.getByLabel('Add a task under Check the library catalogue').press('Enter');
+            await expect(page.getByText('Search by author', { exact: true })).toBeVisible();
+            await page.getByLabel('Add a task under Check the library catalogue').fill('Search by title');
+            await page.getByLabel('Add a task under Check the library catalogue').press('Enter');
+            await expect(page.getByText('Search by title', { exact: true })).toBeVisible();
+            await page.getByRole('button', { name: 'Done adding' }).click();
+            await page.getByRole('button', { name: 'Done: Search by author' }).click();
+            await expect(page.locator('.plan-percent')).toHaveText('38%');
             await page.getByRole('button', { name: 'Actions for Note the key points' }).click();
             await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Edit' }).click();
             await page.locator('#plan-edit-title').fill('Note the key points and quotes');
             await page.locator('#plan-edit-title').press('Enter');
             await expect(page.getByText('Note the key points and quotes', { exact: true })).toBeVisible();
 
-            // It is all still there after a reload, and nothing scrolls sideways.
-            await page.reload();
-            await expect(page.getByText('1 of 13 done')).toBeVisible();
-            await expect(page.getByRole('group', { name: /Use of sources/ }).getByRole('button', { name: 'Partly' })).toHaveAttribute('aria-pressed', 'true');
+            // Its files: Add shows the choices; a folder is made and a file goes up, into the section's own folder.
+            await page.getByRole('button', { name: /^Files/ }).click();
+            await expect(page.getByText('No files yet.')).toBeVisible();
+            await addMenu(page, 'New folder');
+            await page.getByLabel('Name of the new folder').fill('Graphs');
+            await page.getByLabel('Name of the new folder').press('Enter');
+            await expect(page.locator('main').getByRole('link', { name: 'Graphs' })).toBeVisible();
+            const chooser = page.waitForEvent('filechooser');
+            await addMenu(page, 'Upload files');
+            await (await chooser).setFiles(fixture('Onion cells.png'));
+            await expect(page.getByText('1 file added.')).toBeVisible();
+            await expect(page.locator('main').getByRole('link', { name: 'Onion cells.png' })).toBeVisible();
+            await page.getByRole('button', { name: /^Notes/ }).click();
+            await expect(page.getByText('No notes yet.')).toBeVisible();
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+
+            // Back on the assignment: the section's line says how far it is and what it keeps; the assignment has started.
+            await page.getByRole('link', { name: 'Back to Coursework 2: osmosis report' }).click();
+            await page.getByRole('heading', { level: 1, name: 'Coursework 2: osmosis report' }).waitFor();
+            await expect(sectionLine(page, 'Research')).toContainText('1/4 tasks');
+            await expect(sectionLine(page, 'Research')).toContainText('1 file');
+            await expect(page.getByText('2 of 14 done')).toBeVisible();
+            await expect(page.getByRole('group', { name: 'Where you are' }).getByRole('button', { name: 'In progress' })).toHaveAttribute('aria-pressed', 'true');
+            await expect(page.locator('.plan-pace')).toContainText('left');
+            await page.getByRole('group', { name: /Use of sources/ }).getByRole('button', { name: 'Partly' }).click();
+            await expect(page.getByRole('group', { name: /Use of sources/ }).getByRole('button', { name: 'Partly' })).toHaveAttribute('aria-pressed', 'true');
+
+            // As cards: the choice is remembered, and stays the only one marked after the page changes.
+            await views.getByRole('button', { name: 'Cards' }).click();
+            await expect(page.locator('.plan-grid')).not.toHaveClass(/is-list/);
+            await page.reload();
+            await expect(views.getByRole('button', { name: 'Cards' })).toHaveAttribute('aria-pressed', 'true');
+            await page.getByRole('group', { name: /Use of sources/ }).getByRole('button', { name: 'Met' }).click();
+            await expect(page.getByRole('group', { name: /Use of sources/ }).getByRole('button', { name: 'Met' })).toHaveAttribute('aria-pressed', 'true');
+            await expect(views.locator('.is-current')).toHaveCount(1);
+            await expect(views.locator('.is-current')).toHaveText('Cards');
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+            await views.getByRole('button', { name: 'List' }).click();
+            await expect(page.locator('.plan-grid')).toHaveClass(/is-list/);
+
+            // The section's folder is in the assignment's folder, with the file in it.
+            await planMenuOf(page, 'Research', 'Open its folder');
+            await expect(page.getByRole('heading', { level: 1, name: 'Research' })).toBeVisible();
+            await expect(page.locator('main').getByRole('link', { name: 'Onion cells.png' })).toBeVisible();
+            await page.goBack();
+            await page.getByRole('heading', { level: 1, name: 'Coursework 2: osmosis report' }).waitFor();
 
             // With an AI: the brief goes into the prompt, the reply is read, looked over and added.
             await page.getByRole('button', { name: 'Plan with an AI' }).click();
@@ -146,7 +225,7 @@ for (const [name, device] of Object.entries(devices)) {
             // Its progress is on the card in the list.
             await page.getByRole('link', { name: 'Back to Assignments' }).click();
             const card = page.locator('.question-card').filter({ hasText: 'Coursework 2: osmosis report' });
-            await expect(card).toContainText('1 of 14 done');
+            await expect(card).toContainText('2 of 15 done');
             await expect(card).toContainText('In progress');
 
             // A plan that isn't wanted is cleared, after asking.
@@ -161,49 +240,33 @@ for (const [name, device] of Object.entries(devices)) {
             await expect(page.getByText('The plan is cleared.')).toBeVisible();
             await expect(page.getByText('Split the work into sections')).toBeVisible();
 
-            // Built by hand: sections with their weights, checked to add up to 100, and a weight changed in place.
-            await page.getByLabel('Name of the section').fill('Method');
-            await page.getByLabel('Weight, out of 100 (optional)').fill('40');
-            await page.getByLabel('Name of the section').press('Enter');
+            // Built by hand: each section on its own page, with its weight, checked to add up to 100.
+            await newSection(page, 'Method', 40);
+            await page.getByRole('link', { name: 'Back to Coursework 2: osmosis report' }).click();
             await expect(page.locator('.plan-facts')).toContainText('Weights add up to 40%: 60% is in no section');
-            await page.getByLabel('Name of the section').fill('Results');
-            await page.getByLabel('Weight, out of 100 (optional)').fill('50');
-            await page.getByLabel('Name of the section').press('Enter');
-            await page.getByRole('button', { name: /Weight of Results: 50%/ }).click();
-            await page.getByLabel('Weight of Results, out of 100 (empty for none)').fill('60');
-            await page.getByLabel('Weight of Results, out of 100 (empty for none)').press('Enter');
+            await newSection(page, 'Results', 50);
+            await page.getByRole('link', { name: 'Edit', exact: true }).click();
+            await page.getByRole('heading', { level: 1, name: 'Edit section' }).waitFor();
+            await expect(page.getByText('60% is left for this section')).toBeVisible();
+            await page.getByLabel(/Weight/).fill('60');
+            await page.getByRole('button', { name: 'Save' }).click();
+            await page.getByRole('heading', { level: 1, name: 'Results' }).waitFor();
+            await expect(page.locator('.plan-weight-chip')).toHaveText('60%');
+            await page.getByRole('link', { name: 'Back to Coursework 2: osmosis report' }).click();
             await expect(page.locator('.plan-facts')).toContainText('Weights add up to 100%');
             await page.getByRole('button', { name: 'Done: Method' }).click();
             await expect(page.locator('.plan-percent')).toHaveText('40%');
+            await expect(sectionLine(page, 'Method')).toContainText('40 of 40%');
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 
-            // A section keeps its own things: files go up into its folder, and a folder is made in it.
-            const results = page.locator('section[aria-label="Part: Results"]');
-            await results.locator('input[type=file]').setInputFiles(fixture('Onion cells.png'));
-            await expect(page.getByText('1 file added.')).toBeVisible();
-            await expect(results.getByRole('link', { name: 'Onion cells.png' })).toBeVisible();
-            await results.getByRole('button', { name: /New folder/i }).click();
-            await page.getByLabel('Name of the new folder in Results').fill('Graphs');
-            await page.getByLabel('Name of the new folder in Results').press('Enter');
-            await expect(results.getByRole('link', { name: 'Graphs' })).toBeVisible();
-
-            // As a list: one line a section, opened to show what is in it; the choice is remembered.
-            await page.getByRole('button', { name: 'List', exact: true }).click();
-            await expect(results.getByRole('link', { name: 'Graphs' })).toBeHidden();
-            await expect(results.locator('.plan-section-summary')).toContainText('2 items');
-            await results.getByRole('button', { name: 'What is in Results' }).click();
-            await expect(results.getByRole('link', { name: 'Graphs' })).toBeVisible();
-            await page.reload();
-            await expect(page.getByRole('button', { name: 'List', exact: true })).toHaveAttribute('aria-pressed', 'true');
-            await expect(page.locator('section[aria-label="Part: Results"]').getByRole('link', { name: 'Graphs' })).toBeHidden();
-            expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
-            await page.getByRole('button', { name: 'Cards', exact: true }).click();
-            await expect(page.locator('section[aria-label="Part: Results"]').getByRole('link', { name: 'Graphs' })).toBeVisible();
-
-            // Its folder is in the assignment's folder, in the module, with the file in it.
-            await planMenuOf(page, 'Results', 'Open its folder');
-            await expect(page.getByRole('heading', { level: 1, name: 'Results' })).toBeVisible();
-            await expect(page.locator('main').getByRole('link', { name: 'Onion cells.png' })).toBeVisible();
+            // A section is deleted from its own page, and the assignment says what is left.
+            await page.getByRole('link', { name: 'Results', exact: true }).click();
+            await page.getByRole('heading', { level: 1, name: 'Results' }).waitFor();
+            await page.locator('main').getByRole('button', { name: 'Delete', exact: true }).click();
+            await page.getByRole('button', { name: 'Delete it' }).click();
+            await page.getByRole('heading', { level: 1, name: 'Coursework 2: osmosis report' }).waitFor();
+            await expect(page.getByText('The section “Results” is deleted.')).toBeVisible();
+            await expect(page.locator('.plan-facts')).toContainText('Weights add up to 40%: 60% is in no section');
         });
     });
 }
@@ -234,6 +297,29 @@ test('axe finds no violations on the assignment pages', async ({ page }) => {
     await page.getByText('See the prompt').click();
     await page.getByLabel('The prompt', { exact: true }).waitFor();
     expect(await analyse()).toEqual([]);
+
+    // A section's own page, each tab, and its Add menu; then the page that makes a section.
+    await page.getByRole('link', { name: 'Data', exact: true }).click();
+    await page.getByRole('heading', { level: 1, name: 'Data' }).waitFor();
+    expect(await analyse()).toEqual([]);
+    await page.getByRole('button', { name: /^Files/ }).click();
+    await page.getByText('No files yet.').waitFor();
+    await page.locator('main').getByRole('button', { name: 'Add', exact: true }).click();
+    await page.locator('.row-menu:popover-open').waitFor();
+    expect(await analyse()).toEqual([]);
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: /^Notes/ }).click();
+    await page.getByText('No notes yet.').waitFor();
+    expect(await analyse()).toEqual([]);
+    await page.getByRole('link', { name: 'Back to Lab report 3' }).click();
+    await page.getByRole('link', { name: 'New section' }).click();
+    await page.getByRole('heading', { level: 1, name: 'New section' }).waitFor();
+    expect(await analyse()).toEqual([]);
+    await page.getByRole('button', { name: 'Add the section' }).click();
+    await page.getByText('Write what it is.').waitFor();
+    expect(await analyse()).toEqual([]);
+
+    await page.getByRole('link', { name: 'Back to Lab report 3' }).click();
     await page.getByRole('link', { name: 'Back to Assignments' }).click();
     await page.getByRole('heading', { level: 1, name: 'Assignments' }).waitFor();
     expect(await analyse()).toEqual([]);
@@ -251,6 +337,19 @@ test('the plan never scrolls sideways at 320 px, even with 200% text', async ({ 
     await page.getByRole('button', { name: /Essay or report/ }).click();
     await page.getByRole('heading', { level: 3, name: 'Research' }).waitFor();
     await page.getByRole('button', { name: 'Plan with an AI' }).click();
+    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+
+    // A section's page too, with its tasks, its files and the page that changes it.
+    await page.getByRole('link', { name: 'Research', exact: true }).click();
+    await page.getByRole('heading', { level: 1, name: 'Research' }).waitFor();
+    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+    await page.getByRole('button', { name: /^Files/ }).click();
+    await page.getByText('No files yet.').waitFor();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+    await page.getByRole('link', { name: 'Edit', exact: true }).click();
+    await page.getByRole('heading', { level: 1, name: 'Edit section' }).waitFor();
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
@@ -293,7 +392,9 @@ for (const [name, device] of Object.entries(devices)) {
             await page.getByLabel('Add a person').press('Enter');
             await expect(page.locator('.plan-member').filter({ hasText: 'Sara Bekele' })).toContainText('Nothing yet');
 
-            // A step is given a person, dates and a priority in its details, and says so.
+            // On the section's own page, a step is given a person, dates and a priority in its details, and says so.
+            await page.getByRole('link', { name: 'Team set-up', exact: true }).click();
+            await page.getByRole('heading', { level: 1, name: 'Team set-up' }).waitFor();
             await page.getByRole('button', { name: 'Actions for Agree who does what' }).click();
             await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Edit details' }).click();
             await page.locator('#plan-edit-member').selectOption({ label: 'Sara Bekele' });
@@ -307,16 +408,21 @@ for (const [name, device] of Object.entries(devices)) {
             await expect(row).toContainText('1 Mar 2030 – 5 Mar 2030');
             await expect(row).toContainText('High');
             await expect(row).toContainText('planning');
-            await expect(page.locator('.plan-member').filter({ hasText: 'Sara Bekele' })).toContainText('0 of 1 done');
 
-            // Stuck: the step says so, and the work is at risk, with the reason.
+            // Stuck: the step and its section say so, and the work is at risk, with the reason.
             await page.getByRole('button', { name: 'Actions for Agree who does what' }).click();
             await page.locator('.row-menu:popover-open').getByRole('button', { name: 'I am stuck' }).click();
             await expect(row).toContainText('Stuck');
+            await expect(page.locator('.plan-progress')).toContainText('Something in it is stuck');
+            await page.getByRole('link', { name: 'Back to Group project: library app' }).click();
             await expect(page.locator('.plan-progress')).toContainText('At risk');
             await expect(page.locator('.plan-progress')).toContainText('1 task is stuck');
+            await expect(sectionLine(page, 'Team set-up')).toContainText('Stuck');
+            await expect(page.locator('.plan-member').filter({ hasText: 'Sara Bekele' })).toContainText('0 of 1 done');
 
             // A step under a step, and done.
+            await page.getByRole('link', { name: 'Team set-up', exact: true }).click();
+            await page.getByRole('heading', { level: 1, name: 'Team set-up' }).waitFor();
             await page.getByRole('button', { name: 'Actions for Agree who does what' }).click();
             await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Add a task under it' }).click();
             await page.getByLabel('Add a task under Agree who does what').fill('Write the roles down');
@@ -324,6 +430,8 @@ for (const [name, device] of Object.entries(devices)) {
             await expect(page.getByText('Write the roles down', { exact: true })).toBeVisible();
             await page.getByRole('button', { name: 'Done adding' }).click();
             await page.getByRole('button', { name: 'Done: Write the roles down' }).click();
+            await expect(page.locator('.plan-progress')).not.toContainText('Something in it is stuck');
+            await page.getByRole('link', { name: 'Back to Group project: library app' }).click();
             await expect(page.locator('.plan-progress')).not.toContainText('At risk');
 
             // A milestone is reached.
@@ -333,7 +441,7 @@ for (const [name, device] of Object.entries(devices)) {
             // After a reload it is all still there; the card and the page agree; nothing scrolls sideways.
             await page.reload();
             await expect(page.locator('.plan-member').filter({ hasText: 'Sara Bekele' })).toContainText('1 of 1 done');
-            await expect(page.getByText('Write the roles down', { exact: true })).toBeVisible();
+            await expect(sectionLine(page, 'Team set-up')).toContainText('1/3 tasks');
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
             await page.getByRole('link', { name: 'Back to Assignments' }).click();
             await expect(page.locator('.question-card').filter({ hasText: 'Group project: library app' })).toContainText('Project');
@@ -353,6 +461,8 @@ test('axe finds no violations on a project plan with its editor, milestones and 
     await page.getByLabel('Add a person').fill('Sara Bekele');
     await page.getByLabel('Add a person').press('Enter');
     await page.getByRole('button', { name: 'Actions for Sara Bekele' }).waitFor();
+    await page.getByRole('link', { name: 'Initiate', exact: true }).click();
+    await page.getByRole('heading', { level: 1, name: 'Initiate' }).waitFor();
     await page.getByRole('button', { name: 'Actions for Define the goal and the scope' }).click();
     await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Edit details' }).click();
     await page.locator('#plan-edit-title').waitFor();
@@ -362,6 +472,9 @@ test('axe finds no violations on a project plan with its editor, milestones and 
     await page.locator('#plan-edit-title').press('Escape');
     await page.getByRole('button', { name: 'Actions for Define the goal and the scope' }).click();
     await page.locator('.row-menu:popover-open').getByRole('button', { name: 'I am stuck' }).click();
+    await expect(page.locator('.plan-progress')).toContainText('Something in it is stuck');
+    expect(await analyse()).toEqual([]);
+    await page.getByRole('link', { name: 'Back to Project: axe' }).click();
     await expect(page.locator('.plan-progress')).toContainText('At risk');
     expect(await analyse()).toEqual([]);
 });
@@ -377,6 +490,9 @@ test('a project plan never scrolls sideways at 320 px, even with 200% text and t
     await page.getByRole('button', { name: 'Add a person' }).click();
     await page.getByLabel('Add a person').fill('Sara Bekele with a very long name indeed');
     await page.getByLabel('Add a person').press('Enter');
+    await page.getByRole('button', { name: /Actions for Sara Bekele/ }).waitFor();
+    await page.getByRole('link', { name: 'Team set-up', exact: true }).click();
+    await page.getByRole('heading', { level: 1, name: 'Team set-up' }).waitFor();
     await page.getByRole('button', { name: 'Actions for Agree who does what' }).click();
     await page.locator('.row-menu:popover-open').getByRole('button', { name: 'Edit details' }).click();
     await page.locator('#plan-edit-title').waitFor();

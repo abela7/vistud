@@ -1,13 +1,13 @@
 {{--
     An assignment on a page of its own, or a new one (App\Livewire\Workspaces\AssignmentPage), kept calm and in one
     column: a summary (how long is left, where the student is with it, its kind and module) with its details folded
-    behind Edit, the plan, its files, and deleting it at the very bottom. A new one shows the details form straight
-    away. Files chosen on a new one wait, and go up into its own folder once it is created (resources/js/uploader.js).
+    behind Edit, the plan, its files and notes (one list, with Add for a new one), and deleting it at the very
+    bottom. A new one shows the details form straight away. Files chosen on a new one wait, and go up into its own
+    folder once it is created (resources/js/uploader.js).
 --}}
 @php
     use App\Study\Activities;
     use App\Study\FileTypes;
-    use Illuminate\Support\Number;
 
     $new = $assignment === null;
     $moduleTitle = collect($modules)->firstWhere('id', $moduleId)?->title;
@@ -107,24 +107,45 @@
         <livewire:workspaces.assignment-plan :workspace-id="$workspace->id" :activity-id="$assignment->id" :key="'plan-'.$assignment->id" />
     @endunless
 
-    <section class="question-panel space-y-3" aria-labelledby="assignment-files-heading">
+    {{-- Its files and notes: one list, with Add for a new one. Files dropped on it go up into its folder (resources/js/uploader.js). --}}
+    @php
+        $kept = count($files) + count($notes) + count($subfolders);
+        $choices = [['Upload files', 'file-up', "\$dispatch('assignment-files')"]];
+        if (! $new) {
+            $choices[] = ['Write a note', 'notebook-pen', null, 'writeNote'];
+            $choices[] = ['New folder', 'folder-plus', "adding = 'folder'; \$nextTick(() => document.getElementById('assignment-folder-name')?.focus())"];
+        }
+    @endphp
+    <section class="asg-files space-y-3" aria-labelledby="assignment-files-heading" x-data="{ adding: null, over: false }" x-bind:class="{ 'is-over': over }"
+        x-on:dragover.prevent="over = true" x-on:dragleave.self="over = false"
+        x-on:drop.prevent="over = false; Alpine.$data($el.querySelector('[data-assignment-upload]')).drop($event)">
         <div class="flex flex-wrap items-center justify-between gap-2">
             <h2 id="assignment-files-heading" class="flex items-center gap-2 font-semibold">
-                <x-icon name="paperclip" class="size-4 text-fg-muted" />Files and notes
-                @if (count($files) + count($notes) + count($subfolders) > 0)
-                    <span class="count-pill">{{ count($files) + count($notes) + count($subfolders) }}</span>
+                Files and notes
+                @if ($kept > 0)
+                    <span class="count-pill">{{ $kept }}</span>
                 @endif
             </h2>
-            @if ($folder)
-                <div class="flex flex-wrap gap-2">
-                    <a href="{{ route('workspaces.notes.create', [$workspace->id, 'in' => "folder:{$folder->id}"]) }}" class="btn btn-ghost btn-sm"><x-icon name="notebook-pen" class="size-4" />Write a note</a>
-                    <a href="{{ route('workspaces.folders.show', [$workspace->id, $folder->id]) }}" class="btn btn-ghost btn-sm"><x-icon name="folder-open" class="size-4" />Open its folder</a>
-                </div>
-            @endif
+            <div class="flex items-center gap-1">
+                @if ($folder)
+                    <a href="{{ route('workspaces.folders.show', [$workspace->id, $folder->id]) }}" class="btn btn-ghost btn-sm" title="Open its folder"><x-icon name="folder-open" class="size-4" /><span class="max-sm:sr-only">Its folder</span></a>
+                @endif
+                @include('livewire.workspaces.partials.add-menu', ['id' => 'assignment-add', 'items' => $choices])
+            </div>
         </div>
 
-        @if ($files !== [] || $notes !== [] || $subfolders !== [])
-            <ul class="assignment-files" role="list">
+        @unless ($new)
+            <form wire:submit="addFolder" novalidate class="plan-add" x-show="adding === 'folder'" x-cloak x-on:keydown.escape="adding = null" x-on:folder-added.window="adding = null">
+                <label for="assignment-folder-name" class="sr-only">Name of the new folder</label>
+                <input id="assignment-folder-name" type="text" class="input" wire:model="folderName" maxlength="{{ \App\Study\Folders::MAX_NAME }}" placeholder="Folder name" autocomplete="off">
+                <button type="submit" class="btn btn-secondary btn-sm">Add</button>
+                <button type="button" class="topbar-button size-9" x-on:click="adding = null" title="Close"><x-icon name="x" class="size-4" /><span class="sr-only">Close</span></button>
+            </form>
+            @error('folderName') <p class="field-error">{{ $message }}</p> @enderror
+        @endunless
+
+        @if ($kept > 0)
+            <ul class="item-list" role="list" aria-label="Files and notes of the assignment">
                 @foreach ($subfolders as $child)
                     <li wire:key="assignment-folder-{{ $child->id }}" class="item-row">
                         <span class="item-icon ws-colour-amber" aria-hidden="true"><x-icon name="folder" class="size-5" /></span>
@@ -135,6 +156,18 @@
                         <x-icon name="chevron-right" class="size-5 shrink-0 text-fg-subtle" />
                     </li>
                 @endforeach
+                @foreach ($notes as $note)
+                    <li wire:key="assignment-note-{{ $note->id }}" class="item-row">
+                        <span class="item-icon" aria-hidden="true"><x-icon name="file-text" class="size-5" /></span>
+                        <span class="min-w-0 flex-1">
+                            <a href="{{ route('workspaces.notes.show', [$workspace->id, $note->id]) }}" class="tile-link">{{ $note->displayTitle() }}</a>
+                            <span class="item-meta">Note · edited {{ \Illuminate\Support\Carbon::parse($note->updatedAt)->diffForHumans() }}</span>
+                        </span>
+                        @include('livewire.workspaces.partials.row-menu', ['id' => 'assignment-note-'.$note->id, 'label' => $note->displayTitle(), 'items' => [
+                            ['Move to trash', 'trash-2', "trashNote('{$note->id}')", false],
+                        ]])
+                    </li>
+                @endforeach
                 @foreach ($files as $file)
                     <li wire:key="assignment-file-{{ $file->id }}" class="item-row">
                         <span class="item-icon" aria-hidden="true"><x-icon :name="$file->icon()" class="size-5" /></span>
@@ -142,49 +175,28 @@
                             <a href="{{ route('workspaces.files.show', [$workspace->id, $file->id]) }}" class="tile-link">{{ $file->fileName() }}</a>
                             <span class="item-meta">{{ $file->typeLabel() }} · {{ $file->humanSize() }}</span>
                         </span>
-                        <x-icon name="chevron-right" class="size-5 shrink-0 text-fg-subtle" />
-                    </li>
-                @endforeach
-                @foreach ($notes as $note)
-                    <li wire:key="assignment-note-{{ $note->id }}" class="item-row">
-                        <span class="item-icon" aria-hidden="true"><x-icon name="file-text" class="size-5" /></span>
-                        <span class="min-w-0 flex-1">
-                            <a href="{{ route('workspaces.notes.show', [$workspace->id, $note->id]) }}" class="tile-link">{{ $note->displayTitle() }}</a>
-                            <span class="item-meta">Note</span>
-                        </span>
-                        <x-icon name="chevron-right" class="size-5 shrink-0 text-fg-subtle" />
+                        @include('livewire.workspaces.partials.row-menu', ['id' => 'assignment-file-'.$file->id, 'label' => $file->fileName(), 'items' => [
+                            ['Download', 'download', null, false, route('files.content', [$file->id, 'download' => 1])],
+                            ['Move to trash', 'trash-2', "trashFile('{$file->id}')", false],
+                        ]])
                     </li>
                 @endforeach
             </ul>
+        @else
+            <p class="text-sm text-fg-muted">Nothing yet. Add the brief, your files or a note<span class="only-fine-pointer">, or drop files here</span>.</p>
         @endif
 
-        @unless ($new)
-            <x-workspace.quiet-add label="New folder" icon="folder-plus" submit="addFolder">
-                <label for="assignment-folder-name" class="sr-only">Name of the new folder</label>
-                <input id="assignment-folder-name" type="text" class="input" wire:model="folderName" maxlength="{{ \App\Study\Folders::MAX_NAME }}" placeholder="Folder name" autocomplete="off">
-            </x-workspace.quiet-add>
-            @error('folderName') <p class="field-error">{{ $message }}</p> @enderror
-        @endunless
-
         {{-- resources/js/uploader.js: Livewire leaves the list alone. On a new one the files wait for Create. --}}
-        <div wire:ignore class="space-y-3"
+        <div wire:ignore data-assignment-upload
             x-data="uploader({ url: @js(route('api.v1.files.store')), maxBytes: {{ $maxUpload }}, extensions: @js([...array_keys(FileTypes::TYPES), 'jpeg']), hold: @js($new), placeFor: () => $wire.filesFolder() })"
-            x-on:assignment-created.window="start()">
-            <div class="drop-zone drop-zone-slim" x-bind:class="over && 'is-over'" x-on:dragover.prevent="over = true" x-on:dragleave="over = false" x-on:drop.prevent="drop($event)">
-                <span class="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
-                    <x-icon name="upload" class="size-5 text-fg-muted" />
-                    <span class="font-semibold only-fine-pointer">Drop the brief or your files here</span>
-                    <x-button icon="file-up" x-on:click="$refs.files.click()">Choose files</x-button>
-                </span>
-                <span class="text-sm text-fg-muted">Up to {{ Number::fileSize($maxUpload) }} each<span x-show="held"> · added when you create it</span></span>
-                <input type="file" multiple hidden x-ref="files" x-on:change="choose($event)" accept="{{ FileTypes::accept() }}" data-upload-files>
-            </div>
-            <ul class="upload-list" role="list" aria-label="Chosen files" x-show="items.length > 0" x-cloak>
-                <template x-for="item in items" :key="item.key">
+            x-on:assignment-created.window="start()" x-on:assignment-files.window="$refs.files.click()">
+            <input type="file" multiple hidden x-ref="files" x-on:change="choose($event)" accept="{{ FileTypes::accept() }}" data-upload-files>
+            <ul class="upload-list" role="list" aria-label="Chosen files" x-show="items.some((item) => held || item.state !== 'done')" x-cloak>
+                <template x-for="item in items.filter((item) => held || item.state !== 'done')" :key="item.key">
                     <li class="upload-item" x-bind:data-state="item.state">
                         <span class="min-w-0 flex-1">
                             <span class="block truncate font-medium" x-text="item.path"></span>
-                            <span class="block text-sm text-fg-muted" x-text="item.state === 'sending' ? `Uploading… ${item.progress}%` : (item.state === 'waiting' && held ? 'Ready to add' : item.note)"></span>
+                            <span class="block text-sm text-fg-muted" x-text="item.state === 'sending' ? `Uploading… ${item.progress}%` : (item.state === 'waiting' && held ? 'Added when you create it' : item.note)"></span>
                         </span>
                         <button type="button" class="topbar-button size-8" x-show="held || item.state === 'refused'" x-on:click="forget(item.key)" x-bind:aria-label="`Take out ${item.path}`">
                             <x-icon name="x" class="size-4" />

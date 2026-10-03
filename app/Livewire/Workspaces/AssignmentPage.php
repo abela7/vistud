@@ -174,6 +174,37 @@ final class AssignmentPage extends Component
         }
         $this->reset('folderName');
         $this->notify("Folder “{$made->name}” added.");
+        $this->dispatch('folder-added');
+    }
+
+    /** A new note in the assignment's folder (made now if it has none), in the editor. */
+    public function writeNote(): void
+    {
+        if ($this->activityId === null) {
+            return;
+        }
+        $folder = $this->activities->folder($this->principal(), $this->activityId);
+        $this->redirect(route('workspaces.notes.create', [$this->workspaceId, 'in' => "folder:{$folder->id}"]), navigate: true);
+    }
+
+    public function trashFile(string $id): void
+    {
+        try {
+            $this->files->trash($this->principal(), $id);
+            $this->notify('Moved to the trash. Restore it from Notes & files.');
+        } catch (NotFound) {
+            $this->notify('That is no longer here.', 'info');
+        }
+    }
+
+    public function trashNote(string $id): void
+    {
+        try {
+            $this->notes->trash($this->principal(), $id);
+            $this->notify('Moved to the trash. Restore it from Notes & files.');
+        } catch (NotFound) {
+            $this->notify('That is no longer here.', 'info');
+        }
     }
 
     /** Called by resources/js/uploader.js once a round of files has gone up. */
@@ -221,8 +252,8 @@ final class AssignmentPage extends Component
             'modules' => $this->modules->list($by, $this->workspaceId),
             'folder' => $folder,
             'files' => $folder === null ? [] : array_values(array_filter($this->files->list($by, $this->workspaceId), fn ($file) => $file->folderId === $folder->id)),
-            'notes' => $folder === null ? [] : array_values(array_filter($this->notes->list($by, $this->workspaceId), fn ($note) => $note->folderId === $folder->id)),
-            // Its own folders; each section's folder is shown in its section.
+            'notes' => $folder === null ? [] : collect($this->notes->list($by, $this->workspaceId))->filter(fn ($note) => $note->folderId === $folder->id)->sortByDesc('updatedAt')->values()->all(),
+            // Its own folders; each section's folder is on the section's page.
             'subfolders' => $folder === null ? [] : array_values(array_filter(
                 $this->folders->tree($by, $this->workspaceId),
                 fn ($child) => $child->parentId === $folder->id && ! in_array($child->id, array_map(fn ($part) => $part->folderId, $plan->parts()), true),

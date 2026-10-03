@@ -1,5 +1,5 @@
 {{--
-    One step of the plan ($step), in App\Livewire\Workspaces\AssignmentPlan, with the steps under it (up to three
+    One step of the plan ($step), in App\Livewire\Workspaces\AssignmentPlan or SectionPage, with the steps under it (up to three
     levels). $depth is its level (1 for a step of a part), $first and $last say where it stands among its
     neighbours. A step with no steps is ticked: the circle is "done" (or back to "to do"), and the menu starts it, marks
     it stuck, or changes its details. A step that holds steps shows how far they are instead.

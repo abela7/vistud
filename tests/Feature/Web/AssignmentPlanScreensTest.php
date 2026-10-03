@@ -9,7 +9,6 @@ use App\Livewire\Workspaces\Tasks;
 use App\Models\User;
 use App\Study\Activities;
 use App\Study\ActivityDetails;
-use App\Study\Folders;
 use App\Study\Notes;
 use App\Study\PlanMaker;
 use App\Study\Plans;
@@ -87,7 +86,9 @@ class AssignmentPlanScreensTest extends TestCase
         $by = $this->principal($this->ada);
         $part = $plans->addPart($by, $this->essay->id, 'Research');
 
-        $component = $this->plan()->assertSee('Research')->assertSee('Add a task to Research')->assertSee('New section')->assertSee('Clear the plan')->assertSee('Also track')->assertSee('Milestones')->assertSee('Team')->assertSee('Marking criteria')
+        // A section is one line that opens its own page; a new one is made on a page of its own.
+        $component = $this->plan()->assertSee('Research')->assertSee(route('workspaces.assignments.sections.show', [$this->databases->id, $this->essay->id, $part->id]))
+            ->assertSee(route('workspaces.assignments.sections.create', [$this->databases->id, $this->essay->id]))->assertSee('New section')->assertDontSee('Add a task to Research')->assertSee('Clear the plan')->assertSee('Also track')->assertSee('Milestones')->assertSee('Team')->assertSee('Marking criteria')
             ->assertDontSee('Add a milestone')->assertDontSee('Add a person')->assertDontSee('Add a criterion')->assertDontSee('Days to reach')->assertDontSee('Who shares the work');
         $component->call('$set', 'showMilestones', true)->assertSee('Add a milestone')->assertDontSee('Add a person');
         $component->call('$set', 'showTeam', true)->assertSee('Add a person');
@@ -95,61 +96,33 @@ class AssignmentPlanScreensTest extends TestCase
         $this->assertSame('Research', $plans->get($by, $this->essay->id)->item($part->id)->title);
     }
 
-    public function test_sections_are_added_with_their_weight_and_the_weights_are_checked(): void
+    public function test_each_section_shows_its_weight_and_how_far_it_is_and_the_weights_are_checked(): void
     {
         $plans = app(Plans::class);
         $by = $this->principal($this->ada);
+        $research = $plans->addPart($by, $this->essay->id, 'Research', 30);
 
-        $component = $this->plan()->set('partText', 'Research')->set('partMarks', '30')->call('addPart')->assertHasNoErrors()->assertSet('partMarks', '')
-            ->assertSee('30%')->assertSee('Weights add up to 30%: 70% is in no section')->assertSee('0 of 30%')->assertSee('70% left');
-        $component->set('partText', 'Writing')->call('addPart')->assertSee('30% given · 70% shared by the section without a weight')->assertSee('0 of 70%');
-        $writing = $plans->get($by, $this->essay->id)->parts()[1];
+        $component = $this->plan()->assertSee('30%')->assertSee('Weights add up to 30%: 70% is in no section')->assertSee('0 of 30%')->assertSee('No tasks yet')
+            ->assertSee(route('workspaces.assignments.sections.edit', [$this->databases->id, $this->essay->id, $research->id]));
+        $writing = $plans->addPart($by, $this->essay->id, 'Writing');
+        $component->call('$refresh')->assertSee('30% given · 70% shared by the section without a weight')->assertSee('0 of 70%')->assertSee('No weight');
+        $plans->update($by, $writing->id, ['marks' => '90']);
+        $component->call('$refresh')->assertSee('Weights add up to 120%: 20% too many');
+        $plans->update($by, $writing->id, ['marks' => '70']);
+        $component->call('$refresh')->assertSee('Weights add up to 100%');
 
-        // The weight is changed where it is shown; nonsense says so on that section; empty takes it away.
-        $component->call('setWeight', $writing->id, '70')->assertSee('Weights add up to 100%')->assertDispatched('plan-changed');
-        $this->assertSame(70, $plans->get($by, $this->essay->id)->item($writing->id)->weight);
-        $component->call('setWeight', $writing->id, '500')->assertHasErrors(["weight.{$writing->id}"])->assertSee('Enter a number from 1 to 100');
-        $component->call('setWeight', $writing->id, '90')->assertSee('Weights add up to 120%: 20% too many');
-        $component->call('setWeight', $writing->id, '')->assertSee('shared by the section without a weight');
-        $this->assertNull($plans->get($by, $this->essay->id)->item($writing->id)->weight);
+        // Ticking a section with no tasks earns its weight.
+        $component->call('setState', $research->id, 'done')->assertSee('30 of 30%')->assertDispatched('plan-changed');
 
-        // Ticking a section with no steps earns its weight.
-        $research = $plans->get($by, $this->essay->id)->parts()[0];
-        $component->call('setState', $research->id, 'done')->assertSee('30%')->assertSee('30 of 30%');
+        // Without weights, each section counts the same, and the strip says so.
+        $plans->update($by, $research->id, ['marks' => '']);
+        $plans->update($by, $writing->id, ['marks' => '']);
+        $component->call('$refresh')->assertSee('No weights yet · each section counts the same')->assertSee('50 of 50%')->assertSee('0 of 50%');
 
-        // Without weights, it counts the steps and says so.
-        $component->call('setWeight', $research->id, '');
-        $component->assertSee('Counting tasks');
-    }
-
-    public function test_a_section_keeps_notes_files_and_folders_in_its_own_folder_and_lists_them(): void
-    {
-        $plans = app(Plans::class);
-        $by = $this->principal($this->ada);
-        $research = $plans->addPart($by, $this->essay->id, 'Research', 40);
-
-        $component = $this->plan()->assertSeeText('Add a Task to Research')->assertSeeText('Write a Note in Research')->assertSeeText('Add Files to Research')->assertSeeText('New Folder in Research')
-            ->assertDontSee('Open its folder');
-
-        // Its folder is made the first time something goes in: inside the assignment's folder.
-        $component->call('addFolder', $research->id)->assertHasErrors(["folderText.{$research->id}"]);
-        $component->set("folderText.{$research->id}", 'Sources')->call('addFolder', $research->id)->assertHasNoErrors()->assertSee('Folder “Sources” added.')
-            ->assertSet('folderText', [])->assertSee('Sources')->assertSee('Open its folder')->assertSee('1 item');
-        $section = $plans->get($by, $this->essay->id)->item($research->id);
-        $folder = app(Folders::class)->find($by, $section->folderId);
-        $this->assertSame(['Research', app(Activities::class)->find($by, $this->essay->id)->folderId], [$folder->name, $folder->parentId]);
-
-        // Files go up into it (the uploader asks for the place), and a note is written there.
-        $component->call('sectionFolder', $research->id)->assertReturned(['folder', $folder->id]);
-        $component->call('uploadsFinished', 2, 0)->assertSee('2 files added.');
-        $component->call('writeNote', $research->id)->assertRedirect(route('workspaces.notes.create', [$this->databases->id, 'in' => "folder:{$folder->id}"]));
-        $note = app(Notes::class)->create($by, 'folder', $folder->id, 'Reading list');
-        $component->call('$refresh')->assertSee('Reading list')->assertSee('2 items');
-
-        // Deleting the section keeps its folder, with what is in it, and says so.
-        $component->call('remove', $research->id)->assertSee('Deleted. Its folder “Research” stays in the assignment');
-        $this->assertSame('Research', app(Folders::class)->find($by, $folder->id)->name);
-        $this->assertNotNull($note);
+        // Its files and notes are counted on its line; the things themselves are on its page.
+        $folder = $plans->folder($by, $writing->id);
+        app(Notes::class)->create($by, 'folder', $folder->id, 'Outline');
+        $component->call('$refresh')->assertSee('1 note')->assertDontSee('Outline');
     }
 
     public function test_the_assignment_itself_takes_folders_beside_its_files_and_notes(): void
@@ -159,11 +132,19 @@ class AssignmentPlanScreensTest extends TestCase
         $sectionFolder = app(Plans::class)->folder($by, $section->id);
 
         $page = Livewire::test(AssignmentPage::class, ['workspaceId' => $this->databases->id, 'activityId' => $this->essay->id])
+            ->assertSee('Nothing yet. Add the brief, your files or a note')->assertSee('Upload files')->assertSee('Write a note')->assertSee('New folder')
             ->call('addFolder')->assertHasErrors(['folderName'])
             ->set('folderName', 'Brief and rubric')->call('addFolder')->assertHasNoErrors()->assertSee('Folder “Brief and rubric” added.')->assertSee('Brief and rubric')->assertSet('folderName', '');
-        // A section's folder is shown in its section, not here.
-        $page->assertDontSee('>Research</a>', false);
+        // A section's folder is on the section's page, not here.
+        $page->assertDontSee('>Research</a>', false)->assertDispatched('folder-added');
         $this->assertSame('Research', $sectionFolder->name);
+
+        // A note is written in its folder; a note or a file goes to the trash from its menu.
+        $folder = app(Activities::class)->find($by, $this->essay->id)->folderId;
+        $page->call('writeNote')->assertRedirect(route('workspaces.notes.create', [$this->databases->id, 'in' => "folder:{$folder}"]));
+        $note = app(Notes::class)->create($by, 'folder', $folder, 'Brief summary');
+        $page->call('$refresh')->assertSee('Brief summary')->call('trashNote', $note->id)->assertSee('Moved to the trash.')->assertDontSee('Brief summary');
+        $page->call('trashNote', $note->id);
     }
 
     public function test_an_ais_prompt_is_strong_and_carries_the_time_left(): void
@@ -180,7 +161,7 @@ class AssignmentPlanScreensTest extends TestCase
         $plans = app(Plans::class);
         $by = $this->principal($this->ada);
 
-        $component = $this->plan()->call('useStarter', 'essay')->assertSee('Added the “Essay or report” plan.')->assertSee('Research')->assertSee('Find and read the sources')
+        $component = $this->plan()->call('useStarter', 'essay')->assertSee('Added the “Essay or report” plan.')->assertSee('Research')->assertDontSee('Find and read the sources')
             ->assertSee('Argument and analysis')->assertSee('0%')->assertDispatched('plan-changed');
         $plan = $plans->get($by, $this->essay->id);
 
@@ -192,23 +173,21 @@ class AssignmentPlanScreensTest extends TestCase
         $component->call('setState', $plan->criteria()[0]->id, 'partly');
         $this->assertSame('partly', $plans->get($by, $this->essay->id)->criteria()[0]->state);
 
-        // Added by hand, with marks, and the progress counts by them.
-        $component->set('partText', 'Reflection')->set('partMarks', '10')->call('addPart')->assertHasNoErrors()->assertSet('partText', '')->assertSee('Reflection')->assertSee('10%');
+        // Added by hand.
         $component->set('stepText.loose', 'Email the tutor')->call('addStep')->assertSee('Email the tutor')->assertSet('stepText', []);
         $component->set('criterionText', 'Originality')->set('criterionMarks', '15')->call('addCriterion')->assertSee('Originality');
 
         // Renamed, moved, deleted.
-        $reflection = $plans->get($by, $this->essay->id)->parts()[4];
-        $component->call('startEdit', $reflection->id)->assertSet('editTitle', 'Reflection')->assertSet('editMarks', '10')
-            ->set('editTitle', 'Final reflection')->set('editMarks', '')->call('saveEdit')->assertSet('editing', null)->assertSee('Final reflection');
-        $component->call('move', $reflection->id, 'up')->call('remove', $reflection->id)->assertDontSee('Final reflection');
+        $originality = collect($plans->get($by, $this->essay->id)->criteria())->firstWhere('title', 'Originality');
+        $component->call('startEdit', $originality->id)->assertSet('editTitle', 'Originality')->assertSet('editMarks', '15')
+            ->set('editTitle', 'Original thought')->set('editMarks', '')->call('saveEdit')->assertSet('editing', null)->assertSee('Original thought');
+        $reflection = $plans->addPart($by, $this->essay->id, 'Reflection', 10);
+        $component->call('$refresh')->assertSee('Reflection')->call('move', $reflection->id, 'up')->call('remove', $reflection->id)->assertDontSee('Reflection');
     }
 
     public function test_bad_words_and_marks_say_what_is_wrong_where_it_was_typed(): void
     {
         $this->plan()
-            ->call('addPart')->assertHasErrors(['partText'])
-            ->set('partText', 'Part')->set('partMarks', '500')->call('addPart')->assertHasErrors(['partMarks'])
             ->call('addStep')->assertHasErrors(['stepText.loose'])
             ->call('addCriterion')->assertHasErrors(['criterionText']);
     }

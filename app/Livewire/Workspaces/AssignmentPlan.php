@@ -3,15 +3,11 @@
 namespace App\Livewire\Workspaces;
 
 use App\Identity\PrincipalFactory;
+use App\Livewire\Concerns\EditsPlan;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
-use App\Platform\Errors\Conflict;
-use App\Platform\Errors\NotFound;
-use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
 use App\Study\Files;
-use App\Study\FileTypes;
-use App\Study\Folders;
 use App\Study\Notes;
 use App\Study\PlanItem;
 use App\Study\PlanMaker;
@@ -26,11 +22,12 @@ use Livewire\Component;
  * essay to a group project. Parts (its sections or deliverables) with steps under them (which can hold steps), steps
  * on their own, milestones, the marking criteria to check oneself against and the team that shares the work, with
  * the progress, how it is going and what is left against the time left. Made in a moment from a starter or an AI's
- * reply, or by hand. The assignment's ID is locked; the service checks everything.
+ * reply, or by hand. A section is made, and worked on, on its own page (SectionForm, SectionPage); here each is one
+ * line (or card) of how far it has got. The assignment's ID is locked; the service checks everything.
  */
 final class AssignmentPlan extends Component
 {
-    use Notices;
+    use EditsPlan, Notices;
 
     #[Locked]
     public string $workspaceId;
@@ -38,43 +35,9 @@ final class AssignmentPlan extends Component
     #[Locked]
     public string $activityId;
 
-    /** What is typed in each "Add a task" box, by part ID; `loose` is the box for tasks outside any section. */
-    public array $stepText = [];
-
-    /** What is typed in each section's "New folder" box, by part ID. */
-    public array $folderText = [];
-
-    public string $partText = '';
-
-    public string $partMarks = '';
-
     public string $criterionText = '';
 
     public string $criterionMarks = '';
-
-    /** The step that is being given a step of its own, or null. */
-    #[Locked]
-    public ?string $adding = null;
-
-    /** The item being changed (its name, marks, dates, priority, labels, notes, person), or null. */
-    #[Locked]
-    public ?string $editing = null;
-
-    public string $editTitle = '';
-
-    public string $editMarks = '';
-
-    public string $editStart = '';
-
-    public string $editDue = '';
-
-    public string $editPriority = '';
-
-    public string $editLabels = '';
-
-    public string $editNotes = '';
-
-    public string $editMember = '';
 
     public string $milestoneText = '';
 
@@ -116,17 +79,15 @@ final class AssignmentPlan extends Component
 
     private Activities $activities;
 
-    private Folders $folders;
-
     private Files $files;
 
     private Notes $notes;
 
     private PrincipalFactory $principals;
 
-    public function boot(Plans $plans, PlanMaker $maker, Activities $activities, Folders $folders, Files $files, Notes $notes, PrincipalFactory $principals): void
+    public function boot(Plans $plans, PlanMaker $maker, Activities $activities, Files $files, Notes $notes, PrincipalFactory $principals): void
     {
-        [$this->plans, $this->maker, $this->activities, $this->folders, $this->files, $this->notes, $this->principals] = [$plans, $maker, $activities, $folders, $files, $notes, $principals];
+        [$this->plans, $this->maker, $this->activities, $this->files, $this->notes, $this->principals] = [$plans, $maker, $activities, $files, $notes, $principals];
     }
 
     public function mount(string $workspaceId, string $activityId): void
@@ -136,79 +97,10 @@ final class AssignmentPlan extends Component
 
     // ---------- Adding ----------
 
-    /** A step under a part or a step, or outside every part for none. Its text box is stepText[that ID], or stepText.loose. */
-    public function addStep(string $parentId = ''): void
-    {
-        $box = $parentId === '' ? 'loose' : $parentId;
-        $text = $this->stepText[$box] ?? '';
-        $added = $this->attempt(['title' => "stepText.{$box}"], fn () => $this->plans->addStep($this->principal(), $this->activityId, $text, $parentId === '' ? null : $parentId));
-        if ($added) {
-            unset($this->stepText[$box]);
-            $this->changed();
-        }
-    }
-
-    /** Opens (or closes) the box for a step of a step. */
-    public function toggleSub(string $stepId): void
-    {
-        $this->adding = $this->adding === $stepId ? null : $stepId;
-        $this->resetErrorBag();
-    }
-
-    // ---------- A section's own things: notes, files and folders, kept in its folder ----------
-
-    /** The section's folder, made now if it has none: where its files go up (resources/js/uploader.js). @return array{0: string, 1: string} */
-    public function sectionFolder(string $partId): array
-    {
-        return ['folder', $this->plans->folder($this->principal(), $partId)->id];
-    }
-
-    /** A new note in the section's folder, in the editor. */
-    public function writeNote(string $partId): void
-    {
-        $folder = null;
-        if ($this->attempt([], function () use ($partId, &$folder) {
-            $folder = $this->plans->folder($this->principal(), $partId);
-        })) {
-            $this->redirect(route('workspaces.notes.create', [$this->workspaceId, 'in' => "folder:{$folder->id}"]), navigate: true);
-        }
-    }
-
-    /** A folder inside the section's folder; its box is folderText[the part's ID]. */
-    public function addFolder(string $partId): void
-    {
-        $name = (string) ($this->folderText[$partId] ?? '');
-        $made = null;
-        if ($this->attempt(['name' => "folderText.{$partId}"], function () use ($partId, $name, &$made) {
-            $by = $this->principal();
-            $made = $this->folders->create($by, 'folder', $this->plans->folder($by, $partId)->id, $name);
-        })) {
-            unset($this->folderText[$partId]);
-            $this->notify("Folder “{$made->name}” added.");
-            $this->dispatch('folder-added', part: $partId);
-        }
-    }
-
-    /** Called by resources/js/uploader.js once a round of files has gone up into a section. */
-    public function uploadsFinished(int $uploaded, int $refused): void
-    {
-        if ($uploaded > 0) {
-            $this->notify(($uploaded === 1 ? '1 file' : "{$uploaded} files").' added.');
-        }
-    }
-
     public function addMilestone(): void
     {
         if ($this->attempt(['title' => 'milestoneText', 'due_on' => 'milestoneDate'], fn () => $this->plans->addMilestone($this->principal(), $this->activityId, $this->milestoneText, $this->milestoneDate))) {
             $this->reset('milestoneText', 'milestoneDate');
-            $this->changed();
-        }
-    }
-
-    public function addPart(): void
-    {
-        if ($this->attempt(['title' => 'partText', 'marks' => 'partMarks'], fn () => $this->plans->addPart($this->principal(), $this->activityId, $this->partText, $this->partMarks))) {
-            $this->reset('partText', 'partMarks');
             $this->changed();
         }
     }
@@ -312,88 +204,6 @@ final class AssignmentPlan extends Component
 
     // ---------- Ticking, editing, ordering ----------
 
-    /** todo, doing, stuck or done for a part or a step; not_yet, partly or met for a criterion; pending or achieved for a milestone. */
-    public function setState(string $id, string $state): void
-    {
-        if ($this->attempt([], fn () => $this->plans->setState($this->principal(), $id, $state))) {
-            $this->changed();
-        }
-    }
-
-    /** A section's weight, out of 100, changed where it is shown; empty takes it away. */
-    public function setWeight(string $id, mixed $weight): void
-    {
-        $value = is_scalar($weight) ? trim((string) $weight) : '';
-        if ($this->attempt(['marks' => "weight.{$id}"], fn () => $this->plans->update($this->principal(), $id, ['marks' => $value]))) {
-            $this->changed();
-        }
-    }
-
-    public function startEdit(string $id): void
-    {
-        $item = $this->find($id);
-        if ($item === null) {
-            return;
-        }
-        [$this->editing, $this->editTitle, $this->editMarks] = [$item->id, $item->title, (string) $item->weight];
-        [$this->editStart, $this->editDue, $this->editPriority] = [(string) $item->startOn, (string) $item->dueOn, (string) $item->priority];
-        [$this->editLabels, $this->editNotes, $this->editMember] = [implode(', ', $item->labels), (string) $item->notes, (string) $item->memberId];
-        $this->resetErrorBag();
-    }
-
-    public function saveEdit(): void
-    {
-        $item = $this->editing === null ? null : $this->find($this->editing);
-        if ($item === null) {
-            $this->cancelEdit();
-
-            return;
-        }
-        $fields = ['title' => $this->editTitle];
-        if (in_array($item->kind, ['part', 'criterion'], true)) {
-            $fields['marks'] = $this->editMarks;
-        }
-        if (in_array($item->kind, ['part', 'step', 'milestone'], true)) {
-            $fields += ['due_on' => $this->editDue, 'notes' => $this->editNotes];
-        }
-        if (in_array($item->kind, ['part', 'step'], true)) {
-            $fields += ['start_on' => $this->editStart, 'priority' => $this->editPriority, 'labels' => $this->editLabels, 'member_id' => $this->editMember];
-        }
-        $map = ['title' => 'editTitle', 'marks' => 'editMarks', 'start_on' => 'editStart', 'due_on' => 'editDue', 'priority' => 'editPriority', 'labels' => 'editLabels', 'notes' => 'editNotes', 'member' => 'editMember'];
-        if ($this->attempt($map, fn () => $this->plans->update($this->principal(), $item->id, $fields))) {
-            $this->cancelEdit();
-            $this->changed();
-        }
-    }
-
-    public function cancelEdit(): void
-    {
-        $this->reset('editing', 'editTitle', 'editMarks', 'editStart', 'editDue', 'editPriority', 'editLabels', 'editNotes', 'editMember');
-        $this->resetErrorBag();
-    }
-
-    public function move(string $id, string $direction): void
-    {
-        if ($this->attempt([], fn () => $this->plans->move($this->principal(), $id, $direction))) {
-            $this->changed();
-        }
-    }
-
-    public function remove(string $id): void
-    {
-        $kept = null;
-        if ($this->attempt([], function () use ($id, &$kept) {
-            $kept = $this->plans->delete($this->principal(), $id);
-        })) {
-            if ($kept !== null) {
-                $this->notify("Deleted. Its folder “{$kept}” stays in the assignment's folder, with what is in it.");
-            }
-            $this->changed();
-        }
-    }
-
-    // ---------- The team ----------
-
     public function addMember(): void
     {
         if ($this->attempt(['name' => 'memberName'], fn () => $this->plans->addMember($this->principal(), $this->activityId, $this->memberName, $this->memberMe))) {
@@ -461,32 +271,21 @@ final class AssignmentPlan extends Component
             $starters = array_intersect_key($starters, ['project' => 1, 'group' => 1]) + $starters;
         }
 
-        // What each section keeps in its folder: its folders, files and notes.
-        $materials = [];
-        $sectionFolders = array_filter(array_map(fn (PlanItem $part) => $part->folderId, $plan->parts()));
+        // How much each section keeps in its folder (shown on its line; the things themselves are on its page).
+        $counts = [];
+        $sectionFolders = array_flip(array_filter(array_map(fn (PlanItem $part) => $part->folderId, $plan->parts())));
         if ($sectionFolders !== []) {
-            $wanted = array_flip($sectionFolders);
-            foreach ($this->folders->tree($by, $this->workspaceId) as $folder) {
-                if ($folder->parentId !== null && isset($wanted[$folder->parentId])) {
-                    $materials[$folder->parentId]['folders'][] = $folder;
-                }
-            }
-            foreach ($this->files->list($by, $this->workspaceId) as $file) {
-                if ($file->folderId !== null && isset($wanted[$file->folderId])) {
-                    $materials[$file->folderId]['files'][] = $file;
-                }
-            }
-            foreach ($this->notes->list($by, $this->workspaceId) as $note) {
-                if ($note->folderId !== null && isset($wanted[$note->folderId])) {
-                    $materials[$note->folderId]['notes'][] = $note;
+            foreach (['files' => $this->files->list($by, $this->workspaceId), 'notes' => $this->notes->list($by, $this->workspaceId)] as $kind => $things) {
+                foreach ($things as $thing) {
+                    if ($thing->folderId !== null && isset($sectionFolders[$thing->folderId])) {
+                        $counts[$thing->folderId][$kind] = ($counts[$thing->folderId][$kind] ?? 0) + 1;
+                    }
                 }
             }
         }
 
         return view('livewire.workspaces.assignment-plan', [
-            'materials' => $materials,
-            'maxUpload' => Files::maxBytes(),
-            'extensions' => [...array_keys(FileTypes::TYPES), 'jpeg'],
+            'counts' => $counts,
             'plan' => $plan,
             'assignment' => $assignment,
             'progress' => $progress,
@@ -499,47 +298,6 @@ final class AssignmentPlan extends Component
             'prompt' => $this->aiOpen ? $this->maker->prompt($by, $this->activityId, $this->brief) : '',
             'read' => $read,
         ]);
-    }
-
-    /** Runs a change; true when it was made. A refusal goes to the field it names ($fields maps the service's field to a property). */
-    private function attempt(array $fields, callable $change): bool
-    {
-        // What was refused before is cleared as the same fields are sent again.
-        foreach ($fields as $property) {
-            $this->resetErrorBag($property);
-        }
-        try {
-            $change();
-
-            return true;
-        } catch (Unprocessable $e) {
-            foreach ($e->details['fields'] ?? [] as $field => $messages) {
-                $this->addError($fields[$field] ?? 'plan', $messages[0]);
-            }
-        } catch (Conflict $e) {
-            $this->notify($e->getMessage(), 'info');
-        } catch (NotFound) {
-            $this->notify('That is no longer in the plan.', 'info');
-        }
-
-        return false;
-    }
-
-    private function find(string $id): ?PlanItem
-    {
-        foreach ($this->plans->get($this->principal(), $this->activityId)->items as $item) {
-            if ($item->id === $id) {
-                return $item;
-            }
-        }
-
-        return null;
-    }
-
-    /** The page's status and countdown follow what was ticked. */
-    private function changed(): void
-    {
-        $this->dispatch('plan-changed');
     }
 
     private function principal(): Principal

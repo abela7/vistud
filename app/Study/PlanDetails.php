@@ -152,18 +152,44 @@ final readonly class PlanDetails
     }
 
     /**
-     * How far one section has got, and what that is worth: its share of 100 and the part of it earned so far.
+     * How far an item has got, from 0 to 1: a task with sub-tasks is as far as its sub-tasks are on average (each
+     * counts the same), and so is a section with its tasks; a task, or a section, with nothing under it is done or not.
+     */
+    public function fraction(PlanItem $item): float
+    {
+        $children = $this->steps($item->id);
+        if ($children === []) {
+            return $item->state === 'done' ? 1.0 : 0.0;
+        }
+
+        return array_sum(array_map(fn (PlanItem $child) => $this->fraction($child), $children)) / count($children);
+    }
+
+    /**
+     * How far one section has got, and what that is worth: its tasks done of all of them, its percentage (from its
+     * tasks and their sub-tasks), its share of 100 and the part of that earned so far.
      *
      * @return array{done: int, total: int, percent: int, share: float, earned: float}
      */
     public function standing(PlanItem $part): array
     {
-        [$done, $total] = $this->counts($part);
-        $share = $this->weighted() ? ($this->weights()['shares'][$part->id] ?? 0.0) : 0.0;
+        $tasks = $this->steps($part->id);
+        $fraction = $this->fraction($part);
+        $share = $this->weights()['shares'][$part->id] ?? 0.0;
 
-        return ['done' => $done, 'total' => $total, 'percent' => (int) round($done / max(1, $total) * 100), 'share' => $share, 'earned' => $share * $done / max(1, $total)];
+        return [
+            'done' => count(array_filter($tasks, fn (PlanItem $task) => $this->stateOf($task) === 'done')),
+            'total' => count($tasks),
+            'percent' => (int) round($fraction * 100),
+            'share' => $share,
+            'earned' => $share * $fraction,
+        ];
     }
 
+    /**
+     * How far the whole plan has got: each section counts for its share of 100 (its weight, or an equal part of
+     * what the weights leave) times how far it is. $done and $total count the things to tick, for the pace.
+     */
     public function progress(): PlanProgress
     {
         $groups = $this->groups();
@@ -172,34 +198,33 @@ final readonly class PlanDetails
         if ($total === 0) {
             return new PlanProgress(0, 0, 0);
         }
-        if (! $this->weighted()) {
-            return new PlanProgress($done, $total, (int) round($done / $total * 100));
-        }
         // Out of 100, or of what was given when it is more: marks given to no section can't be earned.
         $weights = $this->weights();
         $earned = 0.0;
         foreach ($groups as $key => $group) {
-            $earned += $weights['shares'][$key] * $group['done'] / $group['total'];
+            $earned += $weights['shares'][$key] * $group['fraction'];
         }
 
-        return new PlanProgress($done, $total, (int) min(100, round($earned / max(100, $weights['given']) * 100)), weighted: true);
+        return new PlanProgress($done, $total, (int) min(100, round($earned / max(100, $weights['given']) * 100)), weighted: $this->weighted());
     }
 
-    /** @return array<string, array{weight: ?int, done: int, total: int}> each section, and '' for the steps outside them */
+    /** @return array<string, array{weight: ?int, fraction: float, done: int, total: int}> each section, and '' for the tasks outside them */
     private function groups(): array
     {
         $groups = [];
         foreach ($this->parts() as $part) {
             [$done, $total] = $this->counts($part);
-            $groups[$part->id] = ['weight' => $part->weight, 'done' => $done, 'total' => $total];
+            $groups[$part->id] = ['weight' => $part->weight, 'fraction' => $this->fraction($part), 'done' => $done, 'total' => $total];
         }
-        $looseDone = $looseTotal = 0;
-        foreach ($this->steps() as $step) {
-            [$done, $total] = $this->counts($step);
-            [$looseDone, $looseTotal] = [$looseDone + $done, $looseTotal + $total];
-        }
-        if ($looseTotal > 0) {
-            $groups[''] = ['weight' => null, 'done' => $looseDone, 'total' => $looseTotal];
+        $loose = $this->steps();
+        if ($loose !== []) {
+            $done = $total = 0;
+            foreach ($loose as $step) {
+                [$d, $t] = $this->counts($step);
+                [$done, $total] = [$done + $d, $total + $t];
+            }
+            $fraction = array_sum(array_map(fn (PlanItem $step) => $this->fraction($step), $loose)) / count($loose);
+            $groups[''] = ['weight' => null, 'fraction' => $fraction, 'done' => $done, 'total' => $total];
         }
 
         return $groups;

@@ -110,6 +110,17 @@ Route::middleware('auth')->group(function () {
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'assignment' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.assignments.show');
 
+    // A section of an assignment's plan: a new one, its own page (its tasks, files and notes), and changing it.
+    Route::get('/workspaces/{workspace}/assignments/{assignment}/sections/new', [AssignmentPageController::class, 'createSection'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'assignment' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.assignments.sections.create');
+    Route::get('/workspaces/{workspace}/assignments/{assignment}/sections/{plansection}', [AssignmentPageController::class, 'section'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'assignment' => '[A-Za-z0-9-]{1,64}', 'plansection' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.assignments.sections.show');
+    Route::get('/workspaces/{workspace}/assignments/{assignment}/sections/{plansection}/edit', [AssignmentPageController::class, 'editSection'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'assignment' => '[A-Za-z0-9-]{1,64}', 'plansection' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.assignments.sections.edit');
+
     // A workspace and its sections (docs/specs/workspaces.md).
     Route::get('/workspaces/{workspace}/{section?}', WorkspacePageController::class)
         ->where('workspace', '[A-Za-z0-9-]{1,64}')
