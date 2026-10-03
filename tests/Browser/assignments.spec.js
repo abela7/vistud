@@ -38,10 +38,15 @@ async function newSection(page, title, weight) {
     await page.getByRole('heading', { level: 1, name: title }).waitFor();
 }
 
-/** The plan's ⋯ menu: Add a pre-made plan, Clear the plan. */
+/** The plan's ⋯ menu: Clear the plan. */
 async function planMenu(page, item) {
     await page.getByRole('button', { name: 'Actions for the plan' }).click();
     await page.locator('.row-menu:popover-open').getByRole('button', { name: item }).click();
+}
+
+/** The plan's Pre-made button opens (or closes) the list of pre-made plans. */
+async function preMade(page) {
+    await page.getByRole('button', { name: /^Pre-made/ }).click();
 }
 
 /** Biology's Assignments section, reached the way a student would. */
@@ -118,10 +123,10 @@ for (const [name, device] of Object.entries(devices)) {
             await page.getByRole('button', { name: 'Create' }).click();
             await page.getByRole('heading', { level: 1, name: 'Coursework 2: osmosis report' }).waitFor();
 
-            // An empty plan is calm: a new section is one button away, and the pre-made plans wait in the menu.
+            // An empty plan is calm: a new section is one button away, and the pre-made plans wait behind one button.
             await expect(page.getByText('Split the work into sections')).toBeVisible();
             await expect(page.getByRole('button', { name: /Essay or report/ })).toHaveCount(0);
-            await planMenu(page, 'Add a pre-made plan');
+            await preMade(page);
             await page.getByRole('button', { name: /Essay or report/ }).click();
             await expect(page.getByRole('heading', { level: 3, name: 'Research' })).toBeVisible();
             await expect(page.locator('.plan-percent')).toHaveText('0%');
@@ -288,7 +293,7 @@ test('axe finds no violations on the assignment pages', async ({ page }) => {
     await page.getByLabel('Name', { exact: true }).waitFor();
     expect(await analyse()).toEqual([]);
     await page.getByRole('button', { name: 'Close', exact: true }).click();
-    await planMenu(page, 'Add a pre-made plan');
+    await preMade(page);
     expect(await analyse()).toEqual([]);
     await page.getByRole('button', { name: /Lab report/ }).click();
     await page.getByRole('heading', { level: 3, name: 'Data' }).waitFor();
@@ -333,7 +338,7 @@ test('the plan never scrolls sideways at 320 px, even with 200% text', async ({ 
     await page.getByLabel('Day').fill('2030-03-14');
     await page.getByRole('button', { name: 'Create' }).click();
     await page.getByRole('heading', { level: 1, name: /Lab report with a rather long name/ }).waitFor();
-    await planMenu(page, 'Add a pre-made plan');
+    await preMade(page);
     await page.getByRole('button', { name: /Essay or report/ }).click();
     await page.getByRole('heading', { level: 3, name: 'Research' }).waitFor();
     await page.getByRole('button', { name: 'Plan with an AI' }).click();
@@ -375,7 +380,7 @@ for (const [name, device] of Object.entries(devices)) {
             await newProject(page, 'Group project: library app');
 
             // A project has its own pre-made plans, first in the list, when they are asked for.
-            await planMenu(page, 'Add a pre-made plan');
+            await preMade(page);
             await page.getByRole('button', { name: /Group project/ }).first().click();
             await expect(page.getByRole('heading', { level: 3, name: 'Team set-up' })).toBeVisible();
             await expect(page.getByRole('heading', { level: 3, name: /Milestones/ })).toBeVisible();
@@ -453,7 +458,7 @@ test('axe finds no violations on a project plan with its editor, milestones and 
     await page.setViewportSize({ width: 1440, height: 900 });
     await openAssignments(page, false);
     await newProject(page, 'Project: axe');
-    await planMenu(page, 'Add a pre-made plan');
+    await preMade(page);
     await page.getByRole('button', { name: /^Project/ }).first().click();
     await page.getByRole('heading', { level: 3, name: 'Initiate' }).waitFor();
     await page.getByRole('button', { name: /^Team/ }).click();
@@ -483,7 +488,7 @@ test('a project plan never scrolls sideways at 320 px, even with 200% text and t
     await page.setViewportSize({ width: 320, height: 640 });
     await openAssignments(page, true);
     await newProject(page, 'A project with a rather long name that goes on and on');
-    await planMenu(page, 'Add a pre-made plan');
+    await preMade(page);
     await page.getByRole('button', { name: /Group project/ }).first().click();
     await page.getByRole('heading', { level: 3, name: 'Team set-up' }).waitFor();
     await page.getByRole('button', { name: /^Team/ }).click();

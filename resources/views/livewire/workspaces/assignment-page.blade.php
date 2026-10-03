@@ -116,7 +116,7 @@
             $choices[] = ['New folder', 'folder-plus', "adding = 'folder'; \$nextTick(() => document.getElementById('assignment-folder-name')?.focus())"];
         }
     @endphp
-    <section class="question-panel asg-files space-y-4" aria-labelledby="assignment-files-heading" x-data="{ adding: null, over: false }" x-bind:class="{ 'is-over': over }"
+    <section class="question-panel asg-files space-y-3" aria-labelledby="assignment-files-heading" x-data="{ adding: null, over: false }" x-bind:class="{ 'is-over': over }"
         x-on:dragover.prevent="over = true" x-on:dragleave.self="over = false"
         x-on:drop.prevent="over = false; Alpine.$data($el.querySelector('[data-assignment-upload]')).drop($event)">
         <div class="panel-head">

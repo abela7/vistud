@@ -79,12 +79,14 @@
                     <button type="button" class="segmented-option" x-bind:class="{ 'is-current': view === 'cards' }" x-bind:aria-pressed="(view === 'cards').toString()" aria-pressed="false" x-on:click="show('cards')"><x-icon name="layout-grid" class="size-4" />Cards</button>
                 </div>
             @endunless
+            <button type="button" @class(['btn btn-secondary btn-sm', 'ring-1 ring-accent' => $showStarters]) wire:click="toggleStarters" aria-expanded="{{ $showStarters ? 'true' : 'false' }}" title="Add a pre-made plan"><x-icon name="layout-grid" class="size-4" />Pre-made</button>
             <button type="button" class="quiet-link" wire:click="toggleAi" aria-expanded="{{ $aiOpen ? 'true' : 'false' }}"><x-icon name="brain" class="size-4" />Plan with an AI</button>
             <a href="{{ route('workspaces.assignments.sections.create', [$workspaceId, $activityId]) }}" class="btn btn-primary btn-sm"><x-icon name="plus" class="size-4" />New section</a>
-            @include('livewire.workspaces.partials.row-menu', ['id' => 'plan-head', 'label' => 'the plan', 'items' => array_values(array_filter([
-                ['Add a pre-made plan', 'layout-grid', 'toggleStarters', false],
-                $blank ? null : ['Clear the plan', 'trash-2', 'askClear', false],
-            ]))])
+            @unless ($blank)
+                @include('livewire.workspaces.partials.row-menu', ['id' => 'plan-head', 'label' => 'the plan', 'items' => [
+                    ['Clear the plan', 'trash-2', 'askClear', false],
+                ]])
+            @endunless
         </div>
     </div>
 
@@ -271,7 +273,7 @@
 
     @unless ($blank)
         @if (! $milestonesShown || ! $teamShown || ! $criteriaShown)
-            <section class="question-panel space-y-4" aria-labelledby="plan-also-heading">
+            <section class="question-panel plan-also space-y-3" aria-labelledby="plan-also-heading">
                 <div class="panel-head">
                     <span class="item-icon" aria-hidden="true"><x-icon name="plus" class="size-5" /></span>
                     <div class="panel-head-text">

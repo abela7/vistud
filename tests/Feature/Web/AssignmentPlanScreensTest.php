@@ -50,7 +50,7 @@ class AssignmentPlanScreensTest extends TestCase
 
     public function test_an_empty_plan_is_calm_the_pre_made_ones_wait_to_be_asked_for_and_the_page_shows_the_plan_only_once_it_exists(): void
     {
-        $this->plan()->assertSee('Split the work into sections')->assertSee('Plan with an AI')->assertSee('New section')->assertSee('Add a pre-made plan')->assertDontSee('Clear the plan')
+        $this->plan()->assertSee('Split the work into sections')->assertSee('Plan with an AI')->assertSee('New section')->assertSee('Pre-made')->assertDontSee('Actions for the plan')->assertDontSee('Clear the plan')
             ->assertDontSee('Essay or report')->assertDontSee('Also track')->assertDontSee('Marking criteria')
             ->call('toggleStarters')->assertSet('showStarters', true)->assertSee('Essay or report')->assertSee('Problem set')->assertSee('Group project')
             ->call('toggleStarters')->assertDontSee('Essay or report');
