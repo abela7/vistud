@@ -158,6 +158,26 @@
     }
 
     /* How many are late, by the name: the one thing to look at first. */
+    /* A module in the Overview: its number, its name and dates, and how far its topics are understood. */
+    .module-row {
+        gap: 0.75rem;
+    }
+
+    .module-row-progress {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .module-row-progress .meter {
+        width: 3.5rem;
+        height: 0.3125rem;
+    }
+
     .coming-late {
         display: inline-flex;
         align-items: center;

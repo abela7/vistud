@@ -28,6 +28,9 @@ test('the Overview is short: the rhythm, what to continue, what\'s coming up', a
     await expect(page.locator('.stat-row')).toContainText('Last 7 days');
     await expect(page.locator('.stat-row')).toContainText('Cards to review');
     await expect(page.getByRole('link', { name: 'Lecture 3: joins' })).toBeVisible();
+    // The modules, small: each with where it runs and how many of its topics are understood.
+    await expect(page.getByRole('region', { name: /^Modules/ }).getByRole('link', { name: 'Week 1: Relational model' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'All modules' })).toBeVisible();
     // Topics live in Progress now.
     await expect(page.getByText('Primary and foreign keys')).toHaveCount(0);
 

@@ -7,6 +7,7 @@
     its step arrives (docs/specs/workspaces.md §6).
 --}}
 @php
+    use App\Appearance\Theme;
     use App\Study\SessionDetails;
     use App\Study\Workspaces;
     use Illuminate\Support\Carbon;
@@ -63,7 +64,8 @@
                     <livewire:workspaces.tasks :workspace-id="$workspace->id" />
                 </div>
 
-                <section aria-labelledby="continue-heading" class="ov-panel min-w-0 lg:col-span-2">
+                <div class="min-w-0 space-y-4 lg:col-span-2">
+                <section aria-labelledby="continue-heading" class="ov-panel">
                     <div class="ov-head">
                         <span class="item-icon" aria-hidden="true"><x-icon name="history" class="size-5" /></span>
                         <h2 id="continue-heading" class="panel-title">Continue</h2>
@@ -103,6 +105,50 @@
                         </ul>
                     @endif
                 </section>
+
+                @if ($modules !== [])
+                    @php
+                        // Where the course is now comes first: a module that has ended goes last (the order is kept otherwise).
+                        $today = now()->toDateString();
+                        $ordered = collect($modules)->sortBy(fn ($m) => $m->endsOn !== null && $m->endsOn < $today ? 1 : 0)->values();
+                        $shownModules = $ordered->take(5);
+                        $when = fn ($m) => $m->startsOn || $m->endsOn
+                            ? trim(($m->startsOn ? Carbon::parse($m->startsOn)->format('j M') : '').' – '.($m->endsOn ? Carbon::parse($m->endsOn)->format('j M') : ''), ' –')
+                            : null;
+                    @endphp
+                    <section aria-labelledby="modules-heading" class="ov-panel">
+                        <div class="ov-head">
+                            <span class="item-icon" aria-hidden="true"><x-icon name="layers" class="size-5" /></span>
+                            <h2 id="modules-heading" class="panel-title">Modules<span class="count-pill">{{ count($modules) }}</span></h2>
+                            <a href="{{ route('workspaces.show', [$workspace->id, 'modules']) }}" class="quiet-link coming-actions">All modules<x-icon name="chevron-right" class="size-4" /></a>
+                        </div>
+                        <ul class="item-list" role="list">
+                            @foreach ($shownModules as $module)
+                                @php
+                                    $number = collect($modules)->search(fn ($m) => $m->id === $module->id) + 1;
+                                    $colour = Theme::CATEGORIES[crc32($module->id) % count(Theme::CATEGORIES)];
+                                    $topicsDone = $moduleProgress[$module->id] ?? null;
+                                @endphp
+                                <li class="item-row module-row ws-colour-{{ $colour }}">
+                                    <span class="module-number" aria-hidden="true">{{ $number }}</span>
+                                    <span class="min-w-0 flex-1">
+                                        <a href="{{ route('workspaces.modules.show', [$workspace->id, $module->id]) }}" class="tile-link">{{ $module->title }}</a>
+                                        @if ($when($module))
+                                            <span class="item-meta">{{ $when($module) }}</span>
+                                        @endif
+                                    </span>
+                                    @if ($topicsDone)
+                                        <span class="module-row-progress" title="Topics understood in {{ $module->title }}">
+                                            <span class="meter" role="progressbar" aria-label="Topics understood in {{ $module->title }}" aria-valuemin="0" aria-valuemax="{{ $topicsDone['total'] }}" aria-valuenow="{{ $topicsDone['done'] }}"><span style="width: {{ round($topicsDone['done'] / $topicsDone['total'] * 100) }}%"></span></span>
+                                            <span class="tabular-nums">{{ $topicsDone['done'] }}/{{ $topicsDone['total'] }}</span>
+                                        </span>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ul>
+                    </section>
+                @endif
+                </div>
             </div>
 
             <livewire:workspaces.instructions :workspace-id="$workspace->id" />

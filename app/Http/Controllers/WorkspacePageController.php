@@ -17,7 +17,8 @@ use Illuminate\Http\Request;
  * the workspace first, so another student's ID answers 404 before anything
  * is drawn, exactly like one that doesn't exist. The Overview also gathers
  * what to pick up again (docs/specs/study-memory.md §3): the latest study
- * session, the notes edited last, and whether a session is open.
+ * session, the notes edited last, and whether a session is open; and, to show
+ * the modules and how far each one's topics are understood, the topics.
  */
 class WorkspacePageController
 {
@@ -35,6 +36,14 @@ class WorkspacePageController
             foreach ($moduleList as $module) {
                 $places["module:{$module->id}"] = $module->title;
             }
+            $topicList = $topics->list($by, $details->id);
+            $moduleProgress = [];
+            foreach ($topicList as $topic) {
+                if ($topic->moduleId !== null) {
+                    $moduleProgress[$topic->moduleId]['total'] = ($moduleProgress[$topic->moduleId]['total'] ?? 0) + 1;
+                    $moduleProgress[$topic->moduleId]['done'] = ($moduleProgress[$topic->moduleId]['done'] ?? 0) + (int) in_array($topic->shown(), ['understood', 'mastered'], true);
+                }
+            }
             $hour = CarbonImmutable::now($sessions->timezone($by))->hour;
             $name = trim(explode(' ', (string) $request->user()?->name)[0] ?? '');
 
@@ -43,8 +52,10 @@ class WorkspacePageController
                 'recent' => array_slice($recent, 0, 3),
                 'places' => $places,
                 'moduleCount' => count($moduleList),
+                'modules' => $moduleList,
+                'moduleProgress' => $moduleProgress,
                 'lastSession' => $sessions->list($by, $details->id, 1)[0] ?? null,
-                'topicNames' => collect($topics->list($by, $details->id))->pluck('name', 'id')->all(),
+                'topicNames' => collect($topicList)->pluck('name', 'id')->all(),
                 'openSession' => $sessions->current($by),
             ];
         }

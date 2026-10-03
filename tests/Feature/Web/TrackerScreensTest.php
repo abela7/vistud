@@ -86,13 +86,40 @@ class TrackerScreensTest extends TestCase
         $this->livewire(Tasks::class)->assertSee('Soon quiz')->assertDontSee('late')->assertDontSee('more ·')->assertDontSee('Later');
     }
 
+    public function test_the_overview_lists_the_modules_with_dates_and_topics_understood_five_at_most_ended_ones_last(): void
+    {
+        Carbon::setTestNow('2026-10-10 09:00');
+        $by = $this->principal($this->ada);
+        $modules = app(Modules::class);
+        $topics = app(Topics::class);
+        foreach ([
+            'Week 1' => ['2026-09-28', '2026-10-04'], 'Week 2' => ['2026-10-05', '2026-10-09'], 'Week 3' => ['2026-10-10', '2026-10-16'],
+            'Week 4' => ['2026-10-17', '2026-10-23'], 'Week 5' => ['2026-10-24', '2026-10-30'], 'Week 6' => ['2026-10-31', '2026-11-06'], 'Week 7' => [null, null],
+        ] as $title => [$from, $to]) {
+            $module = $modules->create($by, $this->databases->id, ['title' => $title, 'starts_on' => $from, 'ends_on' => $to]);
+            if ($title === 'Week 3') {
+                $topics->report($by, $topics->create($by, $this->databases->id, 'Joins', $module->id)->id, 'understood');
+                $topics->create($by, $this->databases->id, 'Keys', $module->id);
+            }
+        }
+
+        $page = $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))->assertOk()
+            ->assertSeeInOrder(['Modules', '7', 'All modules', 'Week 3', '10 Oct – 16 Oct', 'Week 4', 'Week 5', 'Week 6', 'Week 7'])
+            ->assertSee('Topics understood in Week 3')->assertSee('aria-valuenow="1"', false)->assertSee('1/2')
+            // Five show; the two that have ended wait on the Modules page.
+            ->assertDontSee('Week 1')->assertDontSee('Week 2');
+        $this->assertSame(1, substr_count($page->getContent(), 'id="modules-heading"'));
+    }
+
     public function test_a_new_course_overview_points_to_the_first_module_and_tasks(): void
     {
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))
             ->assertOk()
             ->assertSee('Add your first module, like “Week 1”', false)
             ->assertSee(route('workspaces.show', [$this->databases->id, 'modules']), false)
-            ->assertSee('Nothing due')->assertSee('Add an assignment');
+            ->assertSee('Nothing due')->assertSee('Add an assignment')
+            // The Modules box would only repeat the first module's prompt.
+            ->assertDontSee('All modules');
     }
 
     public function test_assignments_and_tasks_are_added_edited_ticked_and_deleted(): void
