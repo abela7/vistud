@@ -1950,16 +1950,19 @@
 
     .cal-filters {
         display: flex;
+        flex: 1 1 auto;
         flex-wrap: wrap;
-        gap: 0.5rem;
+        justify-content: center;
+        gap: 0.375rem;
+        min-width: 0;
     }
 
     .cal-filter {
         display: inline-flex;
         align-items: center;
         gap: 0.375rem;
-        min-height: 2.25rem;
-        padding: 0 0.75rem;
+        min-height: 2rem;
+        padding: 0 0.625rem;
         border: 1px solid var(--border);
         border-radius: 9999px;
         background-color: var(--surface);
@@ -1979,6 +1982,42 @@
         color: var(--accent-contrast);
     }
 
+    /*
+    | The month fits the window (the owner's review, 2026-10-04: the days were huge, so the month ran off the screen):
+    | its rows share the height left below its toolbar (--cal-h, set by the page from where the month starts), and
+    | what a day shows follows how tall its row is: three chips, two, one, or dots. On a wide screen the day picked is
+    | listed beside the month, so the month can use the whole height; narrower, under it.
+    */
+    .cal-layout {
+        --cal-head: 2rem;
+        --cal-fit: min(var(--cal-h, 34rem), 34rem);
+        display: grid;
+        gap: 1rem;
+    }
+
+    @media (min-width: 64rem) {
+        .cal-layout {
+            --cal-fit: var(--cal-h, 34rem);
+            grid-template-columns: minmax(0, 1fr) 21rem;
+            align-items: start;
+        }
+
+        .cal-side {
+            height: var(--cal-h, auto);
+            overflow: auto;
+            padding: 0.875rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xl);
+            background-color: var(--surface-raised);
+        }
+
+        .cal-side .item-list {
+            border: 0;
+            border-radius: 0;
+            background-color: transparent;
+        }
+    }
+
     .cal-grid {
         width: 100%;
         table-layout: fixed;
@@ -1990,8 +2029,12 @@
         overflow: hidden;
     }
 
+    .cal-grid thead tr {
+        height: var(--cal-head);
+    }
+
     .cal-grid th {
-        padding: 0.5rem 0.25rem;
+        padding: 0 0.25rem;
         border-bottom: 1px solid var(--divider);
         color: var(--text-muted);
         font-size: 0.75rem;
@@ -2001,8 +2044,13 @@
         text-transform: uppercase;
     }
 
+    /* A week's row: an equal share of the height, never under 3.5rem (the page scrolls then); a phone's rows are short. */
+    .cal-grid tbody tr {
+        height: max(3.5rem, calc((var(--cal-fit) - var(--cal-head)) / var(--cal-weeks, 5)));
+    }
+
     .cal-cell {
-        height: 6.5rem;
+        position: relative;
         padding: 0;
         border-top: 1px solid var(--divider);
         border-left: 1px solid var(--divider);
@@ -2025,18 +2073,26 @@
         color: var(--text-subtle);
     }
 
+    /* The day fills its cell, whatever the row's height; its inside is clipped, never grows the row. */
     .cal-day {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.25rem;
-        width: 100%;
-        height: 100%;
-        min-height: 2.75rem;
-        padding: 0.375rem;
+        position: absolute;
+        inset: 0;
+        display: block;
+        padding: 0.25rem 0.375rem;
         text-align: left;
         cursor: pointer;
         transition: background-color 0.15s ease;
+    }
+
+    .cal-in {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        overflow: hidden;
+        container: cal / size;
     }
 
     .cal-day:hover {
@@ -2055,6 +2111,7 @@
 
     .cal-num {
         display: inline-grid;
+        flex: none;
         place-items: center;
         align-self: flex-start;
         min-width: 1.5rem;
@@ -2071,13 +2128,13 @@
     }
 
     .cal-items {
-        display: grid;
+        display: none;
         gap: 0.125rem;
         min-width: 0;
     }
 
     .cal-chip {
-        display: flex;
+        display: none;
         align-items: center;
         gap: 0.25rem;
         min-width: 0;
@@ -2107,13 +2164,18 @@
     }
 
     .cal-more {
+        display: none;
         padding: 0 0.375rem;
         color: var(--text-muted);
         font-size: 0.75rem;
+        line-height: 1.25rem;
     }
 
     .cal-dots {
-        display: none;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.125rem;
+        padding-left: 0.125rem;
     }
 
     .cal-dot {
@@ -2123,21 +2185,78 @@
         background-color: var(--ws);
     }
 
-    /* A phone's days are small: dots say there is something, the list under the grid says what. */
+    /* What a day shows follows the height of its row: a chip or more where there is room, dots where there is not. */
+    @container cal (min-height: 4.3rem) {
+        .cal-items {
+            display: grid;
+        }
+
+        .cal-chip.c1 {
+            display: flex;
+        }
+
+        .cal-more.m1 {
+            display: block;
+        }
+
+        .cal-dots {
+            display: none;
+        }
+    }
+
+    @container cal (min-height: 5.7rem) {
+        .cal-chip.c2 {
+            display: flex;
+        }
+
+        .cal-more.m1 {
+            display: none;
+        }
+
+        .cal-more.m2 {
+            display: block;
+        }
+    }
+
+    @container cal (min-height: 7.1rem) {
+        .cal-chip.c3 {
+            display: flex;
+        }
+
+        .cal-more.m2 {
+            display: none;
+        }
+
+        .cal-more.m3 {
+            display: block;
+        }
+    }
+
+    /* A phone's days are small: dots say there is something, the list under the month says what. */
     @media (max-width: 40rem) {
-        .cal-cell {
+        /* The filters are one row that slides sideways, not three rows above the month. */
+        .cal-filters {
+            flex: 1 1 100%;
+            flex-wrap: nowrap;
+            justify-content: flex-start;
+            padding-bottom: 0.125rem;
+            overflow-x: auto;
+        }
+
+        .cal-filter {
+            flex: none;
+        }
+
+        .cal-grid tbody tr {
             height: 3.75rem;
         }
 
         .cal-items {
-            display: none;
+            display: none !important;
         }
 
         .cal-dots {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.125rem;
-            padding-left: 0.125rem;
+            display: flex !important;
         }
 
         .cal-day {

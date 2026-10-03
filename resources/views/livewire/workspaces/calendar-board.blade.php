@@ -1,8 +1,10 @@
 {{--
-    The calendar (App\Livewire\Workspaces\CalendarBoard): a month of days, each with what is on it, and under the
-    grid what is on the day picked (picking is in the browser, nothing is fetched); or the month as an agenda.
-    On a phone the days show dots in place of words. Deadlines, steps and milestones, study time and cards, any of
-    which can be hidden. Weeks start on Monday.
+    The calendar (App\Livewire\Workspaces\CalendarBoard): a month of days, each with what is on it, and what is on
+    the day picked (picking is in the browser, nothing is fetched); or the month as an agenda. The month fits the
+    window: its rows share the height left below the toolbar, and each day shows as many chips as its row holds
+    (then "+n more", or dots when it is small, as on a phone). On a wide screen the day picked is listed beside the
+    month, otherwise under it. Deadlines, steps and milestones, study time and cards, any of which can be hidden.
+    Weeks start on Monday.
 --}}
 @php
     use App\Study\Calendar;
@@ -21,19 +23,19 @@
             <button type="button" class="topbar-button" wire:click="next" title="Next month"><x-icon name="chevron-right" class="size-5" /><span class="sr-only">Next month</span></button>
             <button type="button" class="btn btn-secondary btn-sm" wire:click="today"><x-icon name="calendar" class="size-4" />Today</button>
         </div>
+        <div class="cal-filters" role="group" aria-label="What to show">
+            @foreach ($sources as $key => $word)
+                <button type="button" class="cal-filter" wire:click="toggle('{{ $key }}')" aria-pressed="{{ in_array($key, $hidden, true) ? 'false' : 'true' }}">
+                    <x-icon :name="$icons[$key]" class="size-4" />{{ $word }}<span class="tab-count">{{ $counts[$key] }}</span>
+                </button>
+            @endforeach
+        </div>
         <div class="segmented segmented-sm" role="group" aria-label="How to show it">
             <button type="button" @class(['segmented-option', 'is-current' => $view === 'month']) wire:click="show('month')" aria-pressed="{{ $view === 'month' ? 'true' : 'false' }}">Month</button>
             <button type="button" @class(['segmented-option', 'is-current' => $view === 'agenda']) wire:click="show('agenda')" aria-pressed="{{ $view === 'agenda' ? 'true' : 'false' }}">Agenda</button>
         </div>
     </div>
 
-    <div class="cal-filters" role="group" aria-label="What to show">
-        @foreach ($sources as $key => $word)
-            <button type="button" class="cal-filter" wire:click="toggle('{{ $key }}')" aria-pressed="{{ in_array($key, $hidden, true) ? 'false' : 'true' }}">
-                <x-icon :name="$icons[$key]" class="size-4" />{{ $word }}<span class="tab-count">{{ $counts[$key] }}</span>
-            </button>
-        @endforeach
-    </div>
 
     @if ($view === 'agenda')
         @if ($agenda === [])
@@ -54,9 +56,21 @@
             </div>
         @endif
     @else
-        <div class="space-y-4" x-data="{ day: '{{ $selected }}' }" wire:key="cal-{{ $monthKey }}">
+        <div class="cal-layout" style="--cal-weeks: {{ $weeks }}" wire:key="cal-{{ $monthKey }}"
+            x-data="{
+                day: '{{ $selected }}',
+                // The month takes the height left in the window below where it starts (not on a phone, whose days are dots in short rows).
+                fit() {
+                    if (! window.matchMedia('(min-width: 40rem)').matches) { this.$el.style.removeProperty('--cal-h'); return; }
+                    const tabs = document.querySelector('.app-tabbar');
+                    const tabsHeight = tabs && getComputedStyle(tabs).position === 'fixed' ? tabs.offsetHeight : 0;
+                    const top = this.$el.getBoundingClientRect().top + window.scrollY;
+                    this.$el.style.setProperty('--cal-h', Math.max(288, Math.floor(window.innerHeight - top - tabsHeight - 16)) + 'px');
+                },
+            }"
+            x-init="$nextTick(() => fit())" x-on:resize.window.debounce.100ms="fit()" x-on:orientationchange.window.debounce.200ms="fit()">
             <table class="cal-grid">
-                <caption class="sr-only">{{ $first->format('F Y') }}. Choose a day to see what is on it below.</caption>
+                <caption class="sr-only">{{ $first->format('F Y') }}. Choose a day to see what is on it.</caption>
                 <thead>
                     <tr>
                         @foreach ($weekdays as $name)
@@ -77,23 +91,28 @@
                                     <button type="button" @class(['cal-day', 'is-today' => $key === $today]) x-on:click="day = '{{ $key }}'"
                                         aria-pressed="{{ $key === $selected ? 'true' : 'false' }}" x-bind:aria-pressed="(day === '{{ $key }}').toString()" aria-controls="cal-panel"
                                         @if ($key === $today) aria-current="date" @endif>
-                                        <span class="cal-num">{{ $date->day }}</span>
                                         <span class="sr-only">{{ $date->format('l j F') }}, {{ count($entries) === 0 ? 'nothing' : (count($entries) === 1 ? '1 thing' : count($entries).' things') }}</span>
-                                        <span class="cal-items" aria-hidden="true">
-                                            @foreach (array_slice($entries, 0, 3) as $entry)
-                                                <span @class(['cal-chip', 'ws-colour-'.$colourOf($entry), 'is-done' => $entry->done()])><x-icon :name="$entry->icon" class="size-3" /><span class="cal-chip-text">{{ $entry->title }}</span></span>
-                                            @endforeach
-                                            @if (count($entries) > 3)
-                                                <span class="cal-more">+{{ count($entries) - 3 }} more</span>
-                                            @endif
-                                        </span>
-                                        @if ($entries !== [])
-                                            <span class="cal-dots" aria-hidden="true">
-                                                @foreach (array_slice($entries, 0, 4) as $entry)
-                                                    <span class="cal-dot ws-colour-{{ $colourOf($entry) }}"></span>
+                                        <span class="cal-in">
+                                            <span class="cal-num">{{ $date->day }}</span>
+                                            {{-- As many chips as the day's row holds (CSS, by its height), then how many more; the rest is dots. --}}
+                                            <span class="cal-items" aria-hidden="true">
+                                                @foreach (array_slice($entries, 0, 3) as $entry)
+                                                    <span @class(['cal-chip', 'c'.($loop->iteration), 'ws-colour-'.$colourOf($entry), 'is-done' => $entry->done()])><x-icon :name="$entry->icon" class="size-3" /><span class="cal-chip-text">{{ $entry->title }}</span></span>
+                                                @endforeach
+                                                @foreach ([1, 2, 3] as $shown)
+                                                    @if (count($entries) > $shown)
+                                                        <span class="cal-more m{{ $shown }}">+{{ count($entries) - $shown }} more</span>
+                                                    @endif
                                                 @endforeach
                                             </span>
-                                        @endif
+                                            @if ($entries !== [])
+                                                <span class="cal-dots" aria-hidden="true">
+                                                    @foreach (array_slice($entries, 0, 4) as $entry)
+                                                        <span class="cal-dot ws-colour-{{ $colourOf($entry) }}"></span>
+                                                    @endforeach
+                                                </span>
+                                            @endif
+                                        </span>
                                     </button>
                                 </td>
                             @endfor
@@ -102,7 +121,7 @@
                 </tbody>
             </table>
 
-            <div id="cal-panel" class="cal-panel" aria-live="polite">
+            <div id="cal-panel" class="cal-panel cal-side" aria-live="polite">
                 @for ($i = 0; $i < $weeks * 7; $i++)
                     @php
                         $date = $start->addDays($i);

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { execFileSync } from 'node:child_process';
 import { makeStudentWithModules, openStudentHome } from './support.js';
 
 /* The calendar: a month of days with what is on each, the day picked, the agenda, filters (the owner's review, 2026-10-03). */
@@ -135,3 +136,54 @@ test('the calendar never scrolls sideways at 320 px, even with 200% text', async
     await page.locator('.cal-entry').first().waitFor();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
+
+// The month fits the window (the owner's review, 2026-10-04: the days were huge and the month ran off the screen).
+
+/** A student with one exam due today and a busy day (five things) in two days: the calendar's address. */
+function busyCalendar() {
+    const email = makeStudentWithModules();
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
+        `$w = collect(app(\\App\\Study\\Workspaces::class)->list($p))->first(); $a = app(\\App\\Study\\Activities::class);`,
+        `$d = fn (int $n) => now()->addDays($n)->toDateString();`,
+        `$a->create($p, $w->id, ['title' => 'Coursework 1: cell report', 'kind' => 'exam', 'due_on' => $d(0), 'due_time' => '14:30']);`,
+        `foreach (['Quiz 2', 'Lab report 1', 'Problem set 4', 'Exam revision', 'Reading'] as $title) { $a->create($p, $w->id, ['title' => $title, 'due_on' => $d(2)]); }`,
+        `echo route('workspaces.show', [$w->id, 'calendar']);`,
+    ].join(' ');
+    const url = new URL(execFileSync('php', ['artisan', 'tinker', '--execute', code], { cwd: process.cwd(), maxBuffer: 64 * 1024 * 1024 }).toString().trim().split('\n').pop()).pathname;
+
+    return { email, url };
+}
+
+for (const [name, width, height] of [['a wide screen', 1440, 900], ['a laptop', 1280, 720], ['a short window', 1200, 600], ['a tablet', 820, 1100], ['a phone', 390, 844]]) {
+    test(`the month fits ${name}, with what is on a day and the day picked in view`, async ({ page }) => {
+        await page.setViewportSize({ width, height });
+        const { email, url } = busyCalendar();
+        await openStudentHome(page, email);
+        await page.goto(url);
+        const grid = page.locator('.cal-grid');
+        await grid.waitFor();
+        // Let the page measure itself (a phone's rows are fixed and short).
+        if (width >= 640) await expect.poll(() => page.evaluate(() => document.querySelector('.cal-layout').style.getPropertyValue('--cal-h'))).not.toBe('');
+        const viewport = page.viewportSize();
+        const box = await grid.boundingBox();
+        // Down to its bottom edge, in the window: no part of the month waits below the fold (a window too short for it scrolls).
+        if (height >= 700 && width >= 640) expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
+        // A day is small: the days are never huge.
+        const cell = await page.locator('.cal-cell').first().boundingBox();
+        expect(cell.height).toBeLessThan(viewport.height / 4);
+        // What is on a day: chips with their names where the row is tall enough (and "+n more"), dots on a phone.
+        const today = page.locator('.cal-day.is-today');
+        if (width < 640) await expect(today.locator('.cal-dot')).toHaveCount(1);
+        else if (height >= 700) {
+            await expect(today.locator('.cal-chip').first()).toBeVisible();
+            const busy = page.locator('.cal-cell:not(.is-outside) .cal-day').filter({ hasText: '5 things' });
+            await expect(busy.locator('.cal-more:visible')).toContainText('more');
+        }
+        // The day picked is in view too: beside the month on a wide screen, under it otherwise.
+        const panel = await page.locator('#cal-panel section:visible').boundingBox();
+        expect(panel.y).toBeLessThan(viewport.height);
+        // Nothing scrolls sideways.
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+    });
+}
