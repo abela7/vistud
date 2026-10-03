@@ -167,6 +167,19 @@ class FilesScreenTest extends TestCase
         $slot->release();
     }
 
+    public function test_a_picture_opens_in_a_viewer_that_fits_it_whole_and_says_its_kind_and_size(): void
+    {
+        $jpeg = $this->stored('IMIE.jpg', $this->image('jpeg'));
+
+        $this->page($jpeg)->assertOk()
+            ->assertSee('x-data="imageViewer()"', false)
+            ->assertSee('<img x-ref="picture" src="'.route('files.content', $jpeg->id).'"', false)
+            ->assertSee('JPEG · '.$jpeg->humanSize())
+            ->assertSeeText('Zoom in')->assertSeeText('Zoom out')->assertSeeText('Fit')->assertSeeText('Width')->assertSeeText('1:1')
+            ->assertSeeText('Turn the picture a quarter clockwise')
+            ->assertSee(route('files.content', [$jpeg->id, 'download' => 1]), false);
+    }
+
     public function test_a_preview_is_made_on_the_queue_and_never_inside_the_request_that_asks_for_it(): void
     {
         // Gemini's report, 2026-10-03: the first request ran LibreOffice itself, and held up every other page.

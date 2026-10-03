@@ -1765,7 +1765,7 @@
     .file-preview {
         display: block;
         width: 100%;
-        height: calc(100dvh - 7.5rem);
+        height: var(--frame-h, calc(100dvh - 7.5rem));
         min-height: 24rem;
         border: 1px solid var(--border);
         border-radius: var(--radius-xl);
@@ -1786,7 +1786,7 @@
         display: flex;
         flex-direction: row;
         width: 100%;
-        height: calc(100dvh - 7.5rem);
+        height: var(--frame-h, calc(100dvh - 7.5rem));
         min-height: 24rem;
         position: relative;
         gap: 0;
@@ -1934,17 +1934,118 @@
         text-align: center;
     }
 
+    /*
+    | The picture viewer (resources/js/image-viewer.js): a toolbar, then the frame the picture is drawn in, whole and
+    | centred. It is moved and sized with a transform, so a tall or a wide picture is never cut off by the frame.
+    */
     .file-preview-image {
-        display: grid;
-        place-items: center;
-        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
         background-color: var(--surface-sunken);
     }
 
-    .file-preview-image img {
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
+    .image-toolbar {
+        display: flex;
+        flex: none;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.375rem 0.75rem;
+        padding: 0.375rem 0.625rem;
+        border-bottom: 1px solid var(--border);
+        background-color: var(--surface-raised);
+    }
+
+    .image-tools {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.125rem;
+    }
+
+    .image-zoom {
+        min-width: 4rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .image-toolbar :disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+
+    .image-info {
+        margin-left: auto;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .image-stage {
+        position: relative;
+        flex: 1 1 0%;
+        min-height: 0;
+        overflow: hidden;
+        touch-action: none;
+        user-select: none;
+    }
+
+    .image-stage:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: -2px;
+    }
+
+    .image-stage.is-pannable {
+        cursor: grab;
+    }
+
+    .image-stage.is-dragging {
+        cursor: grabbing;
+    }
+
+    .image-stage img {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        max-width: none;
+        max-height: none;
+        opacity: 0;
+        transform-origin: center;
+        transition:
+            transform 0.12s ease-out,
+            opacity 0.15s ease;
+        -webkit-user-drag: none;
+    }
+
+    .image-stage img.is-ready {
+        opacity: 1;
+    }
+
+    /* Zoomed right in, the pixels are shown as they are, not smeared. */
+    .image-stage img.is-pixels {
+        image-rendering: pixelated;
+    }
+
+    .image-stage.is-dragging img {
+        transition: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .image-stage img {
+            transition: none;
+        }
+    }
+
+    .image-wait,
+    .image-problem {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        color: var(--text-muted);
+        text-align: center;
     }
 
     .file-text {

@@ -105,6 +105,7 @@ const icons = [
     'minus',
     'monitor',
     'moon',
+    'move-horizontal',
     'music',
     'notebook-pen',
     'notebook-text',
@@ -124,7 +125,9 @@ const icons = [
     'redo-2',
     'remove-formatting',
     'rotate-ccw',
+    'rotate-cw',
     'scale',
+    'scan',
     'scan-text',
     'scroll-text',
     'search',
@@ -161,6 +164,8 @@ const icons = [
     'volume-x',
     'wand-sparkles',
     'x',
+    'zoom-in',
+    'zoom-out',
 ];
 
 const from = 'node_modules/lucide-static/icons';

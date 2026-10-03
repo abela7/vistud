@@ -27,6 +27,24 @@
                     const val = parseFloat(saved);
                     if (val >= 20 && val <= 80) this.splitPercent = val;
                 }
+                this.$watch('isFullscreen', () => this.$nextTick(() => this.fitFrame()));
+                this.$nextTick(() => this.fitFrame());
+                window.addEventListener('load', () => this.fitFrame(), { once: true });
+            },
+
+            // The preview takes what is left of the window below the toolbar (whatever height the toolbar has, one line
+            // or wrapped), and above the phone's tab bar: the whole of it is in view, never a part below the fold.
+            fitFrame() {
+                const frame = this.$refs.splitContainer;
+                if (!frame || !frame.isConnected) return;
+                if (this.isFullscreen) {
+                    this.$root.style.removeProperty('--frame-h');
+                    return;
+                }
+                const tabs = document.querySelector('.app-tabbar');
+                const tabsHeight = tabs && getComputedStyle(tabs).position === 'fixed' ? tabs.offsetHeight : 0;
+                const top = frame.getBoundingClientRect().top + window.scrollY;
+                this.$root.style.setProperty('--frame-h', Math.max(384, Math.floor(window.innerHeight - top - tabsHeight - 16)) + 'px');
             },
 
             toggleFullscreen() {
@@ -132,6 +150,8 @@
                 localStorage.setItem('vistud-file-split-percent', 50);
             }
         }"
+        x-on:resize.window.debounce.100ms="fitFrame()"
+        x-on:orientationchange.window.debounce.200ms="fitFrame()"
         x-on:fullscreenchange.window="syncFullscreen()"
         x-on:webkitfullscreenchange.window="syncFullscreen()"
         x-on:keydown.escape.window="if (isFullscreen) { exitFullscreen(); }"
@@ -269,8 +289,40 @@
                         <a class="btn btn-primary" href="{{ route('files.content', [$file->id, 'download' => 1]) }}"><x-icon name="download" class="size-4" />Download</a>
                     </section>
                 @elseif ($file->kind === 'image')
-                    <div class="file-preview file-preview-image">
-                        <img src="{{ $content }}" alt="{{ $file->fileName() }}">
+                    {{-- resources/js/image-viewer.js: the picture whole in its frame, whatever its shape; zoom, 1:1, turn and move. --}}
+                    <div class="file-preview file-preview-image" x-data="imageViewer()">
+                        <div class="image-toolbar" role="toolbar" aria-label="Picture controls">
+                            <div class="image-tools">
+                                <button type="button" class="topbar-button size-9" x-on:click="zoomOut()" x-bind:disabled="! ready" title="Zoom out (−)"><x-icon name="zoom-out" class="size-5" /><span class="sr-only">Zoom out</span></button>
+                                <button type="button" class="btn btn-ghost btn-sm image-zoom" x-on:click="setMode('fit')" x-bind:disabled="! ready" title="Back to fitted (0)">
+                                    <span x-text="ready ? percent + '%' : '…'">…</span><span class="sr-only"> zoom. Press to fit the picture in the frame</span>
+                                </button>
+                                <button type="button" class="topbar-button size-9" x-on:click="zoomIn()" x-bind:disabled="! ready" title="Zoom in (+)"><x-icon name="zoom-in" class="size-5" /><span class="sr-only">Zoom in</span></button>
+                            </div>
+                            <div class="segmented segmented-sm" role="group" aria-label="Picture size">
+                                <button type="button" class="segmented-option" x-bind:class="{ 'is-current': mode === 'fit' }" x-bind:aria-pressed="(mode === 'fit').toString()" aria-pressed="false" x-on:click="setMode('fit')" x-bind:disabled="! ready" title="All of it in the frame (0)"><x-icon name="scan" class="size-4" /><span class="max-md:sr-only">Fit</span></button>
+                                <button type="button" class="segmented-option" x-bind:class="{ 'is-current': mode === 'width' }" x-bind:aria-pressed="(mode === 'width').toString()" aria-pressed="false" x-on:click="setMode('width')" x-bind:disabled="! ready" title="As wide as the frame (W)"><x-icon name="move-horizontal" class="size-4" /><span class="max-md:sr-only">Width</span></button>
+                                <button type="button" class="segmented-option" x-bind:class="{ 'is-current': mode === 'actual' }" x-bind:aria-pressed="(mode === 'actual').toString()" aria-pressed="false" x-on:click="setMode('actual')" x-bind:disabled="! ready" title="Its real size, 100% (1)">1:1<span class="sr-only"> (real size)</span></button>
+                            </div>
+                            <button type="button" class="topbar-button size-9" x-on:click="turn()" x-bind:disabled="! ready" title="Turn a quarter (R)"><x-icon name="rotate-cw" class="size-5" /><span class="sr-only">Turn the picture a quarter clockwise</span></button>
+                            <p class="image-info" x-show="ready" x-cloak>{{ strtoupper(substr($file->mime, 6)) }} · {{ $file->humanSize() }}<span x-show="dimensions" x-text="' · ' + dimensions + ' px'"></span></p>
+                        </div>
+                        <div class="image-stage" x-ref="stage" tabindex="0" role="group" aria-label="Picture viewer" aria-describedby="image-keys"
+                            x-bind:class="{ 'is-pannable': pannable, 'is-dragging': dragging }"
+                            x-on:pointerdown="press($event)" x-on:pointermove="move($event)" x-on:pointerup="release($event)" x-on:pointercancel="release($event)"
+                            x-on:wheel="wheel($event)" x-on:dblclick="toggle($event)" x-on:keydown="key($event)">
+                            <img x-ref="picture" src="{{ $content }}" alt="{{ $file->fileName() }}" draggable="false" decoding="async"
+                                x-bind:class="{ 'is-ready': ready, 'is-pixels': scale > 2 }"
+                                x-bind:style="ready ? { width: natural.w + 'px', height: natural.h + 'px', transform: transform } : {}"
+                                x-on:load="loaded()" x-on:error="failed = true">
+                            <p class="image-wait" x-show="! ready && ! failed" role="status"><x-icon name="loader-circle" class="size-5 animate-spin" />Loading the picture…</p>
+                            <p class="image-problem" x-show="failed" x-cloak role="alert">
+                                This picture can't be shown here.
+                                <a class="btn btn-secondary btn-sm" href="{{ route('files.content', [$file->id, 'download' => 1]) }}"><x-icon name="download" class="size-4" />Download it</a>
+                            </p>
+                        </div>
+                        <p id="image-keys" class="sr-only">Plus and minus zoom, the arrow keys move a zoomed picture, 0 fits it in the frame, 1 shows its real size, W fits its width, R turns it a quarter. Control and the wheel zoom.</p>
+                        <p class="sr-only" role="status" aria-live="polite" x-text="ready ? 'Zoom ' + percent + '%' : ''"></p>
                     </div>
                 @elseif ($markdown !== null)
                     {{-- App\Study\MarkdownPreview: raw HTML stripped, unsafe links dropped. Formulas are drawn by resources/js/formulas.js. --}}
