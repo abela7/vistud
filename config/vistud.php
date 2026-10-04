@@ -50,6 +50,28 @@ return [
         'ttl_hours' => 72,
     ],
 
+    'engine' => [
+        // The language model behind the built-in chat (docs/specs/study-memory.md §6): any service that speaks
+        // the OpenAI chat format. OpenRouter by default, one key for every model; the student picks the models.
+        'url' => env('VISTUD_ENGINE_URL', 'https://openrouter.ai/api/v1'),
+        // The key the owner holds. Never in the database, never on a screen.
+        'key' => env('VISTUD_ENGINE_KEY'),
+        // Sent as the app's name and address (OpenRouter's attribution headers; harmless elsewhere).
+        'app_name' => env('APP_NAME', 'ViStud'),
+        'app_url' => env('APP_URL', 'http://localhost'),
+        // The models a student starts with, until they choose their own (an id as the service names it).
+        'tutor_model' => env('VISTUD_ENGINE_TUTOR_MODEL', ''),
+        'quick_model' => env('VISTUD_ENGINE_QUICK_MODEL', ''),
+        // Seconds to wait for a reply; how long the list of models is kept; the most look-ups in one turn;
+        // the size of a chat (characters) past which its oldest turns are folded into a summary, and how
+        // many messages stay whole when that happens.
+        'timeout' => (int) env('VISTUD_ENGINE_TIMEOUT', 120),
+        'models_cache_hours' => 24,
+        'tool_rounds' => 6,
+        'fold_at' => 60_000,
+        'keep_recent' => 8,
+    ],
+
     'appearance' => [
         // The default light and dark themes. In "system" mode the browser's
         // preference picks between them before the first paint

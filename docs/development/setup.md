@@ -79,6 +79,16 @@ A file LibreOffice can't read is noted so it isn't tried on every visit: `php ar
 
 WP6 adds minimal authentication and admin screens: login, two-factor authentication, invitation acceptance, and the admin pages the security tests need. By the PM's decision they use the shared visual foundation in [DESIGN.md](../../DESIGN.md) instead of unstyled markup. The login screen is built; the other screens are not, and are listed in [LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md#4-what-is-left-in-wp6). The persistent workspace shell (the sidebar, top bar and editor host that stay in place while the main area changes) belongs to M2. The rest of M1 is exercised through tests, the console and the JSON endpoints.
 
+## The built-in chat's engine
+
+The chat in a study session calls a language model through [OpenRouter](https://openrouter.ai) (or any service with the OpenAI chat format: set `VISTUD_ENGINE_URL`). One key, every model; each student picks their own models in *AI engine* on a workspace's Overview. Put your key in `.env` yourself:
+
+```
+VISTUD_ENGINE_KEY=sk-or-...
+```
+
+Never paste the key into a chat with an AI agent, a ticket or a commit. `php artisan vistud:doctor` says whether a key is set and whether the service answers; `php artisan vistud:engine:models --find=mini` lists the models with their prices; `php artisan vistud:engine:ask {session-id} "Hi" --user=you@example.com` says something in an open session's chat from the shell. Tests never call the service: they run on `App\Engine\Fake`.
+
 ## Themes and front-end assets
 
 - Themes are data in `resources/themes/*.json` ([DESIGN.md §3](../../DESIGN.md#3-colour-themes-and-gradients)). After changing one, run `php artisan vistud:themes:build`: it checks every theme's contrast and regenerates `resources/css/themes/themes.css` and the sentinel fixture used by the browser tests. CI fails if they are out of date (`vistud:themes:build --check`).

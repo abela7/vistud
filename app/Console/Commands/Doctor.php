@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Engine\Engine;
+use App\Engine\EngineFailed;
 use App\Platform\Uploads\UploadLimits;
 use App\Study\FilePreviews;
 use App\Study\Files;
@@ -102,6 +104,22 @@ class Doctor extends Command
             'Set QUEUE_CONNECTION=database in .env. `php artisan serve` starts the worker beside it; on a server, keep `php artisan queue:work` running.',
             needed: false,
         );
+
+        $engineKey = (string) config('vistud.engine.key');
+        $check(
+            'An engine key (VISTUD_ENGINE_KEY), for the built-in chat',
+            $engineKey !== '',
+            'Get a key at openrouter.ai and put it in .env as VISTUD_ENGINE_KEY. Never paste it into a chat with an AI agent.',
+            needed: false,
+        );
+        if ($engineKey !== '') {
+            try {
+                $count = count($this->laravel->make(Engine::class)->models());
+                $check('The engine answers at '.config('vistud.engine.url')." ({$count} models)", $count > 0, 'The service listed no models. Check VISTUD_ENGINE_URL.', needed: false);
+            } catch (EngineFailed $e) {
+                $check('The engine answers at '.config('vistud.engine.url'), false, $e->getMessage(), needed: false);
+            }
+        }
 
         $this->table(['', 'Check', 'How to fix'], $rows);
         $this->line($failed ? 'Something ViStud needs is missing: fix the MISSING rows, then run this again.' : 'ViStud has what it needs.');

@@ -41,6 +41,7 @@
                         <div id="overview-menu" class="row-menu" data-menu-panel popover="manual" hidden>
                             <button type="button" class="menu-item" x-data x-on:click="$dispatch('workspace-form-open')"><x-icon name="pencil" class="size-4" />Edit workspace</button>
                             <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('instructions-open')"><x-icon name="message-square-text" class="size-4" />Instructions for the AI</button>
+                            <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('engine-settings-open')"><x-icon name="brain" class="size-4" />AI engine</button>
                             <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('study-log')"><x-icon name="history" class="size-4" />Log time</button>
                         </div>
                     </div>
@@ -152,6 +153,7 @@
             </div>
 
             <livewire:workspaces.instructions :workspace-id="$workspace->id" />
+            <livewire:workspaces.engine-settings />
         @elseif (in_array($section, ['modules', 'notes'], true))
             <livewire:workspaces.contents :workspace-id="$workspace->id" :view="$section" :key="$section" />
         @elseif ($section === 'progress')

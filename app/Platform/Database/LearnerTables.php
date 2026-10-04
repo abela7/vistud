@@ -47,6 +47,9 @@ final class LearnerTables
         'study_sessions',
         'session_segments',
         'flashcards',
+        'engine_settings',
+        'engine_threads',
+        'engine_messages',
     ];
 
     public static function query(LearnerScope $scope, string $table): Builder

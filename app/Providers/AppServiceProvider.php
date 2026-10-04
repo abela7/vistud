@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Appearance\Themes;
+use App\Engine\Engine;
+use App\Engine\OpenRouter;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureTwoFactorEnrolled;
 use App\Http\Middleware\EnterAdminArea;
@@ -19,6 +21,8 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(Themes::class, fn () => new Themes(resource_path('themes')));
+        // The built-in chat's engine: OpenRouter, or any service with the OpenAI chat format (config/vistud.php).
+        $this->app->bind(Engine::class, OpenRouter::class);
     }
 
     public function boot(): void

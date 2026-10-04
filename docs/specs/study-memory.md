@@ -324,9 +324,73 @@ as slipped.
    instructions, Overview (1b). Useful before any engine is connected.
 2. **Session engine:** the session, its clock and the Pomodoro clock, the
    teaching options, prompt and briefing, the write-back, and flashcards
-   (built). Still to come: engine settings and the built-in chat; Office
-   files (S7): the PDF-export suggestion and slide text.
+   (built). The engine itself, its settings and the chat's back end (built,
+   §6); still to come: the chat on the session page, files in the chat.
 3. **Progress** over time from the journal.
 4. ChatGPT and Gemini engines. The MCP server, when the owner wants it: the
    same briefing and write-back as tools an AI app calls, starting local
    (Claude Desktop), online once ViStud is hosted.
+
+## 6. The engine (built, 2026-10-05: the back end)
+
+**Decided by the owner, 2026-10-04.** The built-in chat calls the model
+through **OpenRouter** (or any service with the OpenAI chat format,
+`VISTUD_ENGINE_URL`): one key the owner holds in `.env`
+(`VISTUD_ENGINE_KEY`, never in the database or on a screen), every model
+behind it, and **the student chooses the models** (S6 becomes "the model is
+a setting"). A session is cheap by design, not by the model alone: a session
+ends and the memory stays (the next starts from the summaries, never the
+old transcript); a long chat's oldest turns are folded into a summary; a
+look-up returns only what was asked; and the student's own limits stop a
+session or a month going over.
+
+**Settings** (the *AI engine* dialog in the Overview's ⋯ menu;
+`App\Engine\Settings`, `engine_settings`): a *tutor model* (the one that
+teaches), a *quick model* for small jobs (folding a chat; the tutor model
+when empty), a model to try *if the tutor model fails*, the most a session
+and a month may cost (dollars; 0 for no limit; $2 and $20 to start), *keep
+my words out of training* (on; only providers that promise it are used),
+and the student's **consent** to the chat sending their study material to
+the provider (nothing is sent until they write). The owner's defaults
+(`VISTUD_ENGINE_TUTOR_MODEL`, `VISTUD_ENGINE_QUICK_MODEL`) apply until they
+choose. The models are offered by id with their prices per million tokens
+and whether they take tools, pictures and files, from the service's own list
+(`App\Engine\Models`, kept for a day; `php artisan vistud:engine:models`).
+
+**The chat** (`App\Engine\SessionChat`; `engine_threads`,
+`engine_messages`): one per study session. A turn sends the session's
+briefing (§4.3) as the standing instructions, the chat so far, and the
+**tools** the engine may look things up with; the engine answers, or asks
+for look-ups first (each run here as the student, its result sent back; at
+most `tool_rounds` rounds, then it must answer). Every message is kept with
+the model that answered and what it cost (the service says). The engine is
+told to use the tools instead of guessing about the student's own things,
+to say which note a fact came from, and to say plainly when something isn't
+in ViStud. A model that can't call tools gets the briefing alone. Past
+`fold_at` characters, all but the last `keep_recent` messages (cut at a
+student's message) are summarised by the quick model and the engine reads
+the summary instead; the whole chat stays readable. **Saving** is the
+write-back (§4.4): the tutor's marks in the chat are reviewed and ticked
+exactly like a pasted chat; nothing is remembered otherwise. Until the chat
+has a screen: `php artisan vistud:engine:ask {session} "…" --user=email`.
+
+**The tools** (`App\Engine\Toolbox`, one class each in `App\Engine\Tools`;
+the same tools will serve the MCP server): `course_overview`, `topics`,
+`questions`, `findings`, `assignments`, `assignment_plan`, `calendar`,
+`notes`, `read_note` (up to 8,000 characters), `search_notes`, `files`
+(names only; contents come with the next step) and `earlier_sessions`. Each
+runs through the services the pages use, so another student's things are
+"not found" exactly as on a page; an answer is capped at 12,000 characters;
+the student's name and email never go in.
+
+**Failures** come back as `App\Engine\EngineFailed` (503) with a plain
+message: no key, the key refused, out of credit, the model unknown, busy,
+down, unreachable; never the key. `php artisan vistud:doctor` checks the key
+and that the service answers.
+
+**Still to come:** the chat on the session page (streaming, pictures and
+files in it, *Think harder* for one question on a stronger model, the cost
+shown as it goes); files read by the tutor (PDFs and pictures directly, the
+Office PDF for the rest); voice by the browser's own dictation; the golden
+replay (`docs/specs/golden-replay-sql-joins.md`) run against a model before
+it is trusted; the MCP server on the same tools.
