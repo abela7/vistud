@@ -87,6 +87,8 @@ The chat in a study session calls a language model through [OpenRouter](https://
 
 Never paste the key into a chat with an AI agent, a ticket or a commit. `php artisan vistud:doctor` says whether a key is set and whether the service answers; `php artisan vistud:engine:models --find=mini` lists the models with their prices; `php artisan vistud:engine:ask {session-id} "Hi" --user=you@example.com` says something in an open session's chat from the shell (the session's page has the chat itself). Tests never call the service: they run on `App\Engine\Fake`.
 
+The tutor reads PDFs with the `smalot/pdfparser` library (installed by `composer install`), PowerPoint and Word files straight from the file, and other Office files through LibreOffice's preview PDF. The chat's browser test (`tests/Browser/chat.spec.js`) runs against a fake service that streams slowly (`tests/Browser/fixtures/fake-engine.php`, on port 8099); it points the installation's engine address at the fake while it runs and puts it back after.
+
 ## Themes and front-end assets
 
 - Themes are data in `resources/themes/*.json` ([DESIGN.md §3](../../DESIGN.md#3-colour-themes-and-gradients)). After changing one, run `php artisan vistud:themes:build`: it checks every theme's contrast and regenerates `resources/css/themes/themes.css` and the sentinel fixture used by the browser tests. CI fails if they are out of date (`vistud:themes:build --check`).

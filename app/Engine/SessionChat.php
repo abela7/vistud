@@ -51,6 +51,7 @@ final class SessionChat
         private Toolbox $toolbox,
         private WriteBack $writeBack,
         private Setup $setup,
+        private Attachments $attachments,
     ) {}
 
     /**
@@ -59,15 +60,18 @@ final class SessionChat
      * tool's name before each look-up runs. A refusal (Unprocessable) keeps nothing; once the words are kept,
      * a failing engine (EngineFailed) leaves them unanswered, for retry().
      *
+     * With $attach (`note:{id}`, `file:{id}`), the student's notes and files go with the words (App\Engine\Attachments).
+     *
      * @param  (Closure(string, string): void)|null  $onEvent
      */
-    public function send(Principal $by, string $sessionId, mixed $text, ?Closure $onEvent = null): Reply
+    public function send(Principal $by, string $sessionId, mixed $text, ?Closure $onEvent = null, mixed $attach = []): Reply
     {
         $scope = Guard::learner($by);
         [$session, $choices, $key] = $this->ready($by, $sessionId);
         $text = is_string($text) ? trim(str_replace("\r\n", "\n", $text)) : '';
+        $items = $this->attachments->resolve($by, $session, $attach, $this->models->find($choices->tutorModel, $key));
         Input::refuse(match (true) {
-            $text === '' => ['text' => 'Write something first.'],
+            $text === '' && $items === [] => ['text' => 'Write something first.'],
             mb_strlen($text) > self::MAX_TEXT => ['text' => 'Keep a message to '.self::MAX_TEXT.' characters.'],
             default => [],
         });
@@ -75,7 +79,7 @@ final class SessionChat
         $thread = $this->thread($scope, $session, $choices->tutorModel);
         $this->refuseOverCap($scope, $thread, $choices, $this->sessions->timezone($by));
         $position = (int) LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->max('position');
-        $this->keep($scope, $thread->id, ++$position, ['role' => 'user', 'content' => $text]);
+        $this->keep($scope, $thread->id, ++$position, ['role' => 'user', 'content' => $text, 'attachments' => $items === [] ? null : json_encode($items)]);
 
         return $this->answer($by, $session, $thread, $choices, $key, $position, $onEvent);
     }
@@ -122,7 +126,7 @@ final class SessionChat
         $model = $this->models->find($choices->tutorModel, $key);
         $withTools = $model === null || $model->tools;
         $system = $this->system($by, $session, $thread->summary, $withTools);
-        $messages = $this->messagesOf($scope, $thread);
+        $messages = $this->messagesOf($by, $thread, $model === null || $model->images);
         $tools = $withTools ? $this->toolbox->definitions() : [];
         $context = new Context($session->workspaceId, $session->moduleId, $session->id, $this->sessions->timezone($by));
         $fallbacks = $choices->fallbackModel !== '' ? [$choices->fallbackModel] : [];
@@ -193,6 +197,7 @@ final class SessionChat
             $turns[] = [
                 'role' => $row->role,
                 'text' => (string) $row->content,
+                'attachments' => $row->role === 'user' ? array_map(fn (array $a) => ['ref' => (string) $a['ref'], 'name' => (string) $a['name'], 'kind' => (string) $a['kind']], self::attached($row)) : [],
                 'tools' => $row->role === 'assistant' ? [...$pendingTools, ...$tools] : [],
                 'cost_micros' => (int) $row->cost_micros + ($row->role === 'assistant' ? $pendingCost : 0),
                 'folded' => (int) $row->position <= (int) $thread->folded_through,
@@ -204,7 +209,7 @@ final class SessionChat
         }
         if ($pendingTools !== []) {
             // A turn that ended in look-ups without an answer (the engine failed after them).
-            $turns[] = ['role' => 'assistant', 'text' => '', 'tools' => $pendingTools, 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
+            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
         }
 
         return $turns;
@@ -401,22 +406,41 @@ final class SessionChat
         return LearnerTables::query($scope, 'engine_messages')->where('thread_id', $threadId)->orderBy('position')->get()->all();
     }
 
-    /** @return list<array<string, mixed>> the unfolded messages, in the OpenAI chat shape */
-    private function messagesOf(LearnerScope $scope, object $thread): array
+    /**
+     * The unfolded messages, in the OpenAI chat shape. The student's attachments go with their words; pictures are
+     * shown only with the last message they wrote (when the model sees pictures), and named on earlier ones.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function messagesOf(Principal $by, object $thread, bool $see): array
     {
+        $rows = $this->rows(Guard::learner($by), $thread->id);
+        $lastAsked = 0;
+        foreach ($rows as $row) {
+            $lastAsked = $row->role === 'user' ? (int) $row->position : $lastAsked;
+        }
         $messages = [];
-        foreach ($this->rows($scope, $thread->id) as $row) {
+        foreach ($rows as $row) {
             if ((int) $row->position <= (int) $thread->folded_through) {
                 continue;
             }
+            $attached = self::attached($row);
             $messages[] = match ($row->role) {
                 'tool' => ['role' => 'tool', 'tool_call_id' => (string) $row->tool_call_id, 'content' => (string) $row->content],
                 'assistant' => array_filter(['role' => 'assistant', 'content' => (string) $row->content !== '' ? (string) $row->content : null, 'tool_calls' => is_string($row->tool_calls) ? json_decode($row->tool_calls, true) : null], fn ($v) => $v !== null),
-                default => ['role' => 'user', 'content' => (string) $row->content],
+                default => ['role' => 'user', 'content' => $attached === [] ? (string) $row->content : $this->attachments->content($by, (string) $row->content, $attached, $see && (int) $row->position === $lastAsked)],
             };
         }
 
         return $messages;
+    }
+
+    /** @return list<array<string, mixed>> what the student attached to a message */
+    private static function attached(object $row): array
+    {
+        $items = isset($row->attachments) && is_string($row->attachments) ? json_decode($row->attachments, true) : null;
+
+        return is_array($items) ? array_values(array_filter($items, fn ($item) => is_array($item) && isset($item['ref'], $item['name'], $item['kind']))) : [];
     }
 
     /** The standing instructions: the tutor prompt and the briefing, how to look things up, and the folded turns. */
@@ -424,7 +448,7 @@ final class SessionChat
     {
         $system = $this->briefings->forSession($by, $session->id)->markdown;
         if ($withTools) {
-            $system .= "\n\n## Looking things up\n\nYou are inside ViStud's own chat, so you can look things up with the tools: the course's modules and topics, the student's questions (all, or those on one topic or module), findings, assignments and their plans, the calendar, their notes and files, and earlier sessions (with what each used). Use them whenever the student asks about their own things, instead of guessing: what a tool returns is what ViStud holds. Before explaining a note or a topic, it's worth one look at the open questions on it. When you state a fact from a note, say which note. If something isn't in ViStud, say so plainly. Files can't be read here yet; ask the student to share the part that matters.";
+            $system .= "\n\n## Looking things up\n\nYou are inside ViStud's own chat, so you can look things up with the tools: the course's modules and topics, the student's questions (all, or those on one topic or module), findings, assignments and their plans, the calendar, their notes and files, and earlier sessions (with what each used). Use them whenever the student asks about their own things, instead of guessing: what a tool returns is what ViStud holds. Before explaining a note or a topic, it's worth one look at the open questions on it. When you state a fact from a note, say which note. If something isn't in ViStud, say so plainly. Read a file with read_file, a few pages at a time, and say where you are (\"Page 4 of 18\"). What the student attaches comes with their message: a note's text, a file's first pages (read on with read_file), a picture to look at. If a file can't be read, say so and ask for the part they're on.";
         }
         if ($summary !== null && trim($summary) !== '') {
             $system .= "\n\n## Earlier in this chat\n\nThe chat's first part was folded to keep it short. What happened in it:\n\n".trim($summary);
@@ -514,7 +538,7 @@ final class SessionChat
         return implode("\n", array_map(fn ($row) => match ($row->role) {
             'tool' => '[Looked up '.$row->tool_name.': '.mb_substr((string) $row->content, 0, 300).']',
             'assistant' => 'Tutor: '.((string) $row->content !== '' ? $row->content : '(asked for a look-up)'),
-            default => 'Student: '.$row->content,
+            default => 'Student: '.$row->content.(($names = array_column(self::attached($row), 'name')) !== [] ? ' [attached: '.implode(', ', $names).']' : ''),
         }, $rows));
     }
 }

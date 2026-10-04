@@ -7,7 +7,7 @@ use App\Study\Files;
 use App\Study\Links;
 use App\Study\Modules;
 
-/** The files and web links kept in the course: what there is, by module. Their contents aren't read yet. */
+/** The files and web links kept in the course: what there is, by module. A file's contents are read with read_file. */
 final class FilesTool implements Tool
 {
     public function __construct(private Files $files, private Links $links, private Modules $modules) {}
@@ -19,7 +19,7 @@ final class FilesTool implements Tool
 
     public function description(): string
     {
-        return 'The files (slides, PDFs, Word documents, pictures) and web links kept in this course, or in one module: their names, types and sizes. Their contents can\'t be read here yet; ask the student to share the part that matters.';
+        return 'The files (slides, PDFs, Word documents, pictures) and web links kept in this course, or in one module: their names, types and sizes. Read a file\'s contents with read_file.';
     }
 
     public function parameters(): array

@@ -13,6 +13,7 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Briefings;
+use App\Study\Files;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\SessionDetails;
@@ -21,14 +22,16 @@ use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\CreatesAccounts;
+use Tests\Concerns\MakesStudyFiles;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
 /** The built-in chat of a study session, on a scripted engine (docs/specs/study-memory.md §6). */
 class SessionChatTest extends TestCase
 {
-    use CreatesAccounts, RefreshesDatabase;
+    use CreatesAccounts, MakesStudyFiles, RefreshesDatabase;
 
     private User $ada;
 
@@ -302,5 +305,79 @@ class SessionChatTest extends TestCase
         $this->assertFalse($this->chat()->waiting($this->by, $this->session->id));
         $this->assertSame(['user', 'assistant'], array_column($this->chat()->transcript($this->by, $this->session->id), 'role'));
         $this->expectCode(fn () => $this->chat()->retry($this->by, $this->session->id), 'nothing_to_retry');
+    }
+
+    /** @return array{0: string, 1: string, 2: string} the note, a three-slide deck and a picture, in Week 2 */
+    private function material(): array
+    {
+        Storage::fake('local');
+        $week2 = $this->session->moduleId;
+        $note = app(Notes::class)->list($this->by, $this->databases->id)[0]->id;
+        $slides = [];
+        foreach ([1 => 'Joins', 2 => 'Left joins', 3 => 'Right joins'] as $n => $title) {
+            $slides["ppt/slides/slide{$n}.xml"] = "<p:sld><a:p><a:r><a:t>{$title}</a:t></a:r></a:p></p:sld>";
+        }
+        $deck = app(Files::class)->upload($this->by, 'module', $week2, $this->temp($this->ooxml('ppt/presentation.xml', $slides)), 'Joins deck.pptx')->id;
+        $photo = app(Files::class)->upload($this->by, 'module', $week2, $this->temp($this->image()), 'Whiteboard.png')->id;
+
+        return ["note:{$note}", "file:{$deck}", "file:{$photo}"];
+    }
+
+    public function test_notes_files_and_pictures_go_with_the_message_and_a_picture_is_shown_only_once(): void
+    {
+        [$note, $deck, $photo] = $this->material();
+        $this->engine->will(Fake::says('I see the board.'), Fake::says('Next.'));
+        $this->chat()->send($this->by, $this->session->id, 'Look at these', attach: [$note, $deck, $photo]);
+
+        $content = $this->engine->requests[0]->messages[0]['content'];
+        $this->assertSame(['text', 'image_url'], array_column($content, 'type'));
+        $words = $content[0]['text'];
+        $this->assertStringStartsWith('Look at these', $words);
+        $this->assertStringContainsString("[Attached: the student's note \"Lecture 3: joins\"]\nA left join keeps every left row.", $words);
+        $this->assertStringContainsString('[Attached: the file "Joins deck.pptx" (PowerPoint, 3 slides). The first 2 are below; read the rest with read_file', $words);
+        $this->assertStringContainsString("--- Slide 2 of 3 ---\nLeft joins", $words);
+        $this->assertStringNotContainsString('Right joins', $words);
+        $this->assertStringContainsString('[Attached: the picture "Whiteboard.png", shown below.]', $words);
+        $this->assertStringStartsWith('data:image/jpeg;base64,', $content[1]['image_url']['url']);
+
+        // The next turn names the picture instead of sending it again; the note and the deck read the same.
+        $this->chat()->send($this->by, $this->session->id, 'And now?');
+        $first = $this->engine->last()->messages[0]['content'];
+        $this->assertIsString($first);
+        $this->assertStringContainsString('[Attached earlier: the picture "Whiteboard.png", shown with that message.]', $first);
+        $this->assertStringContainsString('--- Slide 2 of 3 ---', $first);
+
+        $turns = $this->chat()->transcript($this->by, $this->session->id);
+        $this->assertSame([['note', 'Lecture 3: joins'], ['file', 'Joins deck.pptx'], ['picture', 'Whiteboard.png']], array_map(fn ($a) => [$a['kind'], $a['name']], $turns[0]['attachments']));
+        $this->assertSame([], $turns[1]['attachments']);
+    }
+
+    public function test_attachments_are_checked_and_one_can_go_without_words(): void
+    {
+        [$note, $deck, $photo] = $this->material();
+        $refused = function (array $attach, string $words) {
+            try {
+                $this->chat()->send($this->by, $this->session->id, 'Look', attach: $attach);
+                $this->fail('Expected a refusal.');
+            } catch (Unprocessable $e) {
+                $this->assertStringContainsString($words, $e->details['fields']['attach'][0]);
+            }
+        };
+        // Another course's note, too many at once, something that isn't a note or file.
+        $theirs = app(Workspaces::class)->create($this->by, ['name' => 'Physics']);
+        $other = app(Notes::class)->create($this->by, 'workspace', $theirs->id, 'Forces');
+        $refused(["note:{$other->id}"], 'from this course');
+        $refused([$note, $deck, $photo, "note:{$other->id}", 'file:x'], 'up to 4');
+        $refused(['topic:abc'], 'isn\'t a note or a file');
+        // A model that can't see pictures is not sent one.
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/quick', 'consent' => true]);
+        $refused([$photo], 'can\'t see pictures');
+        $this->assertSame([], $this->chat()->transcript($this->by, $this->session->id));
+
+        // A note alone, without words.
+        $this->engine->will(Fake::says('Got your note.'));
+        $this->chat()->send($this->by, $this->session->id, '', attach: [$note]);
+        $this->assertStringStartsWith('(The student sent this without a message.)', $this->engine->last()->messages[0]['content']);
+        $this->assertSame('', $this->chat()->transcript($this->by, $this->session->id)[0]['text']);
     }
 }

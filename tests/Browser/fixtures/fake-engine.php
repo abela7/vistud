@@ -13,7 +13,7 @@ if (str_ends_with($path, '/models')) {
     echo json_encode(['data' => [[
         'id' => 'fake/tutor', 'name' => 'Fake tutor', 'context_length' => 100000,
         'pricing' => ['prompt' => '0.000001', 'completion' => '0.000002'],
-        'supported_parameters' => ['tools'], 'architecture' => ['input_modalities' => ['text']],
+        'supported_parameters' => ['tools'], 'architecture' => ['input_modalities' => ['text', 'image']],
     ]]]);
 
     return;
@@ -23,13 +23,23 @@ $request = json_decode((string) file_get_contents('php://input'), true) ?: [];
 $messages = $request['messages'] ?? [];
 $last = end($messages) ?: [];
 $asked = '';
+$picture = false;
 foreach (array_reverse($messages) as $message) {
     if (($message['role'] ?? '') === 'user') {
-        $asked = (string) $message['content'];
+        $content = $message['content'] ?? '';
+        // With a picture, the words are the first part and the picture follows.
+        $picture = is_array($content) && in_array('image_url', array_column($content, 'type'), true);
+        $asked = is_array($content) ? (string) ($content[0]['text'] ?? '') : (string) $content;
         break;
     }
 }
 $words = ['A ', 'left ', 'join ', 'keeps ', 'every ', 'row ', 'of ', 'the ', '**left** ', 'table.'];
+// What was attached, said back, so a test can see it arrived.
+if ($picture) {
+    $words = ['I ', 'can ', 'see ', 'the ', 'picture.'];
+} elseif (str_contains($asked, "[Attached: the student's note")) {
+    $words = ['I ', 'have ', 'your ', 'note.'];
+}
 
 // "busy" fails once (a 429, as a busy provider answers), then works: for "Try again".
 $flag = sys_get_temp_dir().'/vistud-fake-engine-busy';

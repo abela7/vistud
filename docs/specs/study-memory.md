@@ -418,10 +418,30 @@ module before an exam.
 the same tools will serve the MCP server): `course_overview`, `topics`,
 `questions`, `findings`, `assignments`, `assignment_plan`, `calendar`,
 `notes`, `read_note` (up to 8,000 characters), `search_notes`, `files`
-(names only; contents come with the next step) and `earlier_sessions`. Each
+(names, types and sizes), `read_file` (below) and `earlier_sessions`. Each
 runs through the services the pages use, so another student's things are
 "not found" exactly as on a page; an answer is capped at 12,000 characters;
 the student's name and email never go in.
+
+**Material in the chat** (built, 2026-10-05). The tutor reads the student's
+files with `read_file`, a few pages at a time (at most five, about 11,000
+characters), each headed "Page 4 of 18" or "Slide 4 of 18", so it can say
+where it is. `App\Study\FileTexts` reads a file once and keeps its pages
+beside it on the files disk (`texts/{id}.json`, deleted with the file): a
+PDF with the `smalot/pdfparser` library, a PowerPoint's slides with their
+speaker's notes and a Word document straight from their XML (no
+LibreOffice needed), other Office files through their preview PDF, a text
+file in parts; a scanned PDF is said to have no text. In the chat, the
+paperclip attaches notes and files from the session's module (the
+session's chosen material first, four at most per message), and a file or
+picture can be uploaded, pasted or dropped into the box; it is kept in the
+module's *From the chat* folder first. A note goes with its text, a file
+with its first two pages and its length (the rest read with `read_file`),
+a picture as a picture (made no bigger than 1,568 pixels), only with the
+message it came with; later turns name it. A picture is refused when the
+tutor model is known not to see pictures. What went with a note or a file
+is kept with the message (`engine_messages.attachments`), so the chat reads
+the same on every turn (`App\Engine\Attachments`).
 
 **Failures** come back as `App\Engine\EngineFailed` (503) with a plain
 message: not set up, the key refused, out of credit, the model unknown, busy,

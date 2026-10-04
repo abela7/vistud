@@ -2890,8 +2890,17 @@
         box-shadow: 0 0 0 2px var(--accent-subtle);
     }
 
+    .chat-input {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 0.375rem;
+        min-width: 0;
+    }
+
     .chat-box {
         flex: 1 1 auto;
+        width: 100%;
         min-width: 0;
         max-height: 12rem;
         padding: 0.5rem 0.625rem;
@@ -2917,6 +2926,157 @@
         height: 2.5rem;
         padding: 0;
         border-radius: 9999px;
+    }
+
+    /* Attaching: the paperclip opens the module's notes and files above the box; chosen ones show as chips. */
+    .chat-attach {
+        position: relative;
+        flex: none;
+    }
+
+    .chat-attach-button {
+        width: 2.5rem;
+        height: 2.5rem;
+        padding: 0;
+        border-radius: 9999px;
+    }
+
+    .chat-picker {
+        position: absolute;
+        bottom: calc(100% + 0.5rem);
+        left: 0;
+        z-index: 30;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        width: min(22rem, calc(100vw - 3rem));
+        padding: 0.625rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-raised);
+        box-shadow: var(--elevation-lg);
+    }
+
+    .chat-find {
+        min-height: 2.25rem;
+    }
+
+    .chat-picker-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        max-height: 16rem;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .chat-pick {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        min-height: 2.25rem;
+        padding: 0.375rem 0.5rem;
+        border-radius: var(--radius-md);
+        color: var(--text);
+        text-align: left;
+    }
+
+    .chat-pick:hover {
+        background-color: var(--surface-sunken);
+    }
+
+    .chat-pick:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: -2px;
+    }
+
+    .chat-pick[aria-pressed='true'] {
+        background-color: var(--accent-subtle);
+    }
+
+    .chat-pick-check {
+        margin-left: auto;
+        visibility: hidden;
+    }
+
+    .chat-pick[aria-pressed='true'] .chat-pick-check {
+        visibility: visible;
+    }
+
+    .chat-pick-tag {
+        flex: none;
+        padding: 0 0.375rem;
+        border-radius: 9999px;
+        background-color: var(--surface-sunken);
+        color: var(--text-muted);
+        font-size: 0.6875rem;
+    }
+
+    .chat-picker-empty {
+        padding: 0.5rem;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+
+    .chat-picker-foot {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .chat-upload {
+        justify-content: center;
+        cursor: pointer;
+    }
+
+    .chat-upload:focus-within {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .chat-files {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+
+    .chat-turn.is-me .chat-files {
+        justify-content: flex-end;
+    }
+
+    .chat-file {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        max-width: 16rem;
+        min-height: 1.75rem;
+        padding: 0.125rem 0.5rem;
+        border: 1px solid var(--border);
+        border-radius: 9999px;
+        background-color: var(--surface);
+        color: var(--text);
+        font-size: 0.8125rem;
+    }
+
+    a.chat-file:hover {
+        border-color: var(--border-strong);
+        background-color: var(--surface-sunken);
+    }
+
+    .chat-file-remove {
+        display: inline-flex;
+        margin-right: -0.25rem;
+        padding: 0.25rem;
+        border-radius: 9999px;
+        color: var(--text-muted);
+    }
+
+    .chat-file-remove:hover {
+        background-color: var(--surface-sunken);
+        color: var(--text);
     }
 
     /* The answer under way: hidden until its first words, and what the tutor is looking up meanwhile. */

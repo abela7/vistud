@@ -12,6 +12,7 @@ use App\Engine\Tools\FilesTool;
 use App\Engine\Tools\FindingsTool;
 use App\Engine\Tools\NotesTool;
 use App\Engine\Tools\QuestionsTool;
+use App\Engine\Tools\ReadFileTool;
 use App\Engine\Tools\ReadNoteTool;
 use App\Engine\Tools\SearchNotesTool;
 use App\Engine\Tools\Tool;
@@ -42,6 +43,7 @@ final class Toolbox
         CalendarTool::class,
         NotesTool::class,
         ReadNoteTool::class,
+        ReadFileTool::class,
         SearchNotesTool::class,
         FilesTool::class,
         EarlierSessionsTool::class,
@@ -59,7 +61,7 @@ final class Toolbox
     public const WORDS = [
         'course_overview' => 'the course', 'topics' => 'your topics', 'questions' => 'your questions', 'findings' => 'your key points',
         'assignments' => 'your assignments', 'assignment_plan' => 'an assignment plan', 'calendar' => 'your calendar', 'notes' => 'your notes',
-        'read_note' => 'a note', 'search_notes' => 'your notes', 'files' => 'your files', 'earlier_sessions' => 'earlier sessions',
+        'read_note' => 'a note', 'search_notes' => 'your notes', 'files' => 'your files', 'read_file' => 'a file', 'earlier_sessions' => 'earlier sessions',
     ];
 
     public static function words(string $tool): string

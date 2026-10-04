@@ -250,6 +250,7 @@ final class Files
         LearnerTables::query($scope, 'files')->where('id', $row->id)->delete();
         self::disk()->delete($row->storage_key);
         FilePreviews::forget($row->storage_key);
+        FileTexts::forget($row->storage_key);
     }
 
     private function nextPosition(LearnerScope $scope, string $workspaceId, ?string $moduleId, ?string $folderId): int

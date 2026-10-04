@@ -203,7 +203,7 @@ final class Briefings
 
         foreach ($files as $file) {
             if ($session->uses("file:{$file->id}")) {
-                $lines[] = "- {$file->typeLabel()}: {$file->fileName()}. The student will share it with you, a part at a time.";
+                $lines[] = "- {$file->typeLabel()}: {$file->fileName()}. In ViStud's chat, read it with read_file, a few pages at a time; elsewhere the student shares it a part at a time.";
             }
         }
         foreach ($notes as $note) {

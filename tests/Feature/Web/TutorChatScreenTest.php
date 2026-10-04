@@ -13,22 +13,26 @@ use App\Livewire\Workspaces\StudySession;
 use App\Livewire\Workspaces\TutorChat;
 use App\Models\User;
 use App\Platform\Access\Principal;
+use App\Study\Files;
 use App\Study\Modules;
+use App\Study\Notes;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
+use Tests\Concerns\MakesStudyFiles;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
 /** The built-in chat on a study session's page (docs/specs/study-memory.md §6). */
 class TutorChatScreenTest extends TestCase
 {
-    use CreatesAccounts, RefreshesDatabase;
+    use CreatesAccounts, MakesStudyFiles, RefreshesDatabase;
 
     private User $ada;
 
@@ -168,5 +172,30 @@ class TutorChatScreenTest extends TestCase
 
         // Over the limit: nothing is kept, so the words go back to the box.
         $chat->call('send', 'And a left join?')->assertSee('reached its limit of $0.01')->assertDispatched('chat-done', restore: 'And a left join?')->assertDontSee('Try again');
+    }
+
+    public function test_the_modules_notes_and_files_can_be_attached_and_show_on_the_message(): void
+    {
+        Storage::fake('local');
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+        $week2 = $this->session->moduleId;
+        $note = app(Notes::class)->create($this->by, 'module', $week2, 'Lecture 3: joins');
+        $deck = app(Files::class)->upload($this->by, 'module', $week2, $this->temp($this->pdf()), 'Joins deck.pdf');
+        $elsewhere = app(Modules::class)->create($this->by, $this->databases->id, ['title' => 'Week 9'])->id;
+        app(Notes::class)->create($this->by, 'module', $elsewhere, 'Week 9 recap');
+        app(Sessions::class)->toggleMaterial($this->by, $this->session->id, "file:{$deck->id}");
+
+        // The session's material first, marked; the module's notes next; another module's not at all.
+        $chat = $this->chat()->assertSeeInOrder(['Attach a note, a file or a picture', 'Joins deck.pdf', 'This session', 'Lecture 3: joins'])->assertDontSee('Week 9 recap')
+            ->assertSee('Upload a file or picture')->assertSee('paste a screenshot');
+
+        $this->engine->will(Fake::says('Slide one is about joins.'));
+        $chat->call('send', 'What is on the first page?', ["file:{$deck->id}", "note:{$note->id}"])->assertSet('error', null)
+            ->assertSee(route('workspaces.files.show', [$this->databases->id, $deck->id]), false)
+            ->assertSee(route('workspaces.notes.show', [$this->databases->id, $note->id]), false)
+            ->assertSeeInOrder(['What is on the first page?', 'Joins deck.pdf', 'Lecture 3: joins', 'Slide one is about joins.']);
+
+        // A refusal says why, and gives the words back.
+        $chat->call('send', 'And this?', ['topic:nope'])->assertSee('That isn&#039;t a note or a file.', false)->assertDispatched('chat-done', restore: 'And this?');
     }
 }

@@ -7,6 +7,7 @@ use App\Engine\Tools\Context;
 use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Study\Activities;
+use App\Study\Files;
 use App\Study\Findings;
 use App\Study\Flashcards;
 use App\Study\Modules;
@@ -18,14 +19,16 @@ use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\CreatesAccounts;
+use Tests\Concerns\MakesStudyFiles;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
 /** What the engine may look up in ViStud during a chat, as the student (docs/specs/study-memory.md §6). */
 class ToolboxTest extends TestCase
 {
-    use CreatesAccounts, RefreshesDatabase;
+    use CreatesAccounts, MakesStudyFiles, RefreshesDatabase;
 
     private User $ada;
 
@@ -191,5 +194,33 @@ class ToolboxTest extends TestCase
         $this->assertStringContainsString('No notes yet', app(Toolbox::class)->run($other, $context, 'notes'));
         // And Ada's workspace is not found for the other student at all.
         $this->assertStringContainsString('Not found', app(Toolbox::class)->run($other, new Context($this->databases->id, null, null, 'UTC'), 'topics'));
+    }
+
+    public function test_a_file_is_read_a_few_pages_at_a_time_with_where_each_page_is(): void
+    {
+        Storage::fake('local');
+        $slide = fn (string $text) => "<p:sld><a:p><a:r><a:t>{$text}</a:t></a:r></a:p></p:sld>";
+        $slides = [];
+        foreach (range(1, 8) as $n) {
+            $slides["ppt/slides/slide{$n}.xml"] = $slide("Slide {$n}: ".str_repeat('joins ', in_array($n, [6, 7], true) ? 2_000 : 5));
+        }
+        $files = app(Files::class);
+        $files->upload($this->by, 'module', $this->week1, $this->temp($this->ooxml('ppt/presentation.xml', $slides)), 'Joins deck.pptx');
+        $files->upload($this->by, 'module', $this->week1, $this->temp($this->image()), 'Whiteboard.png');
+
+        $first = $this->look('read_file', ['file' => 'Joins deck']);
+        $this->assertStringStartsWith('"Joins deck.pptx": slides 1-3 of 8.', $first);
+        $this->assertStringContainsString("--- Slide 2 of 8 ---\nSlide 2: joins", $first);
+        $this->assertStringNotContainsString('Slide 4 of 8', $first);
+
+        // At most five at a time, and a long one stops the look-up early, saying where to go on.
+        $this->assertStringStartsWith('"Joins deck.pptx": slides 2-6 of 8.', $this->look('read_file', ['file' => 'deck', 'pages' => '2-9']));
+        $long = $this->look('read_file', ['file' => 'deck', 'pages' => '4-7']);
+        $this->assertStringStartsWith('"Joins deck.pptx": slides 4-6 of 8.', $long);
+        $this->assertStringContainsString('ask for slide 7 on', $long);
+        $this->assertStringStartsWith('"Joins deck.pptx": slides 7-8 of 8.', $this->look('read_file', ['file' => 'deck', 'pages' => '7 to 20']));
+        $this->assertStringContainsString('ask for slides 1 to 8', $this->look('read_file', ['file' => 'deck', 'pages' => '12']));
+        $this->assertStringContainsString('is a picture', $this->look('read_file', ['file' => 'Whiteboard']));
+        $this->assertStringContainsString('no file called "Lecture 9"', $this->look('read_file', ['file' => 'Lecture 9']));
     }
 }
