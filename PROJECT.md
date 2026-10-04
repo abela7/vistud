@@ -133,3 +133,4 @@ Migrations always run as the schema owner (`composer migrate`), and the applicat
    - [docs/api/openapi.json](docs/api/openapi.json): the JSON API
 7. [docs/development/setup.md](docs/development/setup.md): get it running.
 8. [docs/handoff/m1-work-packages.md](docs/handoff/m1-work-packages.md): the package you have been assigned, its acceptance criteria and its files.
+9. [docs/specs/vistud-2-blueprint.md](docs/specs/vistud-2-blueprint.md): from 2026-10-06, the plan every new phase follows. Read its Part 5 before taking a phase.

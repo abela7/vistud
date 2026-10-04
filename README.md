@@ -25,6 +25,7 @@ derives where each topic stands, independent of any AI model.
 | Build against another package | [docs/architecture/contracts.md](docs/architecture/contracts.md) and [schema.md](docs/architecture/schema.md) |
 | Follow the house rules | [docs/architecture/conventions.md](docs/architecture/conventions.md) |
 | See the M1 work packages | [docs/handoff/m1-work-packages.md](docs/handoff/m1-work-packages.md) |
+| Build ViStud 2 (the course-centred redesign, phase by phase) | [docs/specs/vistud-2-blueprint.md](docs/specs/vistud-2-blueprint.md): the analysis, the architecture, the phases and the rules for implementers |
 
 ## Quick start
 

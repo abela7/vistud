@@ -2,6 +2,8 @@
 
 The live state of milestone M1: who owns each work package, where it stands, and what is blocking it. Scope, acceptance criteria and owned files are defined in [m1-work-packages.md](../handoff/m1-work-packages.md); this page tracks progress only.
 
+**Now (2026-10-06).** M1 and the study features are built (see the commit log). The next work is **ViStud 2**, the course-centred redesign: its analysis, architecture and phases are in [docs/specs/vistud-2-blueprint.md](../specs/vistud-2-blueprint.md). One model takes one phase at a time, in order, and closes it with a handoff note in `docs/handoff/v2-phase-N.md`.
+
 **Handover (2026-09-25).** Cloud development by the architect is paused and handing over to the local team. Read [LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md) first: branches, what works, what is left, and setup that has been verified in the cloud but not yet on Windows. The PM assigns packages; this page assigns no new work.
 
 ## People
