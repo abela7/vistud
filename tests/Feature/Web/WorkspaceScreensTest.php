@@ -61,10 +61,13 @@ class WorkspaceScreensTest extends TestCase
             ->assertSee('id="ws-menu-sidebar"', false)
             ->assertSee('id="ws-menu-drawer"', false)
             ->assertSeeInOrder(['Biology', 'Mathematics', 'All courses', 'New course'])
-            ->assertSeeInOrder(['Overview', 'Modules', 'Notes &amp; files', 'Calendar', 'Progress'], false)
+            ->assertSeeInOrder(['Overview', 'Modules', 'Calendar', 'Progress'], false)
             ->assertSee('class="app-tabbar"', false)
             ->assertSee('BIO101');
 
+        // Notes & files is reached from Modules, not from the sidebar; its page is still there.
+        $this->actingAs($this->ada)->get(route('workspaces.show', [$biology->id, 'modules']))->assertOk()->assertSee('All notes &amp; files', false)->assertSee(route('workspaces.show', [$biology->id, 'notes']), false);
+        $this->actingAs($this->ada)->get(route('workspaces.show', [$biology->id, 'notes']))->assertOk()->assertSee('Notes &amp; files', false);
         $this->actingAs($this->ada)->get(route('workspaces.show', [$biology->id, 'calendar']))->assertOk()->assertDontSee('is coming next')->assertSee('Cards');
         $this->actingAs($this->ada)->get("/workspaces/{$biology->id}/nonsense")->assertNotFound();
     }

@@ -34,11 +34,22 @@
                 </button>
             </div>
         @endif
+        <a href="{{ route('workspaces.show', [$workspaceId, 'notes']) }}" class="btn btn-secondary">
+            <x-icon name="folder-open" class="size-4" />
+            <span class="max-md:sr-only">All notes &amp; files</span>
+        </a>
         <button type="button" class="btn btn-primary" wire:click="newModule">
             <x-icon name="plus" class="size-4" />
             <span class="max-sm:sr-only">New module</span>
         </button>
     </x-workspace.section-header>
+
+    {{-- Looking for a note or a file: the words go to All notes & files. --}}
+    <form method="get" action="{{ route('workspaces.show', [$workspaceId, 'notes']) }}" role="search" class="search-field">
+        <x-icon name="search" class="size-4" />
+        <label for="modules-search" class="sr-only">Search notes and files</label>
+        <input id="modules-search" type="search" name="q" class="input" placeholder="Search notes and files" autocomplete="off">
+    </form>
 
     <div role="status" aria-live="polite" class="empty:hidden">
         <x-toast :message="$notice" />

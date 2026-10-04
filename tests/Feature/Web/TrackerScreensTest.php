@@ -197,7 +197,7 @@ class TrackerScreensTest extends TestCase
             ->set('url', 'javascript:alert(1)')->call('save')->assertHasErrors('url')
             ->set('url', 'www.youtube.com/watch?v=joins')->call('save')->assertSee('“youtube.com” is added.')
             ->assertSeeInOrder(['Week 1', '1 link']);
-        $this->contents('module', $module->id)->assertSeeInOrder(['Week 1', 'youtube.com', 'youtube.com'])
+        $this->contents('module', $module->id)->set('tab', 'files')->assertSeeInOrder(['Week 1', 'youtube.com', 'youtube.com'])
             ->assertSee('target="_blank" rel="noopener noreferrer"', false);
         $link = app(Links::class)->list($by, $this->databases->id)[0];
 

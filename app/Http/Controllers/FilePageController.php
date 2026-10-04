@@ -37,7 +37,7 @@ class FilePageController
             array_unshift($trail, [$folder->name, route('workspaces.folders.show', [$details->id, $folder->id])]);
         }
         if ($found->moduleId !== null) {
-            array_unshift($trail, [$modules->find($by, $found->moduleId)->title, route('workspaces.modules.show', [$details->id, $found->moduleId])]);
+            array_unshift($trail, [$modules->find($by, $found->moduleId)->title, route('workspaces.modules.show', [$details->id, $found->moduleId, 'tab' => 'files'])]);
         }
 
         $text = $found->trashedAt === null ? $files->textPreview($by, $found->id) : null;

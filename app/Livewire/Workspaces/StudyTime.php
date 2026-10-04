@@ -116,7 +116,7 @@ final class StudyTime extends Component
      * another session open, the usual panel says so; if the session can't be started, the dialog opens.
      */
     #[On('study-next')]
-    public function studyNext(?string $moduleId = null, ?string $topicId = null): void
+    public function studyNext(?string $moduleId = null, ?string $topicId = null, ?string $ask = null): void
     {
         $by = $this->principal();
         if ($this->sessions->current($by) !== null) {
@@ -133,7 +133,8 @@ final class StudyTime extends Component
             return;
         }
         $this->dispatch('session-changed');
-        $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id], navigate: true);
+        // `ask` (quiz or test) puts the ask in the session's message box, for the student to send.
+        $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id] + (in_array($ask, ['quiz', 'test'], true) ? ['ask' => $ask] : []), navigate: true);
     }
 
     /** Ends the open session, then goes on to start the new one. */

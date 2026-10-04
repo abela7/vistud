@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { makeNamedStudent, makeStudentWithCards, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithPomodoro, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, openAccounts, openAdminOverview, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, loginToChallenge, openConfirmPassword, useTheme } from './support.js';
+import { loginToChallenge, makeNamedStudent, makeStudentWithCards, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithPomodoro, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, newHere, openAccounts, openAdminOverview, openConfirmPassword, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -422,8 +422,8 @@ test('modules: the list, a row menu, the move and module dialogs', async ({ page
     }
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
-    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
-    await page.screenshot({ path: out('module-page-desktop-vistud-light-new') });
+    await page.getByRole('button', { name: /Study this/ }).click();
+    await page.screenshot({ path: out('module-page-desktop-vistud-light-study') });
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Actions for Labs' }).click();
     await page.screenshot({ path: out('modules-desktop-vistud-light-menu') });
@@ -480,8 +480,7 @@ test('notes: the editor, Notes & files, and notes in a module', async ({ page })
     await page.unroute('**/api/v1/notes/*');
 
     await page.goto(`/workspaces/${note.workspace}/notes`);
-    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
-    await page.locator('#new-menu').getByRole('button', { name: 'Folder' }).click();
+    await newHere(page, 'Folder');
     await page.locator('#structure-dialog').getByLabel('Name').fill('Exam revision');
     await page.locator('#structure-dialog').getByRole('button', { name: 'Add folder' }).click();
     await page.locator('#structure-dialog').waitFor({ state: 'hidden' });
@@ -528,8 +527,7 @@ test('files: the upload dialog, a module with files, and file pages', async ({ p
     await page.waitForLoadState('load');
     const week1 = page.locator('main .item-list');
 
-    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
-    await page.locator('#new-menu').getByRole('button', { name: 'Upload files' }).click();
+    await newHere(page, 'Upload files');
     await page.locator('#structure-dialog input[type="file"]').setInputFiles(['Lecture 2 - cell division.pdf', 'Essay - why cells divide.docx', 'Onion cells.png', 'Homework with macros.docx'].map(fixture));
     await page.locator('#structure-dialog').getByRole('listitem').nth(3).waitFor();
     await page.screenshot({ path: out('files-upload-desktop-vistud-light') });

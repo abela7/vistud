@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithTopics, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithTopics, newHere, openStudentHome, openTab, THEMES, useSentinelTheme, useTheme } from './support.js';
 
 /* The tracker's step 1b: the Overview, assignments and tasks, instructions, findings and links (docs/specs/study-memory.md §3). */
 
@@ -97,12 +97,12 @@ test('a web link sits in its module and opens in a new tab', async ({ page }) =>
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
     await page.waitForLoadState('load');
+    await openTab(page, 'Files');
     const link = page.getByRole('link', { name: /Joins explained \(video\)/ });
     await expect(link).toHaveAttribute('target', '_blank');
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
 
-    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
-    await page.locator('#new-menu').getByRole('button', { name: 'Link' }).click();
+    await newHere(page, 'Link');
     const dialog = page.locator('#structure-dialog');
     await expect(dialog.getByLabel('Address')).toBeFocused();
     await dialog.getByLabel('Address').fill('javascript:alert(1)');

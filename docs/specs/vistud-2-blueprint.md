@@ -697,7 +697,7 @@ Everything else is a job (Reader) or `Helper::quick`, not a tool.
 |---|---|---|
 | 0 Groundwork | done (2026-10-06) | Roles, jobs, the context Stack, the helper, the settings page, `<x-page>`, the word Course. Handoff: [docs/handoff/v2-phase-0.md](../handoff/v2-phase-0.md). |
 | 1 Course setup and home | done (2026-10-07) | Course and learner profiles, the reader's `profile_course` job, the setup sheet, `NextStep`, the course home. Handoff: [docs/handoff/v2-phase-1.md](../handoff/v2-phase-1.md). |
-| 2 Module page | not started | |
+| 2 Module page | done (2026-10-07) | File digests, the reader's `read_file` job, topic suggestions (**Add all** / Pick / Not these), the module brief (layer 4) and the `module_files` look-up, the module page with its five tabs, **Study this ▾**, the topic sheet, file chips (Read / Reading… / Read now), the file page's **Read by the AI**, search across notes and files. Added beyond the §3.7 table: `topic_suggestions.name_key` (a module is suggested a topic once), `course_profiles.proposed_modules` and `syllabus_text` (Phase 1). Handoff: [docs/handoff/v2-phase-2.md](../handoff/v2-phase-2.md). |
 | 3 Session | not started | |
 | 4 Progress | not started | |
 | 5 Helper | not started | |

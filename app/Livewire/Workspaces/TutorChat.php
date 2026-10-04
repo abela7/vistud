@@ -93,7 +93,14 @@ final class TutorChat extends Component
         [$this->workspaceId, $this->sessionId] = [$workspaceId, $sessionId];
         // A session that ended without its wrap-up (it ended by itself, or the engine was down) gets it once, here.
         $by = $this->principal();
-        if (! $this->sessions->find($by, $sessionId)->isOpen()) {
+        $session = $this->sessions->find($by, $sessionId);
+        // Study this ▾ → Quiz me or Test me on the module page: the ask waits in the message box for the student to send.
+        if ($session->isOpen() && in_array($ask = request()->query('ask'), ['quiz', 'test'], true)) {
+            $this->text = $ask === 'quiz'
+                ? ($this->quizzes($by, $session)[0]['text'] ?? 'Quiz me on what I find hardest in this course.')
+                : 'Test me on this whole module: ten exam-level questions, one at a time, and score me at the end.';
+        }
+        if (! $session->isOpen()) {
             try {
                 $this->chat->wrapUp($by, $sessionId);
             } catch (Unprocessable|NotFound) {

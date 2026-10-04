@@ -1,7 +1,6 @@
 {{--
-    A workspace's Notes & files section (App\Livewire\Workspaces\Contents,
-    view `notes`): what sits outside every module, its folders to open, and
-    the trash.
+    A course's All notes & files (App\Livewire\Workspaces\Contents, view `notes`; reached from Modules): a search across
+    the whole course, what sits outside every module, its folders to open, and the trash.
 --}}
 @php
     use App\Study\Notes;
@@ -34,6 +33,34 @@
         @endif
     </x-selection-bar>
 
+    {{-- Looking for something anywhere in the course (the Modules page links here with the words). --}}
+    <div class="search-field">
+        <x-icon name="search" class="size-4" />
+        <label for="notes-search" class="sr-only">Search notes and files</label>
+        <input id="notes-search" type="search" class="input" placeholder="Search notes and files" wire:model.live.debounce.300ms="search" autocomplete="off">
+    </div>
+
+    @if ($results !== null)
+        @if ($results === [])
+            <div class="empty-place">
+                <span class="item-icon" aria-hidden="true"><x-icon name="search" class="size-5" /></span>
+                <p class="font-medium">Nothing matches</p>
+            </div>
+        @else
+            <ul class="item-list" role="list" aria-label="Search results">
+                @foreach ($results as $result)
+                    <li class="item-row">
+                        <span class="item-icon" aria-hidden="true"><x-icon :name="$result['icon']" class="size-5" /></span>
+                        <span class="min-w-0 flex-1">
+                            <a href="{{ $result['url'] }}" class="tile-link">{{ $result['name'] }}</a>
+                            <span class="item-meta">{{ implode(' · ', array_filter([$result['kind'], $result['place']])) }}</span>
+                        </span>
+                        <x-icon name="chevron-right" class="size-5 shrink-0 text-fg-subtle" />
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+    @else
     @include('livewire.workspaces.partials.place', ['key' => $top, 'placeType' => 'workspace', 'placeId' => $workspaceId])
 
     <section aria-labelledby="trash-heading" class="space-y-2">
@@ -88,6 +115,7 @@
             </div>
         @endif
     </section>
+    @endif
 
     @include('livewire.workspaces.partials.dialog')
 </div>

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { makeStudentWithStudyFiles, openStudentHome } from './support.js';
+import { makeStudentWithStudyFiles, newHere, openStudentHome } from './support.js';
 
 /*
  * Everything added on 2026-09-30 and 2026-10-01, on a phone (320 and 390 px), a tablet (768 and 1024 px,
@@ -67,8 +67,7 @@ for (const [name, device] of Object.entries(devices)) {
             await page.goto(urls.folder);
             await page.getByRole('heading', { level: 1, name: 'Lectures' }).waitFor();
             note('folder', await overflow(page));
-            await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
-            await page.locator('#new-menu').getByRole('button', { name: 'Upload files' }).click();
+            await newHere(page, 'Upload files');
             await page.locator('#structure-dialog').getByRole('heading', { name: /Upload files/ }).waitFor();
             note('upload dialog', await overflow(page));
             // A phone or a tablet can't choose a folder: the button is only where one can.

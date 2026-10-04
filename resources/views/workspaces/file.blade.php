@@ -256,6 +256,8 @@
             </div>
         </header>
 
+        <livewire:workspaces.file-digest :file-id="$file->id" />
+
         <div
             class="file-workspace"
             x-ref="splitContainer"

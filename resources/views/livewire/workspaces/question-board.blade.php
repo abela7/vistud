@@ -21,20 +21,18 @@
 @endphp
 <div @class(['space-y-5' => $page]) x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     @if ($page)
-        <x-workspace.section-header :workspace="$workspace" title="Questions" :count="$counts['all'] > 0 ? $counts['all'] : null" count-label="questions"
-            :back-href="route('workspaces.modules.show', [$workspaceId, $moduleId])" :back-to="$module->title" :eyebrow="$workspace->name.' · '.$module->title">
+        {{-- The page's title and tabs are the module's (workspaces/questions.blade.php); here, what the student can do. --}}
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="{{ route('workspaces.questions.create', [$workspaceId, 'module' => $moduleId]) }}" class="btn btn-primary">
+                <x-icon name="plus" class="size-4" />New question
+            </a>
             @if ($counts['all'] > 0)
                 {{-- While selecting, the selection bar's Done ends it; the focus goes to its Select all. --}}
                 <button type="button" class="btn btn-secondary" x-show="!isSelecting" x-on:click="toggleMode(); $nextTick(() => $root.querySelector('.selection-all-box input')?.focus())">
-                    <x-icon name="list-checks" class="size-4" />
-                    <span class="max-md:sr-only">Select</span>
+                    <x-icon name="list-checks" class="size-4" />Select
                 </button>
             @endif
-            <a href="{{ route('workspaces.questions.create', [$workspaceId, 'module' => $moduleId]) }}" class="btn btn-primary">
-                <x-icon name="plus" class="size-4" />
-                <span class="max-sm:sr-only">New question</span>
-            </a>
-        </x-workspace.section-header>
+        </div>
     @endif
     <div role="status" aria-live="polite" class="empty:hidden">
         <x-toast :message="$notice" :tone="$noticeTone" />

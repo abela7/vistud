@@ -7,10 +7,13 @@ use App\Livewire\Concerns\BulkActions;
 use App\Livewire\Concerns\Notices;
 use App\Livewire\Study\PinnedNotes;
 use App\Platform\Access\Principal;
+use App\Platform\Errors\AppError;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\FileDetails;
+use App\Study\FileDigests;
+use App\Study\FileReading;
 use App\Study\Files;
 use App\Study\Flashcards;
 use App\Study\FolderDetails;
@@ -24,10 +27,12 @@ use App\Study\Notes;
 use App\Study\Questions;
 use App\Study\Sessions;
 use App\Study\Topics;
+use App\Study\TopicSuggestions;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
@@ -56,6 +61,18 @@ final class Contents extends Component
     /** The module or folder a `module` or `folder` page shows. */
     #[Locked]
     public ?string $placeId = null;
+
+    /** A module's tab: topics, files or notes (docs/specs/vistud-2-blueprint.md §3.5.3). */
+    #[Url(as: 'tab', except: 'topics')]
+    public string $tab = 'topics';
+
+    /** The Topics tab is going through the topics the reader found, to pick among them. */
+    #[Locked]
+    public bool $picking = false;
+
+    /** All notes & files: what the student is looking for, across the whole course. */
+    #[Url(as: 'q', except: '')]
+    public string $search = '';
 
     /** module · folder · file (renaming) · link · instructions · upload · move · delete, or null when the dialog is closed. */
     #[Locked]
@@ -119,10 +136,19 @@ final class Contents extends Component
 
     private Flashcards $flashcards;
 
+    private FileDigests $digests;
+
+    private FileReading $reading;
+
+    private TopicSuggestions $suggestions;
+
     private PrincipalFactory $principals;
 
-    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, Questions $questions, Flashcards $flashcards, PrincipalFactory $principals): void
+    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, Questions $questions, Flashcards $flashcards, FileDigests $digests, FileReading $reading, TopicSuggestions $suggestions, PrincipalFactory $principals): void
     {
+        $this->digests = $digests;
+        $this->reading = $reading;
+        $this->suggestions = $suggestions;
         $this->topics = $topics;
         $this->flashcards = $flashcards;
         $this->questions = $questions;
@@ -141,6 +167,7 @@ final class Contents extends Component
     {
         $this->workspaceId = $workspaceId;
         $this->view = in_array($view, ['notes', 'module', 'folder'], true) ? $view : 'modules';
+        $this->tab = in_array($this->tab, ['topics', 'files', 'notes'], true) ? $this->tab : 'topics';
         if (in_array($this->view, ['module', 'folder'], true)) {
             $place = $this->view === 'module' ? $this->modules->find($this->principal(), (string) $placeId) : $this->folders->find($this->principal(), (string) $placeId);
             $place->workspaceId === $workspaceId || throw new NotFound;
@@ -148,16 +175,86 @@ final class Contents extends Component
         }
     }
 
-    /** "Study this": the start dialog (App\Livewire\Workspaces\StudyTime), in this module. */
-    public function studyHere(): void
+    /** A tab the page doesn't have is the first. */
+    public function updatedTab(): void
     {
-        $this->dispatch('study-start', moduleId: $this->placeModuleId());
+        $this->tab = in_array($this->tab, ['topics', 'files', 'notes'], true) ? $this->tab : 'topics';
     }
 
-    /** Studies one of the module's topics: the start panel, with the module and the topic chosen. */
+    /** Study this ▾ → Whole module: a session in this module with no dialog (App\Livewire\Workspaces\StudyTime). */
+    public function studyModule(): void
+    {
+        $this->dispatch('study-next', moduleId: $this->placeModuleId());
+    }
+
+    /**
+     * Study this ▾ → Quiz me or Test me: a session on the module's next topic (a test: on the whole module) whose
+     * message box already holds the ask. Until the session page has modes of its own, the student sends it.
+     */
+    public function studyAsk(string $kind): void
+    {
+        if (! in_array($kind, ['quiz', 'test'], true)) {
+            return;
+        }
+        $this->dispatch('study-next', moduleId: $this->placeModuleId(), topicId: $kind === 'quiz' ? $this->nextTopicId() : null, ask: $kind);
+    }
+
+    /** Study this ▾ → Pick a topic: the sheet of the module's topics. */
+    public function pickTopic(): void
+    {
+        $this->dispatch('topic-picker-open');
+    }
+
+    /** Studies one of the module's topics, with no dialog. */
     public function studyTopic(string $topicId): void
     {
-        $this->dispatch('study-start', moduleId: $this->placeModuleId(), topicId: $topicId);
+        $this->dispatch('study-next', moduleId: $this->placeModuleId(), topicId: $topicId);
+    }
+
+    // ---------- What the reader found ----------
+
+    /** Adds every topic the reader found in the module's files. */
+    public function addSuggested(): void
+    {
+        if ($this->view !== 'module' || $this->placeId === null) {
+            return;
+        }
+        $added = $this->suggestions->addAll($this->principal(), $this->placeId);
+        $this->picking = false;
+        $this->notify($added === 1 ? '1 topic added.' : "{$added} topics added.");
+    }
+
+    public function pickSuggested(): void
+    {
+        $this->picking = ! $this->picking;
+    }
+
+    public function addOneSuggested(string $id): void
+    {
+        $this->suggestions->add($this->principal(), $id);
+    }
+
+    public function dismissOneSuggested(string $id): void
+    {
+        $this->suggestions->dismiss($this->principal(), $id);
+    }
+
+    public function dismissSuggested(): void
+    {
+        if ($this->view === 'module' && $this->placeId !== null) {
+            $this->suggestions->dismissAll($this->principal(), $this->placeId);
+        }
+        $this->picking = false;
+    }
+
+    /** Read now: the reader reads the file, whatever *Read my files automatically* says. */
+    public function readFile(string $id): void
+    {
+        try {
+            $this->reading->readNow($this->principal(), $id);
+        } catch (AppError $e) {
+            $this->notify($e->getMessage(), 'warning');
+        }
     }
 
     /** Adds a topic to the module (a name the course has already is left as it is). */
@@ -753,6 +850,10 @@ final class Contents extends Component
         }
         if (in_array($this->view, ['module', 'folder'], true)) {
             $data += $this->placeData($by, $modules, $folders);
+            // What the reader has made of the files here: read, reading, to read, or nothing to read.
+            $here = $filesIn[$data['key']] ?? [];
+            $data['readStates'] = $here === [] ? [] : $this->digests->states($by, $here);
+            $data['readingNow'] = count(array_filter($data['readStates'], fn ($state) => $state['state'] === 'reading')) > 0;
         }
         if (in_array($this->view, ['module', 'folder', 'notes'], true)) {
             $data['itemCounts'] = $this->itemCounts($folders, $notes, $files, $links);
@@ -767,6 +868,7 @@ final class Contents extends Component
                 'linkCount' => count($links),
                 'recent' => array_slice($recent, 0, 5),
                 'places' => $this->placeNames($modules, $folders),
+                'results' => $this->search === '' ? null : $this->searchResults($notes, $files, $links, $folders, $this->placeNames($modules, $folders)),
                 'trash' => $this->notes->trashed($by, $this->workspaceId),
                 'trashedFiles' => $this->files->trashed($by, $this->workspaceId),
             ];
@@ -776,6 +878,18 @@ final class Contents extends Component
     }
 
     // ---------- Helpers ----------
+
+    /** The module's first topic the student doesn't understand yet, or none. */
+    private function nextTopicId(): ?string
+    {
+        foreach ($this->topics->list($this->principal(), $this->workspaceId) as $topic) {
+            if ($topic->moduleId === $this->placeId && ! in_array($topic->shown(), ['understood', 'mastered'], true)) {
+                return $topic->id;
+            }
+        }
+
+        return null;
+    }
 
     /** The module this page is in: the module itself, or the folder's. */
     private function placeModuleId(): ?string
@@ -831,6 +945,7 @@ final class Contents extends Component
                 // Its topics, in order, each with its status and its cards.
                 'moduleTopics' => array_values(array_filter($this->topics->list($by, $this->workspaceId), fn ($t) => $t->moduleId === $module->id)),
                 'topicCards' => $cards['topics'],
+                'suggestions' => $this->suggestions->list($by, $module->id),
             ];
         }
 
@@ -841,10 +956,10 @@ final class Contents extends Component
         }
         $module = $folder->moduleId !== null ? collect($modules)->firstWhere('id', $folder->moduleId) : null;
         array_unshift($trail, ...($module !== null
-            ? [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])], [$module->title, route('workspaces.modules.show', [$this->workspaceId, $module->id])]]
+            ? [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])], [$module->title, route('workspaces.modules.show', [$this->workspaceId, $module->id, 'tab' => 'files'])]]
             : [[__('Notes & files'), route('workspaces.show', [$this->workspaceId, 'notes'])]]));
 
-        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'topicNames' => [], 'questions' => null, 'sessionsCount' => 0, 'cards' => null, 'moduleTopics' => [], 'topicCards' => []];
+        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'topicNames' => [], 'questions' => null, 'sessionsCount' => 0, 'cards' => null, 'moduleTopics' => [], 'topicCards' => [], 'suggestions' => []];
     }
 
     /** @return array<string, array{done: int, total: int}> module id => its topics understood (or mastered), of all */
@@ -1054,6 +1169,32 @@ final class Contents extends Component
     }
 
     /** @return array<string, string> placeKey => "Week 1: Cells › Labs", for showing where a note is */
+    /**
+     * Notes, files, links and folders of the course whose name has the words searched for, each with where it is.
+     *
+     * @return list<array{icon: string, name: string, kind: string, place: string, url: string}>
+     */
+    private function searchResults(array $notes, array $files, array $links, array $folders, array $places): array
+    {
+        $words = array_filter(preg_split('/\s+/u', trim($this->search)) ?: []);
+        $has = fn (string $name) => collect($words)->every(fn (string $word) => mb_stripos($name, $word) !== false);
+        $rows = [];
+        foreach ($notes as $note) {
+            $has($note->displayTitle()) && $rows[] = ['icon' => 'file-text', 'name' => $note->displayTitle(), 'kind' => 'Note', 'place' => $places[$note->placeKey()] ?? '', 'url' => route('workspaces.notes.show', [$note->workspaceId, $note->id])];
+        }
+        foreach ($files as $file) {
+            $has($file->fileName()) && $rows[] = ['icon' => $file->icon(), 'name' => $file->fileName(), 'kind' => $file->typeLabel(), 'place' => $places[$file->placeKey()] ?? '', 'url' => route('workspaces.files.show', [$file->workspaceId, $file->id])];
+        }
+        foreach ($links as $link) {
+            $has($link->title) && $rows[] = ['icon' => 'link', 'name' => $link->title, 'kind' => 'Link', 'place' => $places[$link->placeKey()] ?? '', 'url' => $link->url];
+        }
+        foreach ($folders as $folder) {
+            $has($folder->name) && $rows[] = ['icon' => 'folder', 'name' => $folder->name, 'kind' => 'Folder', 'place' => $places[$folder->siblingsKey()] ?? '', 'url' => route('workspaces.folders.show', [$this->workspaceId, $folder->id])];
+        }
+
+        return array_slice($rows, 0, 50);
+    }
+
     private function placeNames(array $modules, array $folders): array
     {
         $names = ["workspace:{$this->workspaceId}" => 'Not in a module'];

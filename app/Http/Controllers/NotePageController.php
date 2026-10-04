@@ -91,7 +91,7 @@ class NotePageController
             array_unshift($trail, [$folder->name, route('workspaces.folders.show', [$workspaceId, $folder->id])]);
         }
         if ($moduleId !== null) {
-            array_unshift($trail, [$modules->find($by, $moduleId)->title, route('workspaces.modules.show', [$workspaceId, $moduleId])]);
+            array_unshift($trail, [$modules->find($by, $moduleId)->title, route('workspaces.modules.show', [$workspaceId, $moduleId, 'tab' => 'notes'])]);
         }
 
         return $trail;

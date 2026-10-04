@@ -6,6 +6,7 @@ use App\Identity\PrincipalFactory;
 use App\Platform\Errors\NotFound;
 use App\Study\Folders;
 use App\Study\Modules;
+use App\Study\ModuleTabs;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -31,7 +32,7 @@ class PlacePageController
         return view('workspaces.place', ['workspace' => $details, 'view' => 'module', 'placeId' => $place->id, 'title' => $place->title, 'section' => 'modules']);
     }
 
-    public function questions(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, string $workspace, string $module): View|RedirectResponse
+    public function questions(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, ModuleTabs $tabs, string $workspace, string $module): View|RedirectResponse
     {
         $by = $principals->fromRequest($request);
         $details = $workspaces->find($by, $workspace);
@@ -43,17 +44,17 @@ class PlacePageController
             return redirect()->route('workspaces.questions.create', [$details->id, 'module' => $place->id]);
         }
 
-        return view('workspaces.questions', ['workspace' => $details, 'module' => $place]);
+        return view('workspaces.questions', ['workspace' => $details, 'module' => $place, 'counts' => $tabs->counts($by, $details->id, $place->id)]);
     }
 
-    public function sessions(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, string $workspace, string $module): View
+    public function sessions(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, ModuleTabs $tabs, string $workspace, string $module): View
     {
         $by = $principals->fromRequest($request);
         $details = $workspaces->find($by, $workspace);
         $place = $modules->find($by, $module);
         $place->workspaceId === $details->id || throw new NotFound;
 
-        return view('workspaces.module-sessions', ['workspace' => $details, 'module' => $place]);
+        return view('workspaces.module-sessions', ['workspace' => $details, 'module' => $place, 'counts' => $tabs->counts($by, $details->id, $place->id)]);
     }
 
     public function folder(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Folders $folders, string $workspace, string $folder): View

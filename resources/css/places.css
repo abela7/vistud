@@ -2666,6 +2666,151 @@
         display: inline;
     }
 
+    /* A module's tabs (x-module.tabs): one quiet row under the title, scrolling sideways on a narrow screen. */
+    .page-tabs {
+        display: flex;
+        gap: 0.25rem;
+        overflow-x: auto;
+        border-bottom: 1px solid var(--divider);
+        scrollbar-width: none;
+    }
+
+    .page-tab {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        min-height: 2.75rem;
+        padding: 0 0.875rem;
+        margin-bottom: -1px;
+        border-bottom: 2px solid transparent;
+        color: var(--text-muted);
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .page-tab:hover {
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    .page-tab[aria-current='page'] {
+        border-bottom-color: var(--accent);
+        color: var(--text);
+    }
+
+    .page-tab:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: -2px;
+    }
+
+    /* What the reader found in a file, on its row: Read, Reading…, Read now (above the row's own link). */
+    .digest {
+        position: relative;
+        z-index: 2;
+        margin-top: 0.25rem;
+        font-size: 0.8125rem;
+    }
+
+    .digest-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        min-height: 1.5rem;
+        padding: 0 0.5rem;
+        border-radius: 9999px;
+        color: var(--text-muted);
+        font-weight: 500;
+        cursor: pointer;
+        list-style: none;
+    }
+
+    .digest-chip::-webkit-details-marker {
+        display: none;
+    }
+
+    .digest-chip.is-action {
+        border: 1px solid var(--border);
+        background-color: var(--surface-raised);
+        color: var(--text);
+    }
+
+    .digest-chip.is-action:hover,
+    details.digest > summary:hover {
+        background-color: var(--hover);
+    }
+
+    .digest-body {
+        display: grid;
+        gap: 0.375rem;
+        margin-top: 0.375rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+        color: var(--text);
+    }
+
+    .digest-body ol {
+        display: grid;
+        gap: 0.125rem;
+        padding-left: 1.25rem;
+        list-style: decimal;
+        color: var(--text-muted);
+    }
+
+    /* The file's page: what the reader wrote about it, above the file. */
+    .digest-panel {
+        display: grid;
+        gap: 0.5rem;
+        justify-items: start;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+        color: var(--text);
+        font-size: 0.875rem;
+    }
+
+    .digest-panel-title {
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .digest-outline summary {
+        cursor: pointer;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+
+    .digest-outline ol {
+        display: grid;
+        gap: 0.125rem;
+        margin-top: 0.375rem;
+        padding-left: 1.25rem;
+        list-style: decimal;
+        color: var(--text-muted);
+    }
+
+    /* The reader found topics: one line and two buttons (the module's Topics tab). */
+    .suggestion-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.875rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--accent);
+        border-radius: var(--radius-xl);
+        background-color: var(--accent-subtle);
+    }
+
+    .suggestion-bar p {
+        min-width: 0;
+        flex: 1 1 14rem;
+        overflow-wrap: anywhere;
+    }
+
     .tab-count {
         margin-left: 0.25rem;
         font-variant-numeric: tabular-nums;

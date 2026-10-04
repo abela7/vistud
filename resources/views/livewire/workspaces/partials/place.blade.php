@@ -6,10 +6,12 @@
 @php
     use Illuminate\Support\Carbon;
 
-    $placeNotes = $notesIn[$key] ?? [];
-    $placeFiles = $filesIn[$key] ?? [];
-    $placeLinks = $linksIn[$key] ?? [];
-    $placeFolders = $children[$key] ?? [];
+    // $show: all (a folder), files (a module's Files tab: folders, files and links) or notes (its Notes tab).
+    $show = $show ?? 'all';
+    $placeNotes = in_array($show, ['all', 'notes'], true) ? ($notesIn[$key] ?? []) : [];
+    $placeFiles = in_array($show, ['all', 'files'], true) ? ($filesIn[$key] ?? []) : [];
+    $placeLinks = in_array($show, ['all', 'files'], true) ? ($linksIn[$key] ?? []) : [];
+    $placeFolders = in_array($show, ['all', 'files'], true) ? ($children[$key] ?? []) : [];
     $fileColours = ['pdf' => 'red', 'document' => 'blue', 'slides' => 'orange', 'spreadsheet' => 'green', 'text' => 'pink', 'image' => 'purple'];
 @endphp
 @if ($placeFolders !== [])
@@ -69,6 +71,32 @@
                 <span class="min-w-0 flex-1">
                     <a href="{{ route('workspaces.files.show', [$file->workspaceId, $file->id]) }}" class="tile-link">{{ $file->fileName() }}</a>
                     <span class="item-meta">{{ $file->typeLabel() }} · {{ $file->humanSize() }}</span>
+                    @php
+                        $read = $readStates[$file->id] ?? null;
+                        $digest = $read['digest'] ?? null;
+                    @endphp
+                    @if (($read['state'] ?? null) === 'read' && $digest)
+                        <details class="digest">
+                            <summary class="digest-chip"><x-icon name="circle-check" class="size-3.5" />Read</summary>
+                            <div class="digest-body">
+                                <p>{{ $digest->summary }}</p>
+                                @if ($digest->topics !== [])
+                                    <p class="text-fg-muted">{{ implode(' · ', $digest->topics) }}</p>
+                                @endif
+                                @if ($digest->outline !== [])
+                                    <ol>
+                                        @foreach (array_slice($digest->outline, 0, 12) as $line)
+                                            <li>{{ $line['heading'] }} <span class="text-fg-subtle">· {{ $line['page'] }}</span></li>
+                                        @endforeach
+                                    </ol>
+                                @endif
+                            </div>
+                        </details>
+                    @elseif (($read['state'] ?? null) === 'reading')
+                        <span class="digest"><span class="digest-chip" role="status"><x-icon name="loader-circle" class="size-3.5 animate-spin" />Reading…</span></span>
+                    @elseif (($read['state'] ?? null) === 'unread' && $file->moduleId !== null && $file->kind !== 'image')
+                        <span class="digest"><button type="button" class="digest-chip is-action" wire:click="readFile('{{ $file->id }}')" wire:loading.attr="aria-busy" wire:target="readFile('{{ $file->id }}')">Read now</button></span>
+                    @endif
                 </span>
                 @include('livewire.workspaces.partials.row-menu', ['id' => $file->id, 'label' => $file->fileName(), 'items' => [
                     ['Download', 'download', null, false, route('files.content', [$file->id, 'download' => 1])],
@@ -101,11 +129,14 @@
 
 @if ($placeFolders === [] && $placeNotes === [] && $placeFiles === [] && $placeLinks === [])
     <div class="empty-place">
-        <span class="item-icon" aria-hidden="true"><x-icon name="folder-open" class="size-5" /></span>
-        <p class="font-medium">Nothing here yet</p>
+        <span class="item-icon" aria-hidden="true"><x-icon name="{{ $show === 'notes' ? 'file-text' : 'folder-open' }}" class="size-5" /></span>
+        <p class="font-medium">{{ $show === 'notes' ? 'No notes yet' : ($show === 'files' ? 'No files yet' : 'Nothing here yet') }}</p>
         <div class="flex flex-wrap justify-center gap-2">
-            <x-button icon="file-plus" wire:click="newNote('{{ $placeType }}', '{{ $placeId }}')">New note</x-button>
-            <x-button icon="upload" wire:click="uploadFiles('{{ $placeType }}', '{{ $placeId }}')">Upload files</x-button>
+            @if ($show === 'notes')
+                <x-button icon="file-plus" wire:click="newNote('{{ $placeType }}', '{{ $placeId }}')">New note</x-button>
+            @else
+                <x-button icon="upload" wire:click="uploadFiles('{{ $placeType }}', '{{ $placeId }}')">Upload files</x-button>
+            @endif
         </div>
     </div>
 @endif

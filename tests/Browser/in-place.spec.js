@@ -34,14 +34,16 @@ test('links move between pages without reloading, and each page works as if open
     await expect(page.getByRole('heading', { level: 1, name: 'Modules' })).toBeVisible();
     await page.getByRole('link', { name: 'Week 1: Cells' }).first().click();
     await expect(page.getByRole('heading', { level: 1, name: 'Week 1: Cells' })).toBeVisible();
+    await page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: /^Files/ }).click();
     await page.getByRole('link', { name: 'Labs', exact: true }).first().click();
     await expect(page.getByRole('heading', { level: 1, name: 'Labs' })).toBeVisible();
     expect(await stayed(page)).toBe(true);
 
     // The page swapped in works: its menus open, its Livewire actions answer, and the tab's title follows.
     await expect(page).toHaveTitle(/Labs/);
-    await page.getByRole('button', { name: 'New', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Folder', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'New folder', exact: true }).click();
+    await expect(page.locator('#structure-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // The browser's own Back and Forward step through the pages, still without reloading.
     await page.goBack();

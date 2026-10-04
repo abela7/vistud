@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithSession, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithSession, newHere, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
 
 /* Questions in a study session, on a module's page, and each on a page of its own (docs/specs/study-memory.md §3). */
 
@@ -65,8 +65,8 @@ test('a question written in a session is in its module, and gets answered there'
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
     // The module's page links to its questions; they have their own page.
     await expect(page.getByRole('list', { name: 'Questions' })).toHaveCount(0);
-    await page.locator('main').getByRole('link', { name: /^Questions 3 open, 1 stuck/ }).click();
-    await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
+    await page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: /^Questions/ }).click();
+    await page.getByRole('list', { name: 'Questions' }).waitFor();
     await page.waitForLoadState('load');
     const onModule = page.getByRole('list', { name: 'Questions' });
     await expect(onModule).toContainText('Why does a left join keep rows with no match?');
@@ -85,7 +85,7 @@ test('a question written in a session is in its module, and gets answered there'
     await page.getByRole('button', { name: 'Save' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'The question is saved.' })).toBeVisible();
     await page.getByRole('link', { name: 'Back to Questions' }).click();
-    await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
+    await page.getByRole('list', { name: 'Questions' }).waitFor();
     await expect(page.getByRole('list', { name: 'Questions' })).toContainText('A LEFT JOIN keeps every left row and fills the rest with NULL.');
     await expect(page.getByRole('button', { name: /^Answered\s+1$/ })).toBeVisible();
 });
@@ -104,7 +104,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await page.getByText('Stuck', { exact: true }).last().click();
         states.question = await foreignColours(page);
         await page.getByRole('link', { name: 'Back to Questions' }).click();
-        await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
+        await page.getByRole('list', { name: 'Questions' }).waitFor();
         await page.waitForLoadState('load');
         await useSentinelTheme(page);
         states.cards = await foreignColours(page);
@@ -126,7 +126,7 @@ for (const theme of THEMES) {
         await useTheme(page, theme);
         expect(await analyse(page), 'question page').toEqual([]);
         await page.getByRole('link', { name: 'Back to Questions' }).click();
-        await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
+        await page.getByRole('list', { name: 'Questions' }).waitFor();
         await page.waitForLoadState('load');
         await useTheme(page, theme);
         expect(await analyse(page), 'question cards').toEqual([]);
@@ -142,7 +142,7 @@ test('questions never scroll sideways at 320 px, even with 200% text', async ({ 
     await words(page).waitFor();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
     await page.getByRole('link', { name: 'Back to Questions' }).click();
-    await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
+    await page.getByRole('list', { name: 'Questions' }).waitFor();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
 
@@ -154,13 +154,12 @@ test("a module page's New adds a question, on the module's questions page", asyn
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
     await page.waitForLoadState('load');
     await expect(page.getByPlaceholder("What don't you get? Write it down…")).toHaveCount(0);
-    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
-    await page.locator('#new-menu').getByRole('link', { name: 'Question' }).click();
+    await newHere(page, 'Question');
     await page.getByRole('heading', { level: 1, name: 'New question' }).waitFor();
     await words(page).fill('When is a view better than a table?');
     await page.getByRole('button', { name: 'Save' }).click();
     // Saved, it is in the module's questions.
-    await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
+    await page.getByRole('list', { name: 'Questions' }).waitFor();
     await expect(page.getByRole('list', { name: 'Questions' })).toContainText('When is a view better than a table?');
 });
 
@@ -169,8 +168,8 @@ test('the questions page fills the width: cards in rows, no narrow column', asyn
     const student = await withQuestions(page);
     await page.goto(`/workspaces/${student.workspace}/modules`);
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
-    await page.locator('main').getByRole('link', { name: /^Questions 3 open/ }).click();
-    await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
+    await page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: /^Questions/ }).click();
+    await page.getByRole('list', { name: 'Questions' }).waitFor();
     await page.waitForLoadState('load');
     const main = await page.locator('#main').boundingBox();
     const cards = page.getByRole('list', { name: 'Questions' }).getByRole('listitem');

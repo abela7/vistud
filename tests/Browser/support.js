@@ -1,3 +1,4 @@
+import { expect } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -104,6 +105,42 @@ function makeAccount(twoFactor, admin = false, name = null) {
     execFileSync(php, ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
 
     return email;
+}
+
+/** Opens one of a module page's tabs ('Topics', 'Files', 'Notes', 'Questions' or 'Sessions') and waits for it to have arrived. */
+export async function openTab(page, name) {
+    const tab = page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: new RegExp(`^${name}`) });
+    if ((await tab.getAttribute('aria-current')) !== 'page') {
+        await tab.click();
+        // The page moves in place (resources/js/page.js): the tab is current once the new page has arrived.
+        await expect(tab).toHaveAttribute('aria-current', 'page');
+        await page.waitForLoadState('load');
+    }
+}
+
+/**
+ * On a module's or a folder's page: adds `what` ('Upload files', 'Folder', 'Link', 'Note' or 'Question') there. The page's
+ * buttons are on its Files and Notes tabs (docs/specs/vistud-2-blueprint.md §3.5.3), so a module's tab is opened first.
+ */
+export async function newHere(page, what) {
+    const tabs = page.getByRole('navigation', { name: 'This module' });
+    if (what === 'Question') {
+        await tabs.getByRole('link', { name: /^Questions/ }).click();
+        await page.getByRole('link', { name: 'New question' }).first().click();
+
+        return;
+    }
+    if ((await tabs.count()) > 0) {
+        const tab = tabs.getByRole('link', { name: what === 'Note' ? /^Notes/ : /^Files/ });
+        if ((await tab.getAttribute('aria-current')) !== 'page') {
+            await tab.click();
+            // The page moves in place (resources/js/page.js): the tab is current once the new page has arrived.
+            await expect(tab).toHaveAttribute('aria-current', 'page');
+            await page.waitForLoadState('load');
+        }
+    }
+    const buttons = { 'Upload files': 'Upload files', Folder: 'New folder', Link: 'Add a link', Note: 'New note' };
+    await page.locator('main').getByRole('button', { name: buttons[what], exact: true }).first().click();
 }
 
 /** A confirmed two-factor account in the app database the browser server uses. */
@@ -307,6 +344,31 @@ export function makeStudentWithStudyFiles() {
         `'window' => route('workspaces.notes.show', [$w->id, $n->id, 'window' => 1], false)]);`,
     ].join(' ');
     const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
+    return { email, ...JSON.parse(out) };
+}
+
+/**
+ * A student with Operating Systems and its module "Week 3: CPU scheduling": two topics, three files (one the AI has read, one
+ * being read, one not read yet), and two topics the reader found and nobody has answered yet. Returns the email and the paths.
+ */
+export function makeStudentWithModulePage() {
+    const email = makeAccount(false);
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
+        `$w = app(\\App\\Study\\Workspaces::class)->create($p, ['name' => 'Operating Systems', 'colour' => 'blue', 'icon' => 'code']);`,
+        `$m = app(\\App\\Study\\Modules::class)->create($p, $w->id, ['title' => 'Week 3: CPU scheduling', 'starts_on' => '2026-10-05', 'ends_on' => '2026-10-11']);`,
+        `$t = app(\\App\\Study\\Topics::class); $t->report($p, $t->create($p, $w->id, 'Processes', $m->id)->id, 'understood'); $t->create($p, $w->id, 'Scheduling', $m->id);`,
+        `$files = app(\\App\\Study\\Files::class); $tmp = fn ($text) => tap(tempnam(sys_get_temp_dir(), 'vs'), fn ($f) => file_put_contents($f, $text));`,
+        `$read = $files->upload($p, 'module', $m->id, $tmp("Scheduling decides which process runs next.\\n"), 'Lecture 3.txt');`,
+        `$busy = $files->upload($p, 'module', $m->id, $tmp("Being read.\\n"), 'Lecture 4.txt');`,
+        `$files->upload($p, 'module', $m->id, $tmp("Not read yet.\\n"), 'Lecture 5.txt');`,
+        `app(\\App\\Study\\FileDigests::class)->keep($p, $read->id, ['summary' => 'Scheduling policies and their trade-offs.', 'outline' => [['page' => 1, 'heading' => 'Introduction'], ['page' => 4, 'heading' => 'Round robin']], 'topics' => ['CPU scheduling', 'Round robin'], 'language' => 'English'], 8, 1000, 'fake/quick');`,
+        `\\App\\Platform\\Database\\LearnerTables::insert(\\App\\Platform\\Access\\LearnerScope::of($p), 'engine_jobs', ['id' => \\Illuminate\\Support\\Str::uuid()->toString(), 'role' => 'reader', 'kind' => 'read_file', 'target_type' => 'file', 'target_id' => $busy->id, 'status' => 'running', 'created_at' => now()]);`,
+        `app(\\App\\Study\\TopicSuggestions::class)->suggest($p, $m->id, $read->id, ['Round robin', 'Priority scheduling']);`,
+        `echo json_encode(['module' => route('workspaces.modules.show', [$w->id, $m->id], false), 'file' => route('workspaces.files.show', [$w->id, $read->id], false), 'busy' => route('workspaces.files.show', [$w->id, $busy->id], false)]);`,
+    ].join(' ');
+    const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
+
     return { email, ...JSON.parse(out) };
 }
 

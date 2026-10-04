@@ -46,7 +46,7 @@ class ModuleSessionsScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $module->id]))
             ->assertOk()
             ->assertSee(route('workspaces.modules.sessions', [$this->biology->id, $module->id]), false)
-            ->assertSeeInOrder(['Study sessions', '1', 'session']);
+            ->assertSeeInOrder(['Sessions', '1']);
     }
 
     public function test_every_session_is_counted_and_listed_not_only_the_latest_few(): void
@@ -68,7 +68,7 @@ class ModuleSessionsScreenTest extends TestCase
 
         $this->assertCount(7, $sessions->forModule($by, $this->biology->id, $module->id));
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $module->id]))
-            ->assertOk()->assertSee('7<span class="sr-only"> sessions</span>', false);
+            ->assertOk()->assertSee('<span class="tab-count">7</span>', false);
         Livewire::actingAs($this->ada)->test(ModuleSessions::class, ['workspaceId' => $this->biology->id, 'moduleId' => $module->id])
             ->assertSee('7 sessions · 2 h 20 min studied')
             ->assertViewHas('shown', fn ($shown) => count($shown) === 7);
@@ -100,7 +100,7 @@ class ModuleSessionsScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.modules.sessions', [$this->biology->id, $module->id]))
             ->assertOk()
             ->assertSee('<title>Study sessions · Cells · Biology', false)
-            ->assertSeeInOrder(['Modules', 'Cells', 'Study sessions'])
+            ->assertSeeInOrder(['Modules', 'Cells', 'Sessions'])
             ->assertSee(route('workspaces.modules.show', [$this->biology->id, $module->id]), false);
 
         // Component interaction

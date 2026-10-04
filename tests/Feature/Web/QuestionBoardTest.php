@@ -47,7 +47,7 @@ class QuestionBoardTest extends TestCase
             ->call('add')->assertHasErrors('text')
             ->set('text', 'Why is a primary key never empty?')->call('add')
             ->assertSet('text', '')->assertDispatched('questions-changed')
-            ->assertSeeInOrder(['Databases', 'Week 1', 'Questions', 'New question', 'All', '1', 'Pending', '1', 'Why is a primary key never empty?']);
+            ->assertSeeInOrder(['New question', 'All', '1', 'Pending', '1', 'Why is a primary key never empty?']);
         $question = $this->questions()[0];
         $this->assertSame([$this->week1->id, 'pending'], [$question->moduleId, $question->status]);
 

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithModules, makeStudentWithWorkspaces, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithModules, makeStudentWithWorkspaces, newHere, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
 
 /* A workspace's modules as cards, and each module's and folder's own page (docs/specs/workspaces.md). */
 
@@ -32,6 +32,14 @@ async function openPlace(page, name) {
     await page.locator('main').getByRole('link', { name, exact: true }).click();
     await page.getByRole('heading', { level: 1, name }).waitFor();
     await page.waitForLoadState('load');
+    // A module's folders, files and links are on its Files tab.
+    const tabs = page.getByRole('navigation', { name: 'This module' });
+    if ((await tabs.count()) > 0) {
+        await tabs.getByRole('link', { name: /^Files/ }).click();
+        // The page moves in place (resources/js/page.js): the tab is current once the new page has arrived.
+        await expect(tabs.getByRole('link', { name: /^Files/ })).toHaveAttribute('aria-current', 'page');
+        await page.waitForLoadState('load');
+    }
 }
 
 async function menu(page, name) {
@@ -39,10 +47,7 @@ async function menu(page, name) {
     return page.locator('.row-menu:not([hidden])');
 }
 
-async function newInPlace(page, what) {
-    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
-    await page.locator('#new-menu').getByRole('button', { name: what }).click();
-}
+const newInPlace = newHere;
 
 test('a student adds modules as cards, reorders them, and opens one to build folders inside', async ({ page }) => {
     await page.setViewportSize(desktop);
@@ -73,7 +78,7 @@ test('a student adds modules as cards, reorders them, and opens one to build fol
 
     // A module is a page: folders inside it are pages too.
     await openPlace(page, 'Week 1: Cells');
-    await expect(page.getByText('Nothing here yet')).toBeVisible();
+    await expect(page.getByText('No files yet')).toBeVisible();
     await newInPlace(page, 'Folder');
     await expect(dialog(page).getByRole('heading', { name: 'New folder in Week 1: Cells' })).toBeVisible();
     await dialog(page).getByLabel('Name').fill('Labs');
@@ -123,7 +128,8 @@ test('moving, renaming and deleting folders, and the refusals', async ({ page })
     // Deleting the folder you're in takes you up a level.
     await openPlace(page, 'Labs');
     await openPlace(page, 'Lab 1: microscopes');
-    await (await menu(page, 'Lab 1: microscopes')).getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'More for Lab 1: microscopes', exact: true }).click();
+    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Delete' }).click();
     await dialog(page).getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Labs' })).toBeVisible();
     await expect(page.getByText('Nothing here yet')).toBeVisible();
@@ -170,9 +176,9 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         states['folder page'] = await foreignColours(page);
 
         await (viewport === phone ? page.getByRole('link', { name: 'Back to Week 1: Cells' }) : page.getByRole('navigation', { name: 'Path' }).getByRole('link', { name: 'Week 1: Cells' })).click();
-        await page.getByRole('link', { name: 'Study sessions' }).click();
+        await page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: /^Sessions/ }).click();
         // The page moves in place (resources/js/page.js): the test theme goes on once it has arrived.
-        await page.getByRole('heading', { level: 1, name: 'Study sessions' }).waitFor();
+        await expect(page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: /^Sessions/ })).toHaveAttribute('aria-current', 'page');
         await useSentinelTheme(page);
         states['study sessions page'] = await foreignColours(page);
 
@@ -261,28 +267,24 @@ test('modules can switch between grid and list view, persist preference, and pas
     await expect(gridBtn).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('a module links to its study sessions page, and Back climbs back to the module', async ({ page }) => {
+test('a module has a Sessions tab with its study sessions, and the Topics tab climbs back to the module', async ({ page }) => {
     await page.setViewportSize(desktop);
     await openModules(page, makeStudentWithModules());
     await openPlace(page, 'Week 1: Cells');
 
-    // Button to open Study sessions page
-    const sessionsBtn = page.getByRole('link', { name: 'Study sessions' });
-    await expect(sessionsBtn).toBeVisible();
-    await sessionsBtn.click();
-
-    await expect(page.getByRole('heading', { level: 1, name: 'Study sessions' })).toBeVisible();
+    const tabs = page.getByRole('navigation', { name: 'This module' });
+    await tabs.getByRole('link', { name: /^Sessions/ }).click();
     await expect(page).toHaveURL(/\/modules\/[^/]+\/sessions$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Week 1: Cells' })).toBeVisible();
+    await expect(tabs.getByRole('link', { name: /^Sessions/ })).toHaveAttribute('aria-current', 'page');
 
-    // Axe passes on study sessions page
+    // Axe passes on the sessions tab
     expect(await analyse(page), 'study sessions page').toEqual([]);
 
-    // Back button returns to the module page
-    const backLink = page.getByRole('link', { name: 'Back to Week 1: Cells' });
-    await expect(backLink).toBeVisible();
-    await backLink.click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Week 1: Cells' })).toBeVisible();
+    // The Topics tab returns to the module page
+    await tabs.getByRole('link', { name: /^Topics/ }).click();
     await expect(page).toHaveURL(/\/modules\/[^/]+$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Week 1: Cells' })).toBeVisible();
 });
 
 test('a note inside a module has an action menu whose options are fully visible and not covered', async ({ page }) => {

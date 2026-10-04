@@ -30,6 +30,8 @@
     </div>
     <ul class="nav-list">
         @foreach (\App\Study\Workspaces::SECTIONS as [$key, $label, $icon])
+            {{-- Notes & files is reached from Modules (All notes & files), not from here (docs/specs/vistud-2-blueprint.md §3.4). --}}
+            @continue($key === 'notes')
             <li>
                 <a href="{{ route('workspaces.show', $key === 'overview' ? $workspace->id : [$workspace->id, $key]) }}" class="nav-item" title="{{ $label }}" @if ($key === $section) aria-current="page" @endif>
                     <x-icon :name="$icon" /><span class="nav-label">{{ $label }}</span>

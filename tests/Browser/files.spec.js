@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { fileURLToPath } from 'node:url';
-import { foreignColours, makeStudentWithModules, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithModules, newHere, openTab, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
 
 /* Uploading files, and the file page (docs/specs/workspaces.md step 4). */
 
@@ -10,7 +10,7 @@ const phone = { width: 390, height: 844 };
 const fixture = (name) => fileURLToPath(new URL(`./fixtures/files/${name}`, import.meta.url));
 const dialog = (page) => page.locator('#structure-dialog');
 // Week 1's own page: its notes, files and links.
-const week1 = (page) => page.locator('main .item-list');
+const week1 = (page) => page.getByRole('list', { name: 'Notes, files and links' });
 const analyse = async (page) => (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
     .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
 
@@ -28,8 +28,7 @@ async function withFiles(page) {
     await page.getByRole('heading', { level: 1, name: 'Week 1: Cells' }).waitFor();
     await page.waitForLoadState('load');
 
-    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
-    await page.locator('#new-menu').getByRole('button', { name: 'Upload files' }).click();
+    await newHere(page, 'Upload files');
     await expect(dialog(page).getByRole('heading', { name: 'Upload files to Week 1: Cells' })).toBeVisible();
     // Chosen files go up one at a time, straight away (resources/js/uploader.js).
     await dialog(page).locator('input[data-upload-files]').setInputFiles([
@@ -137,8 +136,7 @@ test('a Markdown file is shown as it was meant to look, and opens as a note', as
     await withFiles(page);
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toBeHidden();
-    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
-    await page.locator('#new-menu').getByRole('button', { name: 'Upload files' }).click();
+    await newHere(page, 'Upload files');
     await dialog(page).locator('input[data-upload-files]').setInputFiles({
         name: 'Cells.md',
         mimeType: 'text/markdown',
@@ -210,5 +208,6 @@ test('Take notes opens the file\'s own note beside it, in the same place, and mo
     await page.getByRole('link', { name: 'Take notes' }).click();
     await expect(pane.locator('.ProseMirror')).toContainText('Prophase comes first.');
     await page.getByRole('link', { name: 'Back to Week 1: Cells' }).click();
+    await openTab(page, 'Notes');
     await expect(week1(page).getByRole('link', { name: 'Lecture 2 - cell division (notes)' })).toHaveCount(1);
 });

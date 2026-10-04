@@ -188,9 +188,9 @@ class NotesScreenTest extends TestCase
 
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
             ->assertSeeInOrder(['Cells', '1 note']);
-        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id, 'tab' => 'notes']))
             ->assertOk()->assertSee('<title>Cells · Biology', false)
-            ->assertSeeInOrder(['Modules', 'Cells', 'New', 'Study this', 'Untitled note', 'Note · ']);
+            ->assertSeeInOrder(['Modules', 'Cells', 'Study this', 'New note', 'Untitled note', 'Note · ']);
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'notes']))
             ->assertOk()->assertSee('<title>Notes &amp; files · Biology', false)
             ->assertSeeInOrder(['New', 'Untitled note', 'Trash (0)']);

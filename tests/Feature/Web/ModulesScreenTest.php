@@ -160,7 +160,11 @@ class ModulesScreenTest extends TestCase
 
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
             ->assertOk()->assertSee('<title>Cells · Biology', false)
-            ->assertSeeInOrder(['Modules', 'Cells', 'New', 'Study this', 'Labs', '2 items'])
+            // The page template, then the tabs; Topics is the one open.
+            ->assertSeeInOrder(['Modules', 'Cells', 'Study this', 'Topics', 'Files', 'Notes', 'Questions', 'Sessions', 'Mitosis'])
+            ->assertDontSee('Labs');
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id, 'tab' => 'files']))
+            ->assertOk()->assertSeeInOrder(['Upload files', 'New folder', 'Add a link', 'Labs', '2 items'])
             ->assertSee(route('workspaces.folders.show', [$this->biology->id, $labs->id]), false);
 
         $this->actingAs($this->ada)->get(route('workspaces.folders.show', [$this->biology->id, $labs->id]))
@@ -173,17 +177,17 @@ class ModulesScreenTest extends TestCase
 
         // The module's topics, each to study; one added by hand lands in the module.
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
-            ->assertSeeInOrder(['Topics', '· 1', 'Mitosis', 'Not started', 'Study']);
+            ->assertSeeInOrder(['Topics', '1', 'Mitosis', 'Not started', 'Study']);
         $page = $this->place('module', $cells->id)->set('topicName', 'Meiosis')->call('addTopic')->assertSet('topicName', '')->assertSee('“Meiosis” is added.')
             ->set('topicName', 'mitosis')->call('addTopic')->assertHasErrors('topicName')->assertSee('The course has a topic with that name already.')
             ->set('topicName', '')->call('addTopic')->assertHasErrors('topicName');
         $meiosis = collect(app(Topics::class)->list($this->principal($this->ada), $this->biology->id))->firstWhere('name', 'Meiosis');
         $this->assertSame($cells->id, $meiosis->moduleId);
-        $page->call('studyTopic', $meiosis->id)->assertDispatched('study-start', moduleId: $cells->id, topicId: $meiosis->id);
+        $page->call('studyTopic', $meiosis->id)->assertDispatched('study-next', moduleId: $cells->id, topicId: $meiosis->id);
 
-        // "Study this" starts in the module; so does a folder inside it.
-        $this->place('module', $cells->id)->call('studyHere')->assertDispatched('study-start', moduleId: $cells->id);
-        $this->place('folder', $week2->id)->call('studyHere')->assertDispatched('study-start', moduleId: $cells->id);
+        // Study this ▾ → Whole module starts in the module with no dialog; so does a folder inside it.
+        $this->place('module', $cells->id)->call('studyModule')->assertDispatched('study-next', moduleId: $cells->id);
+        $this->place('folder', $week2->id)->call('studyModule')->assertDispatched('study-next', moduleId: $cells->id);
         $this->livewire(StudyTime::class)->call('newSession', $cells->id)->assertSet('moduleId', $cells->id)->assertSet('mode', 'start');
     }
 
