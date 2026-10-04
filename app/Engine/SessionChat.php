@@ -270,7 +270,7 @@ final class SessionChat
     {
         $system = $this->briefings->forSession($by, $session->id)->markdown;
         if ($withTools) {
-            $system .= "\n\n## Looking things up\n\nYou are inside ViStud's own chat, so you can look things up with the tools: the course's modules and topics, the student's questions, findings, assignments and their plans, the calendar, their notes and files, and earlier sessions. Use them whenever the student asks about their own things, instead of guessing: what a tool returns is what ViStud holds. When you state a fact from a note, say which note. If something isn't in ViStud, say so plainly. Files can't be read here yet; ask the student to share the part that matters.";
+            $system .= "\n\n## Looking things up\n\nYou are inside ViStud's own chat, so you can look things up with the tools: the course's modules and topics, the student's questions (all, or those on one topic or module), findings, assignments and their plans, the calendar, their notes and files, and earlier sessions (with what each used). Use them whenever the student asks about their own things, instead of guessing: what a tool returns is what ViStud holds. Before explaining a note or a topic, it's worth one look at the open questions on it. When you state a fact from a note, say which note. If something isn't in ViStud, say so plainly. Files can't be read here yet; ask the student to share the part that matters.";
         }
         if ($summary !== null && trim($summary) !== '') {
             $system .= "\n\n## Earlier in this chat\n\nThe chat's first part was folded to keep it short. What happened in it:\n\n".trim($summary);

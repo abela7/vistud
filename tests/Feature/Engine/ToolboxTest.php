@@ -76,6 +76,7 @@ class ToolboxTest extends TestCase
         app(Flashcards::class)->add($this->by, $this->databases->id, $this->joins, 'What does a left join keep?', 'Every left row.');
         $sessions = app(Sessions::class);
         $earlier = $sessions->start($this->by, $this->databases->id, $this->joins, $week2);
+        $sessions->toggleMaterial($this->by, $earlier->id, "note:{$note->id}");
         $sessions->setSummary($this->by, $earlier->id, 'We covered inner joins.');
         $sessions->setCheckpoint($this->by, $earlier->id, 'Stopped before outer joins.');
         $sessions->end($this->by, $earlier->id);
@@ -124,6 +125,11 @@ class ToolboxTest extends TestCase
         $this->assertSame([['Why does a left join keep unmatched rows?', 'stuck', 'Joins']], array_map(fn ($q) => [$q['question'], $q['status'], $q['topic']], $open));
         $all = json_decode($this->look('questions', ['which' => 'all']), true);
         $this->assertSame('A column that names a row.', $all[1]['answer']);
+        // Narrowed to a topic or a module.
+        $this->assertSame(['What is a key?'], array_column(json_decode($this->look('questions', ['which' => 'all', 'topic' => 'keys']), true), 'question'));
+        $this->assertSame(['Why does a left join keep unmatched rows?'], array_column(json_decode($this->look('questions', ['module' => 'week 2']), true), 'question'));
+        $this->assertStringContainsString('No open questions there.', $this->look('questions', ['topic' => 'keys']));
+        $this->assertStringContainsString('no topic called "Monads"', $this->look('questions', ['topic' => 'Monads']));
 
         $findings = json_decode($this->look('findings', ['topic' => 'joins']), true);
         $this->assertSame(['Joins', 'A left join keeps every row of the left table.', 'a study session'], [$findings[0]['topic'], $findings[0]['finding'], $findings[0]['by']]);
@@ -165,7 +171,7 @@ class ToolboxTest extends TestCase
 
         $sessions = json_decode($this->look('earlier_sessions'), true);
         $this->assertCount(1, $sessions);
-        $this->assertSame(['2026-10-05', 'Joins', 'We covered inner joins.', 'Stopped before outer joins.'], [$sessions[0]['on'], $sessions[0]['topic'], $sessions[0]['summary'], $sessions[0]['checkpoint']]);
+        $this->assertSame(['2026-10-05', 'Joins', 'We covered inner joins.', 'Stopped before outer joins.', ['the note "Lecture 3: joins"']], [$sessions[0]['on'], $sessions[0]['topic'], $sessions[0]['summary'], $sessions[0]['checkpoint'], $sessions[0]['used']]);
     }
 
     public function test_an_unknown_tool_is_named_and_another_students_things_are_not_found(): void

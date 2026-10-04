@@ -20,20 +20,44 @@ final class QuestionsTool implements Tool
 
     public function description(): string
     {
-        return 'The questions the student wrote down while studying: by default the open ones (stuck first, then pending), or all of them with their answers. Use it to pick up what they still don\'t get.';
+        return 'The questions the student wrote down while studying: by default the open ones (stuck first, then pending), or all of them with their answers; narrowed to one topic or one module when asked. Use it to pick up what they still don\'t get, before explaining a note or a topic.';
     }
 
     public function parameters(): array
     {
-        return ['type' => 'object', 'properties' => ['which' => ['type' => 'string', 'enum' => ['open', 'all'], 'description' => 'open (the default) or all']], 'additionalProperties' => false];
+        return ['type' => 'object', 'properties' => [
+            'which' => ['type' => 'string', 'enum' => ['open', 'all'], 'description' => 'open (the default) or all'],
+            'topic' => ['type' => 'string', 'description' => 'A topic\'s name (or part of it) to limit to.'],
+            'module' => ['type' => 'string', 'description' => 'A module\'s title (or part of it) to limit to.'],
+        ], 'additionalProperties' => false];
     }
 
     public function run(Principal $by, Context $context, array $input): string
     {
         $all = ($input['which'] ?? 'open') === 'all';
-        $topics = collect($this->topics->list($by, $context->workspaceId))->pluck('name', 'id');
-        $modules = collect($this->modules->list($by, $context->workspaceId))->pluck('title', 'id');
-        $list = array_values(array_filter($this->questions->list($by, $context->workspaceId), fn ($q) => $all || $q->status !== 'answered'));
+        $topicList = $this->topics->list($by, $context->workspaceId);
+        $moduleList = $this->modules->list($by, $context->workspaceId);
+        $topics = collect($topicList)->pluck('name', 'id');
+        $modules = collect($moduleList)->pluck('title', 'id');
+        $onlyTopic = null;
+        if (($wanted = Lookup::text($input, 'topic')) !== null) {
+            $topic = Lookup::one($topicList, $wanted, fn ($t) => $t->name, 'topic');
+            if (is_string($topic)) {
+                return $topic;
+            }
+            $onlyTopic = $topic->id;
+        }
+        $onlyModule = null;
+        if (($wanted = Lookup::text($input, 'module')) !== null) {
+            $module = Lookup::one($moduleList, $wanted, fn ($m) => $m->title, 'module');
+            if (is_string($module)) {
+                return $module;
+            }
+            $onlyModule = $module->id;
+        }
+        $list = array_values(array_filter($this->questions->list($by, $context->workspaceId), fn ($q) => ($all || $q->status !== 'answered')
+            && ($onlyTopic === null || $q->topicId === $onlyTopic)
+            && ($onlyModule === null || $q->moduleId === $onlyModule || ($q->topicId !== null && ($topicList[array_search($q->topicId, array_column($topicList, 'id'), true)]->moduleId ?? null) === $onlyModule))));
         usort($list, fn ($a, $b) => [$b->status === 'stuck', $a->status === 'answered', $b->askedAt] <=> [$a->status === 'stuck', $b->status === 'answered', $a->askedAt]);
         $rows = [];
         foreach (array_slice($list, 0, 40) as $q) {
@@ -48,6 +72,8 @@ final class QuestionsTool implements Tool
             ]);
         }
 
-        return $rows === [] ? ($all ? 'No questions written down yet.' : 'No open questions.') : Lookup::json($rows);
+        $where = $onlyTopic !== null || $onlyModule !== null ? ' there' : '';
+
+        return $rows === [] ? ($all ? "No questions written down{$where} yet." : "No open questions{$where}.") : Lookup::json($rows);
     }
 }
