@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithSession, newHere, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithSession, newHere, openStudentHome, openTab, THEMES, useSentinelTheme, useTheme } from './support.js';
 
-/* Questions in a study session, on a module's page, and each on a page of its own (docs/specs/study-memory.md §3). */
+/* Questions on a module's Questions tab, asked from a session's + menu, and each on a page of its own (docs/specs/study-memory.md §3). */
 
 const desktop = { width: 1440, height: 900 };
 const phone = { width: 390, height: 844 };
@@ -23,50 +23,53 @@ async function openSession(page) {
     return student;
 }
 
-async function ask(page, text) {
-    // A page of its own; saving comes back to the session.
-    await page.getByRole('button', { name: 'Ask a question', exact: true }).click();
-    await page.getByRole('heading', { level: 1, name: 'New question' }).waitFor();
-    await words(page).fill(text);
-    await page.getByRole('button', { name: 'Save' }).click();
-    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
-    // Folded away until opened, but there.
-    await expect(page.locator('ul[aria-label="Questions"]')).toContainText(text);
-}
-
-/** In a session the questions are folded under their heading until opened. */
-async function unfold(page) {
-    const toggle = page.getByRole('button', { name: /^Questions/ });
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.getByRole('list', { name: 'Questions' })).toBeHidden();
-    await toggle.click();
-    await expect(page.getByRole('list', { name: 'Questions' })).toBeVisible();
-}
-
-async function withQuestions(page) {
-    const student = await openSession(page);
-    await ask(page, 'Why does a left join keep rows with no match?');
-    await ask(page, 'What is the difference between a key and an index?');
-    await expect(page.getByRole('button', { name: 'Ask a question', exact: true })).toHaveAccessibleDescription('3 questions open');
-    await unfold(page);
+/** The module's Questions tab: the questions of a session are there, not in the session. */
+async function openQuestions(page) {
+    const student = makeStudentWithSession();
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/modules`);
+    await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
+    await page.waitForLoadState('load');
+    await openTab(page, 'Questions');
+    await page.getByRole('list', { name: 'Questions' }).waitFor();
     return student;
 }
 
-test('a question written in a session is in its module, and gets answered there', async ({ page }) => {
+async function ask(page, text) {
+    // A page of its own; saving comes back to the module's questions.
+    await page.getByRole('link', { name: 'New question' }).first().click();
+    await page.getByRole('heading', { level: 1, name: 'New question' }).waitFor();
+    await words(page).fill(text);
+    await page.getByRole('button', { name: 'Save' }).click();
+    await page.getByRole('list', { name: 'Questions' }).waitFor();
+    await expect(page.getByRole('list', { name: 'Questions' })).toContainText(text);
+}
+
+async function withQuestions(page) {
+    const student = await openQuestions(page);
+    await ask(page, 'Why does a left join keep rows with no match?');
+    await ask(page, 'What is the difference between a key and an index?');
+    await expect(page.getByRole('list', { name: 'Questions' }).getByRole('listitem')).toHaveCount(3);
+    return student;
+}
+
+test('a question is kept from a session, is on the module\'s Questions tab, and gets answered there', async ({ page }) => {
     await page.setViewportSize(desktop);
-    const student = await withQuestions(page);
+    // The session no longer carries a board: the questions are on the module's Questions tab (a session's + menu keeps one there).
+    const session = await openSession(page);
+    await expect(page.getByRole('list', { name: 'Questions' })).toHaveCount(0);
+    await page.goto(`/workspaces/${session.workspace}/modules`);
+    await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
+    await page.waitForLoadState('load');
+    await openTab(page, 'Questions');
+    await ask(page, 'Why does a left join keep rows with no match?');
+    await ask(page, 'What is the difference between a key and an index?');
     const questions = page.getByRole('list', { name: 'Questions' });
     await page.getByRole('button', { name: 'Actions for What is the difference between a key and an index?' }).click();
     await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Stuck' }).click();
     await expect(questions.getByRole('listitem').first()).toContainText('Stuck');
-
-    await page.goto(`/workspaces/${student.workspace}/modules`);
-    await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
-    await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
-    // The module's page links to its questions; they have their own page.
-    await expect(page.getByRole('list', { name: 'Questions' })).toHaveCount(0);
-    await page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: /^Questions/ }).click();
-    await page.getByRole('list', { name: 'Questions' }).waitFor();
     await page.waitForLoadState('load');
     const onModule = page.getByRole('list', { name: 'Questions' });
     await expect(onModule).toContainText('Why does a left join keep rows with no match?');
@@ -95,7 +98,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await page.setViewportSize(viewport);
         await withQuestions(page);
         await useSentinelTheme(page);
-        const states = { session: await foreignColours(page) };
+        const states = { 'questions tab': await foreignColours(page) };
         // A page moved to in place brings its own theme: the sentinel goes on again for each.
         await page.getByRole('list', { name: 'Questions' }).getByRole('link', { name: 'Why does a left join keep rows with no match?', exact: true }).click();
         await page.getByRole('heading', { level: 1, name: 'Question' }).waitFor();
@@ -119,7 +122,7 @@ for (const theme of THEMES) {
         await page.setViewportSize(desktop);
         await withQuestions(page);
         await useTheme(page, theme);
-        expect(await analyse(page), 'session').toEqual([]);
+        expect(await analyse(page), 'questions tab').toEqual([]);
         await page.getByRole('list', { name: 'Questions' }).getByRole('link', { name: 'Why does a left join keep rows with no match?', exact: true }).click();
         await page.getByRole('heading', { level: 1, name: 'Question' }).waitFor();
         await page.waitForLoadState('load');

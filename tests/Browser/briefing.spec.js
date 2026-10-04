@@ -1,8 +1,11 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithSession, makeStudentWithTopics, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, fromSessionMenu, makeStudentWithSession, makeStudentWithTopics, openStudentHome, THEMES, turnOnCopyPaste, useSentinelTheme, useTheme } from './support.js';
 
-/* Teaching choices, material and the briefing any AI receives (docs/specs/study-memory.md §4.3). */
+/*
+ * Teaching choices, material and the briefing any AI receives (docs/specs/study-memory.md §4.3). The briefing is for a
+ * student who uses another AI by copy-paste: its menu items are hidden until they say so in their AI settings.
+ */
 
 const desktop = { width: 1440, height: 900 };
 const phone = { width: 390, height: 844 };
@@ -15,6 +18,7 @@ test.describe.configure({ timeout: 60_000 });
 
 async function openSession(page) {
     const student = makeStudentWithSession();
+    turnOnCopyPaste(student.email);
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
@@ -23,13 +27,12 @@ async function openSession(page) {
 }
 
 async function openBriefing(page) {
-    await page.getByRole('button', { name: 'Another AI', exact: true }).click();
-    await dialog(page).getByRole('heading', { name: 'Study with an AI' }).waitFor();
+    await fromSessionMenu(page, 'Briefing for another AI');
+    await dialog(page).getByRole('heading', { name: 'Briefing for another AI' }).waitFor();
 }
 
 async function openTeaching(page) {
-    await page.getByRole('button', { name: 'Actions for this session' }).click();
-    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'How the AI teaches' }).click();
+    await fromSessionMenu(page, 'How the AI teaches');
     await dialog(page).getByLabel('How to teach').waitFor();
 }
 
@@ -38,14 +41,13 @@ test('the briefing is copied and downloaded, with the note the student chose', a
     await page.setViewportSize(desktop);
     await openSession(page);
 
-    await page.getByRole('button', { name: 'Notes & files', exact: true }).click();
-    const use = dialog(page).getByRole('button', { name: 'Use Lecture 3: joins in the briefing' });
+    // The rail lists the module's material; "Use" there gives a note to the tutor, and so to the briefing.
+    const rail = page.getByRole('complementary', { name: /Topics, material/ });
+    const use = rail.getByRole('button', { name: 'The tutor reads Lecture 3: joins' });
     await expect(use).toHaveAttribute('aria-pressed', 'false');
     await use.click();
     await expect(use).toHaveAttribute('aria-pressed', 'true');
-    await dialog(page).getByRole('button', { name: 'Done' }).click();
-    await dialog(page).waitFor({ state: 'hidden' });
-    await expect(page.getByRole('button', { name: 'Notes & files', exact: true })).toHaveAccessibleDescription('1 for the AI');
+    await expect(rail.getByRole('button', { name: /^All 1 · 1 for the tutor/ })).toBeVisible();
 
     await openBriefing(page);
     const text = dialog(page).getByLabel('Briefing text');
@@ -64,6 +66,7 @@ test('the briefing is copied and downloaded, with the note the student chose', a
 test('how the AI teaches is chosen at the start and changed during the session', async ({ page }) => {
     await page.setViewportSize(desktop);
     const student = makeStudentWithTopics();
+    turnOnCopyPaste(student.email);
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}`);
     await page.waitForLoadState('load');

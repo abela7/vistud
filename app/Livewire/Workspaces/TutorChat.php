@@ -21,6 +21,7 @@ use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
+use App\Study\TopicDetails;
 use App\Study\Topics;
 use Closure;
 use Illuminate\Contracts\View\View;
@@ -43,6 +44,15 @@ final class TutorChat extends Component
         'Explain this topic to me simply, one part at a time.',
         'Quiz me on what I should know by now.',
     ];
+
+    /** The chips above the box: one tap asks the tutor for the thing, so nothing is typed. */
+    public const ACTIONS = [
+        'cards' => ['Cards', 'gallery-vertical-end', 'Make flashcards of what we just covered.'],
+        'note' => ['Note this', 'notebook-pen', 'Write what we just covered in my study note.'],
+        'where' => ['Where are we', 'flag', 'Where are we? What is done and what is left?'],
+    ];
+
+    public const TEST_ASK = 'Test me on this whole module: ten exam-level questions, one at a time, and score me at the end.';
 
     /** How often the answer so far is sent to the browser while it streams, in seconds. */
     private const EVERY = 0.08;
@@ -94,11 +104,14 @@ final class TutorChat extends Component
         // A session that ended without its wrap-up (it ended by itself, or the engine was down) gets it once, here.
         $by = $this->principal();
         $session = $this->sessions->find($by, $sessionId);
-        // Study this ▾ → Quiz me or Test me on the module page: the ask waits in the message box for the student to send.
-        if ($session->isOpen() && in_array($ask = request()->query('ask'), ['quiz', 'test'], true)) {
+        // A quiz or a test starts with its ask waiting in the message box, for the student to send (Study this ▾ on the
+        // module page, or `?ask=`): the tutor asks nothing before they do.
+        $ask = request()->query('ask');
+        $ask = in_array($ask, ['quiz', 'test'], true) ? $ask : (in_array($session->mode, ['quiz', 'test'], true) && $this->chat->transcript($by, $sessionId) === [] ? $session->mode : null);
+        if ($session->isOpen() && $ask !== null) {
             $this->text = $ask === 'quiz'
                 ? ($this->quizzes($by, $session)[0]['text'] ?? 'Quiz me on what I find hardest in this course.')
-                : 'Test me on this whole module: ten exam-level questions, one at a time, and score me at the end.';
+                : self::TEST_ASK;
         }
         if (! $session->isOpen()) {
             try {
@@ -125,7 +138,7 @@ final class TutorChat extends Component
     public function say(string $text): void
     {
         $by = $this->principal();
-        if (! in_array($text, [...self::SUGGESTIONS, ...array_column($this->quizzes($by, $this->sessions->find($by, $this->sessionId)), 'text')], true)) {
+        if (! in_array($text, [...self::SUGGESTIONS, self::TEST_ASK, ...array_column(self::ACTIONS, 2), ...array_column($this->quizzes($by, $this->sessions->find($by, $this->sessionId)), 'text')], true)) {
             $this->dispatch('chat-done', restore: null);
 
             return;
@@ -151,6 +164,38 @@ final class TutorChat extends Component
         $this->dispatch('capture-open', text: implode("\n\n", $texts));
     }
 
+    /** The tutor's proposed status for a topic, accepted with a tap: from now on it is the student's word. */
+    public function applyStatus(string $topicId, string $status): void
+    {
+        $by = $this->principal();
+        $this->sessions->find($by, $this->sessionId);
+        if (! in_array($status, Topics::STATUSES, true)) {
+            return;
+        }
+        try {
+            $this->topics->report($by, $topicId, $status);
+        } catch (NotFound) {
+            return;
+        }
+        $this->dispatch('session-changed');
+    }
+
+    /** Takes back a status the tutor set: the topic goes back to what it was, unless the student has said something since. */
+    public function undoStatus(string $topicId): void
+    {
+        $by = $this->principal();
+        $last = $this->chat->activity($by, $this->sessionId)['statuses'][$topicId] ?? null;
+        if (! is_array($last) || ($last['applied'] ?? false) !== true || ! is_array($last['before'] ?? null)) {
+            return;
+        }
+        try {
+            $this->topics->unmark($by, $topicId, $last['before']);
+        } catch (NotFound) {
+            return;
+        }
+        $this->dispatch('session-changed');
+    }
+
     public function render(): View
     {
         $by = $this->principal();
@@ -160,6 +205,8 @@ final class TutorChat extends Component
         $spent = $this->chat->spent($by, $this->sessionId);
         $ready = $this->settings->keyAvailable($by) && $choices->ready();
         $marked = false;
+        $hasStatuses = array_filter($turns, fn (array $t) => ($t['statuses'] ?? []) !== []) !== [];
+        $topicsNow = $hasStatuses ? array_column($this->topics->list($by, $session->workspaceId), null, 'id') : [];
         foreach ($turns as &$turn) {
             $turn['attachments'] = array_map(fn (array $a) => $a + ['url' => $this->urlOf($a['ref']), 'icon' => self::ICONS[$a['kind']] ?? 'file'], $turn['attachments']);
             if ($turn['role'] === 'assistant') {
@@ -169,6 +216,7 @@ final class TutorChat extends Component
                 $turn['looked'] = array_values(array_unique(array_map(Toolbox::words(...), array_filter($turn['tools'], fn (string $tool) => ! Toolbox::writes($tool)))));
                 $turn['savedWords'] = self::savedWords($turn['saved'] ?? []);
                 $turn['notes'] = array_map(fn (array $note) => $note + ['url' => route('workspaces.notes.show', [$this->workspaceId, $note['id'], 'window' => 1])], $turn['notes'] ?? []);
+                $turn['marks'] = self::marks($turn['statuses'] ?? [], $topicsNow);
             }
         }
         unset($turn);
@@ -182,6 +230,10 @@ final class TutorChat extends Component
             'waiting' => $session->isOpen() && $ready && $this->chat->waiting($by, $this->sessionId),
             'spentWords' => Choices::dollars($spent['session']).($spent['session_cap'] > 0 ? ' of '.Choices::dollars($spent['session_cap']) : '').' this session',
             'suggestions' => self::SUGGESTIONS,
+            'actions' => self::ACTIONS,
+            'testAsk' => self::TEST_ASK,
+            'mode' => $session->mode,
+            'hasModule' => $this->moduleOf($by, $session) !== null,
             'attachable' => $ready && $session->isOpen() ? $this->attachable($by, $session) : ['module' => null, 'items' => []],
             'account' => (string) auth()->id(),
             'upload' => [
@@ -197,8 +249,37 @@ final class TutorChat extends Component
         ]);
     }
 
+    /**
+     * The statuses the tutor set or proposed in a turn, as chips that say where each stands now: marked by the tutor (with
+     * an undo), accepted (the student's word now), taken back, or still only a suggestion (with a tap to accept it).
+     *
+     * @param  list<array<string, mixed>>  $statuses
+     * @param  array<string, TopicDetails>  $topics
+     * @return list<array{topic_id: string, topic: string, to: string, words: string, state: string, reason: ?string}>
+     */
+    private static function marks(array $statuses, array $topics): array
+    {
+        $words = ['covered' => 'covered', 'understood' => 'understood', 'confused' => 'still confusing'];
+        $marks = [];
+        foreach ($statuses as $s) {
+            $now = $topics[$s['topic_id']] ?? null;
+            if ($now === null || ! isset($words[$s['to']])) {
+                continue;
+            }
+            $state = match (true) {
+                $s['applied'] && $now->status === $s['to'] && $now->byTutor() => 'marked',
+                $now->status === $s['to'] => 'accepted',
+                $s['applied'] => 'undone',
+                default => 'proposed',
+            };
+            $marks[] = ['topic_id' => $s['topic_id'], 'topic' => $s['topic'], 'to' => $s['to'], 'words' => $words[$s['to']], 'state' => $state, 'reason' => $s['reason'] ?? null];
+        }
+
+        return $marks;
+    }
+
     /** "3 flashcards, 1 key point, 2 new topics": what a turn saved in the course. */
-    private static function savedWords(array $saved): ?string
+    public static function savedWords(array $saved): ?string
     {
         $words = ['flashcard' => ['flashcard', 'flashcards'], 'finding' => ['key point', 'key points'], 'question' => ['question', 'questions'], 'topic' => ['new topic', 'new topics']];
         $parts = [];

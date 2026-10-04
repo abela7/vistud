@@ -404,6 +404,13 @@ student presses **Add all** or picks some. A module's tutor layer (layer 4, buil
 the key points (eight at most) and the last session's checkpoint; the tutor's `module_files` look-up (also the
 helper's) returns the full digest of a module's files, so it knows what a file holds before it opens it with `read_file`.
 
+**The tutor keeps the topics' statuses and quizzes** (2026-10-07). Two tools: `set_topic_status` (covered, understood or confusing, with the
+reason) and `record_quiz` (a quiz or test, once, after its score is told). With *Let the tutor mark topics* on, a status is set at
+once, shown as the tutor's (`topics.status_by`) with an **Undo** chip in the chat; with it off, it only appears as a suggestion with a
+**Mark it** tap. The student's own word on a topic always wins: the tutor can't change it, only suggest. A tutor-set status is a
+row, not journal evidence. A test proposes each topic's status from its score. A session's *mode* (whole module, one topic, quiz, test,
+free) is one line in the session layer, and the rules have a short paragraph for each.
+
 **The chat** (`App\Engine\SessionChat`; `engine_threads`,
 `engine_messages`): one per study session. A turn sends the standing context built in layers
 (`App\Engine\Context\Stack`: the tutor's rules from

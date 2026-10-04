@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { loginToChallenge, makeNamedStudent, makeStudentWithCards, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithPomodoro, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, newHere, openAccounts, openAdminOverview, openConfirmPassword, openStudentHome, openTwoFactorSetup, startTwoFactorSetup, totp, useTheme } from './support.js';
+import { fromSessionMenu, loginToChallenge, makeNamedStudent, makeStudentWithCards, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithPomodoro, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, newHere, openAccounts, openAdminOverview, openConfirmPassword, openStudentHome, openTab, openTwoFactorSetup, startTwoFactorSetup, totp, turnOnCopyPaste, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -624,7 +624,7 @@ test('overview: the rhythm, what to continue, coming up, and its dialogs', async
     await page.screenshot({ path: out('overview-desktop-vistud-light-instructions') });
 });
 
-test('session: an open space with a slim clock, what to do next, the end dialog, and starting one', async ({ page }) => {
+test('session: the conversation with its rail, the end screen, and starting one', async ({ page }) => {
     const student = makeStudentWithSession();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
@@ -641,11 +641,11 @@ test('session: an open space with a slim clock, what to do next, the end dialog,
     }
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
-    await page.getByRole('button', { name: 'End session' }).click();
+    await page.getByRole('button', { name: 'End', exact: true }).click();
     await page.locator('#session-dialog').getByLabel('Understood').check();
     await page.screenshot({ path: out('session-desktop-vistud-light-end') });
     await page.locator('#session-dialog').getByRole('button', { name: 'End session' }).click();
-    await page.getByRole('status').filter({ hasText: 'Session ended.' }).waitFor();
+    await page.locator('#session-dialog').getByRole('heading', { name: 'Session ended' }).waitFor();
     await page.evaluate(() => document.activeElement?.blur());
     await page.screenshot({ path: out('session-desktop-vistud-light-ended') });
 
@@ -656,57 +656,26 @@ test('session: an open space with a slim clock, what to do next, the end dialog,
     await page.screenshot({ path: out('session-desktop-vistud-light-start') });
 });
 
-test('questions: the board in a session and the side panel', async ({ page }) => {
+test('questions: the module\'s Questions tab and the side panel', async ({ page }) => {
     const student = makeStudentWithSession();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
-    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
-    await page.waitForLoadState('load');
-    const questions = page.getByRole('list', { name: 'Questions' });
-    for (const text of ['Why does a left join keep rows with no match?', 'What is the difference between a key and an index?', 'When would I use a full outer join?']) {
-        await page.getByRole('button', { name: 'Ask a question', exact: true }).click();
-        await page.locator('#question-dialog').getByLabel('Question', { exact: true }).fill(text);
-        await page.locator('#question-dialog').getByRole('button', { name: 'Save' }).click();
-        await page.locator('#question-dialog').waitFor({ state: 'hidden' });
-    }
-    // In a session they're folded until opened.
-    await page.screenshot({ path: out('questions-session-desktop-vistud-light-folded') });
-    await page.getByRole('button', { name: /^Questions/ }).click();
-    await questions.getByRole('button', { name: 'When would I use a full outer join?', exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Actions for What is the difference between a key and an index?' }).click();
-    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Stuck' }).click();
-    await questions.getByRole('listitem').first().filter({ hasText: 'Stuck' }).waitFor();
-    await page.getByRole('button', { name: 'Actions for Why does a left join keep rows with no match?' }).click();
-    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Answered' }).click();
-    const panel = page.locator('#question-dialog');
-    await panel.getByRole('textbox', { name: /^Answer/ }).fill('A LEFT JOIN keeps every row on the left and fills the columns from the right with NULL where nothing matches.');
-    await page.screenshot({ path: out('questions-desktop-vistud-light-answer') });
-    await panel.getByRole('button', { name: 'Save' }).click();
-    await panel.waitFor({ state: 'hidden' });
-    const board = page.locator('section').filter({ has: questions });
-    for (const [size, viewport] of Object.entries(sizes)) {
-        for (const theme of ['vistud-light', 'vistud-dark']) {
-            await page.setViewportSize(viewport);
-            await useTheme(page, theme);
-            await page.evaluate(() => document.activeElement?.blur());
-            await board.screenshot({ path: out(`questions-${size}-${theme}`) });
-        }
-    }
-    await page.setViewportSize(sizes.mobile);
-    await useTheme(page, 'vistud-light');
-    await questions.getByRole('button', { name: 'What is the difference between a key and an index?', exact: true }).click();
-    await panel.getByLabel('Question', { exact: true }).waitFor();
-    await page.screenshot({ path: out('questions-mobile-vistud-light-panel') });
-    await page.keyboard.press('Escape');
-
-    // A module's questions on their own page.
     await page.goto(`/workspaces/${student.workspace}/modules`);
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
-    await page.locator('main').getByRole('link', { name: /^Questions/ }).click();
-    await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
     await page.waitForLoadState('load');
+    await openTab(page, 'Questions');
+    const questions = page.getByRole('list', { name: 'Questions' });
+    await questions.waitFor();
+    for (const text of ['Why does a left join keep rows with no match?', 'What is the difference between a key and an index?', 'When would I use a full outer join?']) {
+        await page.getByRole('link', { name: 'New question' }).first().click();
+        await page.getByLabel("What don't you get?").fill(text);
+        await page.getByRole('button', { name: 'Save' }).click();
+        await questions.waitFor();
+    }
+    await page.getByRole('button', { name: 'Actions for What is the difference between a key and an index?' }).click();
+    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Stuck' }).click();
+    await questions.getByRole('listitem').first().filter({ hasText: 'Stuck' }).waitFor();
     for (const [size, viewport] of Object.entries(sizes)) {
         for (const theme of ['vistud-light', 'vistud-dark']) {
             await page.setViewportSize(viewport);
@@ -762,8 +731,7 @@ test('pomodoro: the countdown ring, a break, and the clock choice', async ({ pag
     await page.evaluate(() => document.activeElement?.blur());
     await page.screenshot({ path: out('pomodoro-desktop-vistud-light-break') });
 
-    await page.getByRole('button', { name: 'Actions for this session' }).click();
-    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Pomodoro settings' }).click();
+    await fromSessionMenu(page, 'Pomodoro settings');
     await page.locator('#session-dialog').getByLabel('Rhythm').selectOption('custom');
     await page.locator('#session-dialog').getByLabel('Focus (min)').waitFor();
     await page.screenshot({ path: out('pomodoro-desktop-vistud-light-settings') });
@@ -771,15 +739,17 @@ test('pomodoro: the countdown ring, a break, and the clock choice', async ({ pag
 
 test('briefing: the dialog, how the AI teaches, and the start options', async ({ page }) => {
     const student = makeStudentWithSession();
+    turnOnCopyPaste(student.email);
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     await useTheme(page, 'vistud-light');
-    await page.getByRole('button', { name: 'Notes & files', exact: true }).click();
-    await page.getByRole('button', { name: 'Use Lecture 3: joins in the briefing' }).click();
-    await page.getByRole('button', { name: 'Use Lecture 3: joins in the briefing' }).and(page.locator('[aria-pressed="true"]')).waitFor();
+    // Material: the rail's Use, and the full list in its panel.
+    await page.getByRole('complementary', { name: /Topics, material/ }).getByRole('button', { name: 'The tutor reads Lecture 3: joins' }).click();
+    await page.getByRole('complementary', { name: /Topics, material/ }).getByRole('button', { name: /^All 1/ }).click();
+    await page.locator('#session-dialog').getByRole('heading', { name: 'Material for the tutor' }).waitFor();
     await page.evaluate(() => document.activeElement?.blur());
     await page.screenshot({ path: out('briefing-material-desktop-vistud-light') });
     await page.setViewportSize(sizes.mobile);
@@ -792,18 +762,17 @@ test('briefing: the dialog, how the AI teaches, and the start options', async ({
         for (const theme of ['vistud-light', 'vistud-dark']) {
             await page.setViewportSize(viewport);
             await useTheme(page, theme);
-            await page.getByRole('button', { name: 'Another AI', exact: true }).click();
-            await page.locator('#session-dialog').getByRole('heading', { name: 'Study with an AI' }).waitFor();
+            await fromSessionMenu(page, 'Briefing for another AI');
+            await page.locator('#session-dialog').getByRole('heading', { name: 'Briefing for another AI' }).waitFor();
             await page.screenshot({ path: out(`briefing-${size}-${theme}`) });
             await page.keyboard.press('Escape');
-            await page.locator('#session-dialog').getByRole('heading', { name: 'Study with an AI' }).waitFor({ state: 'detached' });
+            await page.locator('#session-dialog').getByRole('heading', { name: 'Briefing for another AI' }).waitFor({ state: 'detached' });
         }
     }
 
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
-    await page.getByRole('button', { name: 'Actions for this session' }).click();
-    await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'How the AI teaches' }).click();
+    await fromSessionMenu(page, 'How the AI teaches');
     await page.locator('#session-dialog').getByLabel('How to teach').selectOption({ label: 'Socratic' });
     await page.screenshot({ path: out('briefing-teaching-desktop-vistud-light') });
     await page.keyboard.press('Escape');
@@ -812,9 +781,9 @@ test('briefing: the dialog, how the AI teaches, and the start options', async ({
     await page.waitForLoadState('load');
     await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
     await page.locator('.session-pill').getByRole('link').click();
-    await page.getByRole('button', { name: 'End session' }).click();
+    await page.getByRole('button', { name: 'End', exact: true }).click();
     await page.locator('#session-dialog').getByRole('button', { name: 'End session' }).click();
-    await page.getByRole('status').filter({ hasText: 'Session ended.' }).waitFor();
+    await page.locator('#session-dialog').getByRole('heading', { name: 'Session ended' }).waitFor();
     await page.goto(`/workspaces/${student.workspace}`);
     await page.getByRole('button', { name: /^More for / }).click();
     await page.getByRole('button', { name: 'Study with options' }).click();
@@ -834,13 +803,14 @@ test('save from the chat: paste, review, and the session afterwards', async ({ p
 <checkpoint>Slide 7 of 12. Covered left joins; next is self joins.</checkpoint>
 <summary>We covered inner and left joins. Left joins went well; NULLs were confusing at first.</summary>
 <status topic="Joins" proposed="understood">Answered the apply question right, unaided.</status>`;
+    turnOnCopyPaste(student.email);
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     await useTheme(page, 'vistud-light');
-    await page.getByRole('button', { name: 'Save from the chat' }).click();
+    await fromSessionMenu(page, 'Save from another AI');
     await page.locator('#capture-dialog').getByLabel("The tutor's replies").fill(chat);
     await page.screenshot({ path: out('capture-desktop-vistud-light-paste') });
     await page.locator('#capture-dialog').getByRole('button', { name: 'Find the marks' }).click();
@@ -856,7 +826,7 @@ test('save from the chat: paste, review, and the session afterwards', async ({ p
     await useTheme(page, 'vistud-light');
     await page.locator('#capture-dialog').getByRole('checkbox', { name: /^Set Joins to understood/ }).check();
     await page.locator('#capture-dialog').getByRole('button', { name: /^Save \d+$/ }).click();
-    await page.getByRole('region', { name: 'From the tutor' }).waitFor();
+    await page.getByRole('status').filter({ hasText: 'Saved' }).waitFor();
     await page.evaluate(() => document.activeElement?.blur());
     await page.screenshot({ path: out('capture-desktop-vistud-light-saved'), fullPage: true });
 });

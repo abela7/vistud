@@ -53,14 +53,17 @@ class SessionsTest extends TestCase
         $module = app(Modules::class)->create($this->by, $this->databases->id, ['title' => 'Week 2: joins']);
         $joins = $topics->create($this->by, $this->databases->id, 'Joins', $module->id);
 
-        // Not said: a topic means topic, a module alone the whole module, neither free.
+        // Not said: a module alone is the whole module, anything else a topic (the tutor proposes one when none is chosen).
         $byTopic = $this->sessions->start($this->by, $this->databases->id, $joins->id);
         $this->assertSame('topic', $byTopic->mode);
         $this->sessions->end($this->by, $byTopic->id);
         $whole = $this->sessions->start($this->by, $this->databases->id, null, $module->id);
         $this->assertSame('module', $whole->mode);
         $this->sessions->end($this->by, $whole->id);
-        $free = $this->sessions->start($this->by, $this->databases->id);
+        $bare = $this->sessions->start($this->by, $this->databases->id);
+        $this->assertSame('topic', $bare->mode);
+        $this->sessions->end($this->by, $bare->id);
+        $free = $this->sessions->start($this->by, $this->databases->id, null, null, null, null, 'free');
         $this->assertSame('free', $free->mode);
         $this->sessions->end($this->by, $free->id);
 

@@ -58,9 +58,13 @@ class SessionScreensTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$this->databases->id, $this->current()->id]))
             ->assertOk()
             ->assertSee('<title>Study session · Databases', false)
-            ->assertSeeInOrder(['Joins', 'Started Mon 5 Oct, 09:00', 'Studying', '0:00:00', 'Pause', 'Take a break', 'End session'])
-            ->assertSeeInOrder(['Another AI', 'Save from the chat', 'Ask a question', 'New flashcard', 'Write a note', 'Notes &amp; files'], false)
-            ->assertDontSee('What happened')
+            ->assertSeeInOrder(['Joins', 'Started Mon 5 Oct, 09:00', 'Studying', '0:00:00', 'Pause', 'End'])
+            // The ⋯ menu holds the settings; the copy-paste tools are hidden until the student says they use another AI.
+            ->assertSeeInOrder(['How the AI teaches', 'Use the Pomodoro clock', 'Take a break', 'Delete session'])
+            ->assertDontSee('Briefing for another AI')->assertDontSee('Save from another AI')
+            // The tiles, the questions board and the timeline are gone: the chat is the page.
+            ->assertDontSee('Another AI')->assertDontSee('New flashcard')->assertDontSee('What happened')->assertDontSee('action-tile', false)
+            ->assertSee('Set up your AI first')->assertSee('Material')->assertSee('This session')
             ->assertSee('data-session-heartbeat', false);
 
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))->assertSee('Back to your session')->assertDontSee('Start studying');
@@ -74,8 +78,9 @@ class SessionScreensTest extends TestCase
         app(Notes::class)->create($by, 'module', $week1->id, 'Lecture 3: joins');
         $session = app(Sessions::class)->start($by, $this->databases->id, $joins->id);
 
-        $page = $this->page($session->id)->assertSeeInOrder(['Notes &amp; files', '1 in Week 1'], false)->assertDontSee('Lecture 3: joins')
-            ->call('openMaterial')->assertDispatched('session-dialog-open')->assertSeeInOrder(['Notes &amp; files', 'Lecture 3: joins'], false)
+        // The rail lists the module's topics and material; the material panel lists all of it.
+        $page = $this->page($session->id)->assertSeeInOrder(['Topics in Week 1', 'Joins', 'Material', 'Lecture 3: joins', 'This session'])
+            ->call('openMaterial')->assertDispatched('session-dialog-open')->assertSee('Material for the tutor')
             ->call('close');
         $this->travel(25)->minutes();
         $page->call('pause')->assertDispatched('session-changed')->assertSee('Paused')->assertSee('Resume');
@@ -85,12 +90,14 @@ class SessionScreensTest extends TestCase
         $page->call('resume')->assertSee('Studying');
         $this->travel(20)->minutes();
 
-        $page->call('confirmEnd')->assertDispatched('session-dialog-open')->assertSee('End this session?')->assertSee('45 min')
-            ->set('topicStatus', 'understood')->call('save')
-            ->assertSee('Session ended. You studied 45 min.')
-            ->assertSeeInOrder(['Studied', '09:00', '09:25', '25 min', 'Paused', 'Break', '09:30', '09:40', '10 min', 'Studied', '09:40', '10:00', '20 min'])
-            ->assertSee('Studied 45 min, with 10 min of breaks')
+        // One screen: the time, where the student stands on each topic touched (a choice for each), then, once ended, how it went.
+        $page->call('confirmEnd')->assertDispatched('session-dialog-open')->assertSee('End this session?')->assertSee('You studied 45 min, with 10 min of breaks.')
+            ->assertSee('Where you stand')->assertSeeInOrder(['Joins', 'No status yet.', 'Leave it', 'Covered', 'Understood', 'Still confusing'])
+            ->assertSet('statuses', [$joins->id => ''])
+            ->set('statuses.'.$joins->id, 'understood')->call('save')
+            ->assertSet('mode', 'done')->assertSee('Session ended')->assertSee('You studied 45 min, with 10 min of breaks.')
             ->assertDontSee('Take a break');
+        $page->call('close');
         $this->assertSame('understood', app(Topics::class)->find($by, $joins->id)->status);
     }
 
@@ -107,7 +114,7 @@ class SessionScreensTest extends TestCase
         app(Notes::class)->create($by, 'workspace', $this->databases->id, 'Exam revision');
         $session = app(Sessions::class)->start($by, $this->databases->id, null, $week1->id);
 
-        $this->page($session->id)->assertSee('2 in Week 1')
+        $this->page($session->id)->assertSee('Lecture 1')->assertSee('Joins lab')->assertDontSee('Week 2 reading')
             ->call('openMaterial')
             ->assertSeeInOrder(['In Week 1', 'Lecture 1', 'Labs', 'SQL', 'Joins lab'])
             ->assertDontSee('Week 2 reading')->assertDontSee('Exam revision');
@@ -120,7 +127,7 @@ class SessionScreensTest extends TestCase
         $session = app(Sessions::class)->start($by, $this->databases->id, null, $week1->id);
 
         // The editor for a new note in the module: nothing is made until something is written.
-        $this->page($session->id)->assertSee('In Week 1')->call('newNote')
+        $this->page($session->id)->assertSee('Topics in Week 1')->call('newNote')
             ->assertRedirect(route('workspaces.notes.create', [$this->databases->id, 'in' => "module:{$week1->id}"]));
         $this->assertSame([], app(Notes::class)->list($by, $this->databases->id));
     }
@@ -137,7 +144,8 @@ class SessionScreensTest extends TestCase
             ->call('editTopic')->assertSet('mode', 'topic')->assertSee('What this session is about')
             ->assertSeeInOrder(['Week 1', 'Keys', 'Other topics', 'Normal forms', 'A new topic'])
             ->set('topicChoice', $keys->id)->call('save')->assertSet('mode', null)->assertDispatched('session-changed')
-            ->assertSee('Change topic');
+            // The rail marks it as the one the session is on, and the header's topic names it.
+            ->assertSeeInOrder(['Keys', 'Now']);
         $this->assertSame($keys->id, $this->current()->topicId);
 
         // A new one goes in the session's module; a name the course has is that topic.
@@ -239,7 +247,7 @@ class SessionScreensTest extends TestCase
         $session = app(Sessions::class)->start($by, $this->databases->id, null, $week1->id);
 
         $page = $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$this->databases->id, $session->id]))
-            ->assertOk()->assertSeeInOrder(['Modules', 'Week 1', 'Study session'])
+            ->assertOk()->assertSeeInOrder(['Modules', 'Week 1', 'Whole module'])
             ->assertSee('Hide the timer')->assertSee('Show the study timer');
         $this->assertMatchesRegularExpression('/title="Modules"\s+aria-current="page"/', $page->getContent());
         $this->assertDoesNotMatchRegularExpression('/title="Overview"\s+aria-current="page"/', $page->getContent());

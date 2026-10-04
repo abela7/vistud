@@ -1,42 +1,21 @@
 {{--
-    The built-in chat on a study session's page (App\Livewire\Workspaces\TutorChat): a box with the tutor's
-    name, what the chat has cost and "Keep what the tutor marked"; the turns (the tutor's as Markdown, its marks
-    as labelled quotes); and a line to write in. The student's words show at once; the tutor's answer streams
+    The built-in chat on a study session's page (App\Livewire\Workspaces\TutorChat): the turns (the tutor's as Markdown,
+    its marks as labelled quotes, what it saved and the statuses it set or proposed as chips with a tap to undo or accept),
+    then the dock: quick asks as chips (Quiz me, Cards, Note this, Where are we), a line to write in with a + menu, and
+    what the chat has cost. The student's words show at once; the tutor's answer streams
     in as it is written (wire:stream), with what it is looking up meanwhile. When the engine failed on the last
     message, "Try again" answers it without sending it twice. Notes and files from the module can be attached to
     a message; a file or picture can be uploaded, pasted or dropped into the box (resources/js/tutor-chat.js).
 --}}
 @php
     use App\Engine\Choices;
+    use Illuminate\Support\Str;
 @endphp
 <section class="chat" aria-labelledby="chat-heading-{{ $this->getId() }}"
     x-data="tutorChat(@js(['upload' => $upload, 'account' => $account]))"
     x-on:chat-done.window="done($event.detail.restore)"
     x-on:notes-changed.window="noteChanged($event.detail.notes)">
-    <div class="panel-head chat-head">
-        <span class="item-icon ws-colour-purple" aria-hidden="true"><x-icon name="sparkles" class="size-5" /></span>
-        <div class="panel-head-text">
-            <h2 id="chat-heading-{{ $this->getId() }}" class="panel-title">Your tutor</h2>
-            <p class="panel-hint">{{ $ready ? $choices->tutorModel.' · '.$spentWords : 'Not set up yet' }}</p>
-        </div>
-        @if ($marked || $quizzes !== [])
-            <div class="panel-head-actions">
-                @if ($quizzes !== [])
-                    <div class="chat-quiz" x-data="{ open: false }" x-on:keydown.escape.stop="open = false" x-on:click.outside="open = false">
-                        <x-button size="sm" icon="list-checks" x-on:click="open = ! open" x-bind:aria-expanded="open.toString()" aria-controls="chat-quiz-{{ $this->getId() }}" x-bind:disabled="busy">Quiz me</x-button>
-                        <div id="chat-quiz-{{ $this->getId() }}" class="chat-quiz-menu" role="group" aria-label="Quiz me" x-show="open" x-cloak>
-                            @foreach ($quizzes as $quiz)
-                                <button type="button" class="chat-pick" x-on:click="open = false; say(@js($quiz['text']))"><span class="truncate">{{ $quiz['label'] }}</span></button>
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
-                @if ($marked)
-                    <x-button size="sm" icon="bookmark" wire:click="keep">Keep what the tutor marked</x-button>
-                @endif
-            </div>
-        @endif
-    </div>
+    <h2 id="chat-heading-{{ $this->getId() }}" class="sr-only">Your tutor</h2>
 
     @if (! $ready)
         <div class="chat-empty">
@@ -58,7 +37,7 @@
                 @endif
             </div>
         @endif
-        <ol class="chat-log" role="list" aria-label="The chat" x-ref="log"
+        <ol class="chat-log" role="list" aria-label="The chat" tabindex="0" x-ref="log"
             x-on:scroll="follow = $el.scrollHeight - $el.scrollTop - $el.clientHeight < 80"
             x-show="live || $el.querySelector('[data-turn]') !== null" @if ($turns === []) x-cloak @endif>
             @foreach ($turns as $i => $turn)
@@ -99,6 +78,29 @@
                                 @endforeach
                             </ul>
                         @endif
+                        @if ($turn['marks'] !== [] || ($turn['quizzes'] ?? []) !== [])
+                            {{-- Where the tutor says they stand: set (undo it), suggested (accept it), or decided; and a quiz or test kept. --}}
+                            <ul class="chat-files chat-did" role="list" aria-label="Where you stand">
+                                @foreach ($turn['quizzes'] as $quiz)
+                                    <li><span class="chat-file"><x-icon name="list-checks" class="size-4" /><span class="truncate">{{ ucfirst($quiz['kind']) }} kept: {{ $quiz['score'] }} % over {{ Str::plural('question', $quiz['asked'], prependCount: true) }}</span></span></li>
+                                @endforeach
+                                @foreach ($turn['marks'] as $mark)
+                                    <li class="chat-mark" wire:key="mark-{{ $i }}-{{ $mark['topic_id'] }}">
+                                        @if ($mark['state'] === 'proposed')
+                                            <span class="chat-file" @if ($mark['reason']) title="{{ $mark['reason'] }}" @endif><x-icon name="circle-help" class="size-4" /><span class="truncate">{{ $mark['topic'] }}: {{ $mark['words'] }}?</span></span>
+                                            <button type="button" class="chat-file-action" wire:click="applyStatus('{{ $mark['topic_id'] }}', '{{ $mark['to'] }}')">Mark it<span class="sr-only"> {{ $mark['topic'] }} as {{ $mark['words'] }}</span></button>
+                                        @elseif ($mark['state'] === 'marked')
+                                            <span class="chat-file" @if ($mark['reason']) title="{{ $mark['reason'] }}" @endif><x-icon name="circle-check" class="size-4" /><span class="truncate">{{ $mark['topic'] }}: {{ $mark['words'] }}, marked by the tutor</span></span>
+                                            <button type="button" class="chat-file-action" wire:click="undoStatus('{{ $mark['topic_id'] }}')">Undo<span class="sr-only"> marking {{ $mark['topic'] }}</span></button>
+                                        @elseif ($mark['state'] === 'accepted')
+                                            <span class="chat-file"><x-icon name="circle-check" class="size-4" /><span class="truncate">{{ $mark['topic'] }}: {{ $mark['words'] }}</span></span>
+                                        @else
+                                            <span class="chat-file"><x-icon name="undo-2" class="size-4" /><span class="truncate">{{ $mark['topic'] }}: {{ $mark['words'] }}, undone</span></span>
+                                        @endif
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
                         @if ($turn['looked'] !== [] || $turn['cost_micros'] > 0)
                             <p class="chat-meta">{{ implode(' · ', array_filter([
                                 $turn['looked'] !== [] ? 'Looked up: '.implode(', ', $turn['looked']) : null,
@@ -124,18 +126,46 @@
         </ol>
 
         @if ($open)
+          <div class="chat-dock">
             @if ($waiting)
                 <div class="chat-retry" x-show="! live">
                     <p class="text-sm text-fg-muted">The tutor hasn't answered your last message.</p>
                     <x-button size="sm" icon="rotate-ccw" x-on:click="retry()">Try again</x-button>
                 </div>
             @endif
+            <ul class="chat-actions" role="list" aria-label="Quick asks">
+                @if ($quizzes !== [])
+                    <li class="chat-quiz" x-data="{ open: false }" x-on:keydown.escape.stop="open = false" x-on:click.outside="open = false">
+                        <button type="button" class="chat-chip" x-on:click="open = ! open" x-bind:aria-expanded="open.toString()" aria-controls="chat-quiz-{{ $this->getId() }}" x-bind:disabled="busy"><x-icon name="list-checks" class="size-4" />Quiz me<x-icon name="chevron-down" class="size-4" /></button>
+                        <div id="chat-quiz-{{ $this->getId() }}" class="chat-quiz-menu" role="group" aria-label="Quiz me" x-show="open" x-cloak>
+                            @foreach ($quizzes as $quiz)
+                                <button type="button" class="chat-pick" x-on:click="open = false; say(@js($quiz['text']))"><span class="truncate">{{ $quiz['label'] }}</span></button>
+                            @endforeach
+                            @if ($hasModule)
+                                <button type="button" class="chat-pick" x-on:click="open = false; say(@js($testAsk))"><span class="truncate">Test me on the module</span></button>
+                            @endif
+                        </div>
+                    </li>
+                @endif
+                @foreach ($actions as [$label, $icon, $ask])
+                    <li><button type="button" class="chat-chip" x-on:click="say(@js($ask))" x-bind:disabled="busy"><x-icon :name="$icon" class="size-4" />{{ $label }}</button></li>
+                @endforeach
+                @if ($marked)
+                    <li><button type="button" class="chat-chip" wire:click="keep"><x-icon name="bookmark" class="size-4" />Keep what the tutor marked</button></li>
+                @endif
+            </ul>
             <form class="chat-compose" x-on:submit.prevent="submit()" x-on:dragover.prevent x-on:drop.prevent="drop($event)" novalidate>
-                <div class="chat-attach" x-on:keydown.escape.stop="picking = false" x-on:click.outside="picking = false">
-                    <button type="button" class="btn btn-ghost chat-attach-button" x-on:click="picking = ! picking" x-bind:aria-expanded="picking.toString()"
-                        aria-controls="chat-picker-{{ $this->getId() }}" aria-label="Attach a note, a file or a picture" x-bind:disabled="busy">
-                        <x-icon name="paperclip" class="size-5" />
+                <div class="chat-attach" x-data="{ menu: false }" x-on:keydown.escape.stop="menu = false; picking = false" x-on:click.outside="menu = false; picking = false">
+                    <button type="button" class="btn btn-ghost chat-attach-button" x-on:click="menu = ! menu; picking = false" x-bind:aria-expanded="menu.toString()"
+                        aria-controls="chat-menu-{{ $this->getId() }}" aria-label="More: attach, ask a question, new card or note" x-bind:disabled="busy">
+                        <x-icon name="plus" class="size-5" />
                     </button>
+                    <div id="chat-menu-{{ $this->getId() }}" class="chat-picker chat-menu" x-show="menu" x-cloak role="group" aria-label="More">
+                        <button type="button" class="chat-pick" x-on:click="menu = false; picking = true"><x-icon name="paperclip" class="size-4" /><span class="truncate">Attach a note, file or picture</span></button>
+                        <button type="button" class="chat-pick" x-on:click="menu = false; Livewire.dispatch('session-new-question')"><x-icon name="circle-help" class="size-4" /><span class="truncate">Ask a question</span></button>
+                        <button type="button" class="chat-pick" x-on:click="menu = false; Livewire.dispatch('session-new-card')"><x-icon name="gallery-vertical-end" class="size-4" /><span class="truncate">New flashcard</span></button>
+                        <button type="button" class="chat-pick" x-on:click="menu = false; Livewire.dispatch('session-new-note')"><x-icon name="file-plus" class="size-4" /><span class="truncate">Write a note</span></button>
+                    </div>
                     <div id="chat-picker-{{ $this->getId() }}" class="chat-picker" x-show="picking" x-cloak role="group" aria-label="Attach a note, a file or a picture">
                         <label for="chat-find-{{ $this->getId() }}" class="sr-only">Find a note or a file</label>
                         <input id="chat-find-{{ $this->getId() }}" type="search" class="input chat-find" x-model="search" placeholder="Find a note or a file…" autocomplete="off">
@@ -190,6 +220,8 @@
             @if ($error)
                 <p class="field-error" role="alert">{{ $error }}</p>
             @endif
+            <p class="chat-foot">{{ $choices->tutorModel }} · {{ $spentWords }}</p>
+          </div>
         @else
             <p class="text-sm text-fg-muted">This session has ended. The chat stays here to read; start a new session to go on.</p>
         @endif

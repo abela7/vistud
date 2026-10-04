@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Engine\SessionChat;
+use App\Engine\Settings;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Livewire\Concerns\PomodoroForm;
@@ -14,13 +15,14 @@ use App\Platform\Errors\Unprocessable;
 use App\Study\Briefings;
 use App\Study\Files;
 use App\Study\Folders;
+use App\Study\Instructions;
 use App\Study\ModuleDetails;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Questions;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
-use App\Study\SessionSegment;
+use App\Study\TopicDetails;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Carbon;
@@ -29,11 +31,12 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
- * A study session's page (docs/specs/study-memory.md §4): the clock and its
- * controls, what to do next (study with an AI, save from the chat, ask a
- * question, write a card or a note, the notes and files), the questions,
- * and what happened once it has ended. The service applies the clock's
- * rules; the IDs are locked.
+ * A study session's page (docs/specs/vistud-2-blueprint.md §3.5.4): the conversation, with everything else at its
+ * side. The header holds the clock, Pause and End (or the Pomodoro bar under it) and the ⋯ menu; the rail holds the
+ * module's topics (tap to switch the session's topic), its material and what this session saved; the chat is its own
+ * component. Ending the session is one screen: the time, the topics the tutor touched with the status each would get
+ * as a chip the student can change, what was saved, and, once ended, the tutor's summary. The service applies the
+ * clock's rules; the IDs are locked.
  */
 final class StudySession extends Component
 {
@@ -45,15 +48,21 @@ final class StudySession extends Component
     #[Locked]
     public string $sessionId;
 
-    /** end, delete, pomodoro, teaching, briefing, material or topic: the side panel that's open, or null. */
+    /** end, done, delete, pomodoro, teaching, briefing, material, topic, question or tell: the side panel that's open, or null. */
     #[Locked]
     public ?string $mode = null;
 
     #[Locked]
     public ?string $error = null;
 
-    /** The topic's status to record when the session ends; empty leaves it. */
-    public string $topicStatus = '';
+    /** The status to record for each topic the session touched when it ends, by topic id; empty leaves the topic as it is. */
+    public array $statuses = [];
+
+    /** A question to keep, from the + menu. */
+    public string $questionText = '';
+
+    /** What the student tells the tutor about this module. */
+    public string $moduleNote = '';
 
     /** The session's topic, chosen in the topic panel: a topic's id, '' for none, or 'new' for $newTopic. */
     public string $topicChoice = '';
@@ -80,8 +89,14 @@ final class StudySession extends Component
 
     private SessionChat $chat;
 
-    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, Questions $questions, Folders $folders, PrincipalFactory $principals, SessionChat $chat): void
+    private Settings $settings;
+
+    private Instructions $instructions;
+
+    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, Questions $questions, Folders $folders, PrincipalFactory $principals, SessionChat $chat, Settings $settings, Instructions $instructions): void
     {
+        $this->settings = $settings;
+        $this->instructions = $instructions;
         $this->chat = $chat;
         $this->folders = $folders;
         $this->briefings = $briefings;
@@ -127,6 +142,7 @@ final class StudySession extends Component
     }
 
     /** Opens App\Livewire\Workspaces\FlashcardEditor for a card on the session's topic, in its module. */
+    #[On('session-new-card')]
     public function newFlashcard(): void
     {
         $session = $this->sessions->find($this->principal(), $this->sessionId);
@@ -139,6 +155,42 @@ final class StudySession extends Component
         $topicId = $this->sessions->find($this->principal(), $this->sessionId)->topicId;
         $this->open('topic');
         $this->topicChoice = $topicId ?? '';
+    }
+
+    /** The rail's topic, tapped: the session is about it now (the tutor reads it from its next message). */
+    public function switchTopic(string $topicId): void
+    {
+        $now = null;
+        $this->act(function () use ($topicId, &$now) {
+            try {
+                $topic = $this->topics->find($this->principal(), $topicId);
+                $this->sessions->setTopic($this->principal(), $this->sessionId, $topic->id);
+                $now = $topic->name;
+            } catch (NotFound) {
+                $this->error = 'That topic no longer exists.';
+            }
+        });
+        $this->notice = $now === null ? null : "Now on {$now}.";
+    }
+
+    /** A question to keep, from the + menu: it goes to the module's questions (and to this session). */
+    #[On('session-new-question')]
+    public function newQuestion(): void
+    {
+        $this->open('question');
+    }
+
+    /** What the student wants the tutor to know about this module, in their words. */
+    public function tellTutor(): void
+    {
+        $by = $this->principal();
+        $session = $this->sessions->find($by, $this->sessionId);
+        $moduleId = $this->moduleIdOf($by, $session);
+        if ($moduleId === null) {
+            return;
+        }
+        $this->open('tell');
+        $this->moduleNote = $this->instructions->get($by, "module:{$moduleId}");
     }
 
     /** What the assistant would receive now: the tutoring prompt and the briefing. */
@@ -154,6 +206,7 @@ final class StudySession extends Component
     }
 
     /** The editor for a new note in the session's module (or the workspace's top level); nothing is kept until something is written. */
+    #[On('session-new-note')]
     public function newNote(): void
     {
         $by = $this->principal();
@@ -200,9 +253,17 @@ final class StudySession extends Component
         $this->act(fn () => $this->sessions->countAway($this->principal(), $this->sessionId), 'The time away is counted as study.');
     }
 
+    /** The end screen: each topic the session touched starts on the status the tutor gave or proposed for it, or on none. */
     public function confirmEnd(): void
     {
+        $by = $this->principal();
+        $session = $this->sessions->find($by, $this->sessionId);
+        $activity = $this->chat->activity($by, $this->sessionId);
         $this->open('end');
+        $this->statuses = [];
+        foreach ($this->touched($by, $session, $activity) as $topic) {
+            $this->statuses[$topic->id] = ($activity['statuses'][$topic->id]['to'] ?? '');
+        }
     }
 
     public function confirmDelete(): void
@@ -281,21 +342,60 @@ final class StudySession extends Component
             $this->notice = $this->error === null ? ($topicId === null ? 'The session has no topic now.' : 'The topic is set. The tutor and what you save use it from now on.') : null;
             $this->dispatch('session-changed');
         }
+        if ($this->mode === 'question') {
+            try {
+                $session = $this->sessions->find($by, $this->sessionId);
+                $this->questions->ask($by, $this->workspaceId, $this->questionText, $session->topicId, $this->moduleIdOf($by, $session), $session->id);
+            } catch (Unprocessable $e) {
+                $fields = array_values($e->details['fields'] ?? []);
+                $this->addError('questionText', $fields === [] ? $e->getMessage() : $fields[0][0]);
+
+                return;
+            }
+            $this->notice = 'The question is kept. You\'ll find it with the module\'s questions.';
+            $this->dispatch('questions-changed');
+        }
+        if ($this->mode === 'tell') {
+            $session = $this->sessions->find($by, $this->sessionId);
+            $moduleId = $this->moduleIdOf($by, $session);
+            try {
+                if ($moduleId !== null) {
+                    $this->instructions->set($by, "module:{$moduleId}", $this->moduleNote);
+                }
+            } catch (Unprocessable $e) {
+                $fields = array_values($e->details['fields'] ?? []);
+                $this->addError('moduleNote', $fields === [] ? $e->getMessage() : $fields[0][0]);
+
+                return;
+            }
+            $this->notice = 'The tutor will use it from your next message.';
+        }
         if ($this->mode === 'end') {
-            $status = in_array($this->topicStatus, Topics::STATUSES, true) ? $this->topicStatus : null;
-            $this->act(function () use ($by, $status) {
+            $chosen = array_filter($this->statuses, fn ($status) => in_array($status, Topics::STATUSES, true));
+            $this->act(function () use ($by, $chosen) {
                 $ended = $this->sessions->end($by, $this->sessionId);
-                if ($status !== null && $ended->topicId !== null) {
+                foreach ($chosen as $topicId => $status) {
                     try {
-                        $this->topics->report($by, $ended->topicId, $status);
+                        $topic = $this->topics->find($by, (string) $topicId);
+                        // Said here, it is now the student's word, unless it already was.
+                        if ($topic->status !== $status || $topic->statusBy !== 'student') {
+                            $this->topics->report($by, $topic->id, $status);
+                        }
                     } catch (NotFound) {
                         // The topic was removed meanwhile; the session still ends.
                     }
                 }
+
+                return $ended;
             });
             if ($this->error === null) {
-                $wrapped = $this->wrapUp($by);
-                $this->notice = 'Session ended. You studied '.SessionDetails::duration($this->sessions->find($by, $this->sessionId)->studySeconds).'.'.($wrapped ? ' The tutor\'s summary of the chat is saved below.' : '');
+                $this->wrapUp($by);
+                // The end screen goes on to say how it went: the time and the tutor's summary.
+                $this->mode = 'done';
+                $this->statuses = [];
+                $this->dispatch('session-changed');
+
+                return;
             }
         }
         $this->close();
@@ -304,12 +404,13 @@ final class StudySession extends Component
 
     public function close(): void
     {
-        $this->reset('mode', 'topicStatus', 'topicChoice', 'newTopic', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto', 'method', 'checkIns', 'quiz', 'pace');
+        $this->reset('mode', 'statuses', 'questionText', 'moduleNote', 'topicChoice', 'newTopic', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto', 'method', 'checkIns', 'quiz', 'pace');
         $this->resetErrorBag();
     }
 
     #[On('session-changed')]
     #[On('questions-changed')]
+    #[On('chat-turn')]
     public function refresh(): void {}
 
     public function render(): View
@@ -337,27 +438,58 @@ final class StudySession extends Component
             }
         }
         $material = $this->material($by, $session, $module);
+        $activity = $this->chat->activity($by, $this->sessionId);
+        $choices = $this->settings->get($by);
+        $courseTopics = $this->topics->list($by, $this->workspaceId);
 
         return view('livewire.workspaces.study-session', [
             'session' => $session,
-            'chatted' => $this->mode === 'end' && $this->chat->transcript($by, $this->sessionId) !== [],
+            'chatted' => in_array($this->mode, ['end', 'done'], true) && $this->chat->transcript($by, $this->sessionId) !== [],
             'topic' => $topic,
             'module' => $module,
-            'courseTopics' => $this->mode === 'topic' ? $this->topics->list($by, $this->workspaceId) : [],
+            'courseTopics' => $this->mode === 'topic' ? $courseTopics : [],
+            'railTopics' => $module === null ? [] : array_values(array_filter($courseTopics, fn ($t) => $t->moduleId === $module->id)),
+            'activity' => $activity,
+            'touched' => in_array($this->mode, ['end', 'done'], true) ? $this->touched($by, $session, $activity, $courseTopics) : [],
+            'copyPaste' => $choices->copyPasteAi,
+            'tutorMarks' => $choices->tutorMarksTopics,
             'groups' => $material['groups'],
             'alsoUsed' => $material['alsoUsed'],
             'materialCount' => $material['count'],
             'usedCount' => $material['used'],
-            'openQuestions' => count(array_filter(
-                $module !== null ? $this->questions->list($by, $this->workspaceId, $module->id) : $this->questions->list($by, $this->workspaceId, null, $this->sessionId),
-                fn ($question) => $question->status !== 'answered',
-            )),
             'briefing' => $this->mode === 'briefing' ? $this->briefings->forSession($by, $this->sessionId) : null,
-            'timeline' => $this->timeline($session, $time),
             'started' => Carbon::parse($session->startedAt)->setTimezone($zone),
             'ended' => $session->endedAt === null ? null : Carbon::parse($session->endedAt)->setTimezone($zone),
             'awaySince' => $session->pausedBy === 'away' ? $time($session->lastActivityAt) : null,
         ]);
+    }
+
+    /**
+     * The topics this session touched, for its end screen: the one it is on, and those the tutor set, marked or proposed.
+     *
+     * @param  array{topics: list<string>}  $activity
+     * @param  ?list<TopicDetails>  $all
+     * @return list<TopicDetails>
+     */
+    private function touched(Principal $by, SessionDetails $session, array $activity, ?array $all = null): array
+    {
+        $all ??= $this->topics->list($by, $this->workspaceId);
+        $ids = array_values(array_unique(array_filter([$session->topicId, ...$activity['topics']])));
+
+        return array_values(array_filter($all, fn (TopicDetails $t) => in_array($t->id, $ids, true)));
+    }
+
+    /** The session's module: its own, or its topic's. */
+    private function moduleIdOf(Principal $by, SessionDetails $session): ?string
+    {
+        if ($session->moduleId !== null || $session->topicId === null) {
+            return $session->moduleId;
+        }
+        try {
+            return $this->topics->find($by, $session->topicId)->moduleId;
+        } catch (NotFound) {
+            return null;
+        }
     }
 
     /**
@@ -433,54 +565,6 @@ final class StudySession extends Component
             'count' => count($shown),
             'used' => count(array_filter($all, fn ($item) => $session->uses($item['key']))),
         ];
-    }
-
-    /**
-     * What happened, in order: study, breaks, and the pauses between them.
-     *
-     * @return list<array{kind: string, words: string, from: string, to: ?string, seconds: ?int}>
-     */
-    private function timeline(SessionDetails $session, callable $time): array
-    {
-        $rows = [];
-        $previous = null;
-        foreach ($session->segments as $segment) {
-            if ($previous?->endedAt !== null && $previous->endedAt < $segment->startedAt) {
-                $rows[] = ['kind' => 'pause', 'words' => self::pauseWords($previous),
-                    'from' => $time($previous->endedAt), 'to' => $time($segment->startedAt), 'seconds' => null];
-            }
-            $end = $segment->endedAt ?? now()->toIso8601ZuluString('microsecond');
-            $rows[] = [
-                'kind' => $segment->kind,
-                'words' => match (true) {
-                    $segment->kind === 'break' => 'Break',
-                    $segment->endedBy === 'pomodoro' => 'Pomodoro done',
-                    $segment->endedBy === 'skip' => 'Focus, ended early',
-                    default => 'Studied',
-                },
-                'from' => $time($segment->startedAt),
-                'to' => $segment->endedAt === null ? null : $time($segment->endedAt),
-                'seconds' => max(0, (int) Carbon::parse($segment->startedAt)->diffInSeconds(Carbon::parse($end))),
-            ];
-            $previous = $segment;
-        }
-        if ($session->state === 'paused' && $previous?->endedAt !== null) {
-            $rows[] = ['kind' => 'pause', 'words' => self::pauseWords($previous),
-                'from' => $time($previous->endedAt), 'to' => null, 'seconds' => null];
-        }
-
-        return $rows;
-    }
-
-    /** Why the clock stopped after $previous. */
-    private static function pauseWords(SessionSegment $previous): string
-    {
-        return match ($previous->endedBy) {
-            'away' => 'Paused: no activity',
-            'long_break' => 'Paused after a long break',
-            'pomodoro' => 'Waiting to start the next focus',
-            default => 'Paused',
-        };
     }
 
     /** The chat's summary and checkpoint into the session's record, once; an engine that fails leaves them for later. */

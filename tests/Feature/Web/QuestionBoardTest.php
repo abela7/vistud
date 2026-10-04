@@ -3,6 +3,7 @@
 namespace Tests\Feature\Web;
 
 use App\Livewire\Workspaces\QuestionBoard;
+use App\Livewire\Workspaces\StudySession;
 use App\Models\User;
 use App\Study\ModuleDetails;
 use App\Study\Modules;
@@ -69,8 +70,15 @@ class QuestionBoardTest extends TestCase
         app(Questions::class)->ask($by, $this->databases->id, 'Asked earlier, in the module', null, $this->week1->id, 'an-earlier-session');
 
         $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$this->databases->id, $session->id]))
-            ->assertOk()->assertSee('Ask a question')->assertSee('1 question open')->assertSee('Asked earlier, in the module')
-            ->assertDontSee("What don't you get? Write it down…", false);
+            ->assertOk()->assertDontSee('Asked earlier, in the module')->assertDontSee("What don't you get? Write it down…", false);
+
+        // A question is asked from the box's + menu: it goes to the module and to the session, and is on the module's Questions tab.
+        Livewire::test(StudySession::class, ['workspaceId' => $this->databases->id, 'sessionId' => $session->id])
+            ->call('newQuestion')->assertSet('mode', 'question')->assertSee('Ask a question')
+            ->call('save')->assertHasErrors('questionText')
+            ->set('questionText', 'What is a surrogate key?')->call('save')->assertSet('mode', null)->assertDispatched('questions-changed');
+        $kept = collect($this->questions())->firstWhere('text', 'What is a surrogate key?');
+        $this->assertSame([$this->week1->id, $session->id], [$kept->moduleId, $kept->sessionId]);
 
         $this->board(['moduleId' => $this->week1->id, 'sessionId' => $session->id])
             ->set('text', 'What is a composite key?')->call('add')

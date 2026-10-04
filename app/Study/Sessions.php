@@ -196,7 +196,7 @@ final class Sessions
      *
      * @param  ?array{focus?: mixed, short?: mixed, long?: mixed, every?: mixed, auto?: mixed}  $pomodoro
      * @param  ?array{method?: mixed, check_ins?: mixed, quiz?: mixed, pace?: mixed}  $tutoring  how the assistant should teach; the student's answers in "How you learn", else the defaults, when null
-     * @param  ?string  $mode  one of MODES; not given, a topic means topic, a module alone means module and neither means free
+     * @param  ?string  $mode  one of MODES; not given, a module alone means module, anything else topic (with none chosen yet, the tutor proposes one)
      */
     public function start(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $pomodoro = null, ?array $tutoring = null, ?string $mode = null): SessionDetails
     {
@@ -214,7 +214,7 @@ final class Sessions
         DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $pomodoro, $tutoring, $mode, $id) {
             Input::workspace($scope, $workspaceId, lock: true);
             [$topicId, $moduleId] = $this->place($scope, $workspaceId, $topicId, $moduleId);
-            $mode ??= $topicId !== null ? 'topic' : ($moduleId !== null ? 'module' : 'free');
+            $mode ??= $topicId === null && $moduleId !== null ? 'module' : 'topic';
             $now = self::now();
             // The database keeps one open session per student (open_learner is unique): a start in another tab at the same moment loses.
             try {

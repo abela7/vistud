@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Web;
 
+use App\Engine\Settings;
 use App\Livewire\Workspaces\StudySession;
 use App\Livewire\Workspaces\StudyTime;
 use App\Models\User;
@@ -75,16 +76,16 @@ class BriefingScreensTest extends TestCase
         $session = app(Sessions::class)->start($by, $this->databases->id, $joins->id);
 
         // Only the module's: the workspace's other notes aren't mixed in.
-        $page = $this->page($session->id)->assertSee('1 in Week 1')
+        $page = $this->page($session->id)->assertSee('Lecture 3')
             ->call('openMaterial')
-            ->assertSeeInOrder(['Notes &amp; files', 'Search Week 1', 'Lecture 3', 'Use'], false)
+            ->assertSeeInOrder(['Material for the tutor', 'Search Week 1', 'Lecture 3', 'Use'], false)
             ->assertDontSee('Exam revision')
             ->assertSee('aria-pressed="false"', false);
 
         $page->call('toggleMaterial', "note:{$lecture->id}")->call('toggleMaterial', "note:{$revision->id}");
         $this->assertSame(["note:{$lecture->id}", "note:{$revision->id}"], $this->current()->material);
         // One given to the AI from outside the module (chosen before) is listed apart, to take out.
-        $page->assertSeeInOrder(['Also given to the AI', 'Exam revision', 'In Week 1', 'Lecture 3'])->assertSee('2 for the AI');
+        $page->assertSeeInOrder(['Also given to the AI', 'Exam revision', 'In Week 1', 'Lecture 3'])->assertSee('2 for the tutor');
 
         $page->call('toggleMaterial', 'note:not-mine')->assertSee('That note or file no longer exists.');
     }
@@ -95,9 +96,13 @@ class BriefingScreensTest extends TestCase
         $joins = app(Topics::class)->create($by, $this->databases->id, 'Joins', $this->week1->id);
         $session = app(Sessions::class)->start($by, $this->databases->id, $joins->id);
 
-        $this->page($session->id)->assertSee('Briefing')
+        // The copy-paste tools are for a student who uses another AI, and off until they say so.
+        $this->page($session->id)->assertDontSee('Briefing for another AI');
+        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'copy_paste_ai' => true, 'consent' => true]);
+        $this->page($session->id)->assertSee('Briefing for another AI')
             ->call('showBriefing')->assertDispatched('session-dialog-open')
-            ->assertSee('Study with an AI')->assertSeeText('tokens')
+            ->assertSeeText('tokens')
             ->assertSee('# You are the student&#039;s tutor', false)->assertSee('## This session')->assertSee('- Topic: Joins.')
             ->assertSee('Copy')->assertSee(route('workspaces.sessions.briefing', [$this->databases->id, $session->id]), false);
 

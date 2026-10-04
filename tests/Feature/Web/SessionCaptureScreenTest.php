@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Web;
 
+use App\Engine\Settings;
 use App\Livewire\Workspaces\SessionCapture;
 use App\Livewire\Workspaces\StudySession;
 use App\Models\User;
@@ -55,7 +56,11 @@ class SessionCaptureScreenTest extends TestCase
     {
         $session = app(Sessions::class)->start($this->principal($this->ada), $this->databases->id, $this->joins->id);
 
-        $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$this->databases->id, $session->id]))->assertOk()->assertSee('Save from the chat');
+        // Pasting a chat from another AI is for the student who says they use one: off until then.
+        $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$this->databases->id, $session->id]))->assertOk()->assertDontSee('Save from another AI');
+        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        app(Settings::class)->set($this->principal($this->ada), ['tutor_model' => 'fake/tutor', 'copy_paste_ai' => true, 'consent' => true]);
+        $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$this->databases->id, $session->id]))->assertOk()->assertSee('Save from another AI');
 
         $capture = $this->capture($session->id)
             ->call('open')->assertDispatched('capture-dialog-open')->assertSee("The tutor's replies", false)
@@ -71,6 +76,8 @@ class SessionCaptureScreenTest extends TestCase
             ->assertSee('Saved 1 key point, 1 question, 1 flashcard, 1 answer, 1 status, the summary and where the session stands.');
 
         $this->assertSame('understood', app(Topics::class)->find($this->principal($this->ada), $this->joins->id)->status);
+        // Once it has ended, the page keeps what the tutor wrote for the next session.
+        app(Sessions::class)->end($this->principal($this->ada), $session->id);
         $this->page($session->id)->assertSeeInOrder(['From the tutor', 'Summary', 'We covered left joins; NULLs were confusing at first.', 'Where it stands', 'Slide 7 of 12; next is self joins.']);
 
         // Pasting the same chat again: what was saved is recognised.

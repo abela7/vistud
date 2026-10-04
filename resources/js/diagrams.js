@@ -82,7 +82,7 @@ export async function drawDiagrams(root) {
             const figure = document.createElement('figure');
             figure.className = 'chat-diagram';
             figure.dataset.source = source;
-            figure.innerHTML = '<div class="chat-diagram-drawing"></div><details><summary>The diagram as text</summary><pre></pre></details>';
+            figure.innerHTML = '<div class="chat-diagram-drawing" tabindex="0" role="group" aria-label="Diagram"></div><details><summary>The diagram as text</summary><pre></pre></details>';
             figure.querySelector('pre').textContent = source;
             try {
                 await draw(figure, source, loaded);

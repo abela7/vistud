@@ -34,8 +34,8 @@ foreach (array_reverse($messages) as $message) {
     }
 }
 $words = ['A ', 'left ', 'join ', 'keeps ', 'every ', 'row ', 'of ', 'the ', '**left** ', 'table.'];
-// Acting in the course: "make cards" saves two cards, "jot" writes in the study note; each answers after its tool ran.
-$acts = ['make cards' => ['make_flashcards', ['cards' => [['front' => 'What is an OS?', 'back' => 'The layer between hardware and apps.'], ['front' => 'What is a kernel?', 'back' => 'The core of the OS.']]]], 'jot more' => ['write_note', ['text' => '- System calls ask the kernel for help.']], 'jot' => ['write_note', ['text' => "## Kernels\n\n- The kernel is the core of the OS."]]];
+// Acting in the course: "make cards" saves two cards, "jot" writes in the study note, "mark it" sets the topic's status; each answers after its tool ran.
+$acts = ['mark it' => ['set_topic_status', ['status' => 'understood', 'reason' => 'Two right answers in a row.']], 'make cards' => ['make_flashcards', ['cards' => [['front' => 'What is an OS?', 'back' => 'The layer between hardware and apps.'], ['front' => 'What is a kernel?', 'back' => 'The core of the OS.']]]], 'jot more' => ['write_note', ['text' => '- System calls ask the kernel for help.']], 'jot' => ['write_note', ['text' => "## Kernels\n\n- The kernel is the core of the OS."]]];
 $act = null;
 foreach ($acts as $trigger => $call) {
     if (str_contains($asked, $trigger)) {
@@ -51,7 +51,11 @@ if ($act !== null && ($last['role'] ?? '') === 'user') {
     return;
 }
 if ($act !== null) {
-    $words = $act[0] === 'make_flashcards' ? ['Saved ', 'two ', 'cards.'] : ['Noted.'];
+    $words = match ($act[0]) {
+        'make_flashcards' => ['Saved ', 'two ', 'cards.'],
+        'set_topic_status' => ['You ', 'have ', 'this.'],
+        default => ['Noted.'],
+    };
 } elseif (str_contains($asked, 'draw')) {
     $words = ['Here ', 'it ', 'is:', "\n\n```mermaid\nflowchart LR\n  A[New] --> B[Ready]\n  B --> C[Running]\n```\n\n", 'And ', 'energy: ', '$$E = mc^2$$'];
 } elseif ($picture) {

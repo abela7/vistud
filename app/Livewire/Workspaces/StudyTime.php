@@ -126,14 +126,14 @@ final class StudyTime extends Component
         }
         $last = $this->sessions->lastChoices($by, $this->workspaceId);
         try {
-            $session = $this->sessions->start($by, $this->workspaceId, $topicId ?: null, $moduleId ?: null, $last['pomodoro'], $last['tutoring']);
+            $session = $this->sessions->start($by, $this->workspaceId, $topicId ?: null, $moduleId ?: null, $last['pomodoro'], $last['tutoring'], in_array($ask, ['quiz', 'test'], true) ? $ask : null);
         } catch (Unprocessable|Conflict|NotFound) {
             $this->newSession($moduleId, $topicId);
 
             return;
         }
         $this->dispatch('session-changed');
-        // `ask` (quiz or test) puts the ask in the session's message box, for the student to send.
+        // `ask` (quiz or test) is the session's mode, and puts the ask in its message box, for the student to send.
         $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id] + (in_array($ask, ['quiz', 'test'], true) ? ['ask' => $ask] : []), navigate: true);
     }
 

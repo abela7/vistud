@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithSession, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, fromSessionMenu, makeStudentWithSession, openStudentHome, THEMES, turnOnCopyPaste, useSentinelTheme, useTheme } from './support.js';
 
 /* Save from the chat: the tutor's marks, pasted, reviewed and saved (docs/specs/study-memory.md §4.4). */
 
@@ -25,6 +25,7 @@ test.describe.configure({ timeout: 60_000 });
 
 async function openSession(page) {
     const student = makeStudentWithSession();
+    turnOnCopyPaste(student.email);
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
@@ -33,7 +34,7 @@ async function openSession(page) {
 }
 
 async function review(page) {
-    await page.getByRole('button', { name: 'Save from the chat' }).click();
+    await fromSessionMenu(page, 'Save from another AI');
     await dialog(page).getByLabel('The tutor\'s replies').fill(CHAT);
     await dialog(page).getByRole('button', { name: 'Find the marks' }).click();
     await dialog(page).getByRole('heading', { name: /Statuses: you decide/ }).waitFor();
@@ -51,10 +52,8 @@ test('the tutor\'s marks are pasted, reviewed and saved where they belong', asyn
     await dialog(page).getByRole('button', { name: 'Save 6' }).click();
 
     await expect(page.getByRole('status').filter({ hasText: 'Saved 1 key point, 1 flashcard, 1 answer, 1 status, the summary and where the session stands.' })).toBeVisible();
-    const tutor = page.getByRole('region', { name: 'From the tutor' });
-    await expect(tutor).toContainText('We covered inner and left joins.');
-    await expect(tutor).toContainText('Slide 7 of 12.');
-    await expect(page.locator('h1 + .status-chip')).toHaveText('Understood');
+    // The status is the student's word now: the rail says it.
+    await expect(page.getByRole('complementary', { name: /Topics, material/ }).getByRole('button', { name: /^Joins\s*, Understood/ })).toBeVisible();
 
     // Pasted again, everything saved is recognised; the question can still be saved.
     await review(page);
@@ -76,7 +75,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await page.setViewportSize(viewport);
         await openSession(page);
         await useSentinelTheme(page);
-        await page.getByRole('button', { name: 'Save from the chat' }).click();
+        await fromSessionMenu(page, 'Save from another AI');
         await dialog(page).getByLabel('The tutor\'s replies').waitFor();
         const states = { paste: await foreignColours(page) };
         await dialog(page).getByLabel('The tutor\'s replies').fill(CHAT);
@@ -94,7 +93,7 @@ for (const theme of THEMES) {
         await page.setViewportSize(desktop);
         await openSession(page);
         await useTheme(page, theme);
-        await page.getByRole('button', { name: 'Save from the chat' }).click();
+        await fromSessionMenu(page, 'Save from another AI');
         await dialog(page).getByLabel('The tutor\'s replies').waitFor();
         expect(await analyse(page)).toEqual([]);
         await dialog(page).getByLabel('The tutor\'s replies').fill(CHAT);

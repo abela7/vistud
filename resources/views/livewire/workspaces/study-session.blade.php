@@ -1,11 +1,9 @@
 {{--
-    A study session's page (App\Livewire\Workspaces\StudySession): an open
-    space to study in (the owner's review, 2026-09-27). A slim clock bar,
-    then what to do next as tiles: study with an AI, save from the chat, ask
-    a question, write a card or a note, the notes and files. Questions, the
-    tutor's summary and, once it has ended, what happened show only when
-    there are any. The notes and files, the briefing and the settings open
-    in the side panel.
+    A study session's page (App\Livewire\Workspaces\StudySession), chat first (docs/specs/vistud-2-blueprint.md §3.5.4):
+    the page template's header (the module above the title, the clock and End in its action slot, the ⋯ menu), then the
+    conversation filling the page with the rail beside it: the module's topics (tap to switch), its material, what this
+    session saved. On a phone the rail is a sheet opened from the topic name. The questions board and the timeline are on
+    the module's Questions and Sessions tabs. Ending the session is one screen (the `end` panel, then `done`).
 --}}
 @php
     use App\Study\SessionDetails;
@@ -13,62 +11,64 @@
     use Illuminate\Support\Str;
 
     $open = $session->isOpen();
-    $statusIcons = ['covered' => 'check', 'understood' => 'circle-check', 'confused' => 'circle-alert'];
+    $statusIcons = ['not_started' => 'circle-dot', 'covered' => 'check', 'understood' => 'circle-check', 'confused' => 'circle-alert', 'mastered' => 'shield-check'];
+    $statusWords = ['not_started' => 'Not started', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Still confusing', 'mastered' => 'Mastered'];
     $stateIcons = ['running' => 'timer', 'paused' => 'pause', 'break' => 'coffee', 'ended' => 'square'];
     $studied = SessionDetails::duration($session->studySeconds).($session->breakSeconds > 0 ? ', with '.SessionDetails::duration($session->breakSeconds).' of breaks' : '');
-    $title = $topic?->name ?? $module?->title ?? 'Study session';
-    $uid = $this->getId();
-    $tiles = array_values(array_filter([
-        $open ? ['ai', 'Another AI', 'clipboard-copy', 'purple', 'Copy the briefing into any AI', ['wire:click' => 'showBriefing']] : null,
-        ['chat', 'Save from the chat', 'clipboard-paste', 'green', 'Keep what the AI taught you', ['x-on:click' => "Livewire.dispatch('capture-open')"]],
-        ['question', 'Ask a question', 'circle-help', 'blue', $openQuestions > 0 ? $openQuestions.' '.Str::plural('question', $openQuestions).' open' : 'Something you don\'t get', ['x-on:click' => "Livewire.dispatch('question-new')"]],
-        ['card', 'New flashcard', 'gallery-vertical-end', 'orange', 'To review later', ['wire:click' => 'newFlashcard']],
-        ['note', 'Write a note', 'file-plus', 'teal', $module ? 'In '.$module->title : 'In Notes & files', ['wire:click' => 'newNote']],
-        ['material', 'Notes & files', 'folder-open', 'amber', $usedCount > 0 ? $usedCount.' for the AI' : ($materialCount > 0 ? $materialCount.' in '.($module?->title ?? 'this workspace') : 'Nothing here yet'), ['wire:click' => 'openMaterial']],
+    // The header's second word is the mode: the topic, the whole module, a quiz, a test, or free.
+    $heading = match ($session->mode) {
+        'module' => 'Whole module'.($topic ? ' · '.$topic->name : ''),
+        'quiz' => 'Quiz'.($topic ? ' · '.$topic->name : ($module ? ' · '.$module->title : '')),
+        'test' => 'Test'.($module ? ' · '.$module->title : ''),
+        'free' => 'Free study',
+        default => $topic?->name ?? $module?->title ?? 'Study session',
+    };
+    $context = implode(' · ', array_filter([
+        ($session->manual ? 'Logged for ' : 'Started ').$started->format('D j M, H:i'),
+        $ended && ! $session->manual ? 'ended '.$ended->format('H:i') : null,
     ]));
 @endphp
-<div class="space-y-6">
-    <div class="flex items-start justify-between gap-4">
-        <div class="min-w-0 flex-1 space-y-3">
-            @if ($module)
-                <x-back :href="route('workspaces.modules.show', [$workspaceId, $module->id])" :to="$module->title" />
-            @else
-                <x-back :href="route('workspaces.show', $workspaceId)" to="Overview" />
+<div class="session-page">
+    <x-page :title="$heading" :back-href="$module ? route('workspaces.modules.show', [$workspaceId, $module->id]) : route('workspaces.show', $workspaceId)" :back-to="$module?->title ?? 'Course'" :eyebrow="$module?->title" :context="$context">
+        <x-slot:menu>
+            @if ($open)
+                <button type="button" class="menu-item" wire:click="editTeaching"><x-icon name="message-square-text" class="size-4" />How the AI teaches</button>
+                <button type="button" class="menu-item" wire:click="editPomodoro"><x-icon name="timer" class="size-4" />{{ $session->usesPomodoro() ? 'Pomodoro settings' : 'Use the Pomodoro clock' }}</button>
+                @if ($module)
+                    <button type="button" class="menu-item" wire:click="tellTutor"><x-icon name="message-square-text" class="size-4" />Tell the tutor about this module</button>
+                @endif
+                @if (! $session->usesPomodoro() && $session->state !== 'break')
+                    <button type="button" class="menu-item" wire:click="takeBreak"><x-icon name="coffee" class="size-4" />Take a break</button>
+                @endif
+                @if ($copyPaste)
+                    <button type="button" class="menu-item" wire:click="showBriefing"><x-icon name="clipboard-copy" class="size-4" />Briefing for another AI</button>
+                    <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('capture-open')"><x-icon name="clipboard-paste" class="size-4" />Save from another AI</button>
+                @endif
             @endif
-            <nav aria-label="Path" class="crumbs">
-                <ol role="list">
-                    @if ($module)
-                        <li><a href="{{ route('workspaces.show', [$workspaceId, 'modules']) }}">Modules</a></li>
-                        <li><a href="{{ route('workspaces.modules.show', [$workspaceId, $module->id]) }}">{{ $module->title }}</a></li>
+            <button type="button" class="menu-item" wire:click="confirmDelete"><x-icon name="trash-2" class="size-4" />Delete session</button>
+        </x-slot:menu>
+        <x-slot:action>
+            @if ($open && ! $session->usesPomodoro())
+                <div class="session-clock-inline">
+                    <p @class(['status-chip', 'status-understood' => $session->state === 'running', 'status-covered' => $session->state === 'break'])>
+                        <x-icon :name="$stateIcons[$session->state]" class="size-3.5" />{{ $session->stateWords() }}
+                    </p>
+                    <p class="session-time-inline tabular-nums">
+                        <span class="sr-only">Study time: {{ SessionDetails::duration($session->studySeconds) }}</span>
+                        <span aria-hidden="true" data-clock data-base="{{ $session->studySeconds }}" data-running="{{ $session->state === 'running' ? '1' : '0' }}" data-drawn="{{ microtime(true) }}">{{ gmdate('G:i:s', $session->studySeconds) }}</span>
+                    </p>
+                    @if ($session->state === 'running')
+                        <x-button icon="pause" wire:click="pause">Pause</x-button>
+                    @elseif ($session->state === 'paused')
+                        <x-button variant="primary" icon="play" wire:click="resume">Resume</x-button>
                     @else
-                        <li><a href="{{ route('workspaces.show', $workspaceId) }}">Overview</a></li>
+                        <x-button variant="primary" icon="play" wire:click="resume">Back to studying</x-button>
                     @endif
-                    <li>Study session</li>
-                </ol>
-            </nav>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <h1 class="text-2xl font-semibold tracking-tight break-words sm:text-3xl">{{ $title }}</h1>
-                @if ($topic && in_array($topic->status, Topics::STATUSES, true))
-                    <span class="status-chip status-{{ $topic->status }}"><x-icon :name="$statusIcons[$topic->status]" class="size-3.5" />{{ Str::ucfirst($topic->status) }}</span>
-                @endif
-                @if ($open)
-                    <button type="button" class="btn btn-ghost btn-sm" wire:click="editTopic"><x-icon name="tag" class="size-3.5" />{{ $topic ? 'Change topic' : 'Choose a topic' }}</button>
-                @endif
-            </div>
-            <p class="text-fg-muted">
-                {{ implode(' · ', array_filter([
-                    $topic ? $module?->title : null,
-                    ($session->manual ? 'Logged for ' : 'Started ').$started->format('D j M, H:i'),
-                    $ended && ! $session->manual ? 'ended '.$ended->format('H:i') : null,
-                ])) }}
-            </p>
-        </div>
-        @include('livewire.workspaces.partials.row-menu', ['id' => 'session-'.$session->id, 'label' => 'this session', 'items' => array_values(array_filter([
-            $open ? ['How the AI teaches', 'message-square-text', 'editTeaching', false] : null,
-            $open ? [$session->usesPomodoro() ? 'Pomodoro settings' : 'Use the Pomodoro clock', 'timer', 'editPomodoro', false] : null,
-            ['Delete session', 'trash-2', 'confirmDelete', false],
-        ]))])
-    </div>
+                    <x-button icon="square" wire:click="confirmEnd">End</x-button>
+                </div>
+            @endif
+        </x-slot:action>
+    </x-page>
 
     <livewire:workspaces.session-capture :workspace-id="$workspaceId" :session-id="$session->id" :key="'capture-'.$session->id" />
     <livewire:workspaces.flashcard-editor :workspace-id="$workspaceId" :key="'flashcard-editor-'.$session->id" />
@@ -92,96 +92,56 @@
 
     @if ($open && $session->usesPomodoro())
         @include('livewire.workspaces.partials.pomodoro-clock')
-    @elseif ($open)
-        <section aria-labelledby="clock-heading" class="clock-bar session-clock">
-            <h2 id="clock-heading" class="sr-only">Clock</h2>
-            <div class="clock-bar-main">
-                <p @class(['status-chip', 'status-understood' => $session->state === 'running', 'status-covered' => $session->state === 'break'])>
-                    <x-icon :name="$stateIcons[$session->state]" class="size-3.5" />{{ $session->stateWords() }}
-                </p>
-                <p class="session-time tabular-nums">
-                    <span class="sr-only">Study time: {{ SessionDetails::duration($session->studySeconds) }}</span>
-                    <span aria-hidden="true" data-clock data-base="{{ $session->studySeconds }}" data-running="{{ $session->state === 'running' ? '1' : '0' }}" data-drawn="{{ microtime(true) }}">{{ gmdate('G:i:s', $session->studySeconds) }}</span>
-                </p>
-                @if ($session->state === 'break')
-                    <p class="text-sm text-fg-muted">break <span class="tabular-nums" data-clock data-base="{{ $session->breakSeconds }}" data-running="1" data-drawn="{{ microtime(true) }}">{{ gmdate('G:i:s', $session->breakSeconds) }}</span></p>
-                @elseif ($session->breakSeconds > 0)
-                    <p class="text-sm text-fg-muted">breaks {{ SessionDetails::duration($session->breakSeconds) }}</p>
-                @endif
-            </div>
-            <div class="clock-bar-controls">
-                @if ($session->state === 'running')
-                    <x-button icon="pause" wire:click="pause">Pause</x-button>
-                    <x-button icon="coffee" wire:click="takeBreak">Take a break</x-button>
-                @elseif ($session->state === 'paused')
-                    <x-button variant="primary" icon="play" wire:click="resume">Resume</x-button>
-                    <x-button icon="coffee" wire:click="takeBreak">Take a break</x-button>
-                @else
-                    <x-button variant="primary" icon="play" wire:click="resume">Back to studying</x-button>
-                    <x-button icon="pause" wire:click="pause">Pause</x-button>
-                @endif
-                <x-button icon="square" wire:click="confirmEnd">End session</x-button>
-            </div>
-        </section>
     @endif
 
-    <section aria-labelledby="do-heading-{{ $uid }}">
-        <h2 id="do-heading-{{ $uid }}" class="sr-only">What to do</h2>
-        <ul class="action-grid" role="list">
-            @foreach ($tiles as [$key, $name, $icon, $colour, $meta, $action])
-                <li wire:key="tile-{{ $key }}">
-                    <button type="button" class="action-tile" aria-describedby="tile-{{ $key }}-{{ $uid }}" {{ new \Illuminate\View\ComponentAttributeBag($action) }}>
-                        <span class="item-icon ws-colour-{{ $colour }}" aria-hidden="true"><x-icon :name="$icon" class="size-5" /></span>
-                        <span class="action-tile-name">{{ $name }}</span>
-                        <span id="tile-{{ $key }}-{{ $uid }}" class="item-meta" aria-hidden="true">{{ $meta }}</span>
-                    </button>
-                </li>
-            @endforeach
-        </ul>
-    </section>
-
-    <livewire:workspaces.tutor-chat :workspace-id="$workspaceId" :session-id="$session->id" :key="'chat-'.$session->id" />
-
-    <livewire:workspaces.question-board :workspace-id="$workspaceId" :module-id="$module?->id" :session-id="$session->id" :folded="true" :key="'questions-'.$session->id" />
-
-    @if ($session->summary || $session->checkpoint)
-        <section aria-labelledby="tutor-heading" class="overview-card space-y-3">
-            <h2 id="tutor-heading" class="font-semibold">From the tutor</h2>
-            @if ($session->summary)
-                <div class="space-y-1">
-                    <h3 class="text-sm font-semibold text-fg-muted">Summary</h3>
-                    <p class="break-words">{{ $session->summary }}</p>
-                </div>
+    <div class="session-layout">
+        <div class="session-main">
+            @if ($open)
+                {{-- On a phone: the rail is a sheet, opened from the topic. --}}
+                <button type="button" class="topic-switch" x-data x-on:click="$dispatch('session-rail-open')">
+                    <x-icon name="list-checks" class="size-4" /><span class="truncate">{{ $topic?->name ?? 'Choose a topic' }}</span><x-icon name="chevron-down" class="size-4" />
+                </button>
             @endif
-            @if ($session->checkpoint)
-                <div class="space-y-1">
-                    <h3 class="text-sm font-semibold text-fg-muted">Where it stands</h3>
-                    <p class="break-words">{{ $session->checkpoint }}</p>
-                </div>
+            <livewire:workspaces.tutor-chat :workspace-id="$workspaceId" :session-id="$session->id" :key="'chat-'.$session->id" />
+            @if (! $open && ($session->summary || $session->checkpoint))
+                <section aria-labelledby="tutor-heading" class="overview-card space-y-3">
+                    <h2 id="tutor-heading" class="font-semibold">From the tutor</h2>
+                    @if ($session->summary)
+                        <div class="space-y-1">
+                            <h3 class="text-sm font-semibold text-fg-muted">Summary</h3>
+                            <p class="break-words">{{ $session->summary }}</p>
+                        </div>
+                    @endif
+                    @if ($session->checkpoint)
+                        <div class="space-y-1">
+                            <h3 class="text-sm font-semibold text-fg-muted">Where it stands</h3>
+                            <p class="break-words">{{ $session->checkpoint }}</p>
+                        </div>
+                    @endif
+                </section>
             @endif
-        </section>
-    @endif
+        </div>
+        <aside class="session-rail" aria-label="Topics, material and what this session saved">
+            @include('livewire.workspaces.partials.session-rail', ['suffix' => 'side'])
+        </aside>
+    </div>
 
-    @unless ($open)
-        <section aria-labelledby="timeline-heading" class="overview-card space-y-3">
-            <h2 id="timeline-heading" class="font-semibold">What happened</h2>
-            <ol class="divide-y divide-divider" role="list">
-                @foreach ($timeline as $row)
-                    <li class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
-                        <x-icon :name="['study' => 'timer', 'break' => 'coffee', 'pause' => 'pause'][$row['kind']]" class="size-4 shrink-0 text-fg-muted" />
-                        <span class="min-w-0 flex-1">{{ $row['words'] }}</span>
-                        <span class="text-sm text-fg-muted tabular-nums">{{ $row['from'] }}–{{ $row['to'] ?? 'now' }}</span>
-                        @if ($row['seconds'] !== null)
-                            <span class="w-24 text-right text-sm font-medium tabular-nums">{{ SessionDetails::duration($row['seconds']) }}</span>
-                        @else
-                            <span class="w-24" aria-hidden="true"></span>
-                        @endif
-                    </li>
-                @endforeach
-            </ol>
-            <p class="border-t border-divider pt-3 font-medium">Studied {{ $studied }}</p>
-        </section>
-    @endunless
+    {{-- The rail as a sheet, for a phone. --}}
+    <dialog id="session-rail-sheet" class="modal" aria-labelledby="session-rail-title"
+        wire:ignore.self
+        x-data
+        x-on:session-rail-open.window="$el.open || $el.showModal()"
+        x-on:click="$event.target === $el && $el.close()">
+        <div class="modal-panel">
+            <div class="modal-head">
+                <h2 id="session-rail-title" class="min-w-0 flex-1 text-lg font-semibold">{{ $module?->title ?? 'This session' }}</h2>
+                <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()"><x-icon name="x" /></button>
+            </div>
+            <div class="rail-body px-5 pb-5">
+                @include('livewire.workspaces.partials.session-rail', ['suffix' => 'sheet'])
+            </div>
+        </div>
+    </dialog>
 
     <dialog id="session-dialog" class="modal" aria-labelledby="session-dialog-title"
         wire:ignore.self
@@ -193,7 +153,7 @@
         @if ($mode)
             <form wire:submit="save" novalidate @class(['modal-panel', 'modal-panel-wide' => $mode === 'briefing']) wire:key="session-dialog-{{ $mode }}" @if ($mode === 'briefing') x-data="{ copied: false }" @endif>
                 <div class="modal-head">
-                    <h2 id="session-dialog-title" class="min-w-0 flex-1 text-lg font-semibold" tabindex="-1" autofocus>{{ ['end' => 'End this session?', 'delete' => 'Delete this session?', 'pomodoro' => 'Session clock', 'teaching' => 'How the AI teaches', 'briefing' => 'Study with an AI', 'material' => 'Notes & files', 'topic' => 'What this session is about'][$mode] }}</h2>
+                    <h2 id="session-dialog-title" class="min-w-0 flex-1 text-lg font-semibold" tabindex="-1" autofocus>{{ ['end' => 'End this session?', 'done' => 'Session ended', 'delete' => 'Delete this session?', 'pomodoro' => 'Session clock', 'teaching' => 'How the AI teaches', 'briefing' => 'Briefing for another AI', 'material' => 'Material for the tutor', 'topic' => 'What this session is about', 'question' => 'Ask a question', 'tell' => 'Tell the tutor about this module'][$mode] }}</h2>
                     <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
                         <x-icon name="x" />
                     </button>
@@ -220,7 +180,7 @@
                                     <input id="material-search" type="search" class="input" placeholder="Search {{ $module ? $module->title : 'notes and files' }}" x-model="q" autocomplete="off">
                                 </div>
                                 @if ($open)
-                                    <p class="text-sm text-fg-muted">Use gives it to the AI in the briefing.</p>
+                                    <p class="text-sm text-fg-muted">What you use, the tutor reads, and it goes in the briefing for another AI.</p>
                                 @endif
                             @else
                                 <div class="empty-place">
@@ -298,20 +258,62 @@
                         <p class="text-sm text-fg-muted">{{ $session->usesPomodoro() ? 'Time already studied stays, and the current phase keeps its progress with the new lengths.' : 'Time already studied stays. The first focus period starts counting now.' }}</p>
                     @elseif ($mode === 'end')
                         <p>You studied {{ $studied }}.</p>
-                        @if ($chatted)
-                            <p class="text-sm text-fg-muted">The chat's summary and where it stopped are saved with the session, for the next one to start from.</p>
-                        @endif
-                        @if ($topic)
-                            <fieldset class="space-y-2">
-                                <legend class="field-label mb-1">How is {{ $topic->name }} now?</legend>
-                                @foreach (['' => 'Leave it as it is', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Still confusing'] as $value => $word)
-                                    <label class="move-option">
-                                        <input type="radio" name="topic-status" value="{{ $value }}" wire:model="topicStatus">
-                                        <span>{{ $word }}</span>
-                                    </label>
+                        @if ($touched !== [])
+                            <fieldset class="space-y-3">
+                                <legend class="field-label mb-1">Where you stand</legend>
+                                @foreach ($touched as $t)
+                                    @php $given = $activity['statuses'][$t->id] ?? null; @endphp
+                                    <div class="end-topic" wire:key="end-topic-{{ $t->id }}">
+                                        <p class="font-medium break-words">{{ $t->name }}</p>
+                                        <p class="text-sm text-fg-muted">
+                                            @if ($given)
+                                                {{ $given['applied'] ? 'The tutor marked it' : 'The tutor suggests' }} {{ $statusWords[$given['to']] ?? $given['to'] }}{{ ($given['reason'] ?? null) ? ': '.$given['reason'] : '.' }}
+                                            @else
+                                                {{ $t->status !== null ? 'Now: '.($statusWords[$t->status] ?? $t->status).($t->byTutor() ? ' (marked by the tutor)' : '').'.' : 'No status yet.' }}
+                                            @endif
+                                        </p>
+                                        <div class="segmented" role="radiogroup" aria-label="Where you stand on {{ $t->name }}">
+                                            @foreach (['' => 'Leave it', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Still confusing'] as $value => $word)
+                                                <label>
+                                                    <input type="radio" name="end-status-{{ $t->id }}" value="{{ $value }}" wire:model="statuses.{{ $t->id }}">
+                                                    <span>{{ $word }}</span>
+                                                </label>
+                                            @endforeach
+                                        </div>
+                                    </div>
                                 @endforeach
                             </fieldset>
                         @endif
+                        @if ($activity['saved'] !== [] || $activity['quizzes'] > 0)
+                            <p class="text-sm text-fg-muted">Saved in this session: {{ implode(', ', array_filter([\App\Livewire\Workspaces\TutorChat::savedWords($activity['saved']), $activity['quizzes'] > 0 ? Str::plural('quiz or test', $activity['quizzes'], prependCount: true) : null])) }}.</p>
+                        @endif
+                        @if ($chatted)
+                            <p class="text-sm text-fg-muted">The chat's summary and where it stopped are saved with the session, for the next one to start from.</p>
+                        @endif
+                    @elseif ($mode === 'done')
+                        <p>You studied {{ $studied }}.</p>
+                        @if ($session->summary)
+                            <div class="space-y-1">
+                                <h3 class="text-sm font-semibold text-fg-muted">Summary</h3>
+                                <p class="break-words">{{ $session->summary }}</p>
+                            </div>
+                        @elseif ($chatted)
+                            <p class="text-sm text-fg-muted">The tutor's summary couldn't be written just now. It will be saved the next time you open this session.</p>
+                        @endif
+                    @elseif ($mode === 'question')
+                        <div class="field">
+                            <label for="session-question" class="field-label">Your question</label>
+                            <textarea id="session-question" class="input" rows="3" wire:model="questionText" maxlength="{{ \App\Study\Questions::MAX_TEXT }}" autofocus @error('questionText') aria-invalid="true" @enderror></textarea>
+                            <p class="field-hint">{{ $topic ? 'Kept with '.$topic->name.($module ? ' in '.$module->title : '').'.' : ($module ? 'Kept in '.$module->title.'.' : 'Kept in this course.') }}</p>
+                            @error('questionText') <p class="field-error">{{ $message }}</p> @enderror
+                        </div>
+                    @elseif ($mode === 'tell')
+                        <div class="field">
+                            <label for="session-module-note" class="field-label">What should the tutor know about {{ $module?->title }}?</label>
+                            <textarea id="session-module-note" class="input" rows="5" wire:model="moduleNote" maxlength="{{ \App\Study\Instructions::MAX_TEXT }}" autofocus @error('moduleNote') aria-invalid="true" @enderror></textarea>
+                            <p class="field-hint">For example: the exam covers only the first half, or use the lecturer's slides.</p>
+                            @error('moduleNote') <p class="field-error">{{ $message }}</p> @enderror
+                        </div>
                     @else
                         <p class="text-fg-muted">Its {{ SessionDetails::duration($session->studySeconds) }} of study time comes off your totals. What you recorded during it stays. This can't be undone.</p>
                     @endif
@@ -335,9 +337,11 @@
                         "><span x-show="! copied">Copy</span><span x-show="copied" x-cloak>Copied</span></x-button>
                     @elseif ($mode === 'material')
                         <x-button variant="primary" x-on:click="$el.closest('dialog').close()">Done</x-button>
+                    @elseif ($mode === 'done')
+                        <a href="{{ $module ? route('workspaces.modules.show', [$workspaceId, $module->id]) : route('workspaces.show', $workspaceId) }}" class="btn btn-primary" wire:navigate>Done</a>
                     @else
                         <x-button x-on:click="$el.closest('dialog').close()">{{ $mode === 'end' ? 'Keep studying' : 'Cancel' }}</x-button>
-                        <x-button type="submit" :variant="$mode === 'delete' ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ ['end' => 'End session', 'delete' => 'Delete', 'pomodoro' => 'Save', 'teaching' => 'Save', 'topic' => 'Save'][$mode] }}</x-button>
+                        <x-button type="submit" :variant="$mode === 'delete' ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" busy-label="{{ $mode === 'end' ? 'Ending…' : 'Saving…' }}">{{ ['end' => 'End session', 'delete' => 'Delete', 'pomodoro' => 'Save', 'teaching' => 'Save', 'topic' => 'Save', 'question' => 'Keep question', 'tell' => 'Save'][$mode] }}</x-button>
                     @endif
                 </div>
             </form>

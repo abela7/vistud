@@ -68,7 +68,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_the_chat_waits_for_the_set_up_then_offers_openings(): void
     {
-        $this->get(route('workspaces.sessions.show', [$this->databases->id, $this->session->id]))->assertOk()->assertSee('Your tutor')->assertSee('Set up your AI first')->assertSee(route('engine.settings'))->assertSee('Another AI');
+        $this->get(route('workspaces.sessions.show', [$this->databases->id, $this->session->id]))->assertOk()->assertSee('Your tutor')->assertSee('Set up your AI first')->assertSee(route('engine.settings'))->assertDontSee('Another AI');
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $this->chat()->assertSee('Say hello, or ask about anything in this course.')->assertSee('Quiz me on what I should know by now.')->assertSee('fake/tutor · $0.00 of $2.00 this session')->assertDontSee('Keep what the tutor marked');
     }
@@ -114,8 +114,10 @@ class TutorChatScreenTest extends TestCase
         $this->engine->will(Fake::says('{"summary": "Left joins, explained and understood.", "checkpoint": "Right joins next."}', 200, 'fake/quick'));
         Livewire::test(StudySession::class, ['workspaceId' => $this->databases->id, 'sessionId' => $this->session->id])
             ->call('confirmEnd')->assertSee('saved with the session')
-            ->call('save')
-            ->assertSee('summary of the chat is saved below')
+            ->call('save')->assertSet('mode', 'done')
+            // The end screen says how it went, with the tutor's summary, and the page keeps both once it is closed.
+            ->assertSeeInOrder(['Session ended', 'Summary', 'Left joins, explained and understood.'])
+            ->call('close')
             ->assertSeeInOrder(['From the tutor', 'Left joins, explained and understood.', 'Right joins next.']);
         $this->assertSame('Left joins, explained and understood.', app(Sessions::class)->find($this->by, $this->session->id)->summary);
 

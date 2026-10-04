@@ -8,7 +8,7 @@ const desktop = { width: 1440, height: 900 };
 const phone = { width: 390, height: 844 };
 const analyse = async (page) => (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
     .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
-const clock = (page) => page.locator('.session-time [data-clock]');
+const clock = (page) => page.locator('.session-time-inline [data-clock]');
 const pill = (page) => page.locator('.session-pill');
 
 test.use({ reducedMotion: 'reduce' });
@@ -50,51 +50,60 @@ test('a session is started from the Overview, and its clock runs, pauses, breaks
     await page.waitForTimeout(1500);
     await expect(clock(page)).toHaveText(paused);
 
+    // A break is in the ⋯ menu (the header keeps the clock, Pause and End).
+    await page.getByRole('button', { name: /^More for / }).click();
     await page.getByRole('button', { name: 'Take a break' }).click();
-    await expect(page.locator('.session-clock')).toContainText('On a break');
+    await expect(page.locator('.session-clock-inline')).toContainText('On a break');
     await page.getByRole('button', { name: 'Back to studying' }).click();
-    await expect(page.locator('.session-clock')).toContainText('Studying');
+    await expect(page.locator('.session-clock-inline')).toContainText('Studying');
 
-    await page.getByRole('button', { name: 'End session' }).click();
+    // One screen to end it: the time, where the student stands on the topic, then how it went.
+    await page.getByRole('button', { name: 'End', exact: true }).click();
     const end = page.locator('#session-dialog');
+    await expect(end.getByRole('heading', { name: 'End this session?' })).toBeVisible();
+    await expect(end).toContainText('You studied');
     await end.getByLabel('Understood').check();
     await end.getByRole('button', { name: 'End session' }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Session ended.' })).toBeVisible();
+    await expect(end.getByRole('heading', { name: 'Session ended' })).toBeVisible();
+    await expect(end).toContainText('You studied');
     await expect(pill(page)).toHaveCount(0);
-    await expect(page.locator('h1 + .status-chip')).toHaveText('Understood');
-    await expect(page.getByRole('region', { name: 'What happened' })).toContainText('Studied');
+    await end.getByRole('link', { name: 'Done' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Databases', exact: true }).waitFor();
 });
 
-test('the session page is an open space: a slim clock, what to do as tiles, and the top bar follows it on every page', async ({ page }) => {
+test('the session page is the conversation, with a rail of topics and material, and the top bar follows it on every page', async ({ page }) => {
     await page.setViewportSize(desktop);
     const student = await openSession(page);
-    const tiles = page.getByRole('region', { name: 'What to do' });
-    for (const name of ['Another AI', 'Save from the chat', 'Ask a question', 'New flashcard', 'Write a note', 'Notes & files']) {
-        await expect(tiles.getByRole('button', { name, exact: true })).toBeVisible();
-    }
+    // The tiles, the questions board and the timeline are gone; the clock, Pause and End are in the header.
+    await expect(page.getByRole('region', { name: 'What to do' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'What happened' })).toHaveCount(0);
-    expect((await page.locator('.clock-bar').boundingBox()).height).toBeLessThan(120);
+    await expect(page.locator('.session-clock-inline')).toContainText('Studying');
+    await expect(page.getByRole('button', { name: 'End', exact: true })).toBeVisible();
 
-    await tiles.getByRole('button', { name: 'Notes & files', exact: true }).click();
-    const panel = page.locator('#session-dialog');
-    await expect(panel.getByRole('list', { name: 'In Week 1: Relational model' })).toContainText('Lecture 3: joins');
-    const search = panel.getByRole('searchbox', { name: /Search the notes and files in Week 1/ });
-    await search.fill('zzz');
-    await expect(panel.getByText('Nothing matches.')).toBeVisible();
-    await expect(panel.getByRole('link', { name: 'Lecture 3: joins' })).toBeHidden();
-    await search.fill('LECTURE');
-    await expect(panel.getByRole('link', { name: 'Lecture 3: joins' })).toBeVisible();
-    await expect(panel.getByText('Nothing matches.')).toBeHidden();
-    await page.locator('#session-dialog').getByRole('button', { name: 'Done' }).click();
-    await page.locator('#session-dialog').waitFor({ state: 'hidden' });
+    // The rail: the module's topics (the session's is marked), its material, and what the session saved.
+    const rail = page.getByRole('complementary', { name: /Topics, material/ });
+    await expect(rail.getByRole('heading', { name: 'Topics in Week 1: Relational model' })).toBeVisible();
+    await expect(rail.getByRole('button', { name: /^Joins/ })).toHaveAttribute('aria-current', 'true');
+    await expect(rail.getByRole('link', { name: 'Lecture 3: joins' })).toBeVisible();
+    await expect(rail.getByText('Nothing saved yet.')).toBeVisible();
+
+    // A note is given to the tutor from the rail, and a topic is switched with a tap.
+    const use = rail.getByRole('button', { name: 'The tutor reads Lecture 3: joins' });
+    await expect(use).toHaveAttribute('aria-pressed', 'false');
+    await use.click();
+    await expect(use).toHaveAttribute('aria-pressed', 'true');
+    await rail.getByRole('button', { name: /^Primary and foreign keys/ }).click();
+    await expect(rail.getByRole('button', { name: /^Primary and foreign keys/ })).toHaveAttribute('aria-current', 'true');
+    await expect(rail.getByRole('button', { name: /^Joins/ })).not.toHaveAttribute('aria-current', 'true');
+    await expect(page.getByRole('status').filter({ hasText: 'Now on Primary and foreign keys.' })).toBeVisible();
 
     await page.goto(`/workspaces/${student.workspace}/progress`);
     await expect(pill(page)).toBeVisible();
     await pill(page).getByRole('button', { name: 'Pause the session' }).click();
     await expect(pill(page).getByRole('button', { name: 'Resume the session' })).toBeVisible();
     await pill(page).getByRole('link').click();
-    await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
-    await expect(page.locator('.session-clock')).toContainText('Paused');
+    await page.getByRole('heading', { level: 1, name: 'Primary and foreign keys' }).waitFor();
+    await expect(page.locator('.session-clock-inline')).toContainText('Paused');
 });
 
 test('another tab follows a pause straight away', async ({ page, context }) => {
@@ -120,7 +129,7 @@ async function openPomodoro(page, secondsLeft) {
 
 test('a Pomodoro focus period runs out on its own and the break begins, here and in the top bar', async ({ page }) => {
     await page.setViewportSize(desktop);
-    await openPomodoro(page, 4);
+    await openPomodoro(page, 8);
     const card = page.getByRole('region', { name: 'Pomodoro clock' });
     await expect(card).toContainText('Focus 1 of 4');
     await expect(page).toHaveTitle(/Focus · Study session/);
@@ -183,7 +192,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         const student = await openSession(page);
         await useSentinelTheme(page);
         const states = { 'session page': await foreignColours(page) };
-        await page.getByRole('button', { name: 'End session' }).click();
+        await page.getByRole('button', { name: 'End', exact: true }).click();
         await page.locator('#session-dialog').getByRole('heading').waitFor();
         states['end dialog'] = await foreignColours(page);
         await page.goto(`/workspaces/${student.workspace}`);
@@ -201,7 +210,7 @@ for (const theme of THEMES) {
         const student = await openSession(page);
         await useTheme(page, theme);
         expect(await analyse(page)).toEqual([]);
-        await page.getByRole('button', { name: 'End session' }).click();
+        await page.getByRole('button', { name: 'End', exact: true }).click();
         await page.locator('#session-dialog').getByRole('heading').waitFor();
         expect(await analyse(page)).toEqual([]);
         await page.goto(`/workspaces/${student.workspace}`);
@@ -254,7 +263,7 @@ test('the top-bar timer hides to a pulsing dot, and stays hidden until shown aga
 test('the session topic is changed on the page, to one of the module or a new one', async ({ page }) => {
     await page.setViewportSize(desktop);
     await openSession(page);
-    await page.getByRole('button', { name: 'Change topic' }).click();
+    await page.getByRole('button', { name: 'Another topic…' }).click();
     const panel = page.locator('#session-dialog');
     await expect(panel.getByRole('heading', { name: 'What this session is about' })).toBeVisible();
     await panel.getByLabel('Topic', { exact: true }).selectOption('new');

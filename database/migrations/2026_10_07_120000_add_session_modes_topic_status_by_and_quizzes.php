@@ -20,9 +20,8 @@ return new class extends Migration
             // module, topic, quiz, test or free.
             $table->string('mode', 10)->default('topic')->after('topic_id');
         });
-        // A session with a module and no topic was the whole module; one with neither was free.
+        // A session with a module and no topic was the whole module; the rest were about a topic (or about to choose one).
         DB::table('study_sessions')->whereNull('topic_id')->whereNotNull('module_id')->update(['mode' => 'module']);
-        DB::table('study_sessions')->whereNull('topic_id')->whereNull('module_id')->update(['mode' => 'free']);
 
         Schema::table('topics', function (Blueprint $table) {
             // student or tutor: who set the status the row shows now.

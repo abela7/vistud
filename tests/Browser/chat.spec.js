@@ -113,7 +113,8 @@ test('notes and pictures go with a message: picked, uploaded or pasted', async (
     const answers = chat.locator('li[wire\\:key^="turn-"].is-tutor .chat-markdown');
 
     // Pick the module's note: a chip, then on the message, then the tutor has it.
-    await chat.getByRole('button', { name: 'Attach a note, a file or a picture' }).click();
+    await chat.getByRole('button', { name: /^More: attach/ }).click();
+    await chat.getByRole('button', { name: 'Attach a note, file or picture' }).click();
     const picker = chat.getByRole('group', { name: 'Attach a note, a file or a picture' });
     await picker.getByLabel('Find a note or a file').fill('lecture');
     await picker.getByRole('button', { name: /Lecture 3: joins/ }).click();
@@ -129,7 +130,8 @@ test('notes and pictures go with a message: picked, uploaded or pasted', async (
     await expect(chat.getByRole('list', { name: 'Attached to your message' })).toBeHidden();
 
     // Upload a picture from the picker: it goes into the module, then to the tutor.
-    await chat.getByRole('button', { name: 'Attach a note, a file or a picture' }).click();
+    await chat.getByRole('button', { name: /^More: attach/ }).click();
+    await chat.getByRole('button', { name: 'Attach a note, file or picture' }).click();
     await picker.locator('input[type=file]').setInputFiles(resolve(appRoot, 'tests/Browser/fixtures/files/Onion cells.png'));
     await expect(chat.getByRole('list', { name: 'Attached to your message' })).toContainText('Onion cells.png', { timeout: 10_000 });
     await box.press('Enter');
@@ -198,7 +200,7 @@ test('a diagram and a formula in a reply are drawn, with the diagram as text und
     // Quiz me: the menu offers the session's topic, its module and what's hardest; a choice is sent as a message.
     await chat.getByRole('button', { name: 'Quiz me' }).click();
     const quiz = chat.getByRole('group', { name: 'Quiz me' });
-    await expect(quiz.getByRole('button')).toHaveText(['On Joins', 'On Week 1: Relational model', 'On what I find hardest']);
+    await expect(quiz.getByRole('button')).toHaveText(['On Joins', 'On Week 1: Relational model', 'On what I find hardest', 'Test me on the module']);
     await quiz.getByRole('button', { name: 'On Joins' }).click();
     await expect(quiz).toBeHidden();
     await expect(chat.locator('li[data-turn].is-me').last()).toHaveText('Quiz me on Joins.', { timeout: 15_000 });
@@ -255,3 +257,119 @@ test('the tutor saves cards and writes in a note that updates while it is open',
     await note.close();
 });
 
+
+/** A student with a session, the AI set up against the fake service. */
+async function openReadySession(page, size = { width: 1440, height: 900 }) {
+    const student = makeStudentWithSession();
+    tinker([
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `app(\\App\\Engine\\Settings::class)->setKey($p, 'sk-or-browser-test-0000000000');`,
+        `app(\\App\\Engine\\Settings::class)->set($p, ['tutor_model' => 'fake/tutor', 'consent' => true]);`,
+    ].join(' '));
+    await page.setViewportSize(size);
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { name: 'Your tutor' }).waitFor({ state: 'attached' });
+    await page.waitForLoadState('load');
+
+    return student;
+}
+
+test('the chips ask the tutor, and the + menu holds a question, a card and a note', async ({ page }) => {
+    await openReadySession(page);
+    const chat = page.locator('.chat');
+    const quick = chat.getByRole('list', { name: 'Quick asks' });
+    for (const name of ['Quiz me', 'Cards', 'Note this', 'Where are we']) {
+        await expect(quick.getByRole('button', { name: new RegExp(`^${name}`) })).toBeVisible();
+    }
+    await expect(chat.getByText(/fake\/tutor · \$0\.00 of \$2\.00 this session/)).toBeVisible();
+
+    // One tap asks: the student's words show at once and the tutor answers.
+    await quick.getByRole('button', { name: 'Where are we' }).click();
+    await expect(chat.locator('.chat-turn.is-me').last()).toHaveText('Where are we? What is done and what is left?');
+    await expect(chat.locator('li[wire\\:key^="turn-"].is-tutor .chat-markdown')).toHaveCount(1, { timeout: 15_000 });
+
+    // The + menu: attach, ask a question, a card, a note.
+    await chat.getByRole('button', { name: /^More: attach/ }).click();
+    const menu = chat.getByRole('group', { name: 'More', exact: true });
+    for (const name of ['Attach a note, file or picture', 'Ask a question', 'New flashcard', 'Write a note']) {
+        await expect(menu.getByRole('button', { name })).toBeVisible();
+    }
+    await menu.getByRole('button', { name: 'Ask a question' }).click();
+    const panel = page.locator('#session-dialog');
+    await expect(panel.getByRole('heading', { name: 'Ask a question' })).toBeVisible();
+    await panel.getByLabel('Your question').fill('Why does a left join keep unmatched rows?');
+    await panel.getByRole('button', { name: 'Keep question' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'The question is kept.' })).toBeVisible();
+    await expect(panel).not.toBeVisible();
+});
+
+test('the tutor marks a topic as its own, with a tap to undo it, and the end screen starts there', async ({ page }) => {
+    const student = makeStudentWithSession();
+    tinker([
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `app(\\App\\Engine\\Settings::class)->setKey($p, 'sk-or-browser-test-0000000000');`,
+        `app(\\App\\Engine\\Settings::class)->set($p, ['tutor_model' => 'fake/tutor', 'consent' => true]);`,
+        // A topic with no status yet, and the session on it.
+        `$w = '${student.workspace}'; $joins = collect(app(\\App\\Study\\Topics::class)->list($p, $w))->firstWhere('name', 'Joins');`,
+        `$self = app(\\App\\Study\\Topics::class)->create($p, $w, 'Self joins', $joins->moduleId); app(\\App\\Study\\Sessions::class)->setTopic($p, '${student.session}', $self->id);`,
+    ].join(' '));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { level: 1, name: 'Self joins' }).waitFor();
+    await page.waitForLoadState('load');
+    const chat = page.locator('.chat');
+    const box = chat.getByLabel('Write to your tutor');
+    await box.fill('I think I get this, mark it');
+    await box.press('Enter');
+
+    const where = chat.getByRole('list', { name: 'Where you stand' });
+    await expect(where).toContainText('Self joins: understood, marked by the tutor', { timeout: 15_000 });
+    expect(await analyseChat(page)).toEqual([]);
+    // The rail shows it as the tutor's, and Undo takes it back.
+    const rail = page.getByRole('complementary', { name: /Topics, material/ });
+    await expect(rail.getByRole('button', { name: /Self joins.*marked by the tutor/ })).toBeVisible();
+    await where.getByRole('button', { name: /^Undo/ }).click();
+    await expect(where).toContainText('Self joins: understood, undone');
+    await expect(rail.getByRole('button', { name: /Self joins.*Not started/ })).toBeVisible();
+
+    // The end screen: the topic starts on what the tutor said, and the choice is the student's.
+    await page.getByRole('button', { name: 'End', exact: true }).click();
+    const end = page.locator('#session-dialog');
+    await expect(end.getByRole('heading', { name: 'End this session?' })).toBeVisible();
+    const group = end.getByRole('radiogroup', { name: 'Where you stand on Self joins' });
+    await expect(group.getByLabel('Understood')).toBeChecked();
+    await group.getByLabel('Covered').check();
+    await end.getByRole('button', { name: 'End session' }).click();
+    await expect(end.getByRole('heading', { name: 'Session ended' })).toBeVisible();
+    const status = JSON.parse(tinker(`echo json_encode(DB::table('topics')->where('workspace_id', '${student.workspace}')->where('name', 'Self joins')->first(['status', 'status_by']));`));
+    expect([status.status, status.status_by]).toEqual(['covered', 'student']);
+});
+
+test('on a phone the rail is a sheet from the topic, and the box stays in view', async ({ page }) => {
+    await openReadySession(page, { width: 390, height: 844 });
+    await expect(page.getByRole('complementary', { name: /Topics, material/ })).toBeHidden();
+    const topic = page.getByRole('button', { name: /^Joins/ }).first();
+    await expect(topic).toBeVisible();
+    await topic.click();
+    const sheet = page.locator('#session-rail-sheet');
+    await expect(sheet.getByRole('heading', { name: 'Week 1: Relational model', exact: true })).toBeVisible();
+    await expect(sheet.getByRole('button', { name: /^Primary and foreign keys/ })).toBeVisible();
+    await sheet.getByRole('button', { name: /^Primary and foreign keys/ }).click();
+    await expect(sheet.getByRole('button', { name: /^Primary and foreign keys/ })).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('Escape');
+    await expect(sheet).not.toBeVisible();
+
+    // The box is in view above the tab bar, and the page does not scroll sideways.
+    const box = page.getByLabel('Write to your tutor');
+    await expect(box).toBeVisible();
+    const rect = await box.boundingBox();
+    expect(rect.y + rect.height).toBeLessThanOrEqual(844);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
+async function analyseChat(page) {
+    return (await new AxeBuilder({ page }).include('.chat').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
+        .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
+}

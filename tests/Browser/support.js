@@ -143,6 +143,25 @@ export async function newHere(page, what) {
     await page.locator('main').getByRole('button', { name: buttons[what], exact: true }).first().click();
 }
 
+/**
+ * Turns on "I use another AI by copy-paste" for the student (the briefing and "Save from another AI" are hidden until then),
+ * with a key and a model so the rest of their AI settings are as a student who has set it up.
+ */
+export function turnOnCopyPaste(email) {
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
+        `app(\\App\\Engine\\Settings::class)->setKey($p, 'sk-or-browser-test-0000000000');`,
+        `app(\\App\\Engine\\Settings::class)->set($p, ['tutor_model' => 'fake/tutor', 'consent' => true, 'copy_paste_ai' => true]);`,
+    ].join(' ');
+    execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
+}
+
+/** Opens the session page's ⋯ menu and chooses an item from it. */
+export async function fromSessionMenu(page, item) {
+    await page.getByRole('button', { name: /^More for / }).click();
+    await page.getByRole('button', { name: item }).click();
+}
+
 /** A confirmed two-factor account in the app database the browser server uses. */
 export function makeTwoFactorAccount() {
     return makeAccount(true);
