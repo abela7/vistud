@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithNote, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithNote, openStudentHome, openTab, THEMES, useSentinelTheme, useTheme } from './support.js';
 
 /* Notes and the editor (docs/specs/workspaces.md step 3, ADR 0003 §5 and §14 M2 checks 11–14). */
 
@@ -436,6 +436,7 @@ test('a draft of a note deleted elsewhere is removed before it could be sent', a
     await other.setViewportSize(desktop);
     await other.goto(`/workspaces/${note.workspace}/modules`);
     await other.locator('main').getByRole('link', { name: 'Week 2: Cell division' }).click();
+    await openTab(other, 'Notes');
     await other.getByRole('button', { name: 'Actions for Mitosis vs meiosis' }).click();
     await other.getByRole('button', { name: 'Move to trash' }).click();
     // Leaving before the trash is saved would cancel it.

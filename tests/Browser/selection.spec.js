@@ -46,10 +46,8 @@ async function openNotesAndFiles(page, email) {
     await openStudentHome(page, email);
     await page.locator('main').getByRole('link', { name: 'Biology' }).click();
     await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
-    const isMobile = page.viewportSize().width < 768;
-    const nav = isMobile ? '.app-tabbar' : '.app-sidebar';
-    const linkName = isMobile ? 'Notes' : 'Notes & files';
-    await page.locator(nav).getByRole('link', { name: linkName }).click();
+    // Notes & files is reached from Modules ("All notes & files"); its page is the course's /notes.
+    await page.goto(`${page.url().replace(/\/$/, '')}/notes`);
     await page.getByRole('heading', { level: 1, name: 'Notes & files' }).waitFor();
     await page.waitForLoadState('load');
 }

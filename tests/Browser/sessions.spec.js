@@ -224,7 +224,8 @@ test('starting while a session is open says so, and it can be ended first', asyn
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
     await page.waitForLoadState('load');
-    await page.getByRole('button', { name: 'Study this' }).click();
+    await page.getByRole('button', { name: /Study this/ }).click();
+    await page.locator('#study-menu').getByRole('button', { name: 'Whole module' }).click();
     const panel = page.locator('#study-dialog');
     await expect(panel.getByRole('heading', { name: "You're already studying" })).toBeVisible();
     await expect(panel).toContainText('Joins');
