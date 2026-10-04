@@ -334,11 +334,14 @@ as slipped.
 ## 6. The engine (built, 2026-10-05: the back end)
 
 **Decided by the owner, 2026-10-04.** The built-in chat calls the model
-through **OpenRouter** (or any service with the OpenAI chat format,
-`VISTUD_ENGINE_URL`): one key the owner holds in `.env`
-(`VISTUD_ENGINE_KEY`, never in the database or on a screen), every model
-behind it, and **the student chooses the models** (S6 becomes "the model is
-a setting"). A session is cheap by design, not by the model alone: a session
+through **OpenRouter** (or any service with the OpenAI chat format): one key
+the owner sets up **once, on a screen** (the admin area's *AI engine* page:
+paste the key, it is tried at once, choose the models everyone starts with;
+`App\Engine\Setup`, `platform_settings`, the key encrypted with the app key
+and shown again only by its last four characters; every change in the audit
+log, never the key), every model behind it, and **the student chooses the
+models** (S6 becomes "the model is a setting"). A key in `.env`
+(`VISTUD_ENGINE_KEY`) still works for a server set up by hand. A session is cheap by design, not by the model alone: a session
 ends and the memory stays (the next starts from the summaries, never the
 old transcript); a long chat's oldest turns are folded into a summary; a
 look-up returns only what was asked; and the student's own limits stop a
@@ -384,9 +387,9 @@ runs through the services the pages use, so another student's things are
 the student's name and email never go in.
 
 **Failures** come back as `App\Engine\EngineFailed` (503) with a plain
-message: no key, the key refused, out of credit, the model unknown, busy,
+message: not set up, the key refused, out of credit, the model unknown, busy,
 down, unreachable; never the key. `php artisan vistud:doctor` checks the key
-and that the service answers.
+and that the service answers; the AI engine page's *Try it* does the same.
 
 **Still to come:** the chat on the session page (streaming, pictures and
 files in it, *Think harder* for one question on a stronger model, the cost

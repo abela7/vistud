@@ -42,10 +42,12 @@ class EngineSettingsScreenTest extends TestCase
         $this->assertSame(['fake/tutor', 'fake/quick', 1_500_000, true], [$choices->tutorModel, $choices->quickModel, $choices->sessionCapMicros, $choices->ready()]);
     }
 
-    public function test_without_a_key_the_dialog_says_so(): void
+    public function test_without_a_key_the_dialog_says_so_and_points_an_admin_to_the_set_up(): void
     {
         config(['vistud.engine.key' => '']);
         $this->actingAs($this->student());
-        Livewire::test(EngineSettings::class)->call('edit')->assertSee('No engine key yet')->assertSee('VISTUD_ENGINE_KEY');
+        Livewire::test(EngineSettings::class)->call('edit')->assertSee('The AI engine isn\'t set up yet')->assertSee('Ask the owner')->assertDontSee(route('admin.engine'));
+        $this->actingAs($this->admin());
+        Livewire::test(EngineSettings::class)->call('edit')->assertSee('The AI engine isn\'t set up yet')->assertSee(route('admin.engine'));
     }
 }

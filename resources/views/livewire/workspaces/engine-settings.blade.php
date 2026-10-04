@@ -25,7 +25,13 @@
                 </div>
                 <div class="space-y-4 px-5 pt-2">
                     @unless ($keySet)
-                        <x-alert tone="warning" title="No engine key yet">The owner puts a key for openrouter.ai in <code>.env</code> as <code>VISTUD_ENGINE_KEY</code>. Until then the chat can't answer; your choices here are kept.</x-alert>
+                        <x-alert tone="warning" title="The AI engine isn't set up yet">
+                            @if ($setupUrl)
+                                Set it up on the admin area's <a href="{{ $setupUrl }}" class="text-link">AI engine page</a>: paste a key once and try it. Your choices here are kept meanwhile.
+                            @else
+                                Ask the owner to set it up in the admin area. Until then the chat can't answer; your choices here are kept.
+                            @endif
+                        </x-alert>
                     @elseif ($models === [])
                         <x-alert tone="warning" title="The list of models couldn't be loaded">Type a model's id as the service names it. <code>php artisan vistud:doctor</code> says what's wrong.</x-alert>
                     @endunless

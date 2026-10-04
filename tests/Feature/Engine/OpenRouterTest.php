@@ -8,11 +8,14 @@ use App\Engine\OpenRouter;
 use App\Engine\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
 /** The engine over OpenRouter, or any service with the OpenAI chat format (docs/specs/study-memory.md §6). */
 class OpenRouterTest extends TestCase
 {
+    use RefreshesDatabase;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -27,7 +30,7 @@ class OpenRouterTest extends TestCase
             'usage' => ['prompt_tokens' => 1200, 'completion_tokens' => 40, 'cost' => 0.00123],
         ])]);
 
-        $reply = (new OpenRouter)->reply(new Request('openai/gpt-4.1-mini', 'You are the tutor.', [['role' => 'user', 'content' => 'What is a left join?']], [['type' => 'function', 'function' => ['name' => 'topics']]], ['google/gemini-flash']));
+        $reply = app(OpenRouter::class)->reply(new Request('openai/gpt-4.1-mini', 'You are the tutor.', [['role' => 'user', 'content' => 'What is a left join?']], [['type' => 'function', 'function' => ['name' => 'topics']]], ['google/gemini-flash']));
 
         $this->assertSame(['A left join keeps every row of the left table.', [], 'openai/gpt-4.1-mini', 1200, 40, 1230, 'stop'], [$reply->text, $reply->toolCalls, $reply->model, $reply->tokensIn, $reply->tokensOut, $reply->costMicros, $reply->finish]);
         Http::assertSent(function ($request) {
@@ -48,7 +51,7 @@ class OpenRouterTest extends TestCase
             ['id' => 'call_b', 'type' => 'function', 'function' => ['name' => 'topics', 'arguments' => '']],
         ]], 'finish_reason' => 'tool_calls']], 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5]])]);
 
-        $reply = (new OpenRouter)->reply(new Request('m', 's', [], noTraining: false));
+        $reply = app(OpenRouter::class)->reply(new Request('m', 's', [], noTraining: false));
 
         $this->assertTrue($reply->wantsTools());
         $this->assertSame(['', 'tool_calls', null], [$reply->text, $reply->finish, $reply->costMicros]);
@@ -58,7 +61,7 @@ class OpenRouterTest extends TestCase
 
     public function test_failures_become_plain_messages_without_the_key(): void
     {
-        $engine = new OpenRouter;
+        $engine = app(OpenRouter::class);
         $statuses = [401 => 'refused the key', 402 => 'out of credit', 404 => 'does not know that model', 429 => 'busy right now', 500 => 'down right now'];
         $sequence = Http::sequence();
         foreach (array_keys($statuses) as $status) {
@@ -86,10 +89,10 @@ class OpenRouterTest extends TestCase
         config(['vistud.engine.key' => '']);
         Http::fake();
         try {
-            (new OpenRouter)->reply(new Request('m', 's', []));
+            app(OpenRouter::class)->reply(new Request('m', 's', []));
             $this->fail('Should fail without a key.');
         } catch (EngineFailed $e) {
-            $this->assertStringContainsString('VISTUD_ENGINE_KEY', $e->getMessage());
+            $this->assertStringContainsString('AI engine page', $e->getMessage());
         }
         Http::assertNothingSent();
     }

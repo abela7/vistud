@@ -34,6 +34,9 @@ final class Index extends Component
         AuditAction::TWO_FACTOR_RESET => 'reset two-factor authentication for',
         AuditAction::RECOVERY_CODES_GENERATED => 'made new recovery codes',
         AuditAction::RECOVERY_CODE_USED => 'logged in with a recovery code',
+        AuditAction::ENGINE_KEY_SET => 'set the AI engine\'s key',
+        AuditAction::ENGINE_KEY_REMOVED => 'removed the AI engine\'s key',
+        AuditAction::ENGINE_DEFAULTS_CHANGED => 'changed the AI engine\'s defaults',
     ];
 
     /** Names used by earlier versions. The log is never rewritten, so old entries keep them. */

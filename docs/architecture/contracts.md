@@ -257,3 +257,4 @@ Implemented in increment 2 (`App\Audit\AuditAction`). Provisional until the PM a
 | `two_factor.confirmed`, `two_factor.disabled`, `two_factor.recovery_codes_generated`, `two_factor.recovery_code_used` | user |
 | `area.admin_entered` (`workspace.admin_entered` before M2 step 0) | user |
 | `admin.access_denied` (a non-admin reached an admin route) | route name |
+| `engine.key_set` (`metadata.hint`: the key's last four characters), `engine.key_removed`, `engine.defaults_changed` (2026-10-05) | engine |

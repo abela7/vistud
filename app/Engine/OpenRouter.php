@@ -12,11 +12,13 @@ use Throwable;
  * The engine over OpenRouter (openrouter.ai), or any service with the OpenAI chat format (`VISTUD_ENGINE_URL`):
  * one key, every model, and the student chooses which (docs/specs/study-memory.md §6). It asks for the usage
  * and cost with every reply, names the fallback models to try when the first can't answer, and keeps the
- * student's words away from training when the settings say so. Failures come back as EngineFailed with a
- * plain message; the key is never in one.
+ * student's words away from training when the settings say so. The key and the address come from the set-up
+ * (App\Engine\Setup). Failures come back as EngineFailed with a plain message; the key is never in one.
  */
 final class OpenRouter implements Engine
 {
+    public function __construct(private Setup $setup) {}
+
     public function reply(Request $request): Reply
     {
         $body = [
@@ -88,11 +90,11 @@ final class OpenRouter implements Engine
     /** @return array<string, mixed> the JSON the service answered */
     private function call(callable $send): array
     {
-        $key = (string) config('vistud.engine.key');
+        $key = $this->setup->key();
         if ($key === '') {
-            throw new EngineFailed('engine_not_set_up', 'No engine key is set. Put your OpenRouter key in .env as VISTUD_ENGINE_KEY.');
+            throw new EngineFailed('engine_not_set_up', 'The AI engine isn\'t set up yet: an admin pastes the service\'s key on the admin area\'s AI engine page.');
         }
-        $http = Http::baseUrl(rtrim((string) config('vistud.engine.url'), '/'))
+        $http = Http::baseUrl(rtrim($this->setup->url(), '/'))
             ->withToken($key)
             ->withHeaders(['HTTP-Referer' => (string) config('vistud.engine.app_url'), 'X-Title' => (string) config('vistud.engine.app_name')])
             ->acceptJson()
@@ -103,7 +105,7 @@ final class OpenRouter implements Engine
             /** @var Response $response */
             $response = $send($http);
         } catch (ConnectionException) {
-            throw new EngineFailed('engine_unreachable', 'The engine could not be reached. Check the internet connection and VISTUD_ENGINE_URL.');
+            throw new EngineFailed('engine_unreachable', 'The service could not be reached. Check the internet connection and the service\'s address on the AI engine page.');
         } catch (Throwable) {
             throw new EngineFailed('engine_unreachable', 'The engine could not be reached.');
         }

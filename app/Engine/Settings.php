@@ -24,13 +24,16 @@ final class Settings
 
     private const MODEL_ID = '#^[a-z0-9][a-z0-9._:/-]{0,118}$#i';
 
+    public function __construct(private Setup $setup) {}
+
     public function get(Principal $by): Choices
     {
         $row = LearnerTables::query(Guard::learner($by), 'engine_settings')->first();
+        $defaults = $this->setup->defaultModels();
 
         return new Choices(
-            tutorModel: (string) ($row->tutor_model ?? config('vistud.engine.tutor_model', '')),
-            quickModel: (string) ($row->quick_model ?? config('vistud.engine.quick_model', '')),
+            tutorModel: (string) ($row->tutor_model ?? $defaults['tutor']),
+            quickModel: (string) ($row->quick_model ?? $defaults['quick']),
             fallbackModel: (string) ($row->fallback_model ?? ''),
             sessionCapMicros: (int) ($row->session_cap_micros ?? self::DEFAULT_SESSION_CAP),
             monthCapMicros: (int) ($row->month_cap_micros ?? self::DEFAULT_MONTH_CAP),

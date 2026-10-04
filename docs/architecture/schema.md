@@ -92,6 +92,9 @@ Append-only (ADR 0003 §10.4). The runtime user can only `SELECT` and `INSERT`. 
 
 ADR 0002 defines what goes in; these tables define how it's stored.
 
+### `platform_settings`
+Settings of the installation itself, set by an admin on a screen (docs/specs/study-memory.md §6); not a learner table. `key` (PK, ≤ 64: `engine.key`, `engine.url`, `engine.tutor_model`, `engine.quick_model`), `value` (text, nullable; encrypted with the app key when `secret`, and then never shown whole again), `secret`, `updated_by` (the admin's user id, nullable), `updated_at`. Who changed what is in the audit log (`engine.key_set` with the key's last four characters, `engine.key_removed`, `engine.defaults_changed`); the key itself never is.
+
 ### `journal_entries`
 One row per event, never updated. Corrections are new entries (amendments and reviews).
 

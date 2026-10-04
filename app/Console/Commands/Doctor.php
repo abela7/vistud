@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Engine\Engine;
 use App\Engine\EngineFailed;
+use App\Engine\Setup;
 use App\Platform\Uploads\UploadLimits;
 use App\Study\FilePreviews;
 use App\Study\Files;
@@ -105,19 +106,19 @@ class Doctor extends Command
             needed: false,
         );
 
-        $engineKey = (string) config('vistud.engine.key');
+        $setup = $this->laravel->make(Setup::class);
         $check(
-            'An engine key (VISTUD_ENGINE_KEY), for the built-in chat',
-            $engineKey !== '',
-            'Get a key at openrouter.ai and put it in .env as VISTUD_ENGINE_KEY. Never paste it into a chat with an AI agent.',
+            'The AI engine\'s key, for the built-in chat',
+            $setup->keySet(),
+            'An admin pastes a key from openrouter.ai on the admin area\'s AI engine page (or puts it in .env as VISTUD_ENGINE_KEY). Never paste it into a chat with an AI agent.',
             needed: false,
         );
-        if ($engineKey !== '') {
+        if ($setup->keySet()) {
             try {
                 $count = count($this->laravel->make(Engine::class)->models());
-                $check('The engine answers at '.config('vistud.engine.url')." ({$count} models)", $count > 0, 'The service listed no models. Check VISTUD_ENGINE_URL.', needed: false);
+                $check('The engine answers at '.$setup->url()." ({$count} models)", $count > 0, 'The service listed no models. Check its address on the AI engine page.', needed: false);
             } catch (EngineFailed $e) {
-                $check('The engine answers at '.config('vistud.engine.url'), false, $e->getMessage(), needed: false);
+                $check('The engine answers at '.$setup->url(), false, $e->getMessage(), needed: false);
             }
         }
 

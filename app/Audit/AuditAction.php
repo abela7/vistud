@@ -36,4 +36,10 @@ final class AuditAction
     public const ADMIN_AREA_ENTERED = 'area.admin_entered';
 
     public const ADMIN_ACCESS_DENIED = 'admin.access_denied';
+
+    public const ENGINE_KEY_SET = 'engine.key_set';
+
+    public const ENGINE_KEY_REMOVED = 'engine.key_removed';
+
+    public const ENGINE_DEFAULTS_CHANGED = 'engine.defaults_changed';
 }

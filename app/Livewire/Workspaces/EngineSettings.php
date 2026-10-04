@@ -4,9 +4,11 @@ namespace App\Livewire\Workspaces;
 
 use App\Engine\Models;
 use App\Engine\Settings;
+use App\Engine\Setup;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
+use App\Platform\Access\Role;
 use App\Platform\Errors\Unprocessable;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
@@ -43,12 +45,15 @@ final class EngineSettings extends Component
 
     private Models $models;
 
+    private Setup $setup;
+
     private PrincipalFactory $principals;
 
-    public function boot(Settings $settings, Models $models, PrincipalFactory $principals): void
+    public function boot(Settings $settings, Models $models, Setup $setup, PrincipalFactory $principals): void
     {
         $this->settings = $settings;
         $this->models = $models;
+        $this->setup = $setup;
         $this->principals = $principals;
     }
 
@@ -105,7 +110,8 @@ final class EngineSettings extends Component
 
         return view('livewire.workspaces.engine-settings', [
             'models' => $models,
-            'keySet' => (string) config('vistud.engine.key') !== '',
+            'keySet' => $this->setup->keySet(),
+            'setupUrl' => $this->principal()->hasRole(Role::Admin) ? route('admin.engine') : null,
             'tutorWords' => $words($this->tutorModel),
             'quickWords' => $words($this->quickModel),
             'fallbackWords' => $words($this->fallbackModel),
