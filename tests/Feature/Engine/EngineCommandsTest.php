@@ -32,8 +32,10 @@ class EngineCommandsTest extends TestCase
         $by = $this->principal($ada);
         $workspace = app(Workspaces::class)->create($by, ['name' => 'Databases']);
         $session = app(Sessions::class)->start($by, $workspace->id);
-        $this->artisan('vistud:engine:ask', ['session' => $session->id, 'text' => 'Hi', '--user' => 'ada@example.test'])->expectsOutputToContain('Choose a model')->assertFailed();
+        $this->artisan('vistud:engine:ask', ['session' => $session->id, 'text' => 'Hi', '--user' => 'ada@example.test'])->expectsOutputToContain('Add your OpenRouter key')->assertFailed();
 
+        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->artisan('vistud:engine:ask', ['session' => $session->id, 'text' => 'Hi', '--user' => 'ada@example.test'])->expectsOutputToContain('Choose a model')->assertFailed();
         app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $engine->will(Fake::calls('topics'), Fake::says('Hello, Ada\'s course has no topics yet.', 2_000));
         $this->artisan('vistud:engine:ask', ['session' => $session->id, 'text' => 'Hi', '--user' => 'ada@example.test'])

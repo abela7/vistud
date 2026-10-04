@@ -57,7 +57,7 @@ final class Fake implements Engine
         return $step instanceof Closure ? $step($request) : $step;
     }
 
-    public function models(): array
+    public function models(?string $key = null): array
     {
         return $this->models;
     }

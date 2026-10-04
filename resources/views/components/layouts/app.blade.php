@@ -19,7 +19,7 @@
     $user = auth()->user();
     $items = $area === 'admin'
         ? [['Overview', 'admin.overview', 'layout-dashboard'], ['Accounts', 'admin.accounts', 'users'], ['AI engine', 'admin.engine', 'brain'], ['Audit log', 'admin.audit-log', 'scroll-text']]
-        : [['Home', 'home', 'house'], ['Security', 'two-factor.setup', 'shield-check']];
+        : [['Home', 'home', 'house'], ['AI engine', 'engine.settings', 'brain'], ['Security', 'two-factor.setup', 'shield-check']];
     // A student's own workspaces, for the sidebar and the switcher.
     $workspaces = $area === 'student' && $isStudent ? app(\App\Study\Workspaces::class)->list($principal) : null;
     $homeRoute = $area === 'admin' ? 'admin.overview' : 'home';
@@ -71,6 +71,9 @@
                 <p class="text-sm text-fg-muted">{{ $user->email }}</p>
             </div>
             <div class="border-t border-divider py-1.5">
+                @if ($isStudent)
+                    <a href="{{ route('engine.settings') }}" class="menu-item"><x-icon name="brain" class="size-4" />AI engine</a>
+                @endif
                 <a href="{{ route('two-factor.setup') }}" class="menu-item"><x-icon name="shield-check" class="size-4" />Security</a>
                 @if ($area === 'student' && $isAdmin)
                     <a href="{{ route('admin.overview') }}" class="menu-item"><x-icon name="shield" class="size-4" />Admin area</a>

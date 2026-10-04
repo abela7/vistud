@@ -92,9 +92,20 @@ class OpenRouterTest extends TestCase
             app(OpenRouter::class)->reply(new Request('m', 's', []));
             $this->fail('Should fail without a key.');
         } catch (EngineFailed $e) {
-            $this->assertStringContainsString('AI engine page', $e->getMessage());
+            $this->assertStringContainsString('AI engine settings', $e->getMessage());
         }
         Http::assertNothingSent();
+    }
+
+    public function test_a_students_own_key_is_used_before_the_one_set_up_for_everyone(): void
+    {
+        Http::fake(['engine.test/*' => Http::response(['choices' => [['message' => ['content' => 'Hi'], 'finish_reason' => 'stop']], 'data' => []])]);
+        app(OpenRouter::class)->reply(new Request('m', 's', [], key: 'sk-or-own-key'));
+        app(OpenRouter::class)->models('sk-or-own-key');
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer sk-or-own-key'));
+        app(OpenRouter::class)->reply(new Request('m', 's', []));
+        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer test-key'));
     }
 
     public function test_the_models_are_listed_with_prices_per_million_and_what_they_take_and_kept_for_a_day(): void

@@ -3,10 +3,14 @@
 namespace App\Engine;
 
 use App\Platform\Access\Guard;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Ids;
 use App\Study\Input;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 
 /**
  * Each student's engine settings (docs/specs/study-memory.md §6): which model tutors them, which does small
@@ -24,12 +28,13 @@ final class Settings
 
     private const MODEL_ID = '#^[a-z0-9][a-z0-9._:/-]{0,118}$#i';
 
-    public function __construct(private Setup $setup) {}
+    public function __construct(private Setup $setup, private Models $models) {}
 
     public function get(Principal $by): Choices
     {
         $row = LearnerTables::query(Guard::learner($by), 'engine_settings')->first();
         $defaults = $this->setup->defaultModels();
+        $key = self::decrypt($row);
 
         return new Choices(
             tutorModel: (string) ($row->tutor_model ?? $defaults['tutor']),
@@ -39,7 +44,65 @@ final class Settings
             monthCapMicros: (int) ($row->month_cap_micros ?? self::DEFAULT_MONTH_CAP),
             noTraining: $row === null || (bool) $row->no_training,
             consentedAt: $row?->consented_at === null ? null : (string) $row->consented_at,
+            ownKeyHint: $key === null ? null : '…'.substr($key, -4),
+            keyUpdatedAt: $key === null || $row?->key_updated_at === null ? null : (string) $row->key_updated_at,
         );
+    }
+
+    /** The student's own key for the service, or null without one (or when it can't be read any more). */
+    public function key(Principal $by): ?string
+    {
+        return self::decrypt(LearnerTables::query(Guard::learner($by), 'engine_settings')->first());
+    }
+
+    /** Whether this student's chats can reach the service at all: their own key, or the one set up for everyone. */
+    public function keyAvailable(Principal $by): bool
+    {
+        return $this->key($by) !== null || $this->setup->keySet();
+    }
+
+    /** Keeps the student's own key, encrypted. */
+    public function setKey(Principal $by, mixed $key): Choices
+    {
+        $scope = Guard::learner($by);
+        $key = is_string($key) ? trim($key) : '';
+        Input::refuse(preg_match('/^\S{16,300}$/', $key) === 1 ? [] : ['key' => 'Paste the whole key, with no spaces (it starts with "sk-or-" on OpenRouter).']);
+        $this->ensureRow($scope);
+        LearnerTables::query($scope, 'engine_settings')->update(['key_encrypted' => Crypt::encryptString($key), 'key_updated_at' => now(), 'updated_at' => now()]);
+
+        return $this->get($by);
+    }
+
+    public function removeKey(Principal $by): Choices
+    {
+        LearnerTables::query(Guard::learner($by), 'engine_settings')->update(['key_encrypted' => null, 'key_updated_at' => null, 'updated_at' => now()]);
+
+        return $this->get($by);
+    }
+
+    /**
+     * Asks the service for its models with the student's key (or the one set up for everyone): proof it works.
+     *
+     * @return array{ok: bool, message: string, models: int}
+     */
+    public function test(Principal $by): array
+    {
+        $key = $this->key($by);
+        if ($key === null && ! $this->setup->keySet()) {
+            return ['ok' => false, 'message' => 'No key yet. Paste your OpenRouter key above.', 'models' => 0];
+        }
+        try {
+            $count = count(app(Engine::class)->models($key));
+        } catch (EngineFailed $e) {
+            return ['ok' => false, 'message' => $e->getMessage(), 'models' => 0];
+        }
+        if ($count > 0) {
+            Cache::forget('vistud.engine.models');
+        }
+
+        return $count > 0
+            ? ['ok' => true, 'message' => "It works: the service offers {$count} models.", 'models' => $count]
+            : ['ok' => false, 'message' => 'The service answered but listed no models.', 'models' => 0];
     }
 
     /**
@@ -91,5 +154,28 @@ final class Settings
         }
 
         return $this->get($by);
+    }
+
+    /** A row with the defaults, so a key can be kept before anything else is chosen. */
+    private function ensureRow(LearnerScope $scope): void
+    {
+        if (! LearnerTables::query($scope, 'engine_settings')->exists()) {
+            LearnerTables::insert($scope, 'engine_settings', [
+                'id' => Ids::new(), 'session_cap_micros' => self::DEFAULT_SESSION_CAP, 'month_cap_micros' => self::DEFAULT_MONTH_CAP,
+                'no_training' => true, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+    }
+
+    private static function decrypt(?object $row): ?string
+    {
+        if ($row === null || $row->key_encrypted === null) {
+            return null;
+        }
+        try {
+            return Crypt::decryptString($row->key_encrypted);
+        } catch (DecryptException) {
+            return null;
+        }
     }
 }

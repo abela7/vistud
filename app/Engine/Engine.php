@@ -13,11 +13,12 @@ interface Engine
     public function reply(Request $request): Reply;
 
     /**
-     * The models the service offers, with their prices and what they can take.
+     * The models the service offers, with their prices and what they can take; asked with the given key, or
+     * the one set up for everyone.
      *
      * @return list<Model>
      *
      * @throws EngineFailed
      */
-    public function models(): array;
+    public function models(?string $key = null): array;
 }

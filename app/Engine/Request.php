@@ -21,5 +21,7 @@ final readonly class Request
         public array $fallbacks = [],
         public int $maxTokens = 4000,
         public bool $noTraining = true,
+        /** The student's own key for the service; null means the one set up for everyone. Never logged. */
+        public ?string $key = null,
     ) {}
 }

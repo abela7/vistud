@@ -40,6 +40,7 @@ final class SessionChat
         private Models $models,
         private Toolbox $toolbox,
         private WriteBack $writeBack,
+        private Setup $setup,
     ) {}
 
     /** Sends the student's words and returns the engine's final answer for the turn. */
@@ -51,11 +52,15 @@ final class SessionChat
             throw new Unprocessable('session_ended', 'This session has ended. Start a new one to keep chatting.');
         }
         $choices = $this->settings->get($by);
+        $key = $this->settings->key($by);
+        if ($key === null && ! $this->setup->keySet()) {
+            throw new Unprocessable('engine_key', 'Add your OpenRouter key in your AI engine settings first.');
+        }
         if ($choices->tutorModel === '') {
-            throw new Unprocessable('engine_model', 'Choose a model in the AI engine settings first.');
+            throw new Unprocessable('engine_model', 'Choose a model in your AI engine settings first.');
         }
         if ($choices->consentedAt === null) {
-            throw new Unprocessable('engine_consent', 'Agree to the chat in the AI engine settings first.');
+            throw new Unprocessable('engine_consent', 'Agree to the chat in your AI engine settings first.');
         }
         $text = is_string($text) ? trim(str_replace("\r\n", "\n", $text)) : '';
         Input::refuse(match (true) {
@@ -69,7 +74,7 @@ final class SessionChat
         $position = (int) LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->max('position');
         $this->keep($scope, $thread->id, ++$position, ['role' => 'user', 'content' => $text]);
 
-        $model = $this->models->find($choices->tutorModel);
+        $model = $this->models->find($choices->tutorModel, $key);
         $withTools = $model === null || $model->tools;
         $system = $this->system($by, $session, $thread->summary, $withTools);
         $messages = $this->messagesOf($scope, $thread);
@@ -81,7 +86,7 @@ final class SessionChat
         $reply = null;
 
         for ($round = 0; $round <= $rounds; $round++) {
-            $reply = $this->engine->reply(new Request($choices->tutorModel, $system, $messages, $round < $rounds ? $tools : [], $fallbacks, noTraining: $choices->noTraining));
+            $reply = $this->engine->reply(new Request($choices->tutorModel, $system, $messages, $round < $rounds ? $tools : [], $fallbacks, noTraining: $choices->noTraining, key: $key));
             $spent += $reply->costMicros ?? 0;
             $calls = array_map(fn (ToolCall $c) => ['id' => $c->id, 'type' => 'function', 'function' => ['name' => $c->name, 'arguments' => (string) json_encode($c->arguments)]], $reply->toolCalls);
             $this->keep($scope, $thread->id, ++$position, [
@@ -102,7 +107,7 @@ final class SessionChat
         LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update([
             'spent_micros' => DB::raw('spent_micros + '.(int) $spent), 'turns' => DB::raw('turns + 1'), 'model' => $choices->tutorModel, 'updated_at' => now(),
         ]);
-        $this->foldIfLong($scope, $thread->id, $choices);
+        $this->foldIfLong($scope, $thread->id, $choices, $key);
 
         return $reply;
     }
@@ -278,7 +283,7 @@ final class SessionChat
      * Past a size, the oldest turns (all but the last few messages, cut at a student's message so a look-up
      * never loses its result) are summarised by the quick model and kept only as that summary.
      */
-    private function foldIfLong(LearnerScope $scope, string $threadId, Choices $choices): void
+    private function foldIfLong(LearnerScope $scope, string $threadId, Choices $choices, ?string $key): void
     {
         $thread = LearnerTables::query($scope, 'engine_threads')->where('id', $threadId)->first();
         $rows = array_values(array_filter($this->rows($scope, $threadId), fn ($row) => (int) $row->position > (int) $thread->folded_through));
@@ -308,6 +313,7 @@ final class SessionChat
                 [['role' => 'user', 'content' => $earlier.$transcript]],
                 maxTokens: 800,
                 noTraining: $choices->noTraining,
+                key: $key,
             ));
         } catch (EngineFailed) {
             return;

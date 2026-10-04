@@ -52,6 +52,7 @@ class SessionChatTest extends TestCase
         $note = app(Notes::class)->create($this->by, 'module', $week2, 'Lecture 3: joins');
         app(Notes::class)->save($this->by, $note->id, ['base_version' => 1, 'save_id' => 'engine-save-1', 'client_id' => 'engine-tab-1', 'title' => 'Lecture 3: joins', 'doc' => ['type' => 'doc', 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'A left join keeps every left row.']]]]]]);
         $this->session = app(Sessions::class)->start($this->by, $this->databases->id, $joins, $week2);
+        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'quick_model' => 'fake/quick', 'fallback_model' => 'fake/plain', 'consent' => true]);
     }
 
@@ -177,6 +178,22 @@ class SessionChatTest extends TestCase
         $this->assertSame([true, true, true, true, false, false, false, false], array_column($turns, 'folded'));
         // The fold's own cost counts too.
         $this->assertSame(4 * 1_000 + 200, $this->chat()->spent($this->by, $this->session->id)['session']);
+    }
+
+    public function test_the_students_own_key_goes_with_every_request_and_without_any_key_the_chat_says_so(): void
+    {
+        $this->engine->will(Fake::says('Hi.'));
+        $this->chat()->send($this->by, $this->session->id, 'Hi');
+        $this->assertNull($this->engine->last()->key);
+
+        app(Settings::class)->setKey($this->by, 'sk-or-v1-abcdefghijklmnopqrstuvwxyz');
+        $this->engine->will(Fake::says('Hi again.'));
+        $this->chat()->send($this->by, $this->session->id, 'Hi');
+        $this->assertSame('sk-or-v1-abcdefghijklmnopqrstuvwxyz', $this->engine->last()->key);
+
+        app(Settings::class)->removeKey($this->by);
+        config(['vistud.engine.key' => '']);
+        $this->expectCode(fn () => $this->chat()->send($this->by, $this->session->id, 'Hi'), 'engine_key', 'your AI engine settings');
     }
 
     public function test_another_student_cannot_read_or_write_the_chat(): void

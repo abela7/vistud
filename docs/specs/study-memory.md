@@ -334,31 +334,38 @@ as slipped.
 ## 6. The engine (built, 2026-10-05: the back end)
 
 **Decided by the owner, 2026-10-04.** The built-in chat calls the model
-through **OpenRouter** (or any service with the OpenAI chat format): one key
-the owner sets up **once, on a screen** (the admin area's *AI engine* page:
-paste the key, it is tried at once, choose the models everyone starts with;
-`App\Engine\Setup`, `platform_settings`, the key encrypted with the app key
-and shown again only by its last four characters; every change in the audit
-log, never the key), every model behind it, and **the student chooses the
-models** (S6 becomes "the model is a setting"). A key in `.env`
-(`VISTUD_ENGINE_KEY`) still works for a server set up by hand. A session is cheap by design, not by the model alone: a session
+through **OpenRouter** (or any service with the OpenAI chat format), every
+model behind one key, and **the student chooses the models** (S6 becomes
+"the model is a setting"). **Each student sets the chat up alone** (the
+owner's ask, 2026-10-05: no admin, no `.env`): their *AI engine* page
+(`/ai-engine`, from the account menu and a workspace Overview's ⋯ menu)
+walks them through getting a key at the service and pasting it once; it is
+tried at once ("It works: the service offers N models"), kept encrypted with
+the app key beside their other engine settings (`engine_settings.key_encrypted`),
+shown again only by its last four characters, and their chats go on their own
+account at the service. An admin may also set up **one key for everyone** on
+the admin area's *AI engine* page (`App\Engine\Setup`, `platform_settings`;
+every change in the audit log, never the key): a student without a key of
+their own uses it, and the page says so. A key in `.env` (`VISTUD_ENGINE_KEY`)
+still works for a server set up by hand. A session is cheap by design, not by the model alone: a session
 ends and the memory stays (the next starts from the summaries, never the
 old transcript); a long chat's oldest turns are folded into a summary; a
 look-up returns only what was asked; and the student's own limits stop a
 session or a month going over.
 
-**Settings** (the *AI engine* dialog in the Overview's ⋯ menu;
-`App\Engine\Settings`, `engine_settings`): a *tutor model* (the one that
+**Settings** (the student's *AI engine* page; `App\Engine\Settings`,
+`engine_settings`): their own key (above), a *tutor model* (the one that
 teaches), a *quick model* for small jobs (folding a chat; the tutor model
 when empty), a model to try *if the tutor model fails*, the most a session
 and a month may cost (dollars; 0 for no limit; $2 and $20 to start), *keep
 my words out of training* (on; only providers that promise it are used),
 and the student's **consent** to the chat sending their study material to
-the provider (nothing is sent until they write). The owner's defaults
-(`VISTUD_ENGINE_TUTOR_MODEL`, `VISTUD_ENGINE_QUICK_MODEL`) apply until they
-choose. The models are offered by id with their prices per million tokens
-and whether they take tools, pictures and files, from the service's own list
-(`App\Engine\Models`, kept for a day; `php artisan vistud:engine:models`).
+the provider (nothing is sent until they write). The owner's defaults (the
+admin page, or `VISTUD_ENGINE_TUTOR_MODEL` and `VISTUD_ENGINE_QUICK_MODEL`)
+apply until they choose. The models are offered by id with their prices per
+million tokens and whether they take tools, pictures and files, from the
+service's own list (`App\Engine\Models`, one list kept for a day for
+everyone; `php artisan vistud:engine:models`).
 
 **The chat** (`App\Engine\SessionChat`; `engine_threads`,
 `engine_messages`): one per study session. A turn sends the session's

@@ -38,7 +38,7 @@ final class OpenRouter implements Engine
             $body['provider'] = ['data_collection' => 'deny'];
         }
 
-        $data = $this->call(fn (PendingRequest $http) => $http->post('/chat/completions', $body));
+        $data = $this->call(fn (PendingRequest $http) => $http->post('/chat/completions', $body), $request->key);
         $choice = $data['choices'][0] ?? null;
         if (! is_array($choice)) {
             throw new EngineFailed('engine_empty', 'The engine sent back an empty answer. Try again.');
@@ -60,9 +60,9 @@ final class OpenRouter implements Engine
         );
     }
 
-    public function models(): array
+    public function models(?string $key = null): array
     {
-        $data = $this->call(fn (PendingRequest $http) => $http->get('/models'));
+        $data = $this->call(fn (PendingRequest $http) => $http->get('/models'), $key);
         $models = [];
         foreach (is_array($data['data'] ?? null) ? $data['data'] : [] as $row) {
             if (! is_array($row) || ! is_string($row['id'] ?? null)) {
@@ -88,11 +88,11 @@ final class OpenRouter implements Engine
     }
 
     /** @return array<string, mixed> the JSON the service answered */
-    private function call(callable $send): array
+    private function call(callable $send, ?string $key = null): array
     {
-        $key = $this->setup->key();
+        $key = $key !== null && $key !== '' ? $key : $this->setup->key();
         if ($key === '') {
-            throw new EngineFailed('engine_not_set_up', 'The AI engine isn\'t set up yet: an admin pastes the service\'s key on the admin area\'s AI engine page.');
+            throw new EngineFailed('engine_not_set_up', 'No key for the AI engine yet. Add your own OpenRouter key in your AI engine settings, or ask the owner to set one up for everyone.');
         }
         $http = Http::baseUrl(rtrim($this->setup->url(), '/'))
             ->withToken($key)
@@ -115,7 +115,7 @@ final class OpenRouter implements Engine
         $said = is_array($data['error'] ?? null) && is_string($data['error']['message'] ?? null) ? ' It said: '.mb_substr($data['error']['message'], 0, 200) : '';
         if ($response->failed() || isset($data['error'])) {
             throw new EngineFailed('engine_refused', match ($response->status()) {
-                401, 403 => 'The engine refused the key. Check VISTUD_ENGINE_KEY.',
+                401, 403 => 'The service refused the key. Check it in the AI engine settings.',
                 402 => 'The engine account is out of credit. Top it up at the service.',
                 404 => 'The engine does not know that model, or no provider offers it with what the chat needs.'.$said,
                 429 => 'The engine is busy right now. Wait a moment and try again.',

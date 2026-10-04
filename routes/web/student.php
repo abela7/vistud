@@ -27,6 +27,9 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware('auth')->group(function () {
+    // The student's AI engine: their key, models, limits and consent (docs/specs/study-memory.md §6).
+    Route::view('/ai-engine', 'study.engine')->name('engine.settings');
+
     // The student's journal, newest first.
     Route::get('/journal', function (Request $request, PrincipalFactory $principals, JournalReader $reader) {
         $entries = $reader->entries(Guard::learner($principals->fromRequest($request)));

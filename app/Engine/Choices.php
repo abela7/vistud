@@ -2,7 +2,7 @@
 
 namespace App\Engine;
 
-/** A student's engine settings: the models they chose, their spending limits, and whether they agreed to the chat. */
+/** A student's engine settings: the models they chose, their spending limits, their own key (if any), and whether they agreed to the chat. */
 final readonly class Choices
 {
     public function __construct(
@@ -13,11 +13,19 @@ final readonly class Choices
         public int $monthCapMicros,
         public bool $noTraining,
         public ?string $consentedAt,
+        /** The last four characters of the student's own key for the service, or null without one. */
+        public ?string $ownKeyHint = null,
+        public ?string $keyUpdatedAt = null,
     ) {}
 
     public function ready(): bool
     {
         return $this->tutorModel !== '' && $this->consentedAt !== null;
+    }
+
+    public function ownKey(): bool
+    {
+        return $this->ownKeyHint !== null;
     }
 
     /** The model for small jobs (folding a chat, making cards): the quick one, or the tutor when none is chosen. */
