@@ -364,34 +364,54 @@ old transcript); a long chat's oldest turns are folded into a summary; a
 look-up returns only what was asked; and the student's own limits stop a
 session or a month going over.
 
-**Settings** (the student's *AI engine* page; `App\Engine\Settings`,
-`engine_settings`): their own key (above), a *tutor model* (the one that
-teaches), a *quick model* for small jobs (folding a chat; the tutor model
-when empty), a model to try *if the tutor model fails*, the most a session
+**Settings** (the student's *AI settings* page; `App\Engine\Settings`,
+`engine_settings`): their own key (above), a model for each of the three
+**roles** (`App\Engine\Role`, `Choices::modelFor`; Phase 0 of
+[vistud-2-blueprint.md](vistud-2-blueprint.md)): the *tutor* teaches in
+sessions, the *reader* does the jobs that read and write records (the wrap-up
+and the folding of a long chat now; files later), the *helper* does quick
+edits and questions (`App\Engine\Helper::quick`, read-only look-ups; no
+screen yet). A role left empty uses the next one up: the helper the reader's,
+the reader the tutor's. Also a model to try *if the tutor model fails*, the most a session
 and a month may cost (dollars; 0 for no limit; $2 and $20 to start), *keep
 my words out of training* (on; only providers that promise it are used),
 the language they want to be taught in (empty: the one they write in; the
 course's terms and the marks stay in the course's language, so they match the
 exams), and the student's **consent** to the chat sending their study material to
-the provider (nothing is sent until they write). The owner's defaults (the
-admin page, or `VISTUD_ENGINE_TUTOR_MODEL` and `VISTUD_ENGINE_QUICK_MODEL`)
-apply until they choose. The models are offered by id with their prices per
+the provider (nothing is sent until they write). Three **trust toggles** are
+kept with them: *Ask me before adding or switching topics*, *Let the tutor
+mark topics*, *Read my files automatically* and *I use another AI by
+copy-paste*; the first works now, the others only record the choice until the
+phases that use them. **Usage this month** on the page shows what the month
+has cost by role (`App\Engine\Usage`: the tutor's chats from
+`engine_messages`, the reader's and helper's runs from `engine_jobs`); one
+monthly limit covers all three. The owner's defaults (the admin page, or
+`VISTUD_ENGINE_TUTOR_MODEL`, `VISTUD_ENGINE_READER_MODEL` and
+`VISTUD_ENGINE_HELPER_MODEL`; the old `VISTUD_ENGINE_QUICK_MODEL` still sets the
+reader's) apply until they choose. The models are offered by id with their prices per
 million tokens and whether they take tools, pictures and files, from the
 service's own list (`App\Engine\Models`, one list kept for a day for
 everyone; `php artisan vistud:engine:models`).
 
 **The chat** (`App\Engine\SessionChat`; `engine_threads`,
-`engine_messages`): one per study session. A turn sends the session's
-briefing (§4.3) as the standing instructions, the chat so far, and the
-**tools** the engine may look things up with; the engine answers, or asks
+`engine_messages`): one per study session. A turn sends the standing context built in layers
+(`App\Engine\Context\Stack`: the tutor's rules from
+`resources/prompts/tutor-2.md` at most 2,500 tokens, then the course, the
+student, the module and this session, each within a budget; the same for every
+session of a course up to the session layer, so a service can cache it), the
+chat so far, and the **tools** the engine may look things up with. The pasted
+briefing (§4.3) is not sent in the chat any more: what it carried the tools
+fetch when it is needed, which keeps the standing context near 5,600 tokens
+instead of up to 22,000; the engine answers, or asks
 for look-ups first (each run here as the student, its result sent back; at
 most `tool_rounds` rounds, then it must answer). Every message is kept with
 the model that answered and what it cost (the service says). The engine is
 told to use the tools instead of guessing about the student's own things,
 to say which note a fact came from, and to say plainly when something isn't
-in ViStud. A model that can't call tools gets the briefing alone. Past
+in ViStud. A model that can't call tools gets the rules without the tools part, with the
+marks to offer, and the material's notes in its context. Past
 `fold_at` characters, all but the last `keep_recent` messages (cut at a
-student's message) are summarised by the quick model and the engine reads
+student's message) are summarised by the reader and the engine reads
 the summary instead; the whole chat stays readable. **Saving** is the
 write-back (§4.4): the tutor's marks in the chat are reviewed and ticked
 exactly like a pasted chat; nothing is remembered otherwise.
@@ -414,8 +434,8 @@ has a screen: `php artisan vistud:engine:ask {session} "…" --user=email`.
 **The wrap-up** (built, 2026-10-05; the owner's ask: the next session must
 start from what happened without the student explaining again). When a
 session ends, ViStud writes the chat's **summary and checkpoint** into the
-session's record itself (`SessionChat::wrapUp`; the quick model, once per
-chat, `engine_threads.wrapped_at`): the next session's briefing (§4.3) and
+session's record itself (`SessionChat::wrapUp`; the reader, as a job in
+`engine_jobs`, once per chat, `engine_threads.wrapped_at`): the next session's briefing (§4.3) and
 the `earlier_sessions` look-up start from them. A summary or checkpoint the
 student already ticked from the tutor's marks stays. It runs when the student
 ends the session (its page's *End session*, or the top bar's ending of the
