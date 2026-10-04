@@ -330,7 +330,7 @@ Stable layers first, identical byte for byte across calls, so the service's prom
 | 5 | **Session state** | mode, topic, clock, the tutor's checkpoint and summary so far, material attached, what's been saved this session | ≤ 300 | Every turn |
 | 6 | **Conversation** | the turns, folded beyond the threshold (as today) | the rest | Every turn |
 
-Standing cost before the conversation: about 4,500 tokens for the Tutor, against up to 19,000 today. The **briefing** (`Briefings`) stays only for the copy-paste path; the chat stops using it.
+Standing cost before the conversation: about 5,600 tokens for the Tutor (the rules 2,400, the 19 tools 2,950, a few hundred of course, student, module and session), against up to 22,000 before Phase 0 (the briefing alone could be 15,000). The **briefing** (`Briefings`) stays only for the copy-paste path; the chat stops using it.
 
 Structured layers are written as compact markdown lists or small JSON, never prose:
 
@@ -662,7 +662,7 @@ You are one model, taking one phase. Before you write code:
 ## Appendix A · The Tutor's prompt stack, one real example (abridged)
 
 ```
-[0] # Your role …  (tutor-2.md, ≤ 2,500 tokens, byte-identical every call)
+[0] # You are the student's tutor …  (tutor-2.md, ≤ 2,500 tokens, byte-identical every call)
 [1] tools: 22 definitions (byte-identical every call)
 [2] ## The course: Operating Systems
     About: second-year module on processes, memory, file systems and concurrency.

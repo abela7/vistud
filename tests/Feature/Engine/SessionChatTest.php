@@ -92,6 +92,9 @@ class SessionChatTest extends TestCase
         $this->assertTrue($first->noTraining);
         $this->assertStringStartsWith('# You are the student\'s tutor', $first->system);
         $this->assertStringContainsString('## Your tools in this chat', $first->system);
+        // The pasted-chat briefing is another path: none of its sections go with the chat.
+        $this->assertStringNotContainsString('# Briefing', $first->system);
+        $this->assertStringNotContainsString('Earlier sessions', $first->system);
         $this->assertStringContainsString('```mermaid', $first->system);
         $this->assertStringContainsString('Write formulas in $…$ inside a line or $$…$$', $first->system);
         $this->assertStringContainsString('Joins', $first->system);
@@ -403,16 +406,17 @@ class SessionChatTest extends TestCase
         $this->engine->will(Fake::says('Starting with processes.'), Fake::says('Shall we add these?'));
         $this->chat()->send($this->by, $this->session->id, 'Here are my slides');
         $system = $this->engine->last()->system;
-        $this->assertStringContainsString("## Topics\n\nKeep the course's topics for the student", $system);
-        $this->assertStringContainsString('with add_topics, in the session\'s module (short names like section headings, three to eight for a lecture, not every slide), without asking', $system);
-        $this->assertStringContainsString('set it again each time you move on to the next part, without asking', $system);
+        // The rules say how to keep topics once; the student's line says whether to ask first.
+        $this->assertStringContainsString('**Keep the topics** (add_topics, set_topic)', $system);
+        $this->assertStringContainsString('Topics: keep them yourself, as you teach, and say so in one line.', $system);
+        $this->assertStringNotContainsString('Topics: ask before you add or switch them', $system);
 
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'ask_topics' => true]);
         $this->assertTrue(app(Settings::class)->get($this->by)->askTopics);
         $this->chat()->send($this->by, $this->session->id, 'More slides');
         $system = $this->engine->last()->system;
-        $this->assertStringContainsString('add them with add_topics once the student agrees', $system);
-        $this->assertStringNotContainsString('without asking', $system);
+        $this->assertStringContainsString('Topics: ask before you add or switch them; propose, and do it once they agree.', $system);
+        $this->assertStringNotContainsString('Topics: keep them yourself', $system);
     }
 
     public function test_what_the_tools_did_in_the_course_is_kept_told_as_it_happens_and_shown_on_the_answer(): void

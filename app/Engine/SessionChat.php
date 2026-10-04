@@ -2,6 +2,7 @@
 
 namespace App\Engine;
 
+use App\Engine\Context\Stack;
 use App\Engine\Jobs\Run;
 use App\Engine\Jobs\Runner;
 use App\Engine\Tools\Context;
@@ -11,7 +12,6 @@ use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
-use App\Study\Briefings;
 use App\Study\Input;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * The built-in chat of a study session (docs/specs/study-memory.md §6): the student's message goes to the
- * engine with the session's briefing as its standing instructions and the tools it may look things up with;
+ * engine with the tutor's standing context (App\Engine\Context\Stack) and the tools it may look things up with;
  * the engine answers, or asks for look-ups first (each run here, its result sent back, a few rounds at most);
  * every turn is kept with what it cost. A session's chat may not cost more than the student's limit, nor a
  * month's chats theirs. When a chat grows long, its oldest turns are folded into a short summary the engine
@@ -47,10 +47,10 @@ final class SessionChat
     public function __construct(
         private Engine $engine,
         private Sessions $sessions,
-        private Briefings $briefings,
         private Settings $settings,
         private Models $models,
         private Toolbox $toolbox,
+        private Stack $stack,
         private WriteBack $writeBack,
         private Attachments $attachments,
         private Runner $runner,
@@ -118,7 +118,7 @@ final class SessionChat
     }
 
     /**
-     * The engine's turn: the briefing, the chat so far and the tools; look-ups run and sent back, a few rounds
+     * The engine's turn: the standing context, the chat so far and the tools; look-ups run and sent back, a few rounds
      * at most; every message kept with its cost.
      *
      * @param  (Closure(string, string): void)|null  $onEvent
@@ -128,9 +128,9 @@ final class SessionChat
         $scope = Guard::learner($by);
         $model = $this->models->find($choices->tutorModel, $key);
         $withTools = $model === null || $model->tools;
-        $system = $this->system($by, $session, $thread->summary, $withTools);
+        $built = $this->stack->build($by, $session, $thread->summary, $withTools);
+        [$system, $tools] = [$built->system, $built->tools];
         $messages = $this->messagesOf($by, $thread, $model === null || $model->images, $choices->tutorModel);
-        $tools = $withTools ? $this->toolbox->definitions() : [];
         $context = new Context($session->workspaceId, $session->moduleId, $session->id, $this->sessions->timezone($by));
         $fallbacks = $choices->fallbackModel !== '' ? [$choices->fallbackModel] : [];
         $rounds = max(0, (int) config('vistud.engine.tool_rounds'));
@@ -267,7 +267,7 @@ final class SessionChat
 
     /**
      * Writes what the chat came to into the session's record (its summary and checkpoint, §4.3), once, when the
-     * session ends: the next session's briefing and the earlier-sessions look-up start from them, so the student
+     * session ends: the next session and the earlier-sessions look-up start from them, so the student
      * never explains again what happened. The reader writes them from the chat (the folded part's summary
      * and the rest); a summary or checkpoint the student already ticked from the tutor's marks stays as it is.
      * Nothing happens without a chat with an answer in it, or when the engine isn't set up; a failed try is
@@ -471,39 +471,6 @@ final class SessionChat
         $items = isset($row->attachments) && is_string($row->attachments) ? json_decode($row->attachments, true) : null;
 
         return is_array($items) ? array_values(array_filter($items, fn ($item) => is_array($item) && isset($item['ref'], $item['name'], $item['kind']))) : [];
-    }
-
-    /** How the tutor keeps the course's topics: by itself, saying so in a line, or asking first. */
-    private static function topicRules(bool $ask): string
-    {
-        $rules = "## Topics\n\nKeep the course's topics for the student, so they never have to think about them. A topic is one part of a module, like a section of a chapter (\"CPU scheduling\" in \"Process management\"). Everything saved goes to the session's topic, so keep it right:\n\n";
-
-        return $rules.($ask
-            ? "- When the student shares or you read material (a file, a note, slides), look at its outline and the course's topics (the topics tool). Propose the parts the course doesn't have yet as topics in the session's module (short names like section headings, three to eight for a lecture, not every slide), and add them with add_topics once the student agrees.\n- Propose the session's topic for the part you teach, and set it with set_topic once they agree; when you move on to another part, propose switching in a few words.\n- Use a topic the course has whenever one fits, under its exact name. When the student names or changes the topic, follow them."
-            : "- When the student shares or you read material (a file, a note, slides), look at its outline and the course's topics (the topics tool). Add the parts the course doesn't have yet with add_topics, in the session's module (short names like section headings, three to eight for a lecture, not every slide), without asking, and say so in one line: \"This lecture covers: Processes, Threads, CPU scheduling. Starting with Processes.\"\n- Set the session's topic with set_topic to the part you are teaching, and set it again each time you move on to the next part, without asking. Don't mention it beyond a few words.\n- Use a topic the course has whenever one fits, under its exact name. Don't make topics of small details or one-off questions. When the student names or changes the topic, follow them.");
-    }
-
-    /** The standing instructions: the tutor prompt and the briefing, how to look things up, and the folded turns. */
-    private function system(Principal $by, SessionDetails $session, ?string $summary, bool $withTools): string
-    {
-        $system = $this->briefings->forSession($by, $session->id)->markdown;
-        if ($withTools) {
-            $system .= "\n\n## Your tools in this chat\n\nYou are inside ViStud's own chat, so you have tools: to look things up (the course's modules and topics, the student's questions (all, or those on one topic or module), key points, assignments and their plans, the calendar, their notes and files, and earlier sessions with what each used), to read a file a few pages at a time (\"all\" gives its outline), and to act in the course: save flashcards, key points and questions straight in, and write in a note with the student. Use them whenever the student asks about their own things or asks you to save or note something; never say you can't. What a tool returns is what ViStud holds. Before explaining a note or a topic, it's worth one look at the open questions on it. When you state a fact from a note or a file, say which, and where (\"Page 4 of 18\"). What the student attaches comes with their message: a note's text, a file's first pages (read on with read_file), a picture to look at. If something isn't in ViStud, or a file can't be read, say so plainly.";
-        }
-        $choices = $this->settings->get($by);
-        if ($withTools) {
-            $system .= "\n\n".self::topicRules($choices->askTopics);
-        }
-        $language = $choices->language;
-        if ($language !== null) {
-            $system .= "\n\n## Language\n\nThe student chose to be taught in {$language}. Write your messages in {$language}, whatever language they write in, unless they ask for another in this chat. Keep the course's own terms, and anything you quote from their material, in the course's language, with the {$language} beside them when it helps. Write the marks' text (key points, cards, questions, answers) in the course's language, so they match the exams, unless the student asks otherwise.";
-        }
-        $system .= "\n\n## Diagrams and formulas\n\nThis chat draws diagrams and formulas. When a picture explains better than words (a process, a state machine, a sequence of messages, a hierarchy, a database's tables), draw a small diagram in a ```mermaid code block: a flowchart, sequenceDiagram, stateDiagram-v2, classDiagram or erDiagram, about fifteen boxes at most, short labels, no colours or styles. Write formulas in \$…\$ inside a line or \$\$…\$\$ on a line of their own; write sums of money in words or as \"USD 5\", never with a dollar sign.";
-        if ($summary !== null && trim($summary) !== '') {
-            $system .= "\n\n## Earlier in this chat\n\nThe chat's first part was folded to keep it short. What happened in it:\n\n".trim($summary);
-        }
-
-        return $system;
     }
 
     /**

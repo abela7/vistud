@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Engine\Context;
+
+/**
+ * What the tutor's standing context is written from (docs/specs/vistud-2-blueprint.md §3.6.2): plain values, so
+ * that the Stack's composing is pure and a prompt can be tried without a database (php artisan prompts:try). The
+ * Stack gathers them from the services for a session.
+ */
+final readonly class Facts
+{
+    /**
+     * @param  list<array{name: string, status: string}>  $topics  the module's topics, with the student's word on each
+     * @param  list<string>  $teaching  how to teach in this session, one instruction a line
+     * @param  list<string>  $material  the session's chosen material, a line each
+     * @param  list<string>  $materialText  for a model that can't look things up: the chosen notes' text, a block each
+     */
+    public function __construct(
+        // 2 · the course
+        public string $courseName,
+        public ?string $courseLine = null,
+        public string $courseInstructions = '',
+        // 3 · the student
+        public string $aboutYou = '',
+        public ?string $language = null,
+        public bool $askTopics = false,
+        // 4 · the module
+        public ?string $moduleTitle = null,
+        public ?string $moduleDates = null,
+        public string $moduleInstructions = '',
+        public array $topics = [],
+        // 5 · the session
+        public ?string $topicNow = null,
+        public ?string $topicPractice = null,
+        public string $clock = 'free: the student pauses and takes breaks when they like',
+        public array $teaching = [],
+        public array $material = [],
+        public ?string $checkpoint = null,
+        public ?string $summary = null,
+        public ?string $studied = null,
+        public array $materialText = [],
+        // 6 · the chat so far, when its oldest turns were folded
+        public ?string $folded = null,
+    ) {}
+}
