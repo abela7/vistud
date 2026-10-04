@@ -46,6 +46,7 @@ final class Settings
             consentedAt: $row?->consented_at === null ? null : (string) $row->consented_at,
             ownKeyHint: $key === null ? null : '…'.substr($key, -4),
             keyUpdatedAt: $key === null || $row?->key_updated_at === null ? null : (string) $row->key_updated_at,
+            language: isset($row->language) && $row->language !== '' ? (string) $row->language : null,
         );
     }
 
@@ -133,9 +134,14 @@ final class Settings
                 $caps[$key] = (int) round((float) $value * 1_000_000);
             }
         }
+        $existing = LearnerTables::query($scope, 'engine_settings')->first();
+        // The language, when given: a name like "Amharic" or "Afaan Oromo"; empty for the one the student writes in.
+        $language = array_key_exists('language', $input) ? (is_string($input['language']) ? trim($input['language']) : '') : (string) ($existing?->language ?? '');
+        if ($language !== '' && preg_match("/^\\p{L}[\\p{L}\\p{M} ()'’-]{0,39}$/u", $language) !== 1) {
+            $errors['language'] = 'Write the language\'s name, like "Amharic".';
+        }
         Input::refuse($errors);
 
-        $existing = LearnerTables::query($scope, 'engine_settings')->first();
         $consent = filter_var($input['consent'] ?? ($existing?->consented_at !== null), FILTER_VALIDATE_BOOL);
         $values = [
             'tutor_model' => $models['tutor_model'],
@@ -144,6 +150,7 @@ final class Settings
             'session_cap_micros' => $caps['session_cap'],
             'month_cap_micros' => $caps['month_cap'],
             'no_training' => filter_var($input['no_training'] ?? true, FILTER_VALIDATE_BOOL),
+            'language' => $language === '' ? null : $language,
             'consented_at' => $consent ? ($existing?->consented_at ?? now()) : null,
             'updated_at' => now(),
         ];

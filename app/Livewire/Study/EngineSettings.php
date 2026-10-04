@@ -39,6 +39,8 @@ final class EngineSettings extends Component
 
     public bool $noTraining = true;
 
+    public string $language = '';
+
     public bool $consent = false;
 
     #[Locked]
@@ -110,14 +112,14 @@ final class EngineSettings extends Component
         $this->load();
     }
 
-    /** The models, the limits, training and consent. */
+    /** The models, the language, the limits, training and consent. */
     public function save(): void
     {
         $this->resetErrorBag();
         try {
             $this->settings->set($this->principal(), [
                 'tutor_model' => $this->tutorModel, 'quick_model' => $this->quickModel, 'fallback_model' => $this->fallbackModel,
-                'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent,
+                'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language,
             ]);
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
@@ -163,6 +165,7 @@ final class EngineSettings extends Component
         $this->sessionCap = number_format($choices->sessionCapMicros / 1_000_000, 2, '.', '');
         $this->monthCap = number_format($choices->monthCapMicros / 1_000_000, 2, '.', '');
         $this->noTraining = $choices->noTraining;
+        $this->language = $choices->language ?? '';
         $this->consent = $choices->consentedAt !== null;
     }
 

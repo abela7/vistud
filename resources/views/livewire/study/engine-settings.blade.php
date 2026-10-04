@@ -99,6 +99,22 @@
             </div>
         </section>
 
+        <section class="question-panel space-y-4" aria-labelledby="engine-language-heading">
+            <div class="panel-head">
+                <span class="item-icon" aria-hidden="true"><x-icon name="languages" class="size-5" /></span>
+                <div class="panel-head-text">
+                    <h2 id="engine-language-heading" class="panel-title">Your language</h2>
+                    <p class="panel-hint">The tutor teaches in it, whatever language you write in. The course's own terms stay as they are, with a translation beside them when it helps.</p>
+                </div>
+            </div>
+            <datalist id="engine-languages">
+                @foreach (['English', 'Amharic', 'Afaan Oromo', 'Tigrinya', 'Somali', 'Arabic', 'French', 'Spanish', 'Portuguese', 'Swahili', 'Hindi', 'Chinese'] as $name)
+                    <option value="{{ $name }}"></option>
+                @endforeach
+            </datalist>
+            <x-field name="language" label="Teach me in (optional)" wire:model="language" list="engine-languages" autocomplete="off" placeholder="Amharic" hint="Empty: the language you write in." />
+        </section>
+
         <section class="question-panel space-y-4" aria-labelledby="engine-limits-heading">
             <div class="panel-head">
                 <span class="item-icon" aria-hidden="true"><x-icon name="shield-check" class="size-5" /></span>

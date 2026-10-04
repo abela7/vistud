@@ -382,4 +382,17 @@ class SessionChatTest extends TestCase
         $this->assertStringStartsWith('(The student sent this without a message.)', $this->engine->last()->messages[0]['content']);
         $this->assertSame('', $this->chat()->transcript($this->by, $this->session->id)[0]['text']);
     }
+
+    public function test_the_chosen_language_is_how_the_tutor_teaches_and_the_marks_stay_in_the_courses(): void
+    {
+        $this->engine->will(Fake::says('Salam.'), Fake::says('Hello.'));
+        $this->chat()->send($this->by, $this->session->id, 'Hi');
+        $this->assertStringNotContainsString('## Language', $this->engine->last()->system);
+
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'Amharic']);
+        $this->chat()->send($this->by, $this->session->id, 'Hi again');
+        $system = $this->engine->last()->system;
+        $this->assertStringContainsString("## Language\n\nThe student chose to be taught in Amharic. Write your messages in Amharic, whatever language they write in", $system);
+        $this->assertStringContainsString('marks\' text (key points, cards, questions, answers) in the course\'s language', $system);
+    }
 }

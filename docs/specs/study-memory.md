@@ -359,7 +359,9 @@ teaches), a *quick model* for small jobs (folding a chat; the tutor model
 when empty), a model to try *if the tutor model fails*, the most a session
 and a month may cost (dollars; 0 for no limit; $2 and $20 to start), *keep
 my words out of training* (on; only providers that promise it are used),
-and the student's **consent** to the chat sending their study material to
+the language they want to be taught in (empty: the one they write in; the
+course's terms and the marks stay in the course's language, so they match the
+exams), and the student's **consent** to the chat sending their study material to
 the provider (nothing is sent until they write). The owner's defaults (the
 admin page, or `VISTUD_ENGINE_TUTOR_MODEL` and `VISTUD_ENGINE_QUICK_MODEL`)
 apply until they choose. The models are offered by id with their prices per

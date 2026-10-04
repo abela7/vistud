@@ -70,4 +70,14 @@ class EngineSettingsScreenTest extends TestCase
         $this->actingAs($admin);
         Livewire::test(EngineSettings::class)->assertSee('Not set up')->assertSee(route('admin.engine'));
     }
+
+    public function test_the_language_is_chosen_on_the_page(): void
+    {
+        $ada = $this->student();
+        $this->actingAs($ada);
+        Livewire::test(EngineSettings::class)->assertSee('Your language')->assertSee('Afaan Oromo')
+            ->set('tutorModel', 'fake/tutor')->set('language', '<script>')->call('save')->assertHasErrors(['language'])
+            ->set('language', 'Amharic')->call('save')->assertHasNoErrors()->assertSet('language', 'Amharic');
+        $this->assertSame('Amharic', app(Settings::class)->get($this->principal($ada))->language);
+    }
 }

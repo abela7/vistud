@@ -2,7 +2,7 @@
 
 namespace App\Engine;
 
-/** A student's engine settings: the models they chose, their spending limits, their own key (if any), and whether they agreed to the chat. */
+/** A student's engine settings: the models they chose, their spending limits, their own key (if any), the language they're taught in, and whether they agreed to the chat. */
 final readonly class Choices
 {
     public function __construct(
@@ -16,6 +16,8 @@ final readonly class Choices
         /** The last four characters of the student's own key for the service, or null without one. */
         public ?string $ownKeyHint = null,
         public ?string $keyUpdatedAt = null,
+        /** The language the tutor teaches in; null for the one the student writes in. */
+        public ?string $language = null,
     ) {}
 
     public function ready(): bool
