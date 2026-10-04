@@ -17,7 +17,7 @@
                 <h2 class="text-lg font-semibold">Create your first course</h2>
                 <p class="max-w-md text-fg-muted">One course per subject, like Biology or Spanish. Its modules, notes, files, calendar and progress all live inside it.</p>
             </div>
-            <x-button variant="primary" icon="plus" x-data x-on:click="$dispatch('workspace-create')">New course</x-button>
+            <a href="{{ route('workspaces.create') }}" class="btn btn-primary"><x-icon name="plus" class="size-4" />New course</a>
         </section>
     @else
         <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" role="list">
@@ -88,12 +88,12 @@
                 </li>
             @endforeach
             <li>
-                <button type="button" class="group flex h-full min-h-[10.5rem] w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed border-border-strong p-5 text-fg-muted transition-colors hover:border-fg-muted hover:bg-hover hover:text-fg" x-data x-on:click="$dispatch('workspace-create')">
+                <a href="{{ route('workspaces.create') }}" class="group flex h-full min-h-[10.5rem] w-full flex-col items-center justify-center gap-2.5 rounded-xl border border-dashed border-border-strong p-5 text-fg-muted transition-colors hover:border-fg-muted hover:bg-hover hover:text-fg">
                     <span class="flex size-10 items-center justify-center rounded-full bg-surface-sunken transition-transform group-hover:scale-105">
                         <x-icon name="plus" class="size-5" />
                     </span>
                     <span class="text-sm font-semibold">New course</span>
-                </button>
+                </a>
             </li>
         </ul>
     @endif

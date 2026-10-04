@@ -12,7 +12,7 @@ use Carbon\CarbonImmutable;
 
 /**
  * What the engine has cost a student this month, by role (docs/specs/vistud-2-blueprint.md §3.6.1): the tutor's
- * is what its chats' messages cost, the reader's and the helper's what their runs cost (engine_jobs). The month
+ * is what its chats' messages and its other runs (the course guide) cost, the reader's and the helper's what their runs cost (engine_jobs). The month
  * is the student's own, in their time zone, and one limit covers all three. Millionths of a dollar.
  */
 final class Usage
@@ -49,7 +49,8 @@ final class Usage
     {
         $jobs = LearnerTables::query($scope, 'engine_jobs')->where('created_at', '>=', $since)->selectRaw('role, sum(cost_micros) as cost')->groupBy('role')->pluck('cost', 'role');
         $usage = [
-            'tutor' => (int) LearnerTables::query($scope, 'engine_messages')->where('created_at', '>=', $since)->sum('cost_micros'),
+            // The tutor's chats, and the tutor's other runs (the course guide).
+            'tutor' => (int) LearnerTables::query($scope, 'engine_messages')->where('created_at', '>=', $since)->sum('cost_micros') + (int) ($jobs[Role::Tutor->value] ?? 0),
             'reader' => (int) ($jobs[Role::Reader->value] ?? 0),
             'helper' => (int) ($jobs[Role::Helper->value] ?? 0),
         ];

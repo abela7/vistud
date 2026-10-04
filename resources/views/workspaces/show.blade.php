@@ -31,6 +31,7 @@
             <x-page :title="$workspace->name" :back-href="route('home')" back-to="All courses" :eyebrow="$workspace->subtitle() !== '' ? $workspace->subtitle() : null" :context="$context">
                 <x-slot:menu>
                     <button type="button" class="menu-item" x-data x-on:click="$dispatch('workspace-form-open')"><x-icon name="pencil" class="size-4" />Edit course</button>
+                    <a href="{{ route('workspaces.guide', $workspace->id) }}" class="menu-item"><x-icon name="sparkles" class="size-4" />Set up with the AI</a>
                     <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('course-setup-open', { step: 'about' })"><x-icon name="notebook-text" class="size-4" />About this course</button>
                     <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('course-setup-open', { step: 'learn' })"><x-icon name="lightbulb" class="size-4" />How you learn</button>
                     <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('instructions-open')"><x-icon name="message-square-text" class="size-4" />Instructions for the AI</button>

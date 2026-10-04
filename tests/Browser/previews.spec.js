@@ -366,18 +366,19 @@ test('workspaces: my workspaces, the form, a workspace and its switcher', async 
 
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
-    await page.getByRole('button', { name: 'New course' }).first().click();
-    await page.locator('#workspace-form').getByLabel('Name').fill('Physics');
+    await page.locator('main').getByRole('link', { name: 'Biology' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
+    // The course dialog edits (a new course is made on its own page: the new-course and guide previews are in chat.spec.js).
+    await page.getByRole('button', { name: 'More for Biology' }).click();
+    await page.getByRole('button', { name: 'Edit course' }).click();
+    await page.locator('#workspace-form').getByLabel('Name').waitFor();
     await page.locator('#workspace-form').getByText('Purple', { exact: true }).click({ force: true });
     await page.locator('#workspace-form').getByText('Flask conical', { exact: true }).click({ force: true });
     await page.screenshot({ path: out('workspaces-form-desktop-vistud-light') });
     await page.setViewportSize(sizes.mobile);
     await page.screenshot({ path: out('workspaces-form-mobile-vistud-light') });
     await page.keyboard.press('Escape');
-
     await page.setViewportSize(sizes.desktop);
-    await page.locator('main').getByRole('link', { name: 'Biology' }).click();
-    await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
     for (const [size, viewport] of Object.entries(sizes)) {
         for (const theme of ['vistud-light', 'vistud-dark']) {
             await page.setViewportSize(viewport);

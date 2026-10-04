@@ -13,17 +13,14 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
- * The workspace dialog: creating one (on My courses), or editing,
- * archiving and restoring one (on its page). A thin adapter over
+ * The course dialog: editing, archiving and restoring a course (from its page or its card on My courses). A new course
+ * is made on its own page (App\Livewire\Workspaces\CourseNew). A thin adapter over
  * App\Study\Workspaces, which checks everything; the workspace ID is locked.
  */
 final class Form extends Component
 {
     #[Locked]
     public ?string $workspaceId = null;
-
-    #[Locked]
-    public bool $openOnLoad = false;
 
     public string $name = '';
 
@@ -52,15 +49,17 @@ final class Form extends Component
         $this->principals = $principals;
     }
 
-    public function mount(?string $workspaceId = null, bool $openOnLoad = false): void
+    public function mount(?string $workspaceId = null): void
     {
         $this->workspaceId = $workspaceId;
-        $this->openOnLoad = $openOnLoad;
         $this->loadFields();
     }
 
     public function save(): mixed
     {
+        if ($this->workspaceId === null) {
+            return null;
+        }
         $input = [
             'name' => $this->name,
             'colour' => $this->colour,
@@ -73,9 +72,7 @@ final class Form extends Component
         ];
 
         try {
-            $workspace = $this->workspaceId === null
-                ? $this->workspaces->create($this->principal(), $input)
-                : $this->workspaces->update($this->principal(), $this->workspaceId, $input);
+            $workspace = $this->workspaces->update($this->principal(), $this->workspaceId, $input);
         } catch (Unprocessable $e) {
             $this->resetErrorBag();
             $names = ['starts_on' => 'startsOn', 'ends_on' => 'endsOn'];
@@ -86,10 +83,7 @@ final class Form extends Component
             return null;
         }
 
-        // A new course goes straight on to setting it up (docs/specs/vistud-2-blueprint.md §3.5.2); an edited one stays.
-        return $this->workspaceId === null
-            ? $this->redirectRoute('workspaces.show', ['workspace' => $workspace->id, 'setup' => 1], navigate: true)
-            : $this->redirectRoute('workspaces.show', $workspace->id, navigate: true);
+        return $this->redirectRoute('workspaces.show', $workspace->id, navigate: true);
     }
 
     public function archive(): mixed
@@ -119,15 +113,6 @@ final class Form extends Component
     public function openForEdit(string $workspaceId): void
     {
         $this->workspaceId = $workspaceId;
-        $this->resetErrorBag();
-        $this->loadFields();
-        $this->dispatch('workspace-form-open');
-    }
-
-    #[On('workspace-create')]
-    public function openForCreate(): void
-    {
-        $this->workspaceId = null;
         $this->resetErrorBag();
         $this->loadFields();
         $this->dispatch('workspace-form-open');

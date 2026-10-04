@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { spawn, execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { foreignColours, makeStudentWithCards, makeStudentWithModulePage, makeStudentWithNote, makeStudentWithTopics, openStudentHome, THEMES, turnOnAi, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentAccount, makeStudentWithCards, makeStudentWithModulePage, makeStudentWithNote, makeStudentWithTopics, openStudentHome, THEMES, turnOnAi, useSentinelTheme, useTheme } from './support.js';
 import { makeStudentWithSession } from './support.js';
 
 /*
@@ -566,5 +566,152 @@ for (const theme of THEMES) {
         await askButton(page).click();
         await page.locator('#ask-sheet').getByLabel('Your question', { exact: true }).waitFor();
         expect(await analyseSheet(page), 'ask').toEqual([]);
+    });
+}
+
+/*
+ * The course guide (docs/specs/vistud-2-blueprint.md, Phase 8): the New course page, and the talk with the tutor that sets a
+ * course up. They are here because this file owns the fake service.
+ */
+const timetable = 'About the Module: operating systems and their technologies. Week 1: OS Structure | Processes & Threads. Week 2: Concurrency & Scheduling | Memory Management. Week 3: Virtual Memory | Storage & IO.';
+const guideProposal = (page) => page.getByRole('region', { name: 'I would add' });
+
+async function startGuide(page, viewport) {
+    await ai(page, { email: makeStudentAccount() }, '/courses/new', viewport);
+    await page.getByRole('heading', { level: 1, name: 'New course' }).waitFor();
+    await page.getByLabel('Name', { exact: true }).fill('Operating Systems');
+    await page.getByRole('button', { name: 'Create course' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
+    await page.waitForLoadState('load');
+}
+
+test('guide: a course is made on its own page, the guide proposes the weeks, and only the ticked ones are added', async ({ page }) => {
+    await ai(page, { email: makeStudentAccount() }, '/');
+    await page.locator('main').getByRole('link', { name: 'New course' }).first().click();
+    await page.getByRole('heading', { level: 1, name: 'New course' }).waitFor();
+    await expect(page.getByRole('radio', { name: /Guide me/ })).toBeChecked();
+    await page.getByLabel('Name', { exact: true }).fill('Operating Systems');
+    await page.getByText('Green', { exact: true }).click({ force: true });
+    await page.getByRole('button', { name: 'Create course' }).click();
+
+    // The guide asks first; nothing is sent to the AI until the student writes.
+    await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
+    const log = page.getByRole('log', { name: 'Talk with the guide' });
+    await expect(log).toContainText("Let's set up Operating Systems");
+    await page.getByLabel('Your message').fill(timetable);
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
+    await expect(log).toContainText('I found three weeks.');
+    await expect(guideProposal(page).getByRole('checkbox', { name: /Week 3/ })).toBeChecked();
+
+    // Week 3 is for later: untick it, and add the rest.
+    await guideProposal(page).getByRole('checkbox', { name: /Week 3/ }).uncheck();
+    await guideProposal(page).getByRole('button', { name: /^Add what is ticked \(3\)/ }).click();
+    await expect(log).toContainText('Added: 2 modules and the About text.');
+    await expect(guideProposal(page)).toHaveCount(0);
+
+    // The modules are in the course; the guide can add more later, from Modules.
+    const id = page.url().match(/courses\/([^/]+)\/guide/)[1];
+    await page.goto(`/courses/${id}/modules`);
+    await expect(page.locator('main').getByRole('link', { name: /Week 1: OS Structure/ })).toBeVisible();
+    await expect(page.locator('main').getByRole('link', { name: /Week 3/ })).toHaveCount(0);
+    await page.locator('main').getByRole('link', { name: 'Add with the AI' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Add modules' }).waitFor();
+    await expect(page.getByRole('log', { name: 'Talk with the guide' })).toContainText('Which weeks or chapters of Operating Systems');
+    await page.getByLabel('Your message').fill('Add week 3: Virtual Memory | Storage & IO. Week 1: OS Structure | Processes & Threads again.');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
+    await guideProposal(page).getByRole('checkbox', { name: /Week 1/ }).check();
+    await guideProposal(page).getByRole('button', { name: /^Add what is ticked/ }).click();
+    await page.goto(`/courses/${id}/modules`);
+    await expect(page.locator('main').getByRole('link', { name: /Week 3: Virtual Memory/ })).toBeVisible();
+    await expect(page.locator('main').getByRole('link', { name: /Week 1: OS Structure/ })).toHaveCount(1);
+});
+
+test('guide: choosing to do it myself goes to the course page, and the guide is one step away there', async ({ page }) => {
+    await ai(page, { email: makeStudentAccount() }, '/courses/new');
+    await page.getByLabel('Name', { exact: true }).fill('Biology');
+    await page.getByRole('radio', { name: /I'll do it myself/ }).check({ force: true });
+    await page.getByRole('button', { name: 'Create course' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
+    // Its setup sheet is open (the by-hand way); closing it leaves the course page, with the guide in its ⋯ menu.
+    await expect(page.locator('#course-setup')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#course-setup')).toBeHidden();
+    await page.getByRole('button', { name: 'More for Biology' }).click();
+    await page.getByRole('link', { name: 'Set up with the AI' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
+});
+
+for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } })) {
+    test(`guide: the New course page and the guide fit and use only tokens: ${name}`, async ({ page }) => {
+        await ai(page, { email: makeStudentAccount() }, '/courses/new', viewport);
+        await page.getByRole('heading', { level: 1, name: 'New course' }).waitFor();
+        await page.getByLabel('Name', { exact: true }).fill('Operating Systems');
+        await useSentinelTheme(page);
+        const states = { 'new course': await foreignColours(page) };
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+        await page.locator('.course-new-more summary').click();
+        states['new course details'] = await foreignColours(page);
+
+        await page.getByRole('button', { name: 'Create course' }).click();
+        await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
+        await page.getByLabel('Your message').fill(timetable);
+        await page.getByRole('button', { name: 'Send' }).click();
+        await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
+        await useSentinelTheme(page);
+        states['the guide with a proposal'] = await foreignColours(page);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+        for (const [state, colours] of Object.entries(states)) {
+            expect(colours, `${state}: colours not from a token`).toEqual([]);
+        }
+    });
+}
+
+for (const theme of THEMES) {
+    test(`guide: axe finds no violations on the New course page and the guide: ${theme}`, async ({ page }) => {
+        await ai(page, { email: makeStudentAccount() }, '/courses/new');
+        await page.getByRole('heading', { level: 1, name: 'New course' }).waitFor();
+        await useTheme(page, theme);
+        expect(await analyseSheet(page), 'new course').toEqual([]);
+        await page.getByLabel('Name', { exact: true }).fill('Operating Systems');
+        await page.getByRole('button', { name: 'Create course' }).click();
+        await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
+        await page.getByLabel('Your message').fill(timetable);
+        await page.getByRole('button', { name: 'Send' }).click();
+        await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
+        await useTheme(page, theme);
+        expect(await analyseSheet(page), 'guide').toEqual([]);
+    });
+}
+
+// Screenshots for review (PREVIEWS=1): the New course page and the guide, with a proposal, on a computer and a phone.
+for (const [size, viewport] of Object.entries({ desktop: { width: 1440, height: 900 }, mobile: { width: 390, height: 844 } })) {
+    test(`guide: previews ${size}`, async ({ page }) => {
+        test.skip(!process.env.PREVIEWS, 'Set PREVIEWS=1 to regenerate the review screenshots.');
+        const out = (name) => `docs/design/previews/${name}.png`;
+        await ai(page, { email: makeStudentAccount() }, '/courses/new', viewport);
+        await page.getByRole('heading', { level: 1, name: 'New course' }).waitFor();
+        await useTheme(page, 'vistud-light');
+        await page.getByLabel('Name', { exact: true }).fill('Operating Systems');
+        await page.getByText('Green', { exact: true }).click({ force: true });
+        await page.evaluate(() => document.activeElement?.blur());
+        await page.screenshot({ path: out(`new-course-${size}-vistud-light`), fullPage: size === 'mobile' });
+        await page.locator('.course-new-more summary').click();
+        await page.screenshot({ path: out(`new-course-${size}-vistud-light-details`), fullPage: true });
+        await useTheme(page, 'vistud-dark');
+        await page.screenshot({ path: out(`new-course-${size}-vistud-dark`), fullPage: size === 'mobile' });
+        await useTheme(page, 'vistud-light');
+
+        await page.getByRole('button', { name: 'Create course' }).click();
+        await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
+        await page.screenshot({ path: out(`guide-${size}-vistud-light`), fullPage: size === 'mobile' });
+        await page.getByLabel('Your message').fill(timetable);
+        await page.getByRole('button', { name: 'Send' }).click();
+        await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
+        await page.evaluate(() => document.activeElement?.blur());
+        await page.screenshot({ path: out(`guide-${size}-vistud-light-proposal`), fullPage: true });
+        await useTheme(page, 'vistud-dark');
+        await page.screenshot({ path: out(`guide-${size}-vistud-dark-proposal`), fullPage: true });
     });
 }

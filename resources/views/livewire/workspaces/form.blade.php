@@ -1,6 +1,6 @@
 {{--
     The workspace dialog (App\Livewire\Workspaces\Form). Opened by a
-    `workspace-form-open` browser event, or straight away with ?new=1.
+    `workspace-form-open` browser event.
     Picking a colour recolours the icon choices in the browser, without a
     request.
 --}}
@@ -8,14 +8,13 @@
     <dialog id="workspace-form" class="modal" aria-labelledby="workspace-form-title"
         wire:ignore.self
         x-data
-        x-init="@if ($openOnLoad) $el.showModal() @endif"
         x-on:workspace-form-open.window="$el.open || $el.showModal()"
         x-on:close="$wire.cancel()"
         x-on:click="$event.target === $el && $el.close()">
         <form wire:submit="save" novalidate class="modal-panel" x-data="{ colour: $wire.entangle('colour') }">
             <div class="modal-head">
                 <div class="min-w-0 flex-1 space-y-1">
-                    <h2 id="workspace-form-title" class="text-lg font-semibold">{{ $workspaceId ? 'Edit course' : 'New course' }}</h2>
+                    <h2 id="workspace-form-title" class="text-lg font-semibold">Edit course</h2>
                 </div>
                 <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
                     <x-icon name="x" />
@@ -76,7 +75,7 @@
                     </div>
                 @endif
                 <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
-                <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ $workspaceId ? 'Save changes' : 'Create course' }}</x-button>
+                <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">Save changes</x-button>
             </div>
         </form>
     </dialog>

@@ -92,23 +92,25 @@ class WorkspaceScreensTest extends TestCase
         $this->actingAs($adminOnly)->get(route('workspaces.show', 'anything'))->assertForbidden();
     }
 
-    public function test_creating_through_the_form_opens_the_new_course_with_its_setup_sheet(): void
-    {
-        $this->form()
-            ->set('name', 'Biology')->set('colour', 'green')->set('icon', 'microscope')->set('code', 'BIO101')
-            ->call('save')
-            ->assertRedirect(route('workspaces.show', ['workspace' => app(Workspaces::class)->list($this->principal($this->ada))[0]->id, 'setup' => 1]));
-    }
-
     public function test_the_form_shows_the_services_refusals_on_their_fields(): void
     {
-        $this->form()
+        $biology = $this->create('Biology');
+
+        $this->form($biology->id)
             ->set('name', '')->set('startsOn', '2026-10-01')->set('endsOn', '2026-09-01')
             ->call('save')
             ->assertHasErrors(['name', 'endsOn'])
             ->assertSee('Give the course a name.')
             ->assertSee('The end date is before the start date.')
             ->assertNoRedirect();
+    }
+
+    public function test_the_dialog_only_edits_a_course_and_a_new_one_is_made_on_its_own_page(): void
+    {
+        $this->form()->set('name', 'Biology')->call('save')->assertNoRedirect();
+        $this->assertSame([], app(Workspaces::class)->list($this->principal($this->ada)));
+
+        $this->actingAs($this->ada)->get(route('home'))->assertOk()->assertSee(route('workspaces.create'), false)->assertDontSee('Create course');
     }
 
     public function test_editing_archiving_and_restoring_through_the_form(): void

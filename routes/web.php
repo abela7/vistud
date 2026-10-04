@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\Route;
 
 // Guests start at the login screen. Signed-in accounts get a placeholder
 // until the workspace screens arrive (WP6, then M2).
-Route::get('/', fn () => auth()->check() ? view('home') : redirect()->route('login'))->name('home');
+// An old link to the New course dialog (/?new=1) leads to the New course page.
+Route::get('/', fn () => ! auth()->check() ? redirect()->route('login') : (request()->boolean('new') ? redirect()->route('workspaces.create') : view('home')))->name('home');
 
 // Every icon, once, for the browser to keep (App\Appearance\Icons).
 Route::get('/icons.svg', IconSpriteController::class)->name('icons');

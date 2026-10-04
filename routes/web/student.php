@@ -3,6 +3,7 @@
 use App\Brain\Store\JournalReader;
 use App\Http\Controllers\Api\V1\NoteImageController;
 use App\Http\Controllers\AssignmentPageController;
+use App\Http\Controllers\CourseGuidePageController;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
 use App\Http\Controllers\FilePreviewController;
@@ -137,6 +138,18 @@ Route::middleware('auth')->group(function () {
     Route::get('/courses/{workspace}/assignments/{assignment}/sections/{plansection}/edit', [AssignmentPageController::class, 'editSection'])
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'assignment' => '[A-Za-z0-9-]{1,64}', 'plansection' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.assignments.sections.edit');
+
+    // The page that makes a course (it must come before the routes with a {workspace}, or "new" would be one).
+    Route::get('/courses/new', function (Request $request, PrincipalFactory $principals) {
+        Guard::learner($principals->fromRequest($request));
+
+        return view('workspaces.create');
+    })->name('workspaces.create');
+
+    // The talk that sets a course up, or adds some of its modules (?for=modules).
+    Route::get('/courses/{workspace}/guide', CourseGuidePageController::class)
+        ->where('workspace', '[A-Za-z0-9-]{1,64}')
+        ->name('workspaces.guide');
 
     // A course and its sections (docs/specs/workspaces.md; the address is /courses since docs/specs/vistud-2-blueprint.md Phase 6).
     Route::get('/courses/{workspace}/{section?}', WorkspacePageController::class)

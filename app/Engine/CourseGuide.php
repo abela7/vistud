@@ -1,0 +1,300 @@
+<?php
+
+namespace App\Engine;
+
+use App\Engine\Jobs\ProfileCourse;
+use App\Engine\Jobs\Run;
+use App\Engine\Jobs\Runner;
+use App\Platform\Access\Principal;
+use App\Platform\Errors\NotFound;
+use App\Platform\Errors\Unprocessable;
+use App\Study\Activities;
+use App\Study\CourseProfiles;
+use App\Study\Input;
+use App\Study\Modules;
+use App\Study\Workspaces;
+use Carbon\CarbonImmutable;
+use DateTimeImmutable;
+
+/**
+ * The course guide (docs/specs/vistud-2-blueprint.md, Phase 8): a talk that sets one course up. The student says what the
+ * course is, or pastes its page from their university; the tutor's model asks what is missing, one thing at a time, and
+ * proposes what to add: the course's details, what it is about, what it should teach, how it is assessed, the textbook and
+ * the modules wanted now (they can be added one week at a time, later, with the same guide). Nothing is written by the
+ * talk: the proposal is shown with ticks, and `apply()` writes only what the student ticked, never twice (a module that
+ * is already there is skipped). The talk is not stored here: the screen keeps it. Each turn is one recorded run under
+ * the tutor, so the month's limit counts it.
+ */
+final class CourseGuide
+{
+    public const PROMPT = 'resources/prompts/setup-guide.md';
+
+    /** The most one message can hold: a pasted module page fits. */
+    public const MAX_MESSAGE = 12_000;
+
+    /** How many earlier messages the model is reminded of. */
+    public const KEEP = 16;
+
+    public const MAX_TOKENS = 2_000;
+
+    public function __construct(private Runner $runner, private Workspaces $workspaces, private CourseProfiles $profiles, private Modules $modules, private Activities $activities) {}
+
+    /** The guide's rules, without the file's opening comment (for people). */
+    public static function rules(): string
+    {
+        return trim((string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', (string) file_get_contents(base_path(self::PROMPT))));
+    }
+
+    /**
+     * One turn: the student's message in, the guide's reply and what it proposes out.
+     *
+     * @param  list<array{role: string, content: string}>  $history  what was said before, oldest first
+     * @return array{reply: string, proposal: ?array}
+     *
+     * @throws Unprocessable an empty or too long message; over the month's limit; not set up
+     * @throws NotFound another student's course
+     * @throws EngineFailed the service can't answer, or answered with nothing
+     */
+    public function turn(Principal $by, string $workspaceId, array $history, string $message): array
+    {
+        $message = trim(str_replace("\r\n", "\n", $message));
+        Input::refuse(match (true) {
+            $message === '' => ['message' => 'Write something first.'],
+            mb_strlen($message) > self::MAX_MESSAGE => ['message' => 'That is too long. Paste the main part of the course page.'],
+            default => [],
+        });
+        $this->workspaces->find($by, $workspaceId);
+        $system = self::rules()."\n\n## Today\n".CarbonImmutable::now()->toDateString()."\n\n## What is set up\n".$this->state($by, $workspaceId);
+        $messages = self::remembered($history);
+        $messages[] = ['role' => 'user', 'content' => $message];
+
+        $answer = $this->runner->run($by, Role::Tutor, 'setup_guide', $workspaceId, 'workspace', $workspaceId, fn (Run $run) => $run->ask($system, $messages, self::MAX_TOKENS)->text);
+
+        return self::parse($answer);
+    }
+
+    /**
+     * What the answer says: the reply, and the proposal cleaned to what the app knows. An answer that isn't the shape
+     * asked for isn't lost: what it said becomes the reply.
+     *
+     * @return array{reply: string, proposal: ?array}
+     *
+     * @throws EngineFailed an answer with nothing in it
+     */
+    public static function parse(string $answer): array
+    {
+        $start = strpos($answer, '{');
+        $end = strrpos($answer, '}');
+        $data = $start === false || $end === false || $end < $start ? null : json_decode(substr($answer, $start, $end - $start + 1), true);
+        if (! is_array($data) || array_is_list($data)) {
+            $text = trim($answer);
+            if ($text === '') {
+                throw new EngineFailed('engine_empty', 'The AI had nothing to say. Try again.');
+            }
+
+            return ['reply' => mb_substr($text, 0, 800), 'proposal' => null];
+        }
+
+        $reply = is_string($data['reply'] ?? null) ? mb_substr(trim($data['reply']), 0, 800) : '';
+        $proposal = self::proposal($data['proposal'] ?? null);
+        if ($reply === '' && $proposal === null) {
+            throw new EngineFailed('engine_empty', 'The AI had nothing to say. Try again.');
+        }
+
+        return ['reply' => $reply !== '' ? $reply : 'Here is what I would add.', 'proposal' => $proposal];
+    }
+
+    /**
+     * Writes what the student ticked of a proposal, and only that. $ticked says which parts: `course`, `about`, `outcomes`,
+     * `textbook` (true or false), and `assessment`, `assignments` and `modules` (the numbers of the proposal's items; an
+     * assignment is made from an assessment item that has a day). What is already there is kept: outcomes and assessment
+     * are added to, a module that exists is skipped.
+     *
+     * @param  array{course?: array, about: string, outcomes: list<string>, assessment: list<array>, textbook: string, modules: list<array>}  $proposal
+     * @param  array{course?: bool, about?: bool, outcomes?: bool, textbook?: bool, assessment?: list<int>, assignments?: list<int>, modules?: list<int>}  $ticked
+     * @return array{course: bool, about: bool, outcomes: int, textbook: bool, assessment: int, assignments: int, modules: int}
+     */
+    public function apply(Principal $by, string $workspaceId, array $proposal, array $ticked): array
+    {
+        $done = ['course' => false, 'about' => false, 'outcomes' => 0, 'textbook' => false, 'assessment' => 0, 'assignments' => 0, 'modules' => 0];
+        $workspace = $this->workspaces->find($by, $workspaceId);
+
+        $details = $proposal['course'] ?? [];
+        if (($ticked['course'] ?? false) && $details !== []) {
+            $this->workspaces->update($by, $workspaceId, [
+                'name' => $workspace->name,
+                'code' => $details['code'] ?? $workspace->code,
+                'term' => $details['term'] ?? $workspace->term,
+                'starts_on' => $details['starts_on'] ?? $workspace->startsOn,
+                'ends_on' => $details['ends_on'] ?? $workspace->endsOn,
+                'colour' => $workspace->colour,
+                'icon' => $workspace->icon,
+            ]);
+            $done['course'] = true;
+        }
+
+        $profile = $this->profiles->get($by, $workspaceId);
+        $about = $profile->about;
+        $textbook = $profile->textbook;
+        $outcomes = $profile->outcomes;
+        $rows = $profile->assessment;
+
+        if (($ticked['about'] ?? false) && $proposal['about'] !== '') {
+            $about = $proposal['about'];
+            $done['about'] = true;
+        }
+        if (($ticked['textbook'] ?? false) && $proposal['textbook'] !== '') {
+            $textbook = $proposal['textbook'];
+            $done['textbook'] = true;
+        }
+        if ($ticked['outcomes'] ?? false) {
+            $known = array_map(self::same(...), $outcomes);
+            foreach ($proposal['outcomes'] as $line) {
+                if (! in_array(self::same($line), $known, true) && count($outcomes) < CourseProfiles::MAX_OUTCOMES) {
+                    $outcomes[] = $line;
+                    $known[] = self::same($line);
+                    $done['outcomes']++;
+                }
+            }
+        }
+
+        $assignments = array_map('intval', $ticked['assignments'] ?? []);
+        foreach (array_values(array_unique(array_map('intval', $ticked['assessment'] ?? []))) as $index) {
+            $item = $proposal['assessment'][$index] ?? null;
+            if ($item === null || count($rows) >= CourseProfiles::MAX_ASSESSMENTS) {
+                continue;
+            }
+            $existing = array_search(self::same($item['name']), array_map(fn (array $row) => self::same($row['name']), $rows), true);
+            $row = $existing !== false ? $rows[$existing] : ['name' => $item['name'], 'kind' => $item['kind'], 'weight' => $item['weight'], 'due_on' => $item['due_on'], 'activity_id' => null];
+            if ($existing === false) {
+                $rows[] = $row;
+                $existing = array_key_last($rows);
+                $done['assessment']++;
+            }
+            if (in_array($index, $assignments, true) && $item['due_on'] !== null && ($rows[$existing]['activity_id'] ?? null) === null) {
+                $made = $this->activities->create($by, $workspaceId, ['kind' => $item['kind'], 'title' => $item['name'], 'due_on' => $item['due_on']]);
+                $rows[$existing]['due_on'] = $item['due_on'];
+                $rows[$existing]['activity_id'] = $made->id;
+                $done['assignments']++;
+            }
+        }
+
+        if ($done['about'] || $done['textbook'] || $done['outcomes'] > 0 || $done['assessment'] > 0 || $done['assignments'] > 0) {
+            $this->profiles->save($by, $workspaceId, ['about' => $about, 'outcomes' => $outcomes, 'textbook' => $textbook, 'assessment' => $rows]);
+        }
+
+        $titles = array_map(fn ($module) => self::same($module->title), $this->modules->list($by, $workspaceId));
+        $picked = array_values(array_unique(array_map('intval', $ticked['modules'] ?? [])));
+        sort($picked);
+        foreach ($picked as $index) {
+            $module = $proposal['modules'][$index] ?? null;
+            if ($module === null || in_array(self::same($module['title']), $titles, true)) {
+                continue;
+            }
+            $this->modules->create($by, $workspaceId, $module);
+            $titles[] = self::same($module['title']);
+            $done['modules']++;
+        }
+
+        return $done;
+    }
+
+    /** What is set up in the course, in a few lines, so the guide asks only for what is missing. */
+    public function state(Principal $by, string $workspaceId): string
+    {
+        $workspace = $this->workspaces->find($by, $workspaceId);
+        $profile = $this->profiles->get($by, $workspaceId);
+        $modules = $this->modules->list($by, $workspaceId);
+
+        $lines = ['Course: '.$workspace->name];
+        $facts = array_filter([
+            $workspace->code !== null ? "code {$workspace->code}" : null,
+            $workspace->term !== null ? "term {$workspace->term}" : null,
+            $workspace->startsOn !== null ? "starts {$workspace->startsOn}" : null,
+            $workspace->endsOn !== null ? "ends {$workspace->endsOn}" : null,
+        ]);
+        $lines[] = 'Details: '.($facts === [] ? 'none yet' : implode(', ', $facts));
+        $lines[] = 'About: '.($profile->about !== '' ? mb_substr($profile->about, 0, 300) : 'not written yet');
+        $lines[] = 'What it should teach: '.($profile->outcomes === [] ? 'not written yet' : count($profile->outcomes).' lines');
+        if ($profile->assessment === []) {
+            $lines[] = 'Assessment: not written yet';
+        } else {
+            $lines[] = 'Assessment:';
+            foreach ($profile->assessment as $row) {
+                $lines[] = '- '.$row['name'].' ('.$row['kind'].($row['weight'] !== null ? ", {$row['weight']}%" : '').($row['due_on'] !== null ? ", due {$row['due_on']}" : '').')';
+            }
+        }
+        $lines[] = 'Textbook: '.($profile->textbook !== '' ? $profile->textbook : 'none yet');
+        $lines[] = 'Modules: '.($modules === [] ? 'none yet' : implode('; ', array_map(fn ($module) => $module->title, array_slice($modules, 0, 60))));
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * What was said before, as the model's turns: only the student's and the guide's words, the last few, each cut to a
+     * length that keeps a pasted page from being sent again and again.
+     *
+     * @param  list<array{role: string, content: string}>  $history
+     * @return list<array{role: string, content: string}>
+     */
+    public static function remembered(array $history): array
+    {
+        $turns = [];
+        foreach ($history as $turn) {
+            $role = $turn['role'] ?? null;
+            $text = is_string($turn['content'] ?? null) ? trim($turn['content']) : '';
+            if (in_array($role, ['user', 'assistant'], true) && $text !== '') {
+                $turns[] = ['role' => $role, 'content' => mb_substr($text, 0, $role === 'user' ? 3_000 : 800)];
+            }
+        }
+
+        return array_slice($turns, -self::KEEP);
+    }
+
+    /**
+     * A proposal as the app knows it, or null when it holds nothing.
+     *
+     * @return ?array{course: array, about: string, outcomes: list<string>, assessment: list<array>, textbook: string, modules: list<array>}
+     */
+    private static function proposal(mixed $raw): ?array
+    {
+        if (! is_array($raw) || array_is_list($raw)) {
+            return null;
+        }
+        $proposal = ProfileCourse::clean($raw) + ['course' => self::course($raw['course'] ?? null)];
+        $holds = $proposal['about'] !== '' || $proposal['outcomes'] !== [] || $proposal['assessment'] !== [] || $proposal['textbook'] !== '' || $proposal['modules'] !== [] || $proposal['course'] !== [];
+
+        return $holds ? $proposal : null;
+    }
+
+    /** @return array{code?: string, term?: string, starts_on?: string, ends_on?: string} only what is there */
+    private static function course(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+        $text = fn (mixed $value, int $limit) => is_string($value) ? mb_substr(trim((string) preg_replace('/\s+/u', ' ', $value)), 0, $limit) : '';
+        $date = function (mixed $value): string {
+            $parsed = is_string($value) ? DateTimeImmutable::createFromFormat('!Y-m-d', $value) : false;
+
+            return $parsed !== false && $parsed->format('Y-m-d') === $value ? $value : '';
+        };
+        $course = array_filter([
+            'code' => $text($raw['code'] ?? null, 20),
+            'term' => $text($raw['term'] ?? null, 40),
+            'starts_on' => $date($raw['starts_on'] ?? null),
+            'ends_on' => $date($raw['ends_on'] ?? null),
+        ], fn (string $value) => $value !== '');
+        if (isset($course['starts_on'], $course['ends_on']) && $course['ends_on'] < $course['starts_on']) {
+            unset($course['ends_on']);
+        }
+
+        return $course;
+    }
+
+    /** A name as it is compared: the same words in any case and spacing are the same. */
+    private static function same(string $text): string
+    {
+        return mb_strtolower(trim((string) preg_replace('/\s+/u', ' ', $text)));
+    }
+}

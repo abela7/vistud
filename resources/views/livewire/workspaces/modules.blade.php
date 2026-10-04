@@ -38,6 +38,10 @@
             <x-icon name="folder-open" class="size-4" />
             <span class="max-md:sr-only">All notes &amp; files</span>
         </a>
+        <a href="{{ route('workspaces.guide', [$workspaceId, 'for' => 'modules']) }}" class="btn btn-secondary">
+            <x-icon name="sparkles" class="size-4" />
+            <span class="max-md:sr-only">Add with the AI</span>
+        </a>
         <button type="button" class="btn btn-primary" wire:click="newModule">
             <x-icon name="plus" class="size-4" />
             <span class="max-sm:sr-only">New module</span>

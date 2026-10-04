@@ -23,9 +23,10 @@ async function dismissSetup(page) {
     await expect(page.locator('#course-setup')).toBeHidden();
 }
 
-async function openForm(page) {
-    await page.getByRole('button', { name: 'New course' }).first().click();
-    await expect(form(page)).toBeVisible();
+/** The New course page (a page of its own since the course guide), reached from Home or the switcher. */
+async function openNewCourse(page) {
+    await page.getByRole('link', { name: 'New course' }).first().click();
+    await expect(heading(page, 'New course')).toBeVisible();
 }
 
 test('a student creates their first workspace, opens it, and creates a second from the switcher', async ({ page }) => {
@@ -33,16 +34,18 @@ test('a student creates their first workspace, opens it, and creates a second fr
     await openStudentHome(page);
     await expect(page.getByText('Create your first course')).toBeVisible();
 
-    await openForm(page);
-    await expect(form(page).getByLabel('Name')).toBeFocused();
-    await form(page).getByRole('button', { name: 'Create course' }).click();
-    await expect(form(page).getByText('Give the course a name.')).toBeVisible();
+    await openNewCourse(page);
+    await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
+    await page.getByRole('button', { name: 'Create course' }).click();
+    await expect(page.getByText('Give the course a name.')).toBeVisible();
 
-    await form(page).getByLabel('Name').fill('Biology');
-    await form(page).getByText('Green', { exact: true }).click({ force: true });
-    await form(page).getByText('Microscope', { exact: true }).click({ force: true });
-    await form(page).getByLabel('Course code (optional)').fill('BIO101');
-    await form(page).getByRole('button', { name: 'Create course' }).click();
+    await page.getByLabel('Name', { exact: true }).fill('Biology');
+    await page.getByText('Green', { exact: true }).click({ force: true });
+    await page.getByText('Microscope', { exact: true }).click({ force: true });
+    await page.locator('.course-new-more summary').click();
+    await page.getByLabel('Course code').fill('BIO101');
+    await page.getByRole('radio', { name: /I'll do it myself/ }).check({ force: true });
+    await page.getByRole('button', { name: 'Create course' }).click();
 
     await expect(heading(page, 'Biology')).toBeVisible();
     await dismissSetup(page);
@@ -59,9 +62,10 @@ test('a student creates their first workspace, opens it, and creates a second fr
 
     await sidebar.locator('.ws-switcher').click();
     await sidebar.locator('.ws-menu').getByRole('link', { name: 'New course' }).click();
-    await expect(form(page)).toBeVisible();
-    await form(page).getByLabel('Name').fill('Mathematics');
-    await form(page).getByRole('button', { name: 'Create course' }).click();
+    await expect(heading(page, 'New course')).toBeVisible();
+    await page.getByLabel('Name', { exact: true }).fill('Mathematics');
+    await page.getByRole('radio', { name: /I'll do it myself/ }).check({ force: true });
+    await page.getByRole('button', { name: 'Create course' }).click();
     await expect(heading(page, 'Mathematics')).toBeVisible();
     await dismissSetup(page);
 
@@ -144,13 +148,15 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await useSentinelTheme(page);
         const states = { 'my workspaces': await foreignColours(page) };
 
-        await openForm(page);
-        await form(page).getByRole('button', { name: 'Create course' }).click();
-        await form(page).getByText('Give the course a name.').waitFor();
-        await form(page).getByText('Purple', { exact: true }).click({ force: true });
-        await form(page).getByText('Brain', { exact: true }).click({ force: true });
-        states['form, error, colour and icon picked'] = await foreignColours(page);
-        await page.keyboard.press('Escape');
+        await openNewCourse(page);
+        await useSentinelTheme(page);
+        await page.getByRole('button', { name: 'Create course' }).click();
+        await page.getByText('Give the course a name.').waitFor();
+        await page.getByText('Purple', { exact: true }).click({ force: true });
+        await page.getByText('Brain', { exact: true }).click({ force: true });
+        states['new course page, error, colour and icon picked'] = await foreignColours(page);
+        await page.getByRole('link', { name: 'Cancel' }).click();
+        await page.locator('main').getByRole('link', { name: 'Biology' }).first().waitFor();
 
         await page.locator('main').getByRole('link', { name: 'Biology' }).click();
         await heading(page, 'Biology').waitFor();
@@ -175,9 +181,11 @@ for (const theme of THEMES) {
         await useTheme(page, theme);
         expect(await analyse(page)).toEqual([]);
 
-        await openForm(page);
+        await openNewCourse(page);
+        await useTheme(page, theme);
         expect(await analyse(page)).toEqual([]);
-        await page.keyboard.press('Escape');
+        await page.getByRole('link', { name: 'Cancel' }).click();
+        await page.locator('main').getByRole('link', { name: 'Biology' }).first().waitFor();
 
         await page.locator('main').getByRole('link', { name: 'Biology' }).click();
         await heading(page, 'Biology').waitFor();

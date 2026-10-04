@@ -62,7 +62,24 @@ final class ProfileCourse extends Job
      */
     public static function parse(string $answer): array
     {
-        $data = self::object($answer);
+        $reading = self::clean(self::object($answer));
+        if ($reading['about'] === '' && $reading['outcomes'] === [] && $reading['assessment'] === [] && $reading['modules'] === [] && $reading['textbook'] === '') {
+            throw new EngineFailed('engine_unreadable', 'The AI found nothing in it. Check that it is the syllabus, or try again.');
+        }
+
+        return $reading;
+    }
+
+    /**
+     * What an object from the AI says about a course (a syllabus read, or a proposal in the course guide), cleaned and
+     * checked: text cut to its limits, kinds and dates only as the app knows them, a module list in order. It leaves
+     * out what it can't use and never throws; an empty course comes back empty.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{about: string, outcomes: list<string>, assessment: list<array{name: string, kind: string, weight: ?int, due_on: ?string}>, textbook: string, modules: list<array{title: string, starts_on: ?string, ends_on: ?string}>}
+     */
+    public static function clean(array $data): array
+    {
         $clean = fn (mixed $value, int $limit) => is_string($value) ? mb_substr(trim((string) preg_replace('/\s+/u', ' ', $value)), 0, $limit) : '';
         $date = function (mixed $value): ?string {
             $parsed = is_string($value) ? DateTimeImmutable::createFromFormat('!Y-m-d', $value) : false;
@@ -105,18 +122,13 @@ final class ProfileCourse extends Job
             $modules[] = ['title' => $title, 'starts_on' => $starts, 'ends_on' => $ends !== null && $starts !== null && $ends < $starts ? null : $ends];
         }
 
-        $reading = [
+        return [
             'about' => $clean($data['about'] ?? null, CourseProfiles::MAX_ABOUT),
             'outcomes' => $outcomes,
             'assessment' => $assessment,
             'textbook' => $clean($data['textbook'] ?? null, CourseProfiles::MAX_TEXTBOOK),
             'modules' => $modules,
         ];
-        if ($reading['about'] === '' && $outcomes === [] && $assessment === [] && $modules === [] && $reading['textbook'] === '') {
-            throw new EngineFailed('engine_unreadable', 'The AI found nothing in it. Check that it is the syllabus, or try again.');
-        }
-
-        return $reading;
     }
 
     /** The JSON object in an answer, even inside a code fence or after a word of introduction. */

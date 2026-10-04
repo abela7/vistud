@@ -19,7 +19,7 @@
                 <p class="text-fg-muted">{{ $isNew ? 'Welcome' : 'Welcome back' }}, {{ $firstName }}</p>
                 <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">My courses</h1>
             </div>
-            <x-button variant="primary" icon="plus" x-data x-on:click="$dispatch('workspace-form-open')">New course</x-button>
+            <a href="{{ route('workspaces.create') }}" class="btn btn-primary"><x-icon name="plus" class="size-4" />New course</a>
         </div>
 
         @if ($isNew)
@@ -31,7 +31,7 @@
         <livewire:workspaces.index />
     </div>
 
-    <livewire:workspaces.form :open-on-load="request()->boolean('new')" />
+    <livewire:workspaces.form />
 </x-layouts.app>
 @else
 <x-layouts.app title="Home">

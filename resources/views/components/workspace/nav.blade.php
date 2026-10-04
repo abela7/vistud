@@ -24,7 +24,7 @@
             @endforeach
             <div class="mt-1.5 border-t border-divider pt-1.5">
                 <a href="{{ route('home') }}" class="menu-item"><x-icon name="house" class="size-4" />All courses</a>
-                <a href="{{ route('home', ['new' => 1]) }}" class="menu-item"><x-icon name="plus" class="size-4" />New course</a>
+                <a href="{{ route('workspaces.create') }}" class="menu-item"><x-icon name="plus" class="size-4" />New course</a>
             </div>
         </div>
     </div>

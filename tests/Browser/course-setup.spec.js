@@ -19,10 +19,12 @@ const noSidewaysScroll = (page) => page.evaluate(() => document.documentElement.
 test.use({ reducedMotion: 'reduce' });
 test.describe.configure({ timeout: 90_000 });
 
+/** Makes a course on the New course page, choosing to set it up by hand: the course's own page opens with its setup sheet. */
 async function createCourse(page, name) {
-    await page.getByRole('button', { name: 'New course' }).first().click();
-    await page.locator('#workspace-form').getByLabel('Name').fill(name);
-    await page.locator('#workspace-form').getByRole('button', { name: 'Create course' }).click();
+    await page.getByRole('link', { name: 'New course' }).first().click();
+    await page.getByLabel('Name', { exact: true }).fill(name);
+    await page.getByRole('radio', { name: /I'll do it myself/ }).check({ force: true });
+    await page.getByRole('button', { name: 'Create course' }).click();
     await expect(sheet(page)).toBeVisible();
 }
 

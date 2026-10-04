@@ -36,7 +36,15 @@ foreach (array_reverse($messages) as $message) {
 // The helper's and the reader's jobs (tests/Browser/helper.spec.js): one plain answer each, never streamed.
 $system = (string) (($messages[0]['role'] ?? '') === 'system' ? ($messages[0]['content'] ?? '') : '');
 $quick = null;
-if (str_contains($system, "You make flashcards from a student's material")) {
+if (str_contains($system, 'You set up a course with a student')) {
+    // The course guide (the `guide:` tests in chat.spec.js): a pasted timetable gets a proposal, anything else a question.
+    $quick = str_contains($asked, 'Week 1')
+        ? json_encode(['reply' => 'I found three weeks. Tick the ones to add now.', 'proposal' => [
+            'about' => 'Operating systems and the technologies under them.',
+            'modules' => [['title' => 'Week 1: OS Structure | Processes & Threads'], ['title' => 'Week 2: Concurrency & Scheduling | Memory Management'], ['title' => 'Week 3: Virtual Memory | Storage & IO']],
+        ]])
+        : json_encode(['reply' => 'Which weeks do you want to add now?', 'proposal' => null]);
+} elseif (str_contains($system, "You make flashcards from a student's material")) {
     $quick = json_encode(['cards' => [
         ['front' => 'What does the scheduler decide?', 'back' => 'Which process runs next.'],
         ['front' => 'What is round robin?', 'back' => 'Each process gets a quantum in turn.', 'topic' => 'Scheduling'],

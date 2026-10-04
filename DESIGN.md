@@ -325,6 +325,12 @@ The rules for every word a student reads (blueprint §3.11):
 - **No internal words.** A student never reads "evidence", "marks" (of the tutor), "briefing", "write-back", "journal", "finding", "overview" or "engine"; they read "AI" where a model is meant ("AI" is a part of Settings), a **prompt** for what they paste into another AI, a **study record** for what ViStud has recorded, a **key point**, **Home** for a course's first page, and "tutor", "reader" and "helper" for the three roles. A student's workspace is a **course** on every screen (the code keeps `workspaces`; the routes are `/courses/…` and the old addresses lead to them). `tests/Architecture/StudentWordsTest.php` fails when a student-facing view or notice says one of them (the owner's admin pages are left out).
 - **Errors say what to do next, in one line.**
 
+### 5.11 A new course, and the guide that sets it up
+
+A course is made on a page of its own, `/courses/new` (`App\Livewire\Workspaces\CourseNew`), not in a dialog: a panel for the name, the colour and the icon (the course's card beside it from 1024 px, shown under the form below, changing as the student picks), a *Details (optional)* panel (code, term, dates) and a choice of how to set it up, as two cards (`.choice-card`, the chosen one with the accent): **Guide me** and **I'll do it myself**. Only the name is needed. The dialog on a course's page (`x-livewire workspaces.form`) is for editing, archiving and restoring only.
+
+The guide (`/courses/{course}/guide`, `App\Livewire\Workspaces\GuideChat`, `?for=modules` for *Add with the AI* on Modules) is a conversation, not a form: the guide's lines on the left, the student's on the right (`.guide-line`), a **proposal card** under them with a tick on every part (the course details, what it is about, what it should teach, how it is assessed with *Also add it as an assignment* on each dated item, the textbook, the modules with All / None) and one primary button, *Add what is ticked (n)*, with *Not now* beside it; the box to answer in is at the foot. The guide never writes: only what is ticked is added, and what is already there is skipped. Modules can be added a few at a time, any week.
+
 ## 6. Layout and responsive behaviour
 
 ### 6.1 Breakpoints and layouts
