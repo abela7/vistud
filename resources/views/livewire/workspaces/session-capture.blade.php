@@ -95,6 +95,9 @@
                                                         </div>
                                                     @elseif ($kind === 'attempt')
                                                         <p class="text-sm"><span class="font-medium">{{ $item['asked'] }}</span>@if ($item['answer'] !== '') <span class="text-fg-muted">· You answered: {{ $item['answer'] }}</span>@endif</p>
+                                                        @if (($item['right'] ?? '') !== '' || ($item['fix'] ?? '') !== '')
+                                                            <p class="text-sm text-fg-muted">@if (($item['right'] ?? '') !== '')Right: {{ $item['right'] }}@endif @if (($item['fix'] ?? '') !== '')To fix: {{ $item['fix'] }}@endif</p>
+                                                        @endif
                                                     @elseif ($kind === 'checkpoint')
                                                         <p class="text-sm">{{ $item['text'] }}</p>
                                                     @elseif ($kind === 'status' && $item['why'] !== '')

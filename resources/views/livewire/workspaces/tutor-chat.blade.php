@@ -18,9 +18,21 @@
             <h2 id="chat-heading-{{ $this->getId() }}" class="panel-title">Your tutor</h2>
             <p class="panel-hint">{{ $ready ? $choices->tutorModel.' · '.$spentWords : 'Not set up yet' }}</p>
         </div>
-        @if ($marked)
+        @if ($marked || $quizzes !== [])
             <div class="panel-head-actions">
-                <x-button size="sm" icon="bookmark" wire:click="keep">Keep what the tutor marked</x-button>
+                @if ($quizzes !== [])
+                    <div class="chat-quiz" x-data="{ open: false }" x-on:keydown.escape.stop="open = false" x-on:click.outside="open = false">
+                        <x-button size="sm" icon="list-checks" x-on:click="open = ! open" x-bind:aria-expanded="open.toString()" aria-controls="chat-quiz-{{ $this->getId() }}" x-bind:disabled="busy">Quiz me</x-button>
+                        <div id="chat-quiz-{{ $this->getId() }}" class="chat-quiz-menu" role="group" aria-label="Quiz me" x-show="open" x-cloak>
+                            @foreach ($quizzes as $quiz)
+                                <button type="button" class="chat-pick" x-on:click="open = false; say(@js($quiz['text']))"><span class="truncate">{{ $quiz['label'] }}</span></button>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+                @if ($marked)
+                    <x-button size="sm" icon="bookmark" wire:click="keep">Keep what the tutor marked</x-button>
+                @endif
             </div>
         @endif
     </div>

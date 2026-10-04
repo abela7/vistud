@@ -194,4 +194,20 @@ class WriteBackTest extends TestCase
         $this->assertArrayNotHasKey('finding', $result['saved']);
         $this->assertSame(1, $result['saved']['flashcard']);
     }
+
+    public function test_an_answers_feedback_is_kept_with_it_in_the_journal_and_the_session_note(): void
+    {
+        $session = app(Sessions::class)->start($this->by, $this->databases->id, $this->joins->id);
+        $writeBack = app(WriteBack::class);
+        $mark = '<attempt topic="Joins" form="explain" result="partial"><asked>Why are unmatched columns NULL?</asked><answer>Because nothing matched</answer><right>You saw that nothing matched.</right><fix>Say that NULL means "no value", not zero.</fix></attempt>';
+        $items = $writeBack->review($this->by, $session->id, $mark);
+        $this->assertSame(['You saw that nothing matched.', 'Say that NULL means "no value", not zero.'], [$items[0]['right'], $items[0]['fix']]);
+        $writeBack->apply($this->by, $session->id, $items);
+
+        $attempt = collect(app(JournalReader::class)->entries($this->learnerScopeOf($this->ada)))->first(fn ($e) => $e->kind->value === 'attempt');
+        $content = app(JournalReader::class)->content($this->learnerScopeOf($this->ada), $attempt->id);
+        $this->assertSame(['Because nothing matched', 'You saw that nothing matched.', 'Say that NULL means "no value", not zero.'], [$content['answer'], $content['right'], $content['fix']]);
+        $note = app(Notes::class)->list($this->by, $this->databases->id)[0];
+        $this->assertStringContainsString('Right: You saw that nothing matched. To fix: Say that NULL means "no value", not zero.', NoteDoc::markdown(app(Notes::class)->open($this->by, $note->id)->doc));
+    }
 }

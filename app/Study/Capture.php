@@ -21,6 +21,8 @@ final class Capture
         'back' => 1000,
         'asked' => 1000,
         'answer' => 2000,
+        'right' => 500,
+        'fix' => 500,
         'checkpoint' => 1000,
         'summary' => 2000,
         'why' => 500,
@@ -32,6 +34,9 @@ final class Capture
     public const FORMS = ['recall', 'explain', 'apply', 'recognise'];
 
     public const STATUSES = ['covered', 'understood', 'confused'];
+
+    /** The parts inside a mark: a card's sides, and an answer's question, words, and what was right and what to fix. */
+    private const PARTS = ['front', 'back', 'asked', 'answer', 'right', 'fix'];
 
     /**
      * The marks in the text, in order, without repeats. Each has `kind`,
@@ -83,7 +88,7 @@ final class Capture
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $text = strtr($text, ['“' => '"', '”' => '"', '„' => '"', '‘' => "'", '’' => "'"]);
         // Markdown escapes (\<finding) and backticks around marks.
-        $tags = implode('|', [...self::KINDS, 'front', 'back', 'asked', 'answer']);
+        $tags = implode('|', [...self::KINDS, ...self::PARTS]);
         $text = (string) preg_replace('/\\\\(<\/?(?:'.$tags.')\b)/i', '$1', $text);
         $text = (string) preg_replace('/`+(<(?:'.$tags.')\b)/i', '$1', $text);
 
@@ -134,6 +139,7 @@ final class Capture
 
                 return $asked === '' ? null : [
                     'kind' => $kind, 'topic' => $topic, 'asked' => $asked, 'answer' => $answer,
+                    'right' => self::clean(self::part($inner, 'right'), 'right'), 'fix' => self::clean(self::part($inner, 'fix'), 'fix'),
                     'result' => in_array($result, self::RESULTS, true) ? $result : 'unjudged',
                     'form' => in_array($form, self::FORMS, true) ? $form : null,
                     'support' => $support === 'hinted' ? 'hinted' : 'unaided',
@@ -157,7 +163,7 @@ final class Capture
     private static function clean(string $text, string $field): string
     {
         // Only the marks' own tags go: "age<18" in an answer is content.
-        $tags = implode('|', [...self::KINDS, 'front', 'back', 'asked', 'answer']);
+        $tags = implode('|', [...self::KINDS, ...self::PARTS]);
         $text = (string) preg_replace('/<\/?(?:'.$tags.')\b[^>]*>/i', ' ', $text);
         $text = trim((string) preg_replace('/\s+/u', ' ', $text));
         $limit = self::LIMITS[$field];

@@ -195,6 +195,15 @@ test('a diagram and a formula in a reply are drawn, with the diagram as text und
     await page.evaluate(() => window.dispatchEvent(new CustomEvent('vistud:theme-changed')));
     await expect(chat.locator('figure.chat-diagram svg')).toHaveCount(1);
 
+    // Quiz me: the menu offers the session's topic, its module and what's hardest; a choice is sent as a message.
+    await chat.getByRole('button', { name: 'Quiz me' }).click();
+    const quiz = chat.getByRole('group', { name: 'Quiz me' });
+    await expect(quiz.getByRole('button')).toHaveText(['On Joins', 'On Week 1: Relational model', 'On what I find hardest']);
+    await quiz.getByRole('button', { name: 'On Joins' }).click();
+    await expect(quiz).toBeHidden();
+    await expect(chat.locator('li[data-turn].is-me').last()).toHaveText('Quiz me on Joins.', { timeout: 15_000 });
+    await expect(chat.locator('li[data-turn].is-tutor')).toHaveCount(3, { timeout: 15_000 });
+
     // On a phone the diagram scrolls in its own box; the page never scrolls sideways.
     await page.setViewportSize({ width: 320, height: 700 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);

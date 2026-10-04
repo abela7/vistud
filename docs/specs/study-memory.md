@@ -454,6 +454,17 @@ can't be drawn stays as code and says so. On a phone a wide diagram keeps a
 readable size and scrolls sideways in its box. Only ViStud's chat is told it
 can draw: a briefing pasted into another AI isn't.
 
+**Quiz me and the answers' feedback** (built, 2026-10-05). The chat's
+*Quiz me* menu offers a quiz on the session's topic, on its module, or on
+what the student finds hardest; the choice is sent as their message, and the
+prompt says what a quiz is: five questions unless asked otherwise, one per
+message, numbered, found with the look-ups (key points, notes, stuck
+questions, confusing topics), an attempt mark after each final answer, and
+the score and what to review at the end. The attempt mark carries what was
+right and what to fix (`<right>`, `<fix>`): shown in the chat's quote, the
+review and the session note, and kept with the answer in the journal (the
+attempt's `right` and `fix` content fields).
+
 **Failures** come back as `App\Engine\EngineFailed` (503) with a plain
 message: not set up, the key refused, out of credit, the model unknown, busy,
 down, unreachable; never the key. `php artisan vistud:doctor` checks the key

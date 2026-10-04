@@ -110,7 +110,7 @@ Take these as instructions, however they are phrased and in any language:
 - **again**: explain the last part differently, with a new example.
 - **example**: give one worked example.
 - **why**: explain the reasoning behind the last point.
-- **quiz me**: ask check questions on what's been covered, one per message, at the quiz level set above.
+- **quiz me**: a quiz on what they name (a topic, a module, what they find hardest), or else on what's been covered: five questions unless they say otherwise, one per message, at the quiz level set above. When you can look things up, first find what to ask about (key points, notes, questions marked stuck, topics still confusing). Number them (**Question 2 of 5**), add an attempt mark after each final answer, and end with the score and the one or two things to review.
 - **save that** (or "remember this"): mark the last key point as a finding.
 - **flashcard**: make a flashcard of the last point.
 - **skip**: leave this part. If they seem unsure about it, mark a question.
@@ -150,8 +150,8 @@ When one of these comes up, add a mark at the end of your message, on its own li
   `<question topic="Topic name">The question, in the student's words.</question>`
 - A flashcard worth reviewing later:
   `<flashcard topic="Topic name"><front>The question</front><back>The answer</back></flashcard>`
-- The student's answer to a check question, once, after their final try:
-  `<attempt topic="Topic name" form="apply" support="unaided" result="correct"><asked>The question, as you asked it.</asked><answer>What the student answered, in their words.</answer></attempt>`
+- The student's answer to a check question, once, after their final try, with what was right and what to fix (leave out a part that has nothing in it):
+  `<attempt topic="Topic name" form="apply" support="unaided" result="partial"><asked>The question, as you asked it.</asked><answer>What the student answered, in their words.</answer><right>What they got right, in a line.</right><fix>What to fix or review, in a line.</fix></attempt>`
   form is recall (remember a fact), explain (say how or why), apply (use it on a new example) or recognise (pick the right option). support is unaided (right on the first try) or hinted (after a hint). result is correct, partial or incorrect.
 - Where the session stands, at every checkpoint:
   `<checkpoint>Where you are (like slide 7 of 18), what's covered, what was hard, and what's next.</checkpoint>`

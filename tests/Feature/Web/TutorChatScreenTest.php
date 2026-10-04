@@ -198,4 +198,20 @@ class TutorChatScreenTest extends TestCase
         // A refusal says why, and gives the words back.
         $chat->call('send', 'And this?', ['topic:nope'])->assertSee('That isn&#039;t a note or a file.', false)->assertDispatched('chat-done', restore: 'And this?');
     }
+
+    public function test_quiz_me_offers_the_topic_the_module_and_what_is_hardest(): void
+    {
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+        $chat = $this->chat()->assertSeeInOrder(['Quiz me', 'On Joins', 'On Week 2: SQL joins', 'On what I find hardest']);
+
+        $this->engine->will(Fake::says('**Question 1 of 5** What does a left join keep?'));
+        $chat->call('say', 'Quiz me on Joins.')->assertSee('Quiz me on Joins.')->assertSee('Question 1 of 5');
+        $this->assertSame('Quiz me on Joins.', $this->engine->last()->messages[0]['content']);
+
+        // Only what the menu offers can be sent this way.
+        $chat->call('say', 'Quiz me on everything else.')->assertDontSee('Quiz me on everything else.');
+        // Once the session has ended, there is no quiz to start.
+        app(Sessions::class)->end($this->by, $this->session->id);
+        $this->chat()->assertDontSee('On what I find hardest');
+    }
 }

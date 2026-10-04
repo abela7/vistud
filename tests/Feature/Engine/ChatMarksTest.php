@@ -31,4 +31,12 @@ class ChatMarksTest extends TestCase
         $this->assertSame("Just words.\n\n- a list", ChatMarks::present("Just words.\n\n- a list"));
         $this->assertSame('Before  after', ChatMarks::present('Before <finding topic="x">   </finding> after'));
     }
+
+    public function test_an_answer_shows_what_was_right_and_what_to_fix(): void
+    {
+        $shown = ChatMarks::present('<attempt topic="Joins" result="partial"><asked>What does a left join keep?</asked><answer>The matches</answer><right>You know it keeps the matches.</right><fix>It keeps every left row, matched or not.</fix></attempt>');
+
+        $this->assertStringContainsString("> **Result:** partly right\n> **What was right:** You know it keeps the matches.\n> **To fix:** It keeps every left row, matched or not.", $shown);
+        $this->assertStringNotContainsString('<right>', $shown);
+    }
 }

@@ -49,6 +49,8 @@ final class ChatMarks
                     '**Asked:** '.$item['asked'],
                     $item['answer'] !== '' ? '**You said:** '.$item['answer'] : null,
                     '**Result:** '.['correct' => 'right', 'partial' => 'partly right', 'incorrect' => 'not yet', 'unjudged' => 'not marked'][$item['result']],
+                    ($item['right'] ?? '') !== '' ? '**What was right:** '.$item['right'] : null,
+                    ($item['fix'] ?? '') !== '' ? '**To fix:** '.$item['fix'] : null,
                 ])),
                 'status' => array_values(array_filter(['Proposed: **'.$item['proposed'].'**', $item['why'] !== '' ? $item['why'] : null])),
                 default => [$item['text']],

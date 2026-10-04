@@ -17,6 +17,7 @@ use App\Platform\Errors\Unprocessable;
 use App\Study\Files;
 use App\Study\FileTypes;
 use App\Study\MarkdownPreview;
+use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
@@ -75,9 +76,11 @@ final class TutorChat extends Component
 
     private Models $models;
 
-    public function boot(SessionChat $chat, Settings $settings, Sessions $sessions, PrincipalFactory $principals, ChatStream $stream, Notes $notes, Files $files, Topics $topics, Models $models): void
+    private Modules $modules;
+
+    public function boot(SessionChat $chat, Settings $settings, Sessions $sessions, PrincipalFactory $principals, ChatStream $stream, Notes $notes, Files $files, Topics $topics, Models $models, Modules $modules): void
     {
-        [$this->notes, $this->files, $this->topics, $this->models] = [$notes, $files, $topics, $models];
+        [$this->notes, $this->files, $this->topics, $this->models, $this->modules] = [$notes, $files, $topics, $models, $modules];
         $this->chat = $chat;
         $this->settings = $settings;
         $this->sessions = $sessions;
@@ -111,10 +114,11 @@ final class TutorChat extends Component
         $this->turn(fn (Closure $on) => $this->chat->send($this->principal(), $this->sessionId, $words, $on, $attach), $words);
     }
 
-    /** One of the suggested openings. */
+    /** One of the suggested openings, or a quiz from the Quiz me menu. */
     public function say(string $text): void
     {
-        if (! in_array($text, self::SUGGESTIONS, true)) {
+        $by = $this->principal();
+        if (! in_array($text, [...self::SUGGESTIONS, ...array_column($this->quizzes($by, $this->sessions->find($by, $this->sessionId)), 'text')], true)) {
             $this->dispatch('chat-done', restore: null);
 
             return;
@@ -178,6 +182,7 @@ final class TutorChat extends Component
                 'accept' => implode(',', array_map(fn (string $extension) => ".{$extension}", array_keys(FileTypes::TYPES))),
                 'icons' => array_map(fn (string $icon) => Icons::url($icon), self::ICONS),
             ],
+            'quizzes' => $ready && $session->isOpen() ? $this->quizzes($by, $session) : [],
             'sees' => ($model = $this->models->find($choices->tutorModel, $this->settings->key($by))) === null || $model->images,
         ]);
     }
@@ -208,6 +213,35 @@ final class TutorChat extends Component
         usort($items, fn ($a, $b) => [$b['chosen'], $a['name']] <=> [$a['chosen'], $b['name']]);
 
         return ['module' => $module, 'items' => array_slice($items, 0, 80)];
+    }
+
+    /**
+     * What the Quiz me menu offers: the session's topic, its module, and what the student finds hardest.
+     *
+     * @return list<array{label: string, text: string}>
+     */
+    private function quizzes(Principal $by, SessionDetails $session): array
+    {
+        $quizzes = [];
+        if ($session->topicId !== null) {
+            try {
+                $topic = $this->topics->find($by, $session->topicId)->name;
+                $quizzes[] = ['label' => "On {$topic}", 'text' => "Quiz me on {$topic}."];
+            } catch (NotFound) {
+                // Removed since.
+            }
+        }
+        if (($module = $this->moduleOf($by, $session)) !== null) {
+            try {
+                $title = $this->modules->find($by, $module)->title;
+                $quizzes[] = ['label' => "On {$title}", 'text' => "Quiz me on the module {$title}."];
+            } catch (NotFound) {
+                // Deleted since.
+            }
+        }
+        $quizzes[] = ['label' => 'On what I find hardest', 'text' => 'Quiz me on what I find hardest in this course.'];
+
+        return $quizzes;
     }
 
     /** The session's module: its own, or its topic's. */

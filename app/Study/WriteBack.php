@@ -185,6 +185,8 @@ final class WriteBack
         $asked = trim((string) ($item['asked'] ?? ''));
         Input::refuse($asked === '' ? ['asked' => 'Say what was asked.'] : (mb_strlen($asked) > Capture::LIMITS['asked'] ? ['asked' => 'That question is too long.'] : []));
         $answer = mb_substr(trim((string) ($item['answer'] ?? '')), 0, Capture::LIMITS['answer']);
+        // The tutor's feedback, kept with the answer: what was right, and what to fix.
+        $feedback = array_filter(['right' => mb_substr(trim((string) ($item['right'] ?? '')), 0, Capture::LIMITS['right']), 'fix' => mb_substr(trim((string) ($item['fix'] ?? '')), 0, Capture::LIMITS['fix'])], fn (string $text) => $text !== '');
         $normalised = mb_strtolower(trim((string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', $asked)));
         $taskId = 'chat-'.substr(sha1($session->workspaceId.'|'.$normalised), 0, 40);
         $result = in_array($item['result'] ?? null, Capture::RESULTS, true) ? $item['result'] : 'unjudged';
@@ -205,7 +207,7 @@ final class WriteBack
         $specs[] = $link(Memory::observation($scope, $by, 'attempt', [
             'task' => $taskId, 'form' => $form, 'support' => ($item['support'] ?? null) === 'hinted' ? 'hinted' : 'unaided',
             'setting' => 'chat', 'outcome' => $result, 'judged_by' => 'ai',
-        ], [], $answer === '' ? [] : ['answer' => $answer], $at));
+        ], [], array_filter(['answer' => $answer], fn (string $text) => $text !== '') + $feedback, $at));
 
         $this->memory->append($scope, $specs);
     }
@@ -285,7 +287,7 @@ final class WriteBack
         $section('Key points', array_map(fn ($i) => $i['text'].$topic($i), $of('finding')));
         $section('Questions', array_map(fn ($i) => $i['text'].$topic($i), $of('question')));
         $section('Flashcards', array_map(fn ($i) => $i['front'].' → '.$i['back'], $of('flashcard')));
-        $section('Answers', array_map(fn ($i) => ($result[$i['result']] ?? 'Not marked').': '.$i['asked'].($i['answer'] !== '' ? ' Answer: '.$i['answer'] : ''), $of('attempt')));
+        $section('Answers', array_map(fn ($i) => ($result[$i['result']] ?? 'Not marked').': '.$i['asked'].($i['answer'] !== '' ? ' Answer: '.$i['answer'] : '').(($i['right'] ?? '') !== '' ? ' Right: '.$i['right'] : '').(($i['fix'] ?? '') !== '' ? ' To fix: '.$i['fix'] : ''), $of('attempt')));
         $section('Statuses', array_map(fn ($i) => "{$i['topic_label']}: {$i['proposed']}", $of('status')));
         foreach ($of('checkpoint') as $checkpoint) {
             $blocks[] = self::heading('Where it stands', 3);
