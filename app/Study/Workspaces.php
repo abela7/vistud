@@ -74,7 +74,7 @@ final class Workspaces
     }
 
     /**
-     * @param  array{name?: mixed, code?: mixed, term?: mixed, starts_on?: mixed, ends_on?: mixed, colour?: mixed, icon?: mixed}  $input
+     * @param  array{name?: mixed, code?: mixed, term?: mixed, starts_on?: mixed, ends_on?: mixed, colour?: mixed, icon?: mixed, project_tools?: mixed}  $input
      */
     public function create(Principal $by, array $input): WorkspaceDetails
     {
@@ -310,7 +310,7 @@ final class Workspaces
      * The fields a student sets, cleaned and checked. Refusals name the field
      * (Unprocessable validation_failed), so a screen can show them there.
      *
-     * @return array{name: string, code: ?string, term: ?string, starts_on: ?string, ends_on: ?string, colour: string, icon: string}
+     * @return array{name: string, code: ?string, term: ?string, starts_on: ?string, ends_on: ?string, colour: string, icon: string, project_tools?: bool}
      */
     private static function validated(array $input): array
     {
@@ -324,6 +324,10 @@ final class Workspaces
             'colour' => $input['colour'] ?? 'blue',
             'icon' => $input['icon'] ?? 'book-open',
         ];
+        // Left as it is unless the input says (an update from somewhere that doesn't know of it must not switch it off).
+        if (array_key_exists('project_tools', $input)) {
+            $fields['project_tools'] = filter_var($input['project_tools'], FILTER_VALIDATE_BOOLEAN);
+        }
 
         Input::refuse(array_filter([
             'name' => match (true) {
@@ -355,6 +359,7 @@ final class Workspaces
             type: $row->type,
             position: (int) $row->position,
             archivedAt: $row->archived_at,
+            projectTools: (bool) $row->project_tools,
         );
     }
 }

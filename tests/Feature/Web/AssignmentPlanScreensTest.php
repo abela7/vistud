@@ -84,6 +84,8 @@ class AssignmentPlanScreensTest extends TestCase
     {
         $plans = app(Plans::class);
         $by = $this->principal($this->ada);
+        // Milestones and a team are project tools: this course has them on.
+        app(Workspaces::class)->update($by, $this->databases->id, ['name' => 'Databases', 'project_tools' => true]);
         $part = $plans->addPart($by, $this->essay->id, 'Research');
 
         // A section is one line that opens its own page; a new one is made on a page of its own.

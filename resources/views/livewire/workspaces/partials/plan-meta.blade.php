@@ -7,14 +7,16 @@
     $state = $plan->stateOf($item);
     $when = $item->when();
     $late = $plan->overdue($item, $today);
-    $person = $item->memberId === null ? null : $plan->member($item->memberId);
+    // Priority, the person it is for and labels are the course's project tools.
+    $tools = $projectTools ?? false;
+    $person = $tools && $item->memberId !== null ? $plan->member($item->memberId) : null;
     $priorities = ['low' => ['Low', 'blue'], 'medium' => ['Medium', 'teal'], 'high' => ['High', 'amber'], 'urgent' => ['Urgent', 'red']];
 @endphp
 @php
     // A section's own bar already says how far it is: only "stuck" is worth a chip there.
     $chipState = $item->kind === 'part' && $state === 'doing' ? null : $state;
 @endphp
-@if (in_array($chipState, ['doing', 'stuck'], true) || $when || $item->priority || $person || $item->labels !== [])
+@if (in_array($chipState, ['doing', 'stuck'], true) || $when || ($tools && ($item->priority || $item->labels !== [])) || $person)
     <p class="plan-meta">
         @if ($chipState === 'doing')
             <span class="plan-chip ws-colour-amber"><x-icon name="circle-dot" class="size-3.5" />In progress</span>
@@ -24,15 +26,17 @@
         @if ($when)
             <span @class(['plan-chip', 'ws-colour-red' => $late])><x-icon :name="$late ? 'calendar-clock' : 'calendar'" class="size-3.5" />{{ $late ? ($item->kind === 'milestone' ? 'Missed · ' : 'Overdue · ') : '' }}{{ $when }}</span>
         @endif
-        @if ($item->priority)
+        @if ($tools && $item->priority)
             <span class="plan-chip ws-colour-{{ $priorities[$item->priority][1] }}"><x-icon name="flag" class="size-3.5" />{{ $priorities[$item->priority][0] }}</span>
         @endif
         @if ($person)
             <span class="plan-chip"><x-icon name="user-round" class="size-3.5" />{{ $person->name }}</span>
         @endif
-        @foreach ($item->labels as $label)
-            <span class="plan-chip"><x-icon name="tag" class="size-3.5" />{{ $label }}</span>
-        @endforeach
+        @if ($tools)
+            @foreach ($item->labels as $label)
+                <span class="plan-chip"><x-icon name="tag" class="size-3.5" />{{ $label }}</span>
+            @endforeach
+        @endif
     </p>
 @endif
 @if ($item->notes)

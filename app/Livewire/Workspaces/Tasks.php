@@ -11,6 +11,7 @@ use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
 use App\Study\Modules;
 use App\Study\Plans;
+use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -54,13 +55,16 @@ final class Tasks extends Component
 
     private Plans $plans;
 
+    private Workspaces $workspaces;
+
     private PrincipalFactory $principals;
 
-    public function boot(Activities $activities, Modules $modules, Plans $plans, PrincipalFactory $principals): void
+    public function boot(Activities $activities, Modules $modules, Plans $plans, Workspaces $workspaces, PrincipalFactory $principals): void
     {
         $this->activities = $activities;
         $this->modules = $modules;
         $this->plans = $plans;
+        $this->workspaces = $workspaces;
         $this->principals = $principals;
     }
 
@@ -209,7 +213,8 @@ final class Tasks extends Component
             'modules' => $modules,
             'moduleTitles' => $moduleTitles,
             'plans' => $standing['progress'],
-            'healths' => $standing['health'],
+            // How each is going is a project tool: shown only in a course that has them.
+            'healths' => $this->workspaces->find($by, $this->workspaceId)->projectTools ? $standing['health'] : [],
             'target' => $this->targetId === null ? null : (collect($tasks)->firstWhere('id', $this->targetId)?->title),
         ]);
     }

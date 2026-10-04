@@ -13,6 +13,7 @@ use App\Study\PlanItem;
 use App\Study\PlanMaker;
 use App\Study\Plans;
 use App\Study\PlanStarters;
+use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -83,11 +84,13 @@ final class AssignmentPlan extends Component
 
     private Notes $notes;
 
+    private Workspaces $workspaces;
+
     private PrincipalFactory $principals;
 
-    public function boot(Plans $plans, PlanMaker $maker, Activities $activities, Files $files, Notes $notes, PrincipalFactory $principals): void
+    public function boot(Plans $plans, PlanMaker $maker, Activities $activities, Files $files, Notes $notes, Workspaces $workspaces, PrincipalFactory $principals): void
     {
-        [$this->plans, $this->maker, $this->activities, $this->files, $this->notes, $this->principals] = [$plans, $maker, $activities, $files, $notes, $principals];
+        [$this->plans, $this->maker, $this->activities, $this->files, $this->notes, $this->workspaces, $this->principals] = [$plans, $maker, $activities, $files, $notes, $workspaces, $principals];
     }
 
     public function mount(string $workspaceId, string $activityId): void
@@ -180,10 +183,10 @@ final class AssignmentPlan extends Component
     public function readReply(): void
     {
         $this->resetErrorBag('reply');
-        $read = PlanMaker::read($this->reply);
+        $read = $this->readOfReply();
         if ($read['parts'] === [] && $read['steps'] === [] && $read['criteria'] === [] && $read['milestones'] === []) {
             $this->reading = false;
-            $this->addError('reply', 'No parts, steps, milestones or criteria found in it. Paste the AI\'s whole reply, with the marks it wrote.');
+            $this->addError('reply', 'No parts, steps or criteria found in it. Paste the AI\'s whole reply, with the marks it wrote.');
 
             return;
         }
@@ -194,12 +197,23 @@ final class AssignmentPlan extends Component
     {
         $added = null;
         if ($this->attempt([], function () use (&$added) {
-            $added = $this->plans->addAll($this->principal(), $this->activityId, PlanMaker::read($this->reply));
+            $added = $this->plans->addAll($this->principal(), $this->activityId, $this->readOfReply());
         })) {
             $this->reset('brief', 'reply', 'reading', 'aiOpen');
             $this->notify($added === 1 ? '1 thing added to your plan.' : "{$added} things added to your plan.");
             $this->changed();
         }
+    }
+
+    /** What the AI's reply holds; its milestones only for a course with project tools, which is the only one that shows them. */
+    private function readOfReply(): array
+    {
+        $read = PlanMaker::read($this->reply);
+        if (! $this->workspaces->find($this->principal(), $this->workspaceId)->projectTools) {
+            $read['milestones'] = [];
+        }
+
+        return $read;
     }
 
     // ---------- Ticking, editing, ordering ----------
@@ -263,8 +277,10 @@ final class AssignmentPlan extends Component
         $by = $this->principal();
         $plan = $this->plans->get($by, $this->activityId);
         $assignment = $this->activities->find($by, $this->activityId);
+        // Milestones, the team, priorities, labels and how it is going are the course's project tools (off unless it says so).
+        $tools = $this->workspaces->find($by, $this->workspaceId)->projectTools;
         $progress = $plan->progress();
-        $read = $this->reading ? PlanMaker::read($this->reply) : null;
+        $read = $this->reading ? $this->readOfReply() : null;
         $starters = PlanStarters::ALL;
         if ($assignment->kind === 'project') {
             // A project's own starters first.
@@ -292,7 +308,8 @@ final class AssignmentPlan extends Component
             'pace' => $progress->pace($assignment),
             'criteria' => $plan->criteriaScore(),
             'starters' => $starters,
-            'health' => $plan->health($assignment),
+            'health' => $tools ? $plan->health($assignment) : null,
+            'projectTools' => $tools,
             'workload' => $plan->workload(),
             'today' => now($assignment->zone)->toDateString(),
             'prompt' => $this->aiOpen ? $this->maker->prompt($by, $this->activityId, $this->brief) : '',

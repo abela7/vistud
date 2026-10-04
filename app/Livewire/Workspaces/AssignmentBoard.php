@@ -62,15 +62,17 @@ final class AssignmentBoard extends Component
         }
 
         $standing = $this->plans->standing($by, $this->workspaceId, $all);
+        $workspace = $this->workspaces->find($by, $this->workspaceId);
 
         return view('livewire.workspaces.assignment-board', [
-            'workspace' => $this->workspaces->find($by, $this->workspaceId),
+            'workspace' => $workspace,
             'shown' => $this->filter === 'done' ? $done : $open,
             'counts' => ['open' => count($open), 'done' => count($done)],
             'moduleTitles' => collect($this->modules->list($by, $this->workspaceId))->pluck('title', 'id')->all(),
             'filesIn' => $filesIn,
             'plans' => $standing['progress'],
-            'healths' => $standing['health'],
+            // How each is going is a project tool: shown only in a course that has them.
+            'healths' => $workspace->projectTools ? $standing['health'] : [],
         ]);
     }
 

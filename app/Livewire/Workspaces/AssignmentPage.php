@@ -246,7 +246,8 @@ final class AssignmentPage extends Component
         return view('livewire.workspaces.assignment-page', [
             'progress' => $progress,
             'pace' => $assignment === null ? null : $progress->pace($assignment),
-            'health' => $assignment === null ? null : $plan->health($assignment),
+            // How it is going is a project tool: shown only in a course that has them.
+            'health' => $assignment === null || ! $workspace->projectTools ? null : $plan->health($assignment),
             'workspace' => $workspace,
             'assignment' => $assignment,
             'modules' => $this->modules->list($by, $this->workspaceId),

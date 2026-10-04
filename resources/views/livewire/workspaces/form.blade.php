@@ -59,6 +59,9 @@
                     <x-field name="startsOn" label="Starts (optional)" type="date" wire:model="startsOn" />
                     <x-field name="endsOn" label="Ends (optional)" type="date" wire:model="endsOn" />
                 </div>
+
+                <x-checkbox name="projectTools" id="workspace-project-tools" wire:model="projectTools" label="Project tools for assignments"
+                    hint="Labels, a team, priorities, milestones and how an assignment is going, for a big or group one." />
             </div>
 
             <div class="modal-actions">

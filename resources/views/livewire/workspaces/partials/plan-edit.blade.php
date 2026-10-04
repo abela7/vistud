@@ -7,6 +7,8 @@
     $marks = in_array($item->kind, ['part', 'criterion'], true);
     $dated = in_array($item->kind, ['part', 'step', 'milestone'], true);
     $worked = in_array($item->kind, ['part', 'step'], true);
+    // Priority, the person it is for and labels are the course's project tools.
+    $tools = $worked && ($projectTools ?? false);
 @endphp
 <form wire:submit="saveEdit" novalidate class="plan-edit" x-on:keydown.escape.prevent="$wire.cancelEdit()">
     <div class="field plan-edit-wide">
@@ -35,7 +37,7 @@
             @error('editDue') <p class="field-error mt-1">{{ $message }}</p> @enderror
         </div>
     @endif
-    @if ($worked)
+    @if ($tools)
         <div class="field">
             <label for="plan-edit-priority" class="field-label">Priority</label>
             <select id="plan-edit-priority" class="input mt-1" wire:model="editPriority">

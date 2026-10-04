@@ -17,6 +17,8 @@ final readonly class WorkspaceDetails
         public string $type,
         public int $position,
         public ?string $archivedAt,
+        /** Labels, a team, priorities, milestones and how an assignment is going: shown only when the course says so. */
+        public bool $projectTools = false,
     ) {}
 
     public function archived(): bool

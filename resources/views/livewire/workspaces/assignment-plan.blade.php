@@ -16,8 +16,9 @@
     $weights = $plan->weights();
     $weighted = $plan->weighted();
     $pct = fn (float $value) => rtrim(rtrim(number_format($value, 1, '.', ''), '0'), '.');
-    $milestonesShown = $showMilestones || $milestones !== [];
-    $teamShown = $showTeam || $plan->members !== [];
+    // Milestones and a team are project tools: not offered, and not shown, in a course without them.
+    $milestonesShown = $projectTools && ($showMilestones || $milestones !== []);
+    $teamShown = $projectTools && ($showTeam || $plan->members !== []);
     $criteriaShown = $showCriteria || $items !== [];
     $states = ['not_yet' => 'Not yet', 'partly' => 'Partly', 'met' => 'Met'];
     $icons = ['todo' => 'circle', 'doing' => 'circle-dot', 'stuck' => 'circle-alert', 'done' => 'circle-check'];
@@ -272,7 +273,7 @@
     @endif
 
     @unless ($blank)
-        @if (! $milestonesShown || ! $teamShown || ! $criteriaShown)
+        @if (($projectTools && (! $milestonesShown || ! $teamShown)) || ! $criteriaShown)
             <section class="question-panel plan-also space-y-3" aria-labelledby="plan-also-heading">
                 <div class="panel-head">
                     <span class="item-icon" aria-hidden="true"><x-icon name="plus" class="size-5" /></span>
@@ -282,18 +283,18 @@
                     </div>
                 </div>
                 <div class="track-tiles">
-                    @unless ($milestonesShown)
+                    @if ($projectTools && ! $milestonesShown)
                         <button type="button" class="track-tile" wire:click="$set('showMilestones', true)">
                             <span class="item-icon" aria-hidden="true"><x-icon name="flag" class="size-5" /></span>
                             <span class="min-w-0"><span class="track-tile-name">Milestones</span><span class="track-tile-hint">Days you want to reach</span></span>
                         </button>
-                    @endunless
-                    @unless ($teamShown)
+                    @endif
+                    @if ($projectTools && ! $teamShown)
                         <button type="button" class="track-tile" wire:click="$set('showTeam', true)">
                             <span class="item-icon" aria-hidden="true"><x-icon name="users" class="size-5" /></span>
                             <span class="min-w-0"><span class="track-tile-name">Team</span><span class="track-tile-hint">Who does which part</span></span>
                         </button>
-                    @endunless
+                    @endif
                     @unless ($criteriaShown)
                         <button type="button" class="track-tile" wire:click="$set('showCriteria', true)">
                             <span class="item-icon" aria-hidden="true"><x-icon name="clipboard-check" class="size-5" /></span>

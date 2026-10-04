@@ -171,8 +171,11 @@ final class SectionPage extends Component
             usort($notes, fn ($a, $b) => $b->updatedAt <=> $a->updatedAt);
         }
 
+        $workspace = $this->workspaces->find($by, $this->workspaceId);
+
         return view('livewire.workspaces.section-page', [
-            'workspace' => $this->workspaces->find($by, $this->workspaceId),
+            'workspace' => $workspace,
+            'projectTools' => $workspace->projectTools,
             'assignment' => $assignment,
             'plan' => $plan,
             'section' => $section,

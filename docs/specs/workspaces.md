@@ -164,7 +164,7 @@ V1 (journal replay) and V2 (security T1–T10) go to Grok or Gemini, and WP5
 
 | Table | Main columns |
 |---|---|
-| `workspaces` | `id` (UUIDv7), `learner_id`, `name`, `code`, `term`, `starts_on`, `ends_on`, `colour`, `icon`, `type` (`general`), `position`, `archived_at` |
+| `workspaces` | `id` (UUIDv7), `learner_id`, `name`, `code`, `term`, `starts_on`, `ends_on`, `colour`, `icon`, `type` (`general`), `project_tools` (bool, off; docs/specs/vistud-2-blueprint.md Phase 6), `position`, `archived_at` |
 | `modules` | `id`, `learner_id`, `workspace_id`, `title`, `position`, `starts_on`, `ends_on` |
 | `folders` | `id`, `learner_id`, parent (workspace, module, folder or none for Personal), `name`, `position`, depth ≤ 8 |
 | `notes`, `note_versions`, `note_blocks`, `content_tombstones` | As ADR 0003 §9.1, with the container being a workspace, module, folder or Personal |

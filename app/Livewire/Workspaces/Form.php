@@ -39,6 +39,9 @@ final class Form extends Component
 
     public string $endsOn = '';
 
+    /** Labels, a team, priorities, milestones and how an assignment is going (off unless the student wants them). */
+    public bool $projectTools = false;
+
     private Workspaces $workspaces;
 
     private PrincipalFactory $principals;
@@ -66,6 +69,7 @@ final class Form extends Component
             'term' => $this->term,
             'starts_on' => $this->startsOn,
             'ends_on' => $this->endsOn,
+            'project_tools' => $this->projectTools,
         ];
 
         try {
@@ -160,7 +164,7 @@ final class Form extends Component
     private function loadFields(): void
     {
         if ($this->workspaceId === null) {
-            $this->reset('name', 'colour', 'icon', 'code', 'term', 'startsOn', 'endsOn');
+            $this->reset('name', 'colour', 'icon', 'code', 'term', 'startsOn', 'endsOn', 'projectTools');
 
             return;
         }
@@ -173,6 +177,7 @@ final class Form extends Component
         $this->term = (string) $workspace->term;
         $this->startsOn = (string) $workspace->startsOn;
         $this->endsOn = (string) $workspace->endsOn;
+        $this->projectTools = $workspace->projectTools;
     }
 
     private function principal(): Principal

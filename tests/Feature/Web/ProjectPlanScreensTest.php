@@ -37,7 +37,8 @@ class ProjectPlanScreensTest extends TestCase
         Carbon::setTestNow(Carbon::parse('2026-10-02 09:00', 'UTC'));
         $this->ada = $this->student();
         $by = $this->principal($this->ada);
-        $this->databases = app(Workspaces::class)->create($by, ['name' => 'Databases']);
+        // A course with project tools: without them none of this is shown (AssignmentScreensTest).
+        $this->databases = app(Workspaces::class)->create($by, ['name' => 'Databases', 'project_tools' => true]);
         $this->project = app(Activities::class)->create($by, $this->databases->id, ['title' => 'Group project', 'kind' => 'project', 'due_on' => '2026-10-20', 'due_time' => '09:00']);
         $this->plans = app(Plans::class);
         $this->actingAs($this->ada);
