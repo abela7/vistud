@@ -139,4 +139,82 @@ class OpenRouterTest extends TestCase
         $this->assertSame([], app(Models::class)->all());
         $this->assertCount(1, app(Models::class)->all());
     }
+
+    /** The service's server-sent events, as OpenRouter writes them. */
+    private static function events(array $chunks): string
+    {
+        return ": OPENROUTER PROCESSING\n\n".implode('', array_map(fn ($c) => 'data: '.json_encode($c)."\n\n", $chunks))."data: [DONE]\n\n";
+    }
+
+    public function test_a_streamed_reply_hands_over_its_words_as_they_come_and_ends_as_a_whole_reply(): void
+    {
+        $delta = fn (array $delta, ?string $finish = null) => ['id' => 'gen-1', 'model' => 'openai/gpt-4.1-mini', 'choices' => [['index' => 0, 'delta' => $delta, 'finish_reason' => $finish]]];
+        Http::fake(['engine.test/api/v1/chat/completions' => Http::response(self::events([
+            $delta(['role' => 'assistant', 'content' => 'A left ']),
+            $delta(['content' => 'join keeps']),
+            $delta(['content' => ' every row.'], 'stop'),
+            ['id' => 'gen-1', 'choices' => [], 'usage' => ['prompt_tokens' => 1200, 'completion_tokens' => 40, 'cost' => 0.00123]],
+        ]), 200, ['Content-Type' => 'text/event-stream'])]);
+
+        $heard = [];
+        $reply = app(OpenRouter::class)->stream(new Request('openai/gpt-4.1-mini', 'You are the tutor.', [['role' => 'user', 'content' => 'Left join?']]), function (string $words) use (&$heard) {
+            $heard[] = $words;
+        });
+
+        $this->assertSame(['A left ', 'join keeps', ' every row.'], $heard);
+        $this->assertSame(['A left join keeps every row.', [], 'openai/gpt-4.1-mini', 1200, 40, 1230, 'stop'], [$reply->text, $reply->toolCalls, $reply->model, $reply->tokensIn, $reply->tokensOut, $reply->costMicros, $reply->finish]);
+        Http::assertSent(fn ($request) => $request->data()['stream'] === true && $request->data()['usage'] === ['include' => true]);
+    }
+
+    public function test_a_streamed_tool_call_is_put_together_from_its_pieces(): void
+    {
+        $calls = fn (array $parts, ?string $finish = null) => ['choices' => [['index' => 0, 'delta' => ['tool_calls' => $parts], 'finish_reason' => $finish]]];
+        Http::fake(['engine.test/*' => Http::response(self::events([
+            $calls([['index' => 0, 'id' => 'call_a', 'type' => 'function', 'function' => ['name' => 'read_note', 'arguments' => '{"no']]]),
+            $calls([['index' => 0, 'function' => ['arguments' => 'te":"Lecture 3"}']]]),
+            $calls([['index' => 1, 'id' => 'call_b', 'type' => 'function', 'function' => ['name' => 'topics', 'arguments' => '']]], 'tool_calls'),
+        ]), 200, ['Content-Type' => 'text/event-stream; charset=utf-8'])]);
+
+        $heard = [];
+        $reply = app(OpenRouter::class)->stream(new Request('m', 's', []), function (string $words) use (&$heard) {
+            $heard[] = $words;
+        });
+
+        $this->assertSame([], $heard);
+        $this->assertSame(['', 'tool_calls', null], [$reply->text, $reply->finish, $reply->costMicros]);
+        $this->assertSame([['call_a', 'read_note', ['note' => 'Lecture 3']], ['call_b', 'topics', []]], array_map(fn ($c) => [$c->id, $c->name, $c->arguments], $reply->toolCalls));
+    }
+
+    public function test_a_stream_refused_before_it_begins_cut_off_midway_or_answered_whole_is_handled(): void
+    {
+        $quiet = function (string $words) {};
+        Http::fake(['engine.test/*' => Http::sequence()
+            ->push(['error' => ['message' => 'Insufficient credits']], 402)
+            ->push(self::events([['choices' => [['delta' => ['content' => 'A left']]]], ['error' => ['message' => 'Provider disconnected'], 'choices' => [['delta' => [], 'finish_reason' => 'error']]]]), 200, ['Content-Type' => 'text/event-stream'])
+            ->push(['model' => 'm', 'choices' => [['message' => ['content' => 'Whole at once.'], 'finish_reason' => 'stop']]], 200)
+            ->push(": OPENROUTER PROCESSING\n\ndata: [DONE]\n\n", 200, ['Content-Type' => 'text/event-stream'])]);
+
+        try {
+            app(OpenRouter::class)->stream(new Request('m', 's', []), $quiet);
+            $this->fail('A refusal should fail.');
+        } catch (EngineFailed $e) {
+            $this->assertStringContainsString('out of credit', $e->getMessage());
+        }
+        try {
+            app(OpenRouter::class)->stream(new Request('m', 's', []), $quiet);
+            $this->fail('A cut-off stream should fail.');
+        } catch (EngineFailed $e) {
+            $this->assertSame('engine_cut', $e->errorCode);
+            $this->assertStringContainsString('Provider disconnected', $e->getMessage());
+        }
+        // A service that ignores streaming answers whole: its words arrive in one piece.
+        $heard = [];
+        $reply = app(OpenRouter::class)->stream(new Request('m', 's', []), function (string $words) use (&$heard) {
+            $heard[] = $words;
+        });
+        $this->assertSame([['Whole at once.'], 'Whole at once.'], [$heard, $reply->text]);
+        // A stream with nothing in it is an empty answer.
+        $this->expectException(EngineFailed::class);
+        app(OpenRouter::class)->stream(new Request('m', 's', []), $quiet);
+    }
 }

@@ -13,6 +13,24 @@ final class ChatMarks
 {
     private const WORDS = ['summary' => 'Summary', 'finding' => 'Key point', 'question' => 'Question', 'flashcard' => 'Flashcard', 'attempt' => 'Your answer', 'checkpoint' => 'Where we are', 'status' => 'Status'];
 
+    /**
+     * A reply still being written, cut before a mark that hasn't closed yet (and a tag cut in the middle), so the
+     * chat never shows raw tags while the words stream in; the finished reply shows the mark as a quote.
+     */
+    public static function partial(string $text): string
+    {
+        $kinds = implode('|', Capture::KINDS);
+        if (preg_match_all('/<('.$kinds.')\b/i', $text, $m, PREG_OFFSET_CAPTURE) > 0) {
+            $last = array_key_last($m[0]);
+            [$open, $at] = [strtolower($m[1][$last][0]), $m[0][$last][1]];
+            if (preg_match('/<\/'.$open.'\s*>/i', substr($text, $at)) !== 1) {
+                $text = substr($text, 0, $at);
+            }
+        }
+
+        return (string) preg_replace('/<\/?[a-z]*$/i', '', $text);
+    }
+
     /** The reply as Markdown with each mark turned into a labelled quote. */
     public static function present(string $text): string
     {

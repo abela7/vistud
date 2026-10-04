@@ -2,10 +2,12 @@
 
 namespace App\Engine;
 
+use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Psr\Http\Message\StreamInterface;
 use Throwable;
 
 /**
@@ -14,6 +16,10 @@ use Throwable;
  * and cost with every reply, names the fallback models to try when the first can't answer, and keeps the
  * student's words away from training when the settings say so. The key and the address come from the set-up
  * (App\Engine\Setup). Failures come back as EngineFailed with a plain message; the key is never in one.
+ *
+ * A reply can also be streamed: the service sends it as server-sent events (`data: {…}` lines, a chunk of
+ * words or of a tool call each, the usage last, then `data: [DONE]`), and every chunk of words goes to the
+ * caller as it comes; the reply returned at the end is the same as an unstreamed one.
  */
 final class OpenRouter implements Engine
 {
@@ -21,48 +27,78 @@ final class OpenRouter implements Engine
 
     public function reply(Request $request): Reply
     {
-        $body = [
-            'model' => $request->model,
-            'messages' => [['role' => 'system', 'content' => $request->system], ...$request->messages],
-            'max_tokens' => $request->maxTokens,
-            'usage' => ['include' => true],
-        ];
-        if ($request->fallbacks !== []) {
-            $body['models'] = array_values(array_unique([$request->model, ...$request->fallbacks]));
-        }
-        if ($request->tools !== []) {
-            $body['tools'] = $request->tools;
-            $body['tool_choice'] = 'auto';
-        }
-        if ($request->noTraining) {
-            $body['provider'] = ['data_collection' => 'deny'];
+        $response = $this->send(fn (PendingRequest $http) => $http->post('/chat/completions', $this->body($request)), $request->key);
+
+        return $this->fromJson($this->json($response), $request);
+    }
+
+    public function stream(Request $request, Closure $onText): Reply
+    {
+        $timeout = (int) config('vistud.engine.timeout');
+        $response = $this->send(
+            fn (PendingRequest $http) => $http->timeout($timeout * 3)->withOptions(['stream' => true, 'read_timeout' => $timeout])
+                ->post('/chat/completions', $this->body($request) + ['stream' => true]),
+            $request->key,
+        );
+        if ($response->failed() || ! str_contains(strtolower($response->header('Content-Type')), 'text/event-stream')) {
+            // Refused before it began, or a service that answers whole: read it as an unstreamed reply.
+            $reply = $this->fromJson($this->json($response), $request);
+            if ($reply->text !== '') {
+                $onText($reply->text);
+            }
+
+            return $reply;
         }
 
-        $data = $this->call(fn (PendingRequest $http) => $http->post('/chat/completions', $body), $request->key);
-        $choice = $data['choices'][0] ?? null;
-        if (! is_array($choice)) {
+        $text = '';
+        $calls = [];
+        $usage = [];
+        $model = $request->model;
+        $finish = null;
+        $this->events($response->toPsrResponse()->getBody(), function (array $chunk) use (&$text, &$calls, &$usage, &$model, &$finish, $onText) {
+            if (isset($chunk['error'])) {
+                $said = is_array($chunk['error']) && is_string($chunk['error']['message'] ?? null) ? ' It said: '.mb_substr($chunk['error']['message'], 0, 200) : '';
+                throw new EngineFailed('engine_cut', 'The answer was cut off by the service. Try again.'.$said);
+            }
+            if (is_string($chunk['model'] ?? null) && $chunk['model'] !== '') {
+                $model = $chunk['model'];
+            }
+            if (is_array($chunk['usage'] ?? null)) {
+                $usage = $chunk['usage'];
+            }
+            $choice = is_array($chunk['choices'][0] ?? null) ? $chunk['choices'][0] : [];
+            $delta = is_array($choice['delta'] ?? null) ? $choice['delta'] : [];
+            $words = self::text($delta['content'] ?? '', trim: false);
+            if ($words !== '') {
+                $text .= $words;
+                $onText($words);
+            }
+            foreach (is_array($delta['tool_calls'] ?? null) ? $delta['tool_calls'] : [] as $part) {
+                // A tool call comes in pieces: its id and name first, its arguments a few characters at a time.
+                $i = (int) ($part['index'] ?? 0);
+                $calls[$i] ??= ['id' => null, 'function' => ['name' => '', 'arguments' => '']];
+                if (is_string($part['id'] ?? null)) {
+                    $calls[$i]['id'] = $part['id'];
+                }
+                $calls[$i]['function']['name'] .= is_string($part['function']['name'] ?? null) ? $part['function']['name'] : '';
+                $calls[$i]['function']['arguments'] .= is_string($part['function']['arguments'] ?? null) ? $part['function']['arguments'] : '';
+            }
+            if (is_string($choice['finish_reason'] ?? null)) {
+                $finish = $choice['finish_reason'];
+            }
+        });
+        ksort($calls);
+        $calls = array_values(array_filter($calls, fn (array $call) => $call['function']['name'] !== ''));
+        if (trim($text) === '' && $calls === [] && $finish === null) {
             throw new EngineFailed('engine_empty', 'The engine sent back an empty answer. Try again.');
         }
-        $message = is_array($choice['message'] ?? null) ? $choice['message'] : [];
-        $usage = is_array($data['usage'] ?? null) ? $data['usage'] : [];
-        $cost = $usage['cost'] ?? null;
 
-        return new Reply(
-            text: self::text($message['content'] ?? ''),
-            toolCalls: self::toolCalls($message['tool_calls'] ?? []),
-            model: is_string($data['model'] ?? null) ? $data['model'] : $request->model,
-            tokensIn: (int) ($usage['prompt_tokens'] ?? 0),
-            tokensOut: (int) ($usage['completion_tokens'] ?? 0),
-            costMicros: is_numeric($cost) ? (int) round((float) $cost * 1_000_000) : null,
-            finish: match ($choice['finish_reason'] ?? null) {
-                'stop' => 'stop', 'tool_calls' => 'tool_calls', 'length' => 'length', default => 'other'
-            },
-        );
+        return $this->make(trim($text), $calls, $model, $usage, $finish);
     }
 
     public function models(?string $key = null): array
     {
-        $data = $this->call(fn (PendingRequest $http) => $http->get('/models'), $key);
+        $data = $this->json($this->send(fn (PendingRequest $http) => $http->get('/models'), $key));
         $models = [];
         foreach (is_array($data['data'] ?? null) ? $data['data'] : [] as $row) {
             if (! is_array($row) || ! is_string($row['id'] ?? null)) {
@@ -87,8 +123,33 @@ final class OpenRouter implements Engine
         return $models;
     }
 
-    /** @return array<string, mixed> the JSON the service answered */
-    private function call(callable $send, ?string $key = null): array
+    // ---------- Inside ----------
+
+    /** @return array<string, mixed> the request in the OpenAI chat shape */
+    private function body(Request $request): array
+    {
+        $body = [
+            'model' => $request->model,
+            'messages' => [['role' => 'system', 'content' => $request->system], ...$request->messages],
+            'max_tokens' => $request->maxTokens,
+            'usage' => ['include' => true],
+        ];
+        if ($request->fallbacks !== []) {
+            $body['models'] = array_values(array_unique([$request->model, ...$request->fallbacks]));
+        }
+        if ($request->tools !== []) {
+            $body['tools'] = $request->tools;
+            $body['tool_choice'] = 'auto';
+        }
+        if ($request->noTraining) {
+            $body['provider'] = ['data_collection' => 'deny'];
+        }
+
+        return $body;
+    }
+
+    /** Sends a request with the key (the student's, or the one set up for everyone); a connection that fails says so. */
+    private function send(callable $send, ?string $key = null): Response
     {
         $key = $key !== null && $key !== '' ? $key : $this->setup->key();
         if ($key === '') {
@@ -102,14 +163,17 @@ final class OpenRouter implements Engine
             ->connectTimeout(15);
 
         try {
-            /** @var Response $response */
-            $response = $send($http);
+            return $send($http);
         } catch (ConnectionException) {
             throw new EngineFailed('engine_unreachable', 'The service could not be reached. Check the internet connection and the service\'s address on the AI engine page.');
         } catch (Throwable) {
             throw new EngineFailed('engine_unreachable', 'The engine could not be reached.');
         }
+    }
 
+    /** @return array<string, mixed> the JSON the service answered, once it is known not to be a refusal */
+    private function json(Response $response): array
+    {
         $data = $response->json();
         $data = is_array($data) ? $data : [];
         $said = is_array($data['error'] ?? null) && is_string($data['error']['message'] ?? null) ? ' It said: '.mb_substr($data['error']['message'], 0, 200) : '';
@@ -126,17 +190,91 @@ final class OpenRouter implements Engine
         return $data;
     }
 
-    /** The words of a reply: a string, or a list of text parts from some models. */
-    private static function text(mixed $content): string
+    /** @param array<string, mixed> $data an unstreamed answer */
+    private function fromJson(array $data, Request $request): Reply
     {
-        if (is_string($content)) {
-            return trim($content);
+        $choice = $data['choices'][0] ?? null;
+        if (! is_array($choice)) {
+            throw new EngineFailed('engine_empty', 'The engine sent back an empty answer. Try again.');
         }
-        if (is_array($content)) {
-            return trim(implode('', array_map(fn ($part) => is_array($part) && is_string($part['text'] ?? null) ? $part['text'] : '', $content)));
-        }
+        $message = is_array($choice['message'] ?? null) ? $choice['message'] : [];
 
-        return '';
+        return $this->make(
+            self::text($message['content'] ?? ''),
+            is_array($message['tool_calls'] ?? null) ? $message['tool_calls'] : [],
+            is_string($data['model'] ?? null) ? $data['model'] : $request->model,
+            is_array($data['usage'] ?? null) ? $data['usage'] : [],
+            is_string($choice['finish_reason'] ?? null) ? $choice['finish_reason'] : null,
+        );
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $calls  tool calls in the OpenAI shape
+     * @param  array<string, mixed>  $usage
+     */
+    private function make(string $text, array $calls, string $model, array $usage, ?string $finish): Reply
+    {
+        $cost = $usage['cost'] ?? null;
+
+        return new Reply(
+            text: $text,
+            toolCalls: self::toolCalls($calls),
+            model: $model,
+            tokensIn: (int) ($usage['prompt_tokens'] ?? 0),
+            tokensOut: (int) ($usage['completion_tokens'] ?? 0),
+            costMicros: is_numeric($cost) ? (int) round((float) $cost * 1_000_000) : null,
+            finish: match ($finish) {
+                'stop' => 'stop', 'tool_calls' => 'tool_calls', 'length' => 'length', default => 'other'
+            },
+        );
+    }
+
+    /**
+     * Reads server-sent events off the body as they arrive and hands each `data:` chunk's JSON to $each;
+     * comments (`: OPENROUTER PROCESSING`, sent to keep the line open) and other fields are skipped.
+     */
+    private function events(StreamInterface $body, Closure $each): void
+    {
+        $buffer = '';
+        $done = false;
+        $line = function (string $line) use ($each, &$done) {
+            $line = rtrim($line, "\r");
+            if ($done || ! str_starts_with($line, 'data:')) {
+                return;
+            }
+            $data = trim(substr($line, 5));
+            if ($data === '[DONE]') {
+                $done = true;
+
+                return;
+            }
+            $chunk = json_decode($data, true);
+            if (is_array($chunk)) {
+                $each($chunk);
+            }
+        };
+        while (! $done && ! $body->eof()) {
+            $buffer .= $body->read(8192);
+            while (($end = strpos($buffer, "\n")) !== false) {
+                $line(substr($buffer, 0, $end));
+                $buffer = substr($buffer, $end + 1);
+            }
+        }
+        if ($buffer !== '') {
+            $line($buffer);
+        }
+    }
+
+    /** The words of a reply: a string, or a list of text parts from some models. */
+    private static function text(mixed $content, bool $trim = true): string
+    {
+        $text = match (true) {
+            is_string($content) => $content,
+            is_array($content) => implode('', array_map(fn ($part) => is_array($part) && is_string($part['text'] ?? null) ? $part['text'] : '', $content)),
+            default => '',
+        };
+
+        return $trim ? trim($text) : $text;
     }
 
     /** @return list<ToolCall> */

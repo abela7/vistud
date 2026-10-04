@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Web;
 
+use App\Engine\ChatMarks;
 use App\Engine\Engine;
+use App\Engine\EngineFailed;
 use App\Engine\Fake;
 use App\Engine\Settings;
+use App\Livewire\Workspaces\ChatStream;
 use App\Livewire\Workspaces\SessionCapture;
 use App\Livewire\Workspaces\StudySession;
 use App\Livewire\Workspaces\TutorChat;
@@ -16,6 +19,7 @@ use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
+use Livewire\Component;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
@@ -72,7 +76,7 @@ class TutorChatScreenTest extends TestCase
         $chat = $this->chat()->set('text', "Where did we stop?\nAnd what next?")->call('send')->assertSet('text', '')->assertSet('error', null)->assertDispatched('chat-turn')
             ->assertSee("Where did we stop?\nAnd what next?")->assertSee('<strong>Joins</strong> still confuse you.', false)
             ->assertSee('Key point · Joins', false)->assertSee('A left join keeps every row of the left table.')->assertDontSee('<finding', false)
-            ->assertSee('Looked up: topics · $0.01')->assertSee('$0.01 of $2.00 this session')->assertSee('Keep what the tutor marked');
+            ->assertSee('Looked up: your topics · $0.01')->assertSee('$0.01 of $2.00 this session')->assertSee('Keep what the tutor marked');
 
         // Keeping opens the write-back's review straight on the reply's marks.
         $chat->call('keep')->assertDispatched('capture-open');
@@ -114,5 +118,55 @@ class TutorChatScreenTest extends TestCase
         $asked = count($this->engine->requests);
         $this->chat()->assertDontSee('Write to your tutor');
         $this->assertCount($asked, $this->engine->requests);
+    }
+
+    public function test_the_answer_streams_in_with_what_the_tutor_looks_up_and_half_written_marks_held_back(): void
+    {
+        $stream = new class extends ChatStream
+        {
+            public array $pushed = [];
+
+            public function push(Component $component, string $target, string $html): void
+            {
+                $this->pushed[] = [$target, $html];
+            }
+        };
+        $this->app->instance(ChatStream::class, $stream);
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+        $this->engine->will(Fake::calls('questions'), Fake::says("**Joins** first.\n\n<finding topic=\"Joins\">A left join keeps every left row.</finding>"));
+
+        $this->chat()->call('send', 'What next?')->assertDispatched('chat-turn')->assertDispatched('chat-done')
+            ->assertSee('What next?')->assertSee('Key point · Joins', false);
+
+        $this->assertSame(['status', 'Looking up your questions…'], $stream->pushed[0]);
+        $this->assertSame(['status', ''], $stream->pushed[1]);
+        $answers = array_column(array_filter($stream->pushed, fn ($p) => $p[0] === 'answer'), 1);
+        $this->assertNotEmpty($answers);
+        $this->assertStringContainsString('<strong>Joins</strong>', $answers[0]);
+        foreach ($answers as $html) {
+            $this->assertStringNotContainsString('<finding', $html);
+            $this->assertStringNotContainsString('&lt;finding', $html);
+        }
+
+        // Half-written marks and tags are held back until they close.
+        $this->assertSame('Hello ', ChatMarks::partial('Hello <finding topic="Joins">A left'));
+        $this->assertSame('Hello ', ChatMarks::partial('Hello <flash'));
+        $this->assertSame('Done <finding topic="J">x</finding> and', ChatMarks::partial('Done <finding topic="J">x</finding> and'));
+    }
+
+    public function test_a_failed_answer_offers_to_try_again_and_refused_words_go_back_to_the_box(): void
+    {
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'session_cap' => '0.01', 'consent' => true]);
+        $this->engine->will(fn () => throw new EngineFailed('engine_busy', 'The engine is busy right now.'));
+        $chat = $this->chat()->call('send', 'What is a join?')
+            ->assertSee('The engine is busy right now.')->assertSee('What is a join?')
+            ->assertSee("The tutor hasn't answered your last message.", false)->assertSee('Try again')
+            ->assertDispatched('chat-done', restore: null);
+
+        $this->engine->will(Fake::says('A join combines rows.', 20_000));
+        $chat->call('retry')->assertSet('error', null)->assertSee('A join combines rows.')->assertDontSee('Try again')->assertDispatched('chat-turn');
+
+        // Over the limit: nothing is kept, so the words go back to the box.
+        $chat->call('send', 'And a left join?')->assertSee('reached its limit of $0.01')->assertDispatched('chat-done', restore: 'And a left join?')->assertDontSee('Try again');
     }
 }

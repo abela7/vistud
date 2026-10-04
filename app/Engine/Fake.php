@@ -57,6 +57,17 @@ final class Fake implements Engine
         return $step instanceof Closure ? $step($request) : $step;
     }
 
+    /** The scripted reply, its words handed over a few at a time as a service would stream them. */
+    public function stream(Request $request, Closure $onText): Reply
+    {
+        $reply = $this->reply($request);
+        foreach (preg_split('/(?<=\s)/u', $reply->text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $words) {
+            $onText($words);
+        }
+
+        return $reply;
+    }
+
     public function models(?string $key = null): array
     {
         return $this->models;

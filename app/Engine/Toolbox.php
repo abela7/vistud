@@ -55,6 +55,18 @@ final class Toolbox
         return array_map(fn (string $class) => $this->container->make($class), self::TOOLS);
     }
 
+    /** What each look-up reads, as the chat tells the student ("Looking up your notes…", "Looked up: your notes"). */
+    public const WORDS = [
+        'course_overview' => 'the course', 'topics' => 'your topics', 'questions' => 'your questions', 'findings' => 'your key points',
+        'assignments' => 'your assignments', 'assignment_plan' => 'an assignment plan', 'calendar' => 'your calendar', 'notes' => 'your notes',
+        'read_note' => 'a note', 'search_notes' => 'your notes', 'files' => 'your files', 'earlier_sessions' => 'earlier sessions',
+    ];
+
+    public static function words(string $tool): string
+    {
+        return self::WORDS[$tool] ?? 'your course';
+    }
+
     /** @return list<array<string, mixed>> the tools in the OpenAI chat format */
     public function definitions(): array
     {

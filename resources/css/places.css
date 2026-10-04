@@ -2919,7 +2919,24 @@
         border-radius: 9999px;
     }
 
-    .chat-thinking {
-        padding-left: 0.5rem;
+    /* The answer under way: hidden until its first words, and what the tutor is looking up meanwhile. */
+    .chat-live:empty,
+    .chat-status:empty {
+        display: none;
+    }
+
+    .chat-status {
+        font-style: italic;
+    }
+
+    .chat-retry {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-lg);
     }
 }

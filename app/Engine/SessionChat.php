@@ -15,6 +15,7 @@ use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\WriteBack;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -52,25 +53,18 @@ final class SessionChat
         private Setup $setup,
     ) {}
 
-    /** Sends the student's words and returns the engine's final answer for the turn. */
-    public function send(Principal $by, string $sessionId, mixed $text): Reply
+    /**
+     * Sends the student's words and returns the engine's final answer for the turn. Given $onEvent, the answer
+     * is streamed: it hears `text` with each chunk of words as the engine writes them, and `looking` with a
+     * tool's name before each look-up runs. A refusal (Unprocessable) keeps nothing; once the words are kept,
+     * a failing engine (EngineFailed) leaves them unanswered, for retry().
+     *
+     * @param  (Closure(string, string): void)|null  $onEvent
+     */
+    public function send(Principal $by, string $sessionId, mixed $text, ?Closure $onEvent = null): Reply
     {
         $scope = Guard::learner($by);
-        $session = $this->sessions->find($by, $sessionId);
-        if (! $session->isOpen()) {
-            throw new Unprocessable('session_ended', 'This session has ended. Start a new one to keep chatting.');
-        }
-        $choices = $this->settings->get($by);
-        $key = $this->settings->key($by);
-        if ($key === null && ! $this->setup->keySet()) {
-            throw new Unprocessable('engine_key', 'Add your OpenRouter key in your AI engine settings first.');
-        }
-        if ($choices->tutorModel === '') {
-            throw new Unprocessable('engine_model', 'Choose a model in your AI engine settings first.');
-        }
-        if ($choices->consentedAt === null) {
-            throw new Unprocessable('engine_consent', 'Agree to the chat in your AI engine settings first.');
-        }
+        [$session, $choices, $key] = $this->ready($by, $sessionId);
         $text = is_string($text) ? trim(str_replace("\r\n", "\n", $text)) : '';
         Input::refuse(match (true) {
             $text === '' => ['text' => 'Write something first.'],
@@ -83,6 +77,48 @@ final class SessionChat
         $position = (int) LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->max('position');
         $this->keep($scope, $thread->id, ++$position, ['role' => 'user', 'content' => $text]);
 
+        return $this->answer($by, $session, $thread, $choices, $key, $position, $onEvent);
+    }
+
+    /**
+     * Answers the student's last words again, when the engine failed on them (busy, cut off, unreachable): the
+     * chat goes on from where it stopped, look-ups already made included, without the words being sent twice.
+     *
+     * @param  (Closure(string, string): void)|null  $onEvent
+     */
+    public function retry(Principal $by, string $sessionId, ?Closure $onEvent = null): Reply
+    {
+        $scope = Guard::learner($by);
+        [$session, $choices, $key] = $this->ready($by, $sessionId);
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first();
+        if ($thread === null || ! $this->unanswered($scope, $thread->id)) {
+            throw new Unprocessable('nothing_to_retry', 'There is nothing to try again: the tutor has answered.');
+        }
+        $this->refuseOverCap($scope, $thread, $choices, $this->sessions->timezone($by));
+        $position = (int) LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->max('position');
+
+        return $this->answer($by, $session, $thread, $choices, $key, $position, $onEvent);
+    }
+
+    /** Whether the chat's last words are the student's (or a look-up's) with no answer after them. */
+    public function waiting(Principal $by, string $sessionId): bool
+    {
+        $scope = Guard::learner($by);
+        $this->sessions->find($by, $sessionId);
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first();
+
+        return $thread !== null && $this->unanswered($scope, $thread->id);
+    }
+
+    /**
+     * The engine's turn: the briefing, the chat so far and the tools; look-ups run and sent back, a few rounds
+     * at most; every message kept with its cost.
+     *
+     * @param  (Closure(string, string): void)|null  $onEvent
+     */
+    private function answer(Principal $by, SessionDetails $session, object $thread, Choices $choices, ?string $key, int $position, ?Closure $onEvent): Reply
+    {
+        $scope = Guard::learner($by);
         $model = $this->models->find($choices->tutorModel, $key);
         $withTools = $model === null || $model->tools;
         $system = $this->system($by, $session, $thread->summary, $withTools);
@@ -91,22 +127,26 @@ final class SessionChat
         $context = new Context($session->workspaceId, $session->moduleId, $session->id, $this->sessions->timezone($by));
         $fallbacks = $choices->fallbackModel !== '' ? [$choices->fallbackModel] : [];
         $rounds = max(0, (int) config('vistud.engine.tool_rounds'));
-        $spent = 0;
         $reply = null;
 
         for ($round = 0; $round <= $rounds; $round++) {
-            $reply = $this->engine->reply(new Request($choices->tutorModel, $system, $messages, $round < $rounds ? $tools : [], $fallbacks, noTraining: $choices->noTraining, key: $key));
-            $spent += $reply->costMicros ?? 0;
+            $request = new Request($choices->tutorModel, $system, $messages, $round < $rounds ? $tools : [], $fallbacks, noTraining: $choices->noTraining, key: $key);
+            $reply = $onEvent === null ? $this->engine->reply($request) : $this->engine->stream($request, fn (string $words) => $onEvent('text', $words));
             $calls = array_map(fn (ToolCall $c) => ['id' => $c->id, 'type' => 'function', 'function' => ['name' => $c->name, 'arguments' => (string) json_encode($c->arguments)]], $reply->toolCalls);
             $this->keep($scope, $thread->id, ++$position, [
                 'role' => 'assistant', 'content' => $reply->text, 'tool_calls' => $calls === [] ? null : json_encode($calls), 'model' => $reply->model,
                 'tokens_in' => $reply->tokensIn, 'tokens_out' => $reply->tokensOut, 'cost_micros' => $reply->costMicros ?? 0,
             ]);
+            // Counted round by round, so a turn the engine fails on later still counts what it cost.
+            LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update(['spent_micros' => DB::raw('spent_micros + '.(int) ($reply->costMicros ?? 0)), 'updated_at' => now()]);
             $messages[] = array_filter(['role' => 'assistant', 'content' => $reply->text !== '' ? $reply->text : null, 'tool_calls' => $calls ?: null], fn ($v) => $v !== null);
             if (! $reply->wantsTools()) {
                 break;
             }
             foreach ($reply->toolCalls as $call) {
+                if ($onEvent !== null) {
+                    $onEvent('looking', $call->name);
+                }
                 $out = $this->toolbox->run($by, $context, $call->name, $call->arguments);
                 $this->keep($scope, $thread->id, ++$position, ['role' => 'tool', 'content' => $out, 'tool_call_id' => $call->id, 'tool_name' => $call->name]);
                 $messages[] = ['role' => 'tool', 'tool_call_id' => $call->id, 'content' => $out];
@@ -114,7 +154,7 @@ final class SessionChat
         }
 
         LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update([
-            'spent_micros' => DB::raw('spent_micros + '.(int) $spent), 'turns' => DB::raw('turns + 1'), 'model' => $choices->tutorModel, 'updated_at' => now(),
+            'turns' => DB::raw('turns + 1'), 'model' => $choices->tutorModel, 'updated_at' => now(),
         ]);
         $this->foldIfLong($scope, $thread->id, $choices, $key);
 
@@ -285,6 +325,40 @@ final class SessionChat
     }
 
     // ---------- Inside ----------
+
+    /**
+     * The session, the student's choices and key, once the chat may run: the session open, a key, a model and
+     * the student's consent.
+     *
+     * @return array{0: SessionDetails, 1: Choices, 2: ?string}
+     */
+    private function ready(Principal $by, string $sessionId): array
+    {
+        $session = $this->sessions->find($by, $sessionId);
+        if (! $session->isOpen()) {
+            throw new Unprocessable('session_ended', 'This session has ended. Start a new one to keep chatting.');
+        }
+        $choices = $this->settings->get($by);
+        $key = $this->settings->key($by);
+        if ($key === null && ! $this->setup->keySet()) {
+            throw new Unprocessable('engine_key', 'Add your OpenRouter key in your AI engine settings first.');
+        }
+        if ($choices->tutorModel === '') {
+            throw new Unprocessable('engine_model', 'Choose a model in your AI engine settings first.');
+        }
+        if ($choices->consentedAt === null) {
+            throw new Unprocessable('engine_consent', 'Agree to the chat in your AI engine settings first.');
+        }
+
+        return [$session, $choices, $key];
+    }
+
+    private function unanswered(LearnerScope $scope, string $threadId): bool
+    {
+        $last = LearnerTables::query($scope, 'engine_messages')->where('thread_id', $threadId)->orderByDesc('position')->first();
+
+        return $last !== null && in_array($last->role, ['user', 'tool'], true);
+    }
 
     private function thread(LearnerScope $scope, SessionDetails $session, string $model): object
     {

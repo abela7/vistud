@@ -381,7 +381,21 @@ in ViStud. A model that can't call tools gets the briefing alone. Past
 student's message) are summarised by the quick model and the engine reads
 the summary instead; the whole chat stays readable. **Saving** is the
 write-back (§4.4): the tutor's marks in the chat are reviewed and ticked
-exactly like a pasted chat; nothing is remembered otherwise. Until the chat
+exactly like a pasted chat; nothing is remembered otherwise.
+
+**Streaming** (built, 2026-10-05). The answer arrives as the engine writes it
+(`Engine::stream`: the service's server-sent events, words and tool calls in
+pieces, the usage last; a service that answers whole still works). The chat
+shows the student's words at once, says what the tutor is looking up
+("Looking up your notes…"), and fills the answer in through Livewire's
+`wire:stream` (`App\Livewire\Workspaces\ChatStream`), with a mark that is
+still being written held back until it closes. The finished turn then
+replaces it. A turn's cost is counted round by round. When the engine fails
+on a message (busy, cut off, unreachable) the message stays in the chat and
+**Try again** answers it once, going on from any look-ups already made
+(`SessionChat::retry`); words the chat refused (a limit, an ended session)
+go back to the box instead. The browser test runs against a fake service
+that streams slowly (`tests/Browser/fixtures/fake-engine.php`). Until the chat
 has a screen: `php artisan vistud:engine:ask {session} "…" --user=email`.
 
 **The wrap-up** (built, 2026-10-05; the owner's ask: the next session must

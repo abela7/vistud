@@ -264,11 +264,43 @@ class SessionChatTest extends TestCase
         try {
             $do();
             $this->fail("Expected {$code}.");
-        } catch (Unprocessable $e) {
+        } catch (Unprocessable|EngineFailed $e) {
             $this->assertSame($code, $e->errorCode);
             if ($words !== null) {
                 $this->assertStringContainsString($words, $e->getMessage());
             }
         }
+    }
+
+    public function test_a_streamed_turn_tells_what_it_looks_up_and_hands_over_the_words_as_they_come(): void
+    {
+        $this->engine->will(Fake::calls('read_note', ['note' => 'Lecture 3']), Fake::says('Your note says a left join keeps every left row.'));
+        $events = [];
+        $reply = $this->chat()->send($this->by, $this->session->id, 'What did my lecture say?', function (string $kind, string $value) use (&$events) {
+            $events[] = [$kind, $value];
+        });
+
+        $this->assertSame(['looking', 'read_note'], $events[0]);
+        $words = array_column(array_filter($events, fn ($e) => $e[0] === 'text'), 1);
+        $this->assertGreaterThan(1, count($words));
+        $this->assertSame($reply->text, implode('', $words));
+        $this->assertSame(['user', 'assistant'], array_column($this->chat()->transcript($this->by, $this->session->id), 'role'));
+    }
+
+    public function test_a_turn_the_engine_failed_on_is_tried_again_without_sending_the_words_twice(): void
+    {
+        $this->engine->will(Fake::calls('topics', [], 'call_1'), fn () => throw new EngineFailed('engine_busy', 'The engine is busy right now.'));
+        $this->expectCode(fn () => $this->chat()->send($this->by, $this->session->id, 'What should I study?'), 'engine_busy');
+        $this->assertTrue($this->chat()->waiting($this->by, $this->session->id));
+        // The look-up round that went through still counts.
+        $this->assertSame(1_000, $this->chat()->spent($this->by, $this->session->id)['session']);
+
+        $this->engine->will(Fake::says('Joins: they still confuse you.'));
+        $this->assertSame('Joins: they still confuse you.', $this->chat()->retry($this->by, $this->session->id)->text);
+        // It went on from the look-up: the words once, the call and its result, no second question.
+        $this->assertSame(['user', 'assistant', 'tool'], array_column($this->engine->last()->messages, 'role'));
+        $this->assertFalse($this->chat()->waiting($this->by, $this->session->id));
+        $this->assertSame(['user', 'assistant'], array_column($this->chat()->transcript($this->by, $this->session->id), 'role'));
+        $this->expectCode(fn () => $this->chat()->retry($this->by, $this->session->id), 'nothing_to_retry');
     }
 }
