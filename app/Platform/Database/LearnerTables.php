@@ -51,6 +51,8 @@ final class LearnerTables
         'engine_threads',
         'engine_messages',
         'engine_jobs',
+        'course_profiles',
+        'learner_profiles',
     ];
 
     public static function query(LearnerScope $scope, string $table): Builder

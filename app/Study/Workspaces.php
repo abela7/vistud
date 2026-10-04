@@ -121,7 +121,8 @@ final class Workspaces
 
     /**
      * Deletes the workspace and everything inside it: modules, folders, notes,
-     * files, flashcards, study sessions, and its instructions.
+     * files, flashcards, study sessions, its instructions and profiles, and the
+     * reader's and helper's runs for it.
      */
     public function delete(Principal $by, string $id): void
     {
@@ -175,6 +176,9 @@ final class Workspaces
             LearnerTables::query($scope, 'activity_members')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'activities')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'instructions')->where('scope', "workspace:{$id}")->delete();
+            CourseProfiles::forget($scope, $id);
+            LearnerProfiles::forget($scope, $id);
+            LearnerTables::query($scope, 'engine_jobs')->where('workspace_id', $id)->delete();
 
             // Delete course
             LearnerTables::query($scope, 'workspaces')->where('id', $id)->delete();

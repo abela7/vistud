@@ -55,7 +55,7 @@ final class Sessions
     /** The range each Pomodoro setting may take. */
     public const POMODORO_LIMITS = ['focus' => [5, 120], 'short' => [1, 30], 'long' => [5, 60], 'every' => [2, 8]];
 
-    public function __construct(private Memory $memory) {}
+    public function __construct(private Memory $memory, private LearnerProfiles $profiles) {}
 
     /** The student's open session, in any workspace, or null. */
     public function current(Principal $by): ?SessionDetails
@@ -192,13 +192,14 @@ final class Sessions
      * Another open session is a conflict.
      *
      * @param  ?array{focus?: mixed, short?: mixed, long?: mixed, every?: mixed, auto?: mixed}  $pomodoro
-     * @param  ?array{method?: mixed, check_ins?: mixed, quiz?: mixed, pace?: mixed}  $tutoring  how the assistant should teach; defaults when null
+     * @param  ?array{method?: mixed, check_ins?: mixed, quiz?: mixed, pace?: mixed}  $tutoring  how the assistant should teach; the student's answers in "How you learn", else the defaults, when null
      */
     public function start(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $pomodoro = null, ?array $tutoring = null): SessionDetails
     {
         $scope = Guard::learner($by);
         $pomodoro = $pomodoro === null ? null : self::pomodoroSettings($pomodoro);
-        $tutoring = Tutoring::validated($tutoring);
+        // Not chosen: the way the student said they like to learn in this course, if they said.
+        $tutoring = Tutoring::validated($tutoring ?? LearnerProfiles::teaching($this->profiles->get($by, $workspaceId)));
         $open = $this->openRow($scope);
         if ($open !== null && $this->settled($scope, $by, $open->id)->state !== 'ended') {
             throw new Conflict('session_open', 'Another session is still open. End it first.', ['session' => $open->id, 'workspace' => $open->workspace_id]);
@@ -407,20 +408,24 @@ final class Sessions
     }
 
     /**
-     * The clock and teaching the student chose last (in this workspace, or
-     * any), to offer again: a new session starts the way the last one did.
+     * The clock and teaching to offer a new session: the way the last one in this course went, so a session starts
+     * as the student left off; or, in a course with no session yet (or after the student has answered "How you
+     * learn" again since), their answers there; or the way the last one anywhere went; or the plain defaults.
      *
      * @return array{pomodoro: ?array, tutoring: array}
      */
     public function lastChoices(Principal $by, string $workspaceId): array
     {
         $scope = Guard::learner($by);
-        $row = LearnerTables::query($scope, 'study_sessions')->where('manual', false)->where('workspace_id', $workspaceId)->orderByDesc('started_at')->first()
-            ?? LearnerTables::query($scope, 'study_sessions')->where('manual', false)->orderByDesc('started_at')->first();
+        $here = LearnerTables::query($scope, 'study_sessions')->where('manual', false)->where('workspace_id', $workspaceId)->orderByDesc('started_at')->first();
+        $row = $here ?? LearnerTables::query($scope, 'study_sessions')->where('manual', false)->orderByDesc('started_at')->first();
+        $profile = $this->profiles->get($by, $workspaceId);
+        $taught = LearnerProfiles::teaching($profile);
+        $profileWins = $taught !== null && ($here === null || ($profile->updatedAt !== null && $profile->updatedAt > $here->started_at));
 
         return [
             'pomodoro' => $row?->pomodoro === null ? null : json_decode((string) $row->pomodoro, true),
-            'tutoring' => Tutoring::normalised($row?->tutoring === null ? null : json_decode((string) $row->tutoring, true)),
+            'tutoring' => $profileWins ? $taught : Tutoring::normalised($row?->tutoring === null ? null : json_decode((string) $row->tutoring, true)),
         ];
     }
 

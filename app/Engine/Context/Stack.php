@@ -6,8 +6,10 @@ use App\Engine\Settings;
 use App\Engine\Toolbox;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
+use App\Study\CourseProfiles;
 use App\Study\Files;
 use App\Study\Instructions;
+use App\Study\LearnerProfiles;
 use App\Study\ModuleDetails;
 use App\Study\Modules;
 use App\Study\NoteDoc;
@@ -56,6 +58,8 @@ final class Stack
         private Notes $notes,
         private Files $files,
         private Toolbox $toolbox,
+        private CourseProfiles $courseProfiles,
+        private LearnerProfiles $learnerProfiles,
     ) {}
 
     /** The tutor's standing context for a session: its system prompt, its tools and the report on its layers. */
@@ -160,12 +164,19 @@ final class Stack
         [$material, $materialText] = $this->material($by, $session, $withTools);
 
         $tutoring = Tutoring::normalised($session->tutoring);
+        $course = $this->courseProfiles->get($by, $workspace->id);
+        $today = CarbonImmutable::now();
 
         return new Facts(
             courseName: $workspace->name,
             courseLine: $workspace->subtitle() !== '' ? $workspace->subtitle() : null,
             courseInstructions: $instructions['workspace'],
+            courseAbout: $course->about,
+            courseOutcomes: $course->outcomes,
+            courseAssessment: array_map(fn (array $item) => self::assessment($item, $today), $course->assessment),
+            courseTextbook: $course->textbook,
             aboutYou: $instructions['me'],
+            preferences: LearnerProfiles::lines($this->learnerProfiles->get($by, $workspace->id)),
             language: $choices->language,
             askTopics: $choices->askTopics,
             moduleTitle: $module?->title,
@@ -183,6 +194,15 @@ final class Stack
             materialText: $materialText,
             folded: $folded,
         );
+    }
+
+    /** One assessment as a line: "Midterm 30 % (12 Oct)"; the year only when it isn't this one. */
+    private static function assessment(array $item, CarbonImmutable $today): string
+    {
+        $due = $item['due_on'] === null ? null : CarbonImmutable::parse($item['due_on']);
+        $when = $due === null ? null : $due->format($due->year === $today->year ? 'j M' : 'j M Y');
+
+        return $item['name'].($item['weight'] !== null ? " {$item['weight']} %" : '').($when !== null ? " ({$when})" : '');
     }
 
     /** The helper's rules, without the file's opening comment (for people). */
@@ -215,6 +235,24 @@ final class Stack
         if ($f->courseLine !== null) {
             $lines[] = [$f->courseLine, true];
         }
+        if ($f->courseAbout !== '') {
+            $lines[] = ["About: {$f->courseAbout}", true];
+        }
+        if ($f->courseTextbook !== '') {
+            $lines[] = ["Textbook: {$f->courseTextbook}", true];
+        }
+        if ($f->courseOutcomes !== []) {
+            $lines[] = ['Outcomes:', true];
+            foreach ($f->courseOutcomes as $outcome) {
+                $lines[] = ["- {$outcome}", false];
+            }
+        }
+        if ($f->courseAssessment !== []) {
+            $lines[] = ['Assessment:', true];
+            foreach ($f->courseAssessment as $item) {
+                $lines[] = ["- {$item}", false];
+            }
+        }
         if ($f->courseInstructions !== '') {
             $lines[] = ["Instructions for this course, in the student's words: {$f->courseInstructions}", true];
         }
@@ -226,6 +264,9 @@ final class Stack
     private function student(Facts $f, bool $withTools): array
     {
         $lines = [['## The student', true], ['About you, in their words: '.($f->aboutYou !== '' ? $f->aboutYou : 'nothing written yet.'), true]];
+        if ($f->preferences !== []) {
+            $lines[] = ['How they like to learn in this course: '.implode(' · ', $f->preferences).'.', true];
+        }
         if ($withTools) {
             $lines[] = [$f->askTopics
                 ? 'Topics: ask before you add or switch them; propose, and do it once they agree.'

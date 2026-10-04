@@ -9,7 +9,9 @@ use App\Engine\Settings;
 use App\Engine\Toolbox;
 use App\Models\User;
 use App\Platform\Access\Principal;
+use App\Study\CourseProfiles;
 use App\Study\Instructions;
+use App\Study\LearnerProfiles;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\SessionDetails;
@@ -103,6 +105,56 @@ class StackTest extends TestCase
         }
         $this->assertSame(array_sum(array_column($built->report, 'tokens')), $built->tokens());
         $this->assertSame(count(app(Toolbox::class)->definitions()), count($built->tools));
+    }
+
+    public function test_the_course_profile_and_how_the_student_likes_to_learn_fill_the_course_and_student_layers(): void
+    {
+        app(CourseProfiles::class)->save($this->by, $this->workspace, [
+            'about' => 'Relational databases: modelling, SQL and transactions.',
+            'outcomes' => "Write joins\nNormalise a schema",
+            'textbook' => 'Database System Concepts',
+            'assessment' => [['name' => 'Midterm', 'kind' => 'exam', 'weight' => 30, 'due_on' => '2026-10-12'], ['name' => 'Final', 'kind' => 'exam', 'weight' => 40, 'due_on' => '2026-12-14']],
+        ]);
+        app(LearnerProfiles::class)->save($this->by, $this->workspace, ['explain' => ['examples', 'diagrams'], 'pace' => 'small', 'check' => 'often', 'goal' => 'top', 'note' => 'Use C.']);
+        app(Instructions::class)->set($this->by, "workspace:{$this->workspace}", 'Teach slide by slide.');
+
+        $built = $this->stack()->build($this->by, app(Sessions::class)->find($this->by, $this->session->id), null, true);
+
+        // The course: what it is, what it should teach and how it is assessed, with the student's own words last.
+        $this->assertStringContainsString("## The course: Databases\nCS301 · Autumn 2026\nAbout: Relational databases: modelling, SQL and transactions.\nTextbook: Database System Concepts\nOutcomes:\n- Write joins\n- Normalise a schema\nAssessment:\n- Midterm 30 % (12 Oct)\n- Final 40 % (14 Dec)\nInstructions for this course, in the student's words: Teach slide by slide.", $built->system);
+        // The student: one line of how they like to learn, in short phrases, after what they wrote about themselves.
+        $this->assertStringContainsString("About you, in their words: nothing written yet.\nHow they like to learn in this course: Likes: examples first, diagrams · Pace: small steps · Check: often · Goal: top marks · Also: Use C..", $built->system);
+        foreach ($built->report as $layer) {
+            if (in_array($layer['layer'], [2, 3], true)) {
+                $this->assertSame(0, $layer['cut']);
+                $this->assertLessThanOrEqual($layer['budget'], $layer['tokens']);
+            }
+        }
+        // Both are in the stable front of the prompt: the same for every session of the course.
+        $this->assertStringContainsString('Assessment:', $built->stable);
+        $this->assertStringContainsString('How they like to learn', $built->stable);
+    }
+
+    public function test_a_long_profile_is_cut_a_line_at_a_time_and_a_course_with_none_is_as_before(): void
+    {
+        $plain = $this->stack()->build($this->by, app(Sessions::class)->find($this->by, $this->session->id), null, true);
+        $this->assertStringNotContainsString('About:', $plain->system);
+        $this->assertStringNotContainsString('Outcomes:', $plain->system);
+        $this->assertStringNotContainsString('How they like to learn', $plain->system);
+
+        app(CourseProfiles::class)->save($this->by, $this->workspace, [
+            'about' => 'Relational databases.',
+            'outcomes' => implode("\n", array_map(fn (int $n) => "Outcome {$n}: ".str_repeat('word ', 36), range(1, 12))),
+            'assessment' => array_map(fn (int $n) => ['name' => "Piece of coursework {$n} ".str_repeat('x', 40), 'kind' => 'assignment', 'weight' => 5, 'due_on' => '2026-11-'.str_pad((string) $n, 2, '0', STR_PAD_LEFT)], range(1, 12)),
+        ]);
+        $built = $this->stack()->build($this->by, app(Sessions::class)->find($this->by, $this->session->id), null, true);
+
+        $course = array_values(array_filter($built->report, fn (array $layer) => $layer['layer'] === 2))[0];
+        $this->assertGreaterThan(0, $course['cut']);
+        $this->assertLessThanOrEqual(Stack::BUDGETS[2], $course['tokens']);
+        $this->assertStringContainsString('(cut: ', $built->system);
+        // What the student wrote is never what is cut.
+        $this->assertStringContainsString('About: Relational databases.', $built->system);
     }
 
     public function test_the_tutors_rules_stay_within_their_budget_for_a_model_with_tools_and_one_without(): void
