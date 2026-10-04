@@ -3168,3 +3168,42 @@
         border-radius: var(--radius-lg);
     }
 }
+
+/* ---------- A module's topics (its page): the parts it is made of, and a box to add one ---------- */
+@layer components {
+    .module-topics {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+    }
+
+    .module-topic-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+        gap: 0.5rem;
+    }
+
+    .module-topic {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid var(--divider);
+        border-radius: var(--radius-lg);
+    }
+
+    .module-topic-add {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .module-topic-add .input {
+        flex: 1;
+        min-width: 0;
+    }
+}

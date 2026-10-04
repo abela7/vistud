@@ -226,3 +226,21 @@ for (const [name, size] of Object.entries({ desktop, phone })) {
         await expect(page.getByRole('region', { name: 'Question' })).toContainText('What does a correlated subquery refer to?');
     });
 }
+
+for (const [name, size] of Object.entries({ desktop, phone })) {
+    test(`a module page lists its topics and a topic is added there: ${name}`, async ({ page }) => {
+        await page.setViewportSize(size);
+        const student = makeStudentWithModuleCards();
+        await openStudentHome(page, student.email);
+        await page.goto(`/workspaces/${student.workspace}/modules/${student.week2}`);
+        const topics = page.getByRole('region', { name: /Topics/ });
+        await expect(topics).toContainText('Subqueries');
+        await expect(topics).toContainText('1 card, 1 due');
+        await topics.getByLabel(/Add a topic/).fill('Window functions');
+        await topics.getByRole('button', { name: 'Add' }).click();
+        await expect(topics.locator('.module-topic')).toHaveCount(2);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        expect(await analyse(page)).toEqual([]);
+        await page.screenshot({ path: `test-results/module-topics-${size.width}.png` });
+    });
+}

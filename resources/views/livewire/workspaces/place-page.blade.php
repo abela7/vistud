@@ -101,6 +101,52 @@
         <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0 || !selectedKeys().some(k => k.startsWith('folder:') || k.startsWith('link:'))" title="Delete selected folders and links" x-on:click="$wire.openBulkDelete(selectedKeys().filter(k => k.startsWith('folder:') || k.startsWith('link:')))">Delete</x-button>
     </x-selection-bar>
 
+    @if ($isModule)
+        @php
+            $statusWords = ['not_started' => 'Not started', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Confusing', 'mastered' => 'Mastered'];
+            $statusIcons = ['not_started' => 'circle-dot', 'covered' => 'check', 'understood' => 'circle-check', 'confused' => 'circle-alert', 'mastered' => 'shield-check'];
+        @endphp
+        {{-- The module's topics: the parts it is made of, each with how it stands. The tutor adds them as it teaches; here they can be added by hand. --}}
+        <section class="module-topics" aria-labelledby="module-topics-heading">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 id="module-topics-heading" class="font-semibold">Topics <span class="text-sm font-normal text-fg-muted">· {{ count($moduleTopics) }}</span></h2>
+                @if ($moduleTopics !== [])
+                    <a href="{{ route('workspaces.show', [$workspaceId, 'progress']) }}" class="item-link text-sm">All in Progress</a>
+                @endif
+            </div>
+            @if ($moduleTopics === [])
+                <p class="text-sm text-fg-muted">The parts of this module, like a chapter's sections. The tutor adds them from what you study; you can add one here too.</p>
+            @else
+                <ul class="module-topic-list" role="list">
+                    @foreach ($moduleTopics as $t)
+                        @php
+                            $shown = $t->shown();
+                            $tc = $topicCards[$t->id] ?? null;
+                        @endphp
+                        <li class="module-topic" wire:key="module-topic-{{ $t->id }}">
+                            <div class="min-w-0 flex-1">
+                                <p class="font-medium break-words">{{ $t->name }}</p>
+                                <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-muted">
+                                    <span @class(['status-chip', "status-{$shown}"])><x-icon :name="$statusIcons[$shown]" class="size-3.5" />{{ $statusWords[$shown] }}</span>
+                                    @if ($tc)
+                                        <a href="{{ route('workspaces.show', [$workspaceId, 'flashcards', 'module' => $place->id, 'topic' => $t->id]) }}" class="item-link">{{ Str::plural('card', $tc['total'], prependCount: true) }}{{ $tc['due'] > 0 ? ', '.$tc['due'].' due' : '' }}</a>
+                                    @endif
+                                </p>
+                            </div>
+                            <x-button size="sm" icon="play" wire:click="studyTopic('{{ $t->id }}')" aria-label="Study {{ $t->name }}">Study</x-button>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+            <form wire:submit="addTopic" class="module-topic-add" novalidate>
+                <label for="module-topic-name" class="sr-only">Add a topic to {{ $placeName }}</label>
+                <input id="module-topic-name" type="text" class="input" wire:model="topicName" maxlength="{{ \App\Study\Topics::MAX_NAME }}" placeholder="Add a topic, like “CPU scheduling”" @error('topicName') aria-invalid="true" aria-describedby="module-topic-error" @enderror>
+                <x-button type="submit" icon="plus" wire:loading.attr="aria-busy" wire:target="addTopic">Add</x-button>
+            </form>
+            @error('topicName') <p id="module-topic-error" class="field-error">{{ $message }}</p> @enderror
+        </section>
+    @endif
+
     @include('livewire.workspaces.partials.place', ['key' => $key, 'placeId' => $place->id])
 
     @include('livewire.workspaces.partials.dialog')

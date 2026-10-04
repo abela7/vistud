@@ -398,6 +398,23 @@ class SessionChatTest extends TestCase
         $this->assertStringContainsString('marks\' text (key points, cards, questions, answers) in the course\'s language', $system);
     }
 
+    public function test_the_tutor_keeps_the_topics_itself_unless_the_student_wants_to_be_asked(): void
+    {
+        $this->engine->will(Fake::says('Starting with processes.'), Fake::says('Shall we add these?'));
+        $this->chat()->send($this->by, $this->session->id, 'Here are my slides');
+        $system = $this->engine->last()->system;
+        $this->assertStringContainsString("## Topics\n\nKeep the course's topics for the student", $system);
+        $this->assertStringContainsString('with add_topics, in the session\'s module (short names like section headings, three to eight for a lecture, not every slide), without asking', $system);
+        $this->assertStringContainsString('set it again each time you move on to the next part, without asking', $system);
+
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'ask_topics' => true]);
+        $this->assertTrue(app(Settings::class)->get($this->by)->askTopics);
+        $this->chat()->send($this->by, $this->session->id, 'More slides');
+        $system = $this->engine->last()->system;
+        $this->assertStringContainsString('add them with add_topics once the student agrees', $system);
+        $this->assertStringNotContainsString('without asking', $system);
+    }
+
     public function test_what_the_tools_did_in_the_course_is_kept_told_as_it_happens_and_shown_on_the_answer(): void
     {
         $this->engine->will(

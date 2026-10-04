@@ -47,6 +47,7 @@ final class Settings
             ownKeyHint: $key === null ? null : '…'.substr($key, -4),
             keyUpdatedAt: $key === null || $row?->key_updated_at === null ? null : (string) $row->key_updated_at,
             language: isset($row->language) && $row->language !== '' ? (string) $row->language : null,
+            askTopics: (bool) ($row->ask_topics ?? false),
         );
     }
 
@@ -153,6 +154,7 @@ final class Settings
             'month_cap_micros' => $caps['month_cap'],
             'no_training' => filter_var($input['no_training'] ?? true, FILTER_VALIDATE_BOOL),
             'language' => $language === '' ? null : $language,
+            'ask_topics' => filter_var($input['ask_topics'] ?? ($existing?->ask_topics ?? false), FILTER_VALIDATE_BOOL),
             'consented_at' => $consent ? ($existing?->consented_at ?? now()) : null,
             'updated_at' => now(),
         ];

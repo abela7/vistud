@@ -83,6 +83,9 @@ final class Contents extends Component
 
     public string $name = '';
 
+    /** A topic to add to the module, from the Topics list on its page. */
+    public string $topicName = '';
+
     public string $url = '';
 
     /** A module's instructions for the assistant. */
@@ -149,6 +152,38 @@ final class Contents extends Component
     public function studyHere(): void
     {
         $this->dispatch('study-start', moduleId: $this->placeModuleId());
+    }
+
+    /** Studies one of the module's topics: the start panel, with the module and the topic chosen. */
+    public function studyTopic(string $topicId): void
+    {
+        $this->dispatch('study-start', moduleId: $this->placeModuleId(), topicId: $topicId);
+    }
+
+    /** Adds a topic to the module (a name the course has already is left as it is). */
+    public function addTopic(): void
+    {
+        $this->resetErrorBag('topicName');
+        if ($this->view !== 'module' || $this->placeId === null) {
+            return;
+        }
+        $by = $this->principal();
+        $name = trim($this->topicName);
+        if (collect($this->topics->list($by, $this->workspaceId))->contains(fn ($t) => mb_strtolower($t->name) === mb_strtolower($name))) {
+            $this->addError('topicName', 'The course has a topic with that name already.');
+
+            return;
+        }
+        try {
+            $topic = $this->topics->create($by, $this->workspaceId, $name, $this->placeId);
+        } catch (Unprocessable $e) {
+            $fields = $e->details['fields'] ?? [];
+            $this->addError('topicName', $fields === [] ? $e->getMessage() : reset($fields)[0]);
+
+            return;
+        }
+        $this->topicName = '';
+        $this->notify("“{$topic->name}” is added.");
     }
 
     // ---------- Opening the dialog ----------
@@ -792,7 +827,10 @@ final class Contents extends Component
                 'topicNames' => $topicNames, 'questions' => $questions,
                 'sessionsCount' => count($this->sessions->forModule($by, $this->workspaceId, $module->id)),
                 // The module's flashcards are in the deck, shown by module: how many, and how many are due.
-                'cards' => $this->flashcards->counts($by, $this->workspaceId, null, $module->id),
+                'cards' => $cards = $this->flashcards->counts($by, $this->workspaceId, null, $module->id),
+                // Its topics, in order, each with its status and its cards.
+                'moduleTopics' => array_values(array_filter($this->topics->list($by, $this->workspaceId), fn ($t) => $t->moduleId === $module->id)),
+                'topicCards' => $cards['topics'],
             ];
         }
 
@@ -806,7 +844,7 @@ final class Contents extends Component
             ? [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])], [$module->title, route('workspaces.modules.show', [$this->workspaceId, $module->id])]]
             : [[__('Notes & files'), route('workspaces.show', [$this->workspaceId, 'notes'])]]));
 
-        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'topicNames' => [], 'questions' => null, 'sessionsCount' => 0, 'cards' => null];
+        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'topicNames' => [], 'questions' => null, 'sessionsCount' => 0, 'cards' => null, 'moduleTopics' => [], 'topicCards' => []];
     }
 
     /** @return array<string, array{done: int, total: int}> module id => its topics understood (or mastered), of all */

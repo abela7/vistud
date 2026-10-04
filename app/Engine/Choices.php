@@ -2,7 +2,7 @@
 
 namespace App\Engine;
 
-/** A student's engine settings: the models they chose, their spending limits, their own key (if any), the language they're taught in, and whether they agreed to the chat. */
+/** A student's engine settings: the models they chose, their spending limits, their own key (if any), the language they're taught in, how the tutor keeps topics, and whether they agreed to the chat. */
 final readonly class Choices
 {
     public function __construct(
@@ -18,6 +18,8 @@ final readonly class Choices
         public ?string $keyUpdatedAt = null,
         /** The language the tutor teaches in; null for the one the student writes in. */
         public ?string $language = null,
+        /** Whether the tutor asks before adding or switching topics; otherwise it keeps them as it teaches. */
+        public bool $askTopics = false,
     ) {}
 
     public function ready(): bool

@@ -143,7 +143,7 @@ final class Briefings
         $lines = ['- Started: '.$date($session->startedAt).' (the student\'s time).'];
         $lines[] = $topic !== null
             ? "- Topic: {$topic->name}. The student says: {$status($topic)}. Evidence: {$topic->evidence()}."
-            : '- Topic: none chosen. Propose one (from what is still confusing, open or due soon below, or the module\'s material) and ask whether to take it; in ViStud, set it with set_topic once they agree.';
+            : '- Topic: none chosen. Propose one (from what is still confusing, open or due soon below, or the module\'s material) and ask whether to take it; in ViStud, keep it as the Topics section says.';
         if ($session->pomodoro !== null) {
             $p = $session->pomodoro;
             $lines[] = "- Clock: Pomodoro, {$p['focus']}-minute focus periods with {$p['short']}-minute breaks ({$p['long']} minutes after every {$p['every']}). Plan each part to fit in a focus period, and when the student says they're on a break, stop until they're back.";

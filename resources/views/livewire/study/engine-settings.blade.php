@@ -113,6 +113,13 @@
                 @endforeach
             </datalist>
             <x-field name="language" label="Teach me in (optional)" wire:model="language" list="engine-languages" autocomplete="off" placeholder="Amharic" hint="Empty: the language you write in." />
+            <label class="flex items-start gap-3">
+                <input type="checkbox" class="mt-1" wire:model="askTopics" aria-describedby="engine-ask-topics-hint">
+                <span>
+                    <span class="font-medium">Ask me before adding or switching topics</span>
+                    <span id="engine-ask-topics-hint" class="block text-sm text-fg-muted">Off: the tutor finds the topics in what you study, adds them to the module and moves between them as it teaches, and tells you in a line.</span>
+                </span>
+            </label>
         </section>
 
         <section class="question-panel space-y-4" aria-labelledby="engine-limits-heading">

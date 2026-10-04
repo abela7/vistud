@@ -468,8 +468,14 @@ record): a topic the course has, matched by name whatever the case, or a new
 one made in the session's module. `add_topics` adds up to 15 topics, each in
 the module named or the session's, leaving the names the course has already;
 it is for a file's chapters or headings, once the student agrees to the list.
-The briefing tells the tutor to propose a topic when the session has none and
-set it once the student agrees. The answer shows the topic set ("Topic: Outer
+By default (2026-10-06, the owner: "I don't see where topic comes in") the
+tutor keeps the topics itself: when material is shared or read it adds the
+parts the course doesn't have (three to eight for a lecture) to the session's
+module, says so in a line, and sets the session's topic to the part it is
+teaching, switching as it moves on. *Ask me before adding or switching topics*
+(AI settings, `engine_settings.ask_topics`) makes it propose instead. A
+module's page lists its topics, each with its status, its cards and a
+**Study** button, with a box to add one by hand. The answer shows the topic set ("Topic: Outer
 joins") and the session page shows it at once. The student does the same on
 the session page: **Choose a topic** (or *Change topic*) offers the module's
 topics first, the others, none, or a new one made in the session's module.

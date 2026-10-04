@@ -22,7 +22,7 @@ final class SetTopicTool implements Tool
 
     public function description(): string
     {
-        return 'Sets what this study session is about: one of the course\'s topics, by its exact name, or a new topic made in the session\'s module when the course doesn\'t have it. Use it when the session has no topic, or the student moves on to another one, once the student agrees. Look at the course\'s topics first and use an existing one when it fits. Flashcards, questions and key points saved afterwards go to it.';
+        return 'Sets what this study session is about: one of the course\'s topics, by its exact name, or a new topic made in the session\'s module when the course doesn\'t have it. Use it when the session has no topic and when you move on to another part (whether to ask first, the Topics section of your instructions says). Look at the course\'s topics first and use an existing one when it fits. Flashcards, questions and key points saved afterwards go to it.';
     }
 
     public function parameters(): array

@@ -171,6 +171,16 @@ class ModulesScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
             ->assertSeeInOrder(['Cells', '1 note', '2 folders', 'Topics understood', '0/1']);
 
+        // The module's topics, each to study; one added by hand lands in the module.
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
+            ->assertSeeInOrder(['Topics', '· 1', 'Mitosis', 'Not started', 'Study']);
+        $page = $this->place('module', $cells->id)->set('topicName', 'Meiosis')->call('addTopic')->assertSet('topicName', '')->assertSee('“Meiosis” is added.')
+            ->set('topicName', 'mitosis')->call('addTopic')->assertHasErrors('topicName')->assertSee('The course has a topic with that name already.')
+            ->set('topicName', '')->call('addTopic')->assertHasErrors('topicName');
+        $meiosis = collect(app(Topics::class)->list($this->principal($this->ada), $this->biology->id))->firstWhere('name', 'Meiosis');
+        $this->assertSame($cells->id, $meiosis->moduleId);
+        $page->call('studyTopic', $meiosis->id)->assertDispatched('study-start', moduleId: $cells->id, topicId: $meiosis->id);
+
         // "Study this" starts in the module; so does a folder inside it.
         $this->place('module', $cells->id)->call('studyHere')->assertDispatched('study-start', moduleId: $cells->id);
         $this->place('folder', $week2->id)->call('studyHere')->assertDispatched('study-start', moduleId: $cells->id);

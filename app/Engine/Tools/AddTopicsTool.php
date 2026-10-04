@@ -25,7 +25,7 @@ final class AddTopicsTool implements Tool
 
     public function description(): string
     {
-        return 'Adds topics to the course, each in a module: for example the chapters or headings of a file the student shared, when the course doesn\'t have them yet. Show the student the list you would add and add it once they agree. Topics the course has already are left as they are. Up to '.self::MAX.' at a time.';
+        return 'Adds topics to the course, each in a module: for example the chapters or headings of a file the student shared, when the course doesn\'t have them yet. Whether to ask the student first, the Topics section of your instructions says. Topics the course has already are left as they are. Up to '.self::MAX.' at a time.';
     }
 
     public function parameters(): array

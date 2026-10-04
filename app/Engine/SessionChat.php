@@ -491,6 +491,16 @@ final class SessionChat
         return is_array($items) ? array_values(array_filter($items, fn ($item) => is_array($item) && isset($item['ref'], $item['name'], $item['kind']))) : [];
     }
 
+    /** How the tutor keeps the course's topics: by itself, saying so in a line, or asking first. */
+    private static function topicRules(bool $ask): string
+    {
+        $rules = "## Topics\n\nKeep the course's topics for the student, so they never have to think about them. A topic is one part of a module, like a section of a chapter (\"CPU scheduling\" in \"Process management\"). Everything saved goes to the session's topic, so keep it right:\n\n";
+
+        return $rules.($ask
+            ? "- When the student shares or you read material (a file, a note, slides), look at its outline and the course's topics (the topics tool). Propose the parts the course doesn't have yet as topics in the session's module (short names like section headings, three to eight for a lecture, not every slide), and add them with add_topics once the student agrees.\n- Propose the session's topic for the part you teach, and set it with set_topic once they agree; when you move on to another part, propose switching in a few words.\n- Use a topic the course has whenever one fits, under its exact name. When the student names or changes the topic, follow them."
+            : "- When the student shares or you read material (a file, a note, slides), look at its outline and the course's topics (the topics tool). Add the parts the course doesn't have yet with add_topics, in the session's module (short names like section headings, three to eight for a lecture, not every slide), without asking, and say so in one line: \"This lecture covers: Processes, Threads, CPU scheduling. Starting with Processes.\"\n- Set the session's topic with set_topic to the part you are teaching, and set it again each time you move on to the next part, without asking. Don't mention it beyond a few words.\n- Use a topic the course has whenever one fits, under its exact name. Don't make topics of small details or one-off questions. When the student names or changes the topic, follow them.");
+    }
+
     /** The standing instructions: the tutor prompt and the briefing, how to look things up, and the folded turns. */
     private function system(Principal $by, SessionDetails $session, ?string $summary, bool $withTools): string
     {
@@ -498,7 +508,11 @@ final class SessionChat
         if ($withTools) {
             $system .= "\n\n## Your tools in this chat\n\nYou are inside ViStud's own chat, so you have tools: to look things up (the course's modules and topics, the student's questions (all, or those on one topic or module), key points, assignments and their plans, the calendar, their notes and files, and earlier sessions with what each used), to read a file a few pages at a time (\"all\" gives its outline), and to act in the course: save flashcards, key points and questions straight in, and write in a note with the student. Use them whenever the student asks about their own things or asks you to save or note something; never say you can't. What a tool returns is what ViStud holds. Before explaining a note or a topic, it's worth one look at the open questions on it. When you state a fact from a note or a file, say which, and where (\"Page 4 of 18\"). What the student attaches comes with their message: a note's text, a file's first pages (read on with read_file), a picture to look at. If something isn't in ViStud, or a file can't be read, say so plainly.";
         }
-        $language = $this->settings->get($by)->language;
+        $choices = $this->settings->get($by);
+        if ($withTools) {
+            $system .= "\n\n".self::topicRules($choices->askTopics);
+        }
+        $language = $choices->language;
         if ($language !== null) {
             $system .= "\n\n## Language\n\nThe student chose to be taught in {$language}. Write your messages in {$language}, whatever language they write in, unless they ask for another in this chat. Keep the course's own terms, and anything you quote from their material, in the course's language, with the {$language} beside them when it helps. Write the marks' text (key points, cards, questions, answers) in the course's language, so they match the exams, unless the student asks otherwise.";
         }

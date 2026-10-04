@@ -79,5 +79,11 @@ class EngineSettingsScreenTest extends TestCase
             ->set('tutorModel', 'fake/tutor')->set('language', '<script>')->call('save')->assertHasErrors(['language'])
             ->set('language', 'Amharic')->call('save')->assertHasNoErrors()->assertSet('language', 'Amharic');
         $this->assertSame('Amharic', app(Settings::class)->get($this->principal($ada))->language);
+
+        // The tutor keeps the topics itself unless asked not to.
+        Livewire::test(EngineSettings::class)->assertSet('askTopics', false)->assertSee('Ask me before adding or switching topics')
+            ->set('askTopics', true)->call('save')->assertHasNoErrors();
+        $this->assertTrue(app(Settings::class)->get($this->principal($ada))->askTopics);
+        $this->assertSame('Amharic', app(Settings::class)->get($this->principal($ada))->language);
     }
 }

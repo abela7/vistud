@@ -41,6 +41,8 @@ final class EngineSettings extends Component
 
     public string $language = '';
 
+    public bool $askTopics = false;
+
     public bool $consent = false;
 
     #[Locked]
@@ -119,7 +121,7 @@ final class EngineSettings extends Component
         try {
             $this->settings->set($this->principal(), [
                 'tutor_model' => $this->tutorModel, 'quick_model' => $this->quickModel, 'fallback_model' => $this->fallbackModel,
-                'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language,
+                'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language, 'ask_topics' => $this->askTopics,
             ]);
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
@@ -166,6 +168,7 @@ final class EngineSettings extends Component
         $this->monthCap = number_format($choices->monthCapMicros / 1_000_000, 2, '.', '');
         $this->noTraining = $choices->noTraining;
         $this->language = $choices->language ?? '';
+        $this->askTopics = $choices->askTopics;
         $this->consent = $choices->consentedAt !== null;
     }
 
