@@ -93,11 +93,11 @@ class NavigationTest extends TestCase
 
     public function test_settings_is_one_page_with_four_parts_and_the_old_address_leads_to_the_first(): void
     {
-        $this->get(route('settings'))->assertOk()->assertSee('<title>AI settings', false)->assertSeeInOrder(['AI engine', 'Appearance', 'Security', 'Your data'])
-            ->assertSeeInOrder(['aria-current="page"', 'AI engine'], false);
+        $this->get(route('settings'))->assertOk()->assertSee('<title>AI settings', false)->assertSeeInOrder(['AI', 'Appearance', 'Security', 'Your data'])
+            ->assertSeeInOrder(['aria-current="page"', 'AI'], false);
         $this->get(route('settings', ['part' => 'appearance']))->assertOk()->assertSee('<title>Appearance', false)->assertSee('data-appearance-option', false);
         $this->get(route('settings', ['part' => 'security']))->assertOk()->assertSee('Two-step sign-in')->assertSee(route('two-factor.setup'), false);
-        $this->get(route('settings', ['part' => 'data']))->assertOk()->assertSee('Your journal')->assertSee(route('journal.index'), false)->assertSee('Open the journal');
+        $this->get(route('settings', ['part' => 'data']))->assertOk()->assertSee('Your study record')->assertSee(route('journal.index'), false)->assertSee('Open your study record');
         // An unknown part is the first.
         $this->get(route('settings', ['part' => 'nonsense']))->assertOk()->assertSee('<title>AI settings', false);
         $this->get('/ai-engine')->assertStatus(301)->assertRedirect('/settings?part=ai');

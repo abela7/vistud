@@ -131,7 +131,7 @@
                 <div class="modal-actions">
                     @if ($step === 'paste')
                         <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
-                        <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Reading…">Find the marks</x-button>
+                        <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Reading…">Find what to save</x-button>
                     @else
                         <x-button icon="arrow-left" wire:click="back">Paste again</x-button>
                         <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…" :disabled="$ticked === 0">{{ $ticked === 0 ? 'Nothing ticked' : 'Save '.$ticked }}</x-button>

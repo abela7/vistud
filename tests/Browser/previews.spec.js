@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { fromSessionMenu, loginToChallenge, makeNamedStudent, makeStudentWithCards, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithPomodoro, makeStudentWithProgressTree, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, newHere, openAccounts, openAdminOverview, openConfirmPassword, openStudentHome, openTab, openTwoFactorSetup, startTwoFactorSetup, totp, turnOnCopyPaste, useTheme } from './support.js';
 
 /*
@@ -425,6 +425,8 @@ test('modules: the list, a row menu, the move and module dialogs', async ({ page
     await page.getByRole('button', { name: /Study this/ }).click();
     await page.screenshot({ path: out('module-page-desktop-vistud-light-study') });
     await page.keyboard.press('Escape');
+    // The folders are on the module's Files tab.
+    await openTab(page, 'Files');
     await page.getByRole('button', { name: 'Actions for Labs' }).click();
     await page.screenshot({ path: out('modules-desktop-vistud-light-menu') });
     await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Move to…' }).click();
@@ -435,8 +437,7 @@ test('modules: the list, a row menu, the move and module dialogs', async ({ page
     await page.getByRole('heading', { level: 1, name: 'Labs' }).waitFor();
     await page.screenshot({ path: out('folder-page-desktop-vistud-light') });
 
-    await page.goBack();
-    await page.goBack();
+    await page.locator('.app-sidebar').getByRole('link', { name: 'Modules' }).click();
     await page.getByRole('heading', { level: 1, name: 'Modules' }).waitFor();
     await page.setViewportSize(sizes.mobile);
     await page.getByRole('button', { name: 'New module' }).click();
@@ -528,11 +529,11 @@ test('files: the upload dialog, a module with files, and file pages', async ({ p
     const week1 = page.locator('main .item-list');
 
     await newHere(page, 'Upload files');
-    await page.locator('#structure-dialog input[type="file"]').setInputFiles(['Lecture 2 - cell division.pdf', 'Essay - why cells divide.docx', 'Onion cells.png', 'Homework with macros.docx'].map(fixture));
+    await page.locator('#structure-dialog [data-upload-files]').setInputFiles(['Lecture 2 - cell division.pdf', 'Essay - why cells divide.docx', 'Onion cells.png', 'Homework with macros.docx'].map(fixture));
+    // Chosen files go up one at a time, straight away.
     await page.locator('#structure-dialog').getByRole('listitem').nth(3).waitFor();
     await page.screenshot({ path: out('files-upload-desktop-vistud-light') });
-    await page.locator('#structure-dialog').getByRole('button', { name: 'Upload', exact: true }).click();
-    await page.getByRole('status').filter({ hasText: '3 files uploaded.' }).waitFor();
+    await expect(page.locator('#structure-dialog')).toContainText('3 files uploaded, 1 not uploaded.', { timeout: 20_000 });
     await page.screenshot({ path: out('files-upload-desktop-vistud-light-refused') });
     await page.keyboard.press('Escape');
     await page.screenshot({ path: out('files-module-desktop-vistud-light') });
@@ -755,11 +756,11 @@ test('briefing: the dialog, how the AI teaches, and the start options', async ({
         for (const theme of ['vistud-light', 'vistud-dark']) {
             await page.setViewportSize(viewport);
             await useTheme(page, theme);
-            await fromSessionMenu(page, 'Briefing for another AI');
-            await page.locator('#session-dialog').getByRole('heading', { name: 'Briefing for another AI' }).waitFor();
+            await fromSessionMenu(page, 'Prompt for another AI');
+            await page.locator('#session-dialog').getByRole('heading', { name: 'Prompt for another AI' }).waitFor();
             await page.screenshot({ path: out(`briefing-${size}-${theme}`) });
             await page.keyboard.press('Escape');
-            await page.locator('#session-dialog').getByRole('heading', { name: 'Briefing for another AI' }).waitFor({ state: 'detached' });
+            await page.locator('#session-dialog').getByRole('heading', { name: 'Prompt for another AI' }).waitFor({ state: 'detached' });
         }
     }
 
@@ -806,7 +807,7 @@ test('save from the chat: paste, review, and the session afterwards', async ({ p
     await fromSessionMenu(page, 'Save from another AI');
     await page.locator('#capture-dialog').getByLabel("The tutor's replies").fill(chat);
     await page.screenshot({ path: out('capture-desktop-vistud-light-paste') });
-    await page.locator('#capture-dialog').getByRole('button', { name: 'Find the marks' }).click();
+    await page.locator('#capture-dialog').getByRole('button', { name: 'Find what to save' }).click();
     await page.locator('#capture-dialog').getByRole('heading', { name: /Statuses: you decide/ }).waitFor();
     for (const [size, viewport] of Object.entries(sizes)) {
         for (const theme of ['vistud-light', 'vistud-dark']) {
@@ -860,7 +861,8 @@ test('flashcards: the deck, writing a card, the ✦ menu, making cards from…, 
     await page.keyboard.press('Escape');
     for (const [size, viewport] of Object.entries(sizes)) {
         await page.setViewportSize(viewport);
-        await page.locator('.app-topbar').getByRole('button', { name: 'Ask', exact: true }).click();
+        // The top bar's Ask on a computer, the tab bar's on a phone.
+        await page.locator('.app-topbar, .app-tabbar').getByRole('button', { name: 'Ask', exact: true }).click();
         await page.locator('#ask-sheet').getByLabel('Your question', { exact: true }).waitFor();
         await page.screenshot({ path: out(`ask-${size}-vistud-light`) });
         await page.keyboard.press('Escape');

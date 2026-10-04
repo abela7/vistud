@@ -9,7 +9,7 @@ const phone = { width: 390, height: 844 };
 const status = (page) => page.locator('[data-save-status]');
 const body = (page) => page.locator('.note-prose');
 const alert = (page, name) => page.locator(`[data-alert="${name}"]`);
-const apiUrl = (note) => note.url.replace(/^\/workspaces\/[^/]+\/notes\//, '/api/v1/notes/');
+const apiUrl = (note) => note.url.replace(/^\/(?:courses|workspaces)\/[^/]+\/notes\//, '/api/v1/notes/');
 const serverText = async (page, note) => JSON.stringify((await (await page.request.get(apiUrl(note))).json()).doc);
 
 test.use({ reducedMotion: 'reduce' });

@@ -460,11 +460,10 @@ test('project tools: a course shows none of them until it says so, and the switc
     await preMade(page);
     await page.getByRole('button', { name: /^Project/ }).first().click();
     await page.getByRole('heading', { level: 3, name: 'Initiate' }).waitFor();
-    // Off: the plan is sections and tasks, with marking criteria on offer; no milestones, team or how it is going.
+    // Off: the plan is sections and tasks; no milestones, team or how it is going.
     await expect(page.getByRole('button', { name: /^Team/ })).toHaveCount(0);
     await expect(page.getByRole('heading', { level: 3, name: /Milestones/ })).toHaveCount(0);
     await expect(page.locator('.plan-progress')).not.toContainText(/On track|At risk|Off track/);
-    await expect(page.getByRole('button', { name: /Marking criteria/ })).toBeVisible();
 
     // The switch is in the course's dialog.
     await openSection(page, 'Home');

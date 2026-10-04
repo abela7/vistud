@@ -95,7 +95,7 @@ final class SessionCapture extends Component
         }
         $this->items = $this->writeBack->review($this->principal(), $this->sessionId, $this->text);
         if ($this->items === []) {
-            $this->addError('text', 'No marks found. Paste the tutor\'s replies as they are: the marks look like <finding topic="…">…</finding>.');
+            $this->addError('text', 'Nothing to save was found. Paste the tutor\'s replies as they are, tags included.');
 
             return;
         }

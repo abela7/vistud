@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { foreignColours, makeStudentWithTopics, newHere, openStudentHome, openTab, THEMES, useSentinelTheme, useTheme } from './support.js';
 
-/* The tracker's step 1b: the Overview, assignments and tasks, instructions and links (docs/specs/study-memory.md §3); findings are kept on the topic sheet (progress.spec.js). */
+/* The tracker's step 1b: Home, assignments and tasks, instructions and links (docs/specs/study-memory.md §3); findings are kept on the topic sheet (progress.spec.js). */
 
 const desktop = { width: 1440, height: 900 };
 const phone = { width: 390, height: 844 };
@@ -29,7 +29,7 @@ test('Progress ends with the student\'s rhythm', async ({ page }) => {
     await expect(page.locator('.stat-row')).toContainText('Cards to review');
 });
 
-test('the Overview is short: what is next, what to continue, what\'s coming up', async ({ page }) => {
+test('Home is short: what is next, what to continue, what\'s coming up', async ({ page }) => {
     await page.setViewportSize(desktop);
     await open(page);
     await expect(page.getByText('Next:')).toBeVisible();
@@ -116,7 +116,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
 }
 
 for (const theme of THEMES) {
-    test(`axe finds no violations in the Overview and its dialogs: ${theme}`, async ({ page }) => {
+    test(`axe finds no violations on Home and its dialogs: ${theme}`, async ({ page }) => {
         await page.setViewportSize(desktop);
         await open(page);
         await useTheme(page, theme);
@@ -129,7 +129,7 @@ for (const theme of THEMES) {
     });
 }
 
-test('the Overview never scrolls sideways at 320 px, even with 200% text', async ({ page }) => {
+test('Home never scrolls sideways at 320 px, even with 200% text', async ({ page }) => {
     await open(page);
     await page.setViewportSize({ width: 320, height: 800 });
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });

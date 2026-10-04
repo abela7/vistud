@@ -41,7 +41,7 @@
                     <button type="button" class="menu-item" wire:click="takeBreak"><x-icon name="coffee" class="size-4" />Take a break</button>
                 @endif
                 @if ($copyPaste)
-                    <button type="button" class="menu-item" wire:click="showBriefing"><x-icon name="clipboard-copy" class="size-4" />Briefing for another AI</button>
+                    <button type="button" class="menu-item" wire:click="showBriefing"><x-icon name="clipboard-copy" class="size-4" />Prompt for another AI</button>
                     <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('capture-open')"><x-icon name="clipboard-paste" class="size-4" />Save from another AI</button>
                 @endif
             @endif
@@ -153,7 +153,7 @@
         @if ($mode)
             <form wire:submit="save" novalidate @class(['modal-panel', 'modal-panel-wide' => $mode === 'briefing']) wire:key="session-dialog-{{ $mode }}" @if ($mode === 'briefing') x-data="{ copied: false }" @endif>
                 <div class="modal-head">
-                    <h2 id="session-dialog-title" class="min-w-0 flex-1 text-lg font-semibold" tabindex="-1" autofocus>{{ ['end' => 'End this session?', 'done' => 'Session ended', 'delete' => 'Delete this session?', 'pomodoro' => 'Session clock', 'teaching' => 'How the AI teaches', 'briefing' => 'Briefing for another AI', 'material' => 'Material for the tutor', 'topic' => 'What this session is about', 'question' => 'Ask a question', 'tell' => 'Tell the tutor about this module'][$mode] }}</h2>
+                    <h2 id="session-dialog-title" class="min-w-0 flex-1 text-lg font-semibold" tabindex="-1" autofocus>{{ ['end' => 'End this session?', 'done' => 'Session ended', 'delete' => 'Delete this session?', 'pomodoro' => 'Session clock', 'teaching' => 'How the AI teaches', 'briefing' => 'Prompt for another AI', 'material' => 'Material for the tutor', 'topic' => 'What this session is about', 'question' => 'Ask a question', 'tell' => 'Tell the tutor about this module'][$mode] }}</h2>
                     <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
                         <x-icon name="x" />
                     </button>
@@ -164,7 +164,7 @@
                         @if ($briefing->trimmed)
                             <x-alert tone="info" :live="false">Some things were left out to keep it short. The most relevant come first.</x-alert>
                         @endif
-                        <pre class="briefing-text" tabindex="0" aria-label="Briefing text" x-ref="text">{{ $briefing->markdown }}</pre>
+                        <pre class="briefing-text" tabindex="0" aria-label="Prompt text" x-ref="text">{{ $briefing->markdown }}</pre>
                         <p class="text-sm text-fg-muted">About {{ number_format($briefing->tokens()) }} tokens · <button type="button" class="text-link" wire:click="editTeaching">How the AI teaches</button></p>
                         <p class="sr-only" role="status" x-text="copied ? 'Copied to the clipboard.' : ''"></p>
                     @elseif ($mode === 'material')
@@ -180,7 +180,7 @@
                                     <input id="material-search" type="search" class="input" placeholder="Search {{ $module ? $module->title : 'notes and files' }}" x-model="q" autocomplete="off">
                                 </div>
                                 @if ($open)
-                                    <p class="text-sm text-fg-muted">What you use, the tutor reads, and it goes in the briefing for another AI.</p>
+                                    <p class="text-sm text-fg-muted">What you use, the tutor reads, and it goes in the prompt for another AI.</p>
                                 @endif
                             @else
                                 <div class="empty-place">
@@ -252,7 +252,7 @@
                         @endif
                     @elseif ($mode === 'teaching')
                         @include('livewire.workspaces.partials.teaching-fields')
-                        <p class="text-sm text-fg-muted">The briefing asks for this from now on. An AI you already briefed needs the new briefing, or to be told.</p>
+                        <p class="text-sm text-fg-muted">The prompt asks for this from now on. An AI you already gave it to needs the new prompt, or to be told.</p>
                     @elseif ($mode === 'pomodoro')
                         @include('livewire.workspaces.partials.pomodoro-fields')
                         <p class="text-sm text-fg-muted">{{ $session->usesPomodoro() ? 'Time already studied stays, and the current phase keeps its progress with the new lengths.' : 'Time already studied stays. The first focus period starts counting now.' }}</p>

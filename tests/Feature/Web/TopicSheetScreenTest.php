@@ -84,7 +84,7 @@ class TopicSheetScreenTest extends TestCase
     public function test_the_topic_is_removed_after_asking_and_what_was_done_stays(): void
     {
         $sheet = $this->sheet()->assertSee('Remove topic')
-            ->call('askRemove')->assertSet('confirmingRemove', true)->assertSee('What you did on it stays in your journal.')
+            ->call('askRemove')->assertSet('confirmingRemove', true)->assertSee('What you did on it stays in your study record.')
             ->call('keep')->assertSet('confirmingRemove', false);
         $this->assertCount(1, app(Topics::class)->list($this->by, $this->workspace));
 

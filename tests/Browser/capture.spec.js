@@ -36,7 +36,7 @@ async function openSession(page) {
 async function review(page) {
     await fromSessionMenu(page, 'Save from another AI');
     await dialog(page).getByLabel('The tutor\'s replies').fill(CHAT);
-    await dialog(page).getByRole('button', { name: 'Find the marks' }).click();
+    await dialog(page).getByRole('button', { name: 'Find what to save' }).click();
     await dialog(page).getByRole('heading', { name: /Statuses: you decide/ }).waitFor();
 }
 
@@ -83,7 +83,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await dialog(page).getByLabel('The tutor\'s replies').waitFor();
         const states = { paste: await foreignColours(page) };
         await dialog(page).getByLabel('The tutor\'s replies').fill(CHAT);
-        await dialog(page).getByRole('button', { name: 'Find the marks' }).click();
+        await dialog(page).getByRole('button', { name: 'Find what to save' }).click();
         await dialog(page).getByRole('heading', { name: /Statuses: you decide/ }).waitFor();
         states.review = await foreignColours(page);
         for (const [state, colours] of Object.entries(states)) {
@@ -101,7 +101,7 @@ for (const theme of THEMES) {
         await dialog(page).getByLabel('The tutor\'s replies').waitFor();
         expect(await analyse(page)).toEqual([]);
         await dialog(page).getByLabel('The tutor\'s replies').fill(CHAT);
-        await dialog(page).getByRole('button', { name: 'Find the marks' }).click();
+        await dialog(page).getByRole('button', { name: 'Find what to save' }).click();
         await dialog(page).getByRole('heading', { name: /Statuses: you decide/ }).waitFor();
         expect(await analyse(page)).toEqual([]);
     });

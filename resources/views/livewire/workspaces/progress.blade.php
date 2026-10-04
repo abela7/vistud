@@ -247,7 +247,7 @@
             </div>
             <div class="space-y-4 px-5 pt-2">
                 <p class="text-sm text-fg-muted">
-                    Remove {{ count($bulkKeys) }} selected {{ Str::plural('topic', count($bulkKeys)) }}? What you did on them stays in your journal.
+                    Remove {{ count($bulkKeys) }} selected {{ Str::plural('topic', count($bulkKeys)) }}? What you did on them stays in your study record.
                 </p>
             </div>
             <div class="modal-actions">

@@ -8,8 +8,7 @@
     Inside a study workspace (`workspace` and `section` props) the sidebar
     holds that workspace's switcher and sections, and phones get a bottom tab
     bar of its sections. Students also get their pinned notes' button in the
-    bottom corner (App\Livewire\Study\PinnedNotes). Optional slots (used by the design mockups):
-    `sidebar` replaces the navigation, and `tabbar` adds a bottom bar.
+    bottom corner (App\Livewire\Study\PinnedNotes).
 --}}
 @props(['title', 'area' => 'student', 'workspace' => null, 'section' => null, 'pinnedCurrent' => null])
 @php
@@ -37,7 +36,7 @@
         <meta name="vistud-account" content="{{ $user->id }}">
     @endif
 </head>
-<body class="bg-canvas text-fg antialiased" @if (isset($tabbar) || $workspace) data-tabbar @endif>
+<body class="bg-canvas text-fg antialiased" @if ($workspace) data-tabbar @endif>
     <a href="#main" class="skip-link">Skip to content</a>
 
     <div class="app-shell">
@@ -104,15 +103,13 @@
         <div class="app-body">
             <aside class="app-sidebar">
                 <nav aria-label="Main">
-                    @isset($sidebar)
-                        {{ $sidebar }}
-                    @elseif ($workspace)
+                    @if ($workspace)
                         <x-workspace.nav :workspace="$workspace" :workspaces="$workspaces ?? []" :section="$section" menu-id="ws-menu-sidebar" />
                     @elseif ($workspaces !== null)
                         <x-app.student-nav :workspaces="$workspaces" />
                     @else
                         <x-app.nav :items="$items" />
-                    @endisset
+                    @endif
                 </nav>
                 <button type="button" class="nav-item sidebar-toggle" data-sidebar-toggle title="Collapse sidebar">
                     <x-icon name="panel-left" />
@@ -120,7 +117,7 @@
                 </button>
             </aside>
 
-            <main id="main" @class(['app-main', 'has-tabbar' => isset($tabbar) || $workspace]) tabindex="-1">
+            <main id="main" @class(['app-main', 'has-tabbar' => $workspace]) tabindex="-1">
                 {{ $slot }}
                 @if ($area === 'student' && $isStudent)
                     {{-- The pinned notes' button in the corner, on every student page (`pinnedCurrent`: the note this page shows). --}}
@@ -133,11 +130,9 @@
             </main>
         </div>
 
-        @isset($tabbar)
-            <nav class="app-tabbar" aria-label="Sections">{{ $tabbar }}</nav>
-        @elseif ($workspace)
+        @if ($workspace)
             <nav class="app-tabbar" aria-label="{{ $workspace->name }} sections"><x-workspace.tabs :workspace="$workspace" :section="$section" /></nav>
-        @endisset
+        @endif
     </div>
 
     <dialog id="app-drawer" class="drawer" aria-label="Menu">
@@ -152,15 +147,13 @@
                 <div class="px-4 pt-4"><x-admin.marker /></div>
             @endif
             <nav aria-label="Main" class="p-3">
-                @isset($sidebar)
-                    {{ $sidebar }}
-                @elseif ($workspace)
+                @if ($workspace)
                     <x-workspace.nav :workspace="$workspace" :workspaces="$workspaces ?? []" :section="$section" menu-id="ws-menu-drawer" />
                 @elseif ($workspaces !== null)
                     <x-app.student-nav :workspaces="$workspaces" />
                 @else
                     <x-app.nav :items="$items" />
-                @endisset
+                @endif
             </nav>
         </div>
     </dialog>

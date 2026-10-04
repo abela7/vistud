@@ -94,7 +94,7 @@
             @unless ($new)
                 <section class="question-panel question-danger" aria-labelledby="question-delete-label">
                     <h2 id="question-delete-label" class="field-label">Delete this question</h2>
-                    <p class="field-hint mt-1">It leaves your lists. What you wrote in the journal stays.</p>
+                    <p class="field-hint mt-1">It leaves your lists. What you wrote stays in your study record.</p>
                     <div class="mt-3">
                         <button type="button" class="btn btn-secondary" x-show="! sure" x-on:click="sure = true"><x-icon name="trash-2" class="size-4" />Delete</button>
                         <div class="flex flex-wrap gap-2" x-show="sure" x-cloak>

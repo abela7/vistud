@@ -27,8 +27,8 @@ async function openSession(page) {
 }
 
 async function openBriefing(page) {
-    await fromSessionMenu(page, 'Briefing for another AI');
-    await dialog(page).getByRole('heading', { name: 'Briefing for another AI' }).waitFor();
+    await fromSessionMenu(page, 'Prompt for another AI');
+    await dialog(page).getByRole('heading', { name: 'Prompt for another AI' }).waitFor();
 }
 
 async function openTeaching(page) {
@@ -50,7 +50,7 @@ test('the briefing is copied and downloaded, with the note the student chose', a
     await expect(rail.getByRole('button', { name: /^All 1 · 1 for the tutor/ })).toBeVisible();
 
     await openBriefing(page);
-    const text = dialog(page).getByLabel('Briefing text');
+    const text = dialog(page).getByLabel('Prompt text');
     await expect(text).toContainText('# You are the student\'s tutor');
     await expect(text).toContainText('## This session');
     await expect(text).toContainText('## The student\'s note: Lecture 3: joins');
@@ -86,7 +86,7 @@ test('how the AI teaches is chosen at the start and changed during the session',
     await expect(page.getByRole('status').filter({ hasText: 'The briefing now asks for this way of teaching.' })).toBeVisible();
     await dialog(page).waitFor({ state: 'hidden' });
     await openBriefing(page);
-    await expect(dialog(page).getByLabel('Briefing text')).toContainText('Questions are exam-style');
+    await expect(dialog(page).getByLabel('Prompt text')).toContainText('Questions are exam-style');
 });
 
 for (const [name, viewport] of Object.entries({ desktop, phone })) {

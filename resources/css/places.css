@@ -27,15 +27,15 @@
     }
 
     /* A tile's own menu sits above its link, and an open menu above the tiles around it. */
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card, .workspace-card, .plan-section) .relative:has(> [data-menu-button]) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .question-card, .workspace-card, .plan-section) .relative:has(> [data-menu-button]) {
         z-index: 1;
     }
 
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card, .workspace-card, .plan-section) .relative:has(> [data-menu-button][aria-expanded='true']) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .question-card, .workspace-card, .plan-section) .relative:has(> [data-menu-button][aria-expanded='true']) {
         z-index: 30;
     }
 
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card, .workspace-card, .plan-section):has([data-menu-button][aria-expanded='true']) {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .question-card, .workspace-card, .plan-section):has([data-menu-button][aria-expanded='true']) {
         z-index: 30;
     }
 
@@ -434,8 +434,7 @@
 
     /* ---------- Rows and tiles ---------- */
 
-    .item-icon,
-    .place-badge {
+    .item-icon {
         display: inline-grid;
         flex: none;
         place-items: center;
@@ -445,11 +444,6 @@
         background-color: var(--ws-subtle, var(--accent-subtle));
         color: var(--ws, var(--accent-contrast));
         font-weight: 700;
-    }
-
-    .place-badge {
-        width: 2.75rem;
-        height: 2.75rem;
     }
 
     .item-list {
@@ -2891,12 +2885,12 @@
         pointer-events: none;
     }
 
-    .is-selecting :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card) {
+    .is-selecting :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .question-card) {
         cursor: pointer;
         user-select: none;
     }
 
-    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .finding-row, .question-card).is-selected {
+    :is(.module-tile, .folder-tile, .item-row, .card-row, .task-row, .topic-row, .question-card).is-selected {
         background-color: var(--selected) !important;
         border-color: var(--accent) !important;
     }

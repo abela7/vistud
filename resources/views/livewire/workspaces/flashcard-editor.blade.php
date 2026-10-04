@@ -23,7 +23,7 @@
                 <div class="space-y-4 px-5 pt-2">
                     @if ($mode === 'delete')
                         <p class="break-words"><span class="font-medium">{{ $front }}</span></p>
-                        <p class="text-fg-muted">The card is removed from your reviews. How you answered it stays in your journal, as what happened.</p>
+                        <p class="text-fg-muted">The card is removed from your reviews. How you answered it stays in your study record, as what happened.</p>
                     @else
                         <div class="field">
                             <label for="flashcard-front" class="field-label">Front</label>

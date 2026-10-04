@@ -98,7 +98,7 @@ test('leaving a note without reloading saves what was written, and the editor st
     await page.getByRole('link', { name: /^Back to / }).click();
     await expect(page).toHaveURL(modulePage);
     expect(await stayed(page)).toBe(true);
-    const api = note.url.replace(/^\/workspaces\/[^/]+\/notes\//, '/api/v1/notes/');
+    const api = note.url.replace(/^\/(?:courses|workspaces)\/[^/]+\/notes\//, '/api/v1/notes/');
     await expect.poll(async () => JSON.stringify((await (await page.request.get(api)).json()).doc)).toContain('Written just before leaving.');
 
     // The editor's keys went with it: Ctrl+F here is the browser's again, not the note's find bar.

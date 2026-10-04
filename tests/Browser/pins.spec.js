@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithNote, openStudentHome, pinNewNotes, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithNote, openStudentHome, openTab, pinNewNotes, THEMES, useSentinelTheme, useTheme } from './support.js';
 
 /* Pinned notes: a button in the corner of every student page (docs/specs/workspaces.md, DESIGN.md "Pinned notes"). */
 
@@ -119,6 +119,7 @@ test('a row\'s menu follows a pin taken out of the corner, and the corner surviv
     await page.goto(`/courses/${note.workspace}/modules`);
     await page.getByRole('link', { name: /Week 2: Cell division/ }).click();
     await page.waitForURL(/\/modules\/[^/]+$/);
+    await openTab(page, 'Notes');
 
     // The note is pinned, so its row offers Unpin; take it out of the corner's list and the row offers Pin again.
     await page.getByRole('button', { name: 'Actions for Mitosis vs meiosis' }).click();

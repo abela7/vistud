@@ -158,7 +158,15 @@ export async function newHere(page, what) {
         }
     }
     const buttons = { 'Upload files': 'Upload files', Folder: 'New folder', Link: 'Add a link', Note: 'New note' };
-    await page.locator('main').getByRole('button', { name: buttons[what], exact: true }).first().click();
+    const direct = page.locator('main').getByRole('button', { name: buttons[what], exact: true });
+    if ((await direct.count()) > 0) {
+        await direct.first().click();
+
+        return;
+    }
+    // A page with no module tabs (Notes & files) has one New menu.
+    await page.locator('main').getByRole('button', { name: 'New', exact: true }).click();
+    await page.locator('#new-menu').getByRole('button', { name: what, exact: true }).click();
 }
 
 /**
@@ -534,7 +542,13 @@ export async function openTwoFactorSetup(page, email = makeStudentAccount()) {
     // The account menu works once the page's script has run.
     await page.waitForLoadState('load');
     await page.locator('[data-menu-button]').click();
-    await page.getByRole('link', { name: 'Security' }).click();
+    // Two-step sign-in is the Security part of Settings.
+    await page.locator('#account-menu').getByRole('link', { name: 'Settings' }).click();
+    await page.waitForURL('**/settings**');
+    await page.getByRole('heading', { level: 1, name: 'Settings' }).waitFor();
+    await page.waitForLoadState('load');
+    await page.locator('.page-tabs').getByRole('link', { name: 'Security' }).click();
+    await page.getByRole('link', { name: /^(Turn on|Manage)$/ }).click();
     await page.waitForURL('**/user/confirm-password');
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Confirm' }).click();

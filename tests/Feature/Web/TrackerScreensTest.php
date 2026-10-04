@@ -22,7 +22,7 @@ use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
-/** The tracker's screens from step 1b: the Overview, tasks, instructions and links (docs/specs/study-memory.md §3); key points are kept on the topic sheet (TopicSheetScreenTest). */
+/** The tracker's screens from step 1b: Home, tasks, instructions and links (docs/specs/study-memory.md §3); key points are kept on the topic sheet (TopicSheetScreenTest). */
 class TrackerScreensTest extends TestCase
 {
     use CreatesAccounts, RefreshesDatabase;

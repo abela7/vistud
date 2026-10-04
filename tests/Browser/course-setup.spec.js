@@ -125,6 +125,8 @@ for (const [name, viewport] of Object.entries(sizes)) {
             await expect(sheet(page)).toBeVisible();
             await sheet(page).getByRole('button', { name: 'Write it myself' }).click();
             await sheet(page).getByRole('button', { name: 'Add an item' }).click();
+            // The new row is below the fold of a phone's sheet; the sheet's pinned buttons must not sit on a control that is looked at.
+            await sheet(page).getByRole('button', { name: 'Remove this item' }).evaluate((el) => el.scrollIntoView({ block: 'center' }));
             expect(await analyse(page)).toEqual([]);
 
             await page.keyboard.press('Escape');

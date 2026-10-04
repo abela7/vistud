@@ -1,5 +1,7 @@
 # Workspaces: the plan for milestone M2
 
+> **Superseded in part by [vistud-2-blueprint.md](vistud-2-blueprint.md) (2026-10-06 and after).** A workspace is a **course** on every screen, its pages are at `/courses/…` (the old `/workspaces/…` addresses lead to them), and its doors, Home and sidebar were rebuilt in ViStud 2 (§3.4, Phases 1–6). The tables, services and notes/files/folders rules here still hold; where this file and the blueprint differ, the blueprint wins.
+
 **Status:** approved by the owner (decisions W0–W6 as recommended). Built so
 far: **step 0** (renames and workspace colours), **step 1** (workspaces:
 create, open, switch, edit, archive and restore) and **step 2** (modules, and
@@ -22,10 +24,9 @@ is now the topic tracker (docs/specs/study-memory.md): topics with a status
 and the evidence behind it, and the student's questions. Next: the rest of
 the tracker (study-memory.md §5), then the calendar (Grok or Gemini).
 
-**Mockups:** [docs/design/mockups/](../design/mockups/). They use the real
-theme, top bar and components, so what is approved is what gets built. On a
-development machine they can be opened at `/_mockups/workspaces` (they never
-exist on a live server).
+**Mockups:** the static review screens of this plan (`/_mockups/workspaces`, with
+their screenshots) were removed in ViStud 2 Phase 7, once the real screens
+replaced them; they are in the git history.
 
 ---
 

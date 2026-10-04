@@ -6,7 +6,7 @@ import { makeStudentWithModules, openStudentHome } from './support.js';
 
 test('an opened but empty box is closed again, and a milestone is deleted', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    const email = makeStudentWithModules();
+    const email = makeStudentWithModules({ projectTools: true });
     const code = [
         `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
         `$w = collect(app(\\App\\Study\\Workspaces::class)->list($p))->first(); $a = app(\\App\\Study\\Activities::class);`,

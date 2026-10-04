@@ -112,7 +112,7 @@
                 </div>
                 @if ($confirmingRemove)
                     <div class="px-5 pt-3">
-                        <p class="text-sm">Remove {{ $topic->name }}? What you did on it stays in your journal.</p>
+                        <p class="text-sm">Remove {{ $topic->name }}? What you did on it stays in your study record.</p>
                     </div>
                     <div class="modal-actions">
                         <x-button wire:click="keep">Keep it</x-button>

@@ -1,5 +1,7 @@
 # Study memory: the tracker, the session and the engine
 
+> **Superseded in part by [vistud-2-blueprint.md](vistud-2-blueprint.md) (2026-10-06 and after).** The data, the services and the rules of §2–§4 still hold; the screens, the words and the navigation they describe (the Overview, the flat Progress page with its findings, the six session tiles, the copy-paste first approach) were rebuilt in ViStud 2 Phases 1–6 and are described there. Where this file and the blueprint differ, the blueprint wins.
+
 **Status:** decided by the owner on 2026-09-26. Built: step 1, the tracker:
 topics, statuses and questions (1a); findings, web links, assignments and
 tasks, instructions and the Overview (1b). Step 2 has begun: the study

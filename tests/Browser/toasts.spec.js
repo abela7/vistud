@@ -7,7 +7,7 @@ import { foreignColours, makeStudentWithSession, openStudentHome, useSentinelThe
 test.use({ reducedMotion: 'reduce' });
 test.describe.configure({ timeout: 60_000 });
 
-async function openOverview(page) {
+async function openHome(page) {
     const student = makeStudentWithSession();
     await openStudentHome(page, student.email);
     await page.goto(`/courses/${student.workspace}`);
@@ -25,7 +25,7 @@ async function saveInstructions(page, text) {
 
 test('a notice closes itself after a few seconds, or with its ×, and shows again when it happens again', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await openOverview(page);
+    await openHome(page);
     const toasts = page.getByRole('status').filter({ has: page.locator('.toast') });
 
     await saveInstructions(page, 'Explain with everyday examples.');
@@ -40,7 +40,7 @@ test('a notice closes itself after a few seconds, or with its ×, and shows agai
 
 test('a notice stays while the pointer is on it', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await openOverview(page);
+    await openHome(page);
     await saveInstructions(page, 'Explain with everyday examples.');
     await page.locator('.toast').hover();
     await page.waitForTimeout(7000);
@@ -51,7 +51,7 @@ test('a notice stays while the pointer is on it', async ({ page }) => {
 
 test('a notice takes its colours from tokens, passes axe, and fits a 320 px phone at 200% text', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await openOverview(page);
+    await openHome(page);
     await saveInstructions(page, 'Explain with everyday examples.');
     await page.locator('.toast').hover();
     expect((await new AxeBuilder({ page }).include('[data-toasts]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze()).violations.map((v) => v.id)).toEqual([]);

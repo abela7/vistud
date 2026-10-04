@@ -21,7 +21,7 @@ use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
-/** Study sessions on screen: the Overview's study time, the session page and the top bar's clock (docs/specs/study-memory.md §4). */
+/** Study sessions on screen: Home's study time, the session page and the top bar's clock (docs/specs/study-memory.md §4). */
 class SessionScreensTest extends TestCase
 {
     use CreatesAccounts, RefreshesDatabase;
@@ -61,7 +61,7 @@ class SessionScreensTest extends TestCase
             ->assertSeeInOrder(['Joins', 'Started Mon 5 Oct, 09:00', 'Studying', '0:00:00', 'Pause', 'End'])
             // The ⋯ menu holds the settings; the copy-paste tools are hidden until the student says they use another AI.
             ->assertSeeInOrder(['How the AI teaches', 'Use the Pomodoro clock', 'Take a break', 'Delete session'])
-            ->assertDontSee('Briefing for another AI')->assertDontSee('Save from another AI')
+            ->assertDontSee('Prompt for another AI')->assertDontSee('Save from another AI')
             // The tiles, the questions board and the timeline are gone: the chat is the page.
             ->assertDontSee('Another AI')->assertDontSee('New flashcard')->assertDontSee('What happened')->assertDontSee('action-tile', false)
             ->assertSee('Set up your AI first')->assertSee('Material')->assertSee('This session')
@@ -250,7 +250,7 @@ class SessionScreensTest extends TestCase
             ->assertOk()->assertSeeInOrder(['Modules', 'Week 1', 'Whole module'])
             ->assertSee('Hide the timer')->assertSee('Show the study timer');
         $this->assertMatchesRegularExpression('/title="Modules"\s+aria-current="page"/', $page->getContent());
-        $this->assertDoesNotMatchRegularExpression('/title="Overview"\s+aria-current="page"/', $page->getContent());
+        $this->assertDoesNotMatchRegularExpression('/title="Home"\s+aria-current="page"/', $page->getContent());
     }
 
     public function test_a_pomodoro_session_is_started_counts_down_and_moves_through_its_phases(): void

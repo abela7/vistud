@@ -115,7 +115,7 @@ final class Progress extends Component
         $by = $this->principal();
         $name = $this->topics->find($by, $id)->name;
         $this->topics->retire($by, $id);
-        $this->notice = "{$name} is removed. What you did on it stays in your journal.";
+        $this->notice = "{$name} is removed. What you did on it stays in your study record.";
     }
 
     public function openBulkMove(array $keys): void

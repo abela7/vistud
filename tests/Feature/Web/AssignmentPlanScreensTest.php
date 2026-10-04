@@ -21,7 +21,7 @@ use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
-/** An assignment's plan on its page, and its progress on the cards and the Overview (the owner's review, 2026-10-02). */
+/** An assignment's plan on its page, and its progress on the cards and Home (the owner's review, 2026-10-02). */
 class AssignmentPlanScreensTest extends TestCase
 {
     use CreatesAccounts, RefreshesDatabase;

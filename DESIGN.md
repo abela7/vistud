@@ -310,7 +310,11 @@ Bulk actions allow students to select multiple items across any list (folders, n
 
 Every new or rebuilt page starts the same way (ViStud 2, [docs/specs/vistud-2-blueprint.md](docs/specs/vistud-2-blueprint.md) §3.9): `<x-page title back-href back-to eyebrow context>` draws one row, Back as a round button, the title with a small line above it (usually the course's name), and **one line under it saying what the page is for** (`context`, 60 characters at most). On the right: the page's **one primary action** in the `action` slot, and everything else in the `menu` slot (`.menu-item` links and buttons) behind a ⋯ button named "More for …". It reuses the section header's styles (`.section-header*`), so the older `x-workspace.section-header` and this look alike; a page that has to show a count or a view switch keeps using the older one until it is rebuilt. The page's content starts straight under it, with no paragraph of help between.
 
-### 5.9 Writing for the screen
+### 5.9 The ✦ menu: the helper on the thing itself
+
+An AI action lives next to the thing it works on (docs/specs/vistud-2-blueprint.md §3.6.5): `<x-ai-menu>` is a ✦ button (named "AI help with …") beside a row's ⋯ on a card, a question, a file, a note, a topic or a folder, and a ✦ in a note's toolbar for a selection. It opens a small menu of what can be done there (`Improve`, `Make cards from it`, `Summarise`, `Clarify` …). One sheet, `App\Livewire\Workspaces\AiAssist` (`#ai-sheet`), shows what comes back as a **proposal** (before and after, or the cards ticked) with **Keep** and **Discard**: nothing is applied or stored until Keep, and a failure says what to do next with **Try again**. **Ask** is the same helper for a question about the course: a button in the top bar (a tab on a phone) and a sheet that remembers nothing once left. The ✦ is the helper's one mark: do not draw AI actions anywhere else.
+
+### 5.10 Writing for the screen
 
 The rules for every word a student reads (blueprint §3.11):
 
@@ -318,7 +322,7 @@ The rules for every word a student reads (blueprint §3.11):
 - **Buttons are verbs:** Study, Add, Review, Done. Never "Click here to…".
 - **A status is an icon and one word** (a `.badge`).
 - **An empty state is one line and one button**, never a paragraph.
-- **No internal words.** A student never reads "evidence", "marks", "briefing", "write-back", "journal" or "engine"; they read "AI" where a model is meant, "AI settings" for the page, and "tutor", "reader" and "helper" for the three roles. A student's workspace is a **course** on every screen (the code and the routes keep `workspaces` until Phase 6).
+- **No internal words.** A student never reads "evidence", "marks" (of the tutor), "briefing", "write-back", "journal", "finding", "overview" or "engine"; they read "AI" where a model is meant ("AI" is a part of Settings), a **prompt** for what they paste into another AI, a **study record** for what ViStud has recorded, a **key point**, **Home** for a course's first page, and "tutor", "reader" and "helper" for the three roles. A student's workspace is a **course** on every screen (the code keeps `workspaces`; the routes are `/courses/…` and the old addresses lead to them). `tests/Architecture/StudentWordsTest.php` fails when a student-facing view or notice says one of them (the owner's admin pages are left out).
 - **Errors say what to do next, in one line.**
 
 ## 6. Layout and responsive behaviour
@@ -326,6 +330,8 @@ The rules for every word a student reads (blueprint §3.11):
 ### 6.1 Breakpoints and layouts
 
 ADR 0003 §11 defines the workspace layouts: desktop from 1280 px (resizable sidebar, main area, optional right panel), tablet 768–1279 px (drawer and sliding panels), and a deliberately different mobile layout below 768 px (bottom navigation, drill-down lists, a full-screen editor, bottom sheets). Admin uses the same breakpoints with its own sidebar; its tables become cards on mobile.
+
+**A course's doors** (docs/specs/vistud-2-blueprint.md §3.4): six, in this order: **Home · Modules · Cards · Questions · Assignments · Progress** (`Workspaces::NAV`). Notes & files is reached from Modules and the course's Calendar from Home; both pages exist at their addresses. Below the doors an **Everywhere** group: Courses, Calendar (every course), Settings. On a phone the tab bar is **Home · Modules · Cards · Ask · More**: Ask opens the helper's sheet, More a sheet of Questions, Assignments, Progress, Notes & files, Calendar and Settings, and is the current tab on those pages. Settings is one page with four parts (`?part=ai|appearance|security|data`): AI, Appearance, Security and Your data (the study record).
 
 **Questions** (the owner's review, 2026-09-29): a module's questions page uses the whole width like Modules: the section heading (`x-workspace.section-header` with `back-href`, `back-to` and `eyebrow`: Back to the module, "workspace · module" small above the title, the count, Select and a primary *New question*), one line to write a question, the search, filter and sort, then cards in `.question-grid` (`repeat(auto-fill, minmax(20rem, 1fr))`). A card (`.question-card`) is the status as a chip in its colour (`.question-status`: pending blue, stuck red, answered green, through `--ws` / `--ws-subtle`) with a strip of it along the top, the words (four lines at most), the answer's first lines with the answered accent on the left, and when it was asked, who it is for and its topic at the bottom, aligned across a row; it is one link, its ⋯ menu above. A question has a page of its own (`.question-layout`): the words and the answer in panels on the left, and one narrow column of options on the right (`21rem` from 1024 px; on a phone below the answer): the three statuses as big choices, the module, the topic, *Ask the teacher*, when it was asked, and Delete in a panel of its own with a second press; Cancel and Save at the end of the words. There are no side panels for questions.
 

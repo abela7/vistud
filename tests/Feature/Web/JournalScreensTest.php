@@ -41,7 +41,7 @@ class JournalScreensTest extends TestCase
     {
         $this->actingAs($this->ada)->get('/journal')
             ->assertOk()
-            ->assertSee('<title>Journal', false)
+            ->assertSee('<title>Study record', false)
             ->assertSeeInOrder(['Attempt', 'Incorrect', 'Task TK-1', 'Task'])
             ->assertSee(route('journal.show', 'E-ADA'), false)
             ->assertDontSee('E-BOB');

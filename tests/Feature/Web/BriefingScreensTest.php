@@ -97,10 +97,10 @@ class BriefingScreensTest extends TestCase
         $session = app(Sessions::class)->start($by, $this->databases->id, $joins->id);
 
         // The copy-paste tools are for a student who uses another AI, and off until they say so.
-        $this->page($session->id)->assertDontSee('Briefing for another AI');
+        $this->page($session->id)->assertDontSee('Prompt for another AI');
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
         app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'copy_paste_ai' => true, 'consent' => true]);
-        $this->page($session->id)->assertSee('Briefing for another AI')
+        $this->page($session->id)->assertSee('Prompt for another AI')
             ->call('showBriefing')->assertDispatched('session-dialog-open')
             ->assertSeeText('tokens')
             ->assertSee('# You are the student&#039;s tutor', false)->assertSee('## This session')->assertSee('- Topic: Joins.')

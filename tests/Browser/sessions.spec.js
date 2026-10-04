@@ -23,7 +23,7 @@ async function openSession(page) {
     return student;
 }
 
-test('a session is started from the Overview, and its clock runs, pauses, breaks and ends', async ({ page }) => {
+test('a session is started from Home, and its clock runs, pauses, breaks and ends', async ({ page }) => {
     await page.setViewportSize(desktop);
     const student = makeStudentWithTopics();
     await openStudentHome(page, student.email);
@@ -145,7 +145,7 @@ test('a Pomodoro focus period runs out on its own and the break begins, here and
     await expect(card).toContainText('Focus 2 of 4');
 });
 
-test('a Pomodoro session is started from the Overview, and the sound can be turned off', async ({ page }) => {
+test('a Pomodoro session is started from Home, and the sound can be turned off', async ({ page }) => {
     await page.setViewportSize(desktop);
     const student = makeStudentWithTopics();
     await openStudentHome(page, student.email);

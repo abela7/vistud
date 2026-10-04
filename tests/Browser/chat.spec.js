@@ -455,7 +455,7 @@ test('helper: Make cards from… asks what from, shows the cards ticked, and add
 
 test('helper: a question is clarified on its page, and Keep puts the clearer words in the box', async ({ page }) => {
     const student = makeStudentWithTopics();
-    await ai(page, student, `/courses/${student.workspace}/progress`);
+    await ai(page, student, `/courses/${student.workspace}/questions`);
     await page.getByRole('link', { name: 'Why does a left join keep the unmatched rows?' }).first().click();
     await page.getByRole('heading', { level: 1, name: 'Question' }).waitFor();
     await page.waitForLoadState('load');

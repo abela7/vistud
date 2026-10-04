@@ -81,7 +81,7 @@ In this order; each step is small and reviewable. Every screen gets the DESIGN.m
    - `Journal\EntryShow` (**done**: `/journal/{entry}` with a `#[Locked]` ID, under a `/journal` list; another learner's entry, a tampered locked ID and an edited snapshot all answer 404 like a missing entry. `php artisan vistud:journal:sample {email}` fills an empty journal for trying it)
 9. **403 and 404 pages** on the shared layout.
 
-**M2, in progress (approved):** [docs/specs/workspaces.md](../specs/workspaces.md), one workspace per subject with Overview, Modules, Notes & files, Calendar and Progress. Mockups in `docs/design/mockups/`, and on a development machine at `/_mockups/workspaces` (local only; regenerate with `MOCKUPS=1 npx playwright test mockups`).
+**M2, built and then rebuilt as ViStud 2:** [docs/specs/workspaces.md](../specs/workspaces.md) was the plan (one course per subject); [docs/specs/vistud-2-blueprint.md](../specs/vistud-2-blueprint.md) is what the screens are now (Home, Modules, Cards, Questions, Assignments, Progress; the closing notes are in [v2-phase-7.md](v2-phase-7.md)). The old design mockups were removed.
 
 **Backend dependencies:**
 - **Services these screens call:** WP2's services (`Accounts`, `Roles`, `Invitations`, `TwoFactorReset`, `Workspaces`, the audit log) and WP3's `JournalReader`. Both are delivered but not yet reviewed, and nothing else is needed from the backend for these screens.

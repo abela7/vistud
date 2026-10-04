@@ -22,7 +22,7 @@ Branch `claude/persistent-study-context-zsilo6`. The plan is [docs/specs/vistud-
 
 **The screen** (blueprint §3.9, §3.11)
 - AI settings (was "AI engine" for students): Your key, **Usage this month** (Tutor, Reader, Helper, and the total against the monthly limit), **Your models** (three fields, one line each: the price once a model is chosen, otherwise what the role does), **How the tutor works** (language and four toggles), Limits and privacy. Hints are one line.
-- `<x-page title back-href back-to eyebrow context>` with `action` and `menu` slots (`resources/views/components/page.blade.php`); `<x-checkbox hint>`; DESIGN.md §5.8 (the page template) and §5.9 (the writing rules).
+- `<x-page title back-href back-to eyebrow context>` with `action` and `menu` slots (`resources/views/components/page.blade.php`); `<x-checkbox hint>`; DESIGN.md §5.8 (the page template) and §5.10 (the writing rules; §5.9 is the ✦ menu).
 - **Course** instead of *workspace* on every student screen (labels only; routes, the code and the admin pages keep their names until Phase 6).
 
 **Tests added or changed**: `Engine/RolesTest`, `JobsTest`, `StackTest`, `HelperTest`, `PromptsTryTest`, `SettingsTest`, `SetupTest`, `SessionChatTest`; `Web/EngineSettingsScreenTest` (three roles, toggles, usage by role), `EngineSetupScreenTest`, `TutorChatScreenTest`, and the Course wording in `WorkspaceScreensTest`, `AppShellTest`, `CalendarScreensTest`, `TrackerScreensTest`; browser spec `ai-settings.spec.js` (desktop and phone, axe in all three themes, token colours) and the Course wording in the other browser specs.

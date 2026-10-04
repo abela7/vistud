@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithProgressTree, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithProgressTree, openSection, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
 
 /* Progress, the tree: the ring, the filters, modules that fold, topics with where they stand (docs/specs/vistud-2-blueprint.md §3.5.5, §3.8). */
 
@@ -113,7 +113,7 @@ test('a topic opens its sheet: who set the status, key points, and removing it',
     // Removing asks first, and says what stays.
     await row(page, 'Isolation levels').getByRole('button', { name: 'Isolation levels', exact: true }).click();
     await sheet(page).getByRole('button', { name: 'Remove topic' }).click();
-    await expect(sheet(page)).toContainText('What you did on it stays in your journal.');
+    await expect(sheet(page)).toContainText('What you did on it stays in your study record.');
     await sheet(page).getByRole('button', { name: 'Keep it' }).click();
     await expect(sheet(page).getByRole('button', { name: 'Remove topic' })).toBeVisible();
     await sheet(page).getByRole('button', { name: 'Remove topic' }).click();
@@ -129,7 +129,7 @@ test('Study on a row starts the session on that topic', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1, name: 'Joins' })).toBeVisible();
 });
 
-test('a student adds a topic, selects several and tells the app they are covered, and keeps questions', async ({ page }) => {
+test('a student adds a topic, selects several and tells the app they are covered, and writes a question on the Questions page', async ({ page }) => {
     await page.setViewportSize(desktop);
     await openProgress(page);
 
@@ -150,7 +150,9 @@ test('a student adds a topic, selects several and tells the app they are covered
     await expect(row(page, 'Normalisation')).toContainText('Covered');
     await page.locator('.progress-head').getByRole('button', { name: 'Done', exact: true }).click();
 
-    // Questions are still written down here, one line at a time.
+    // Questions are written down on their own page, one line at a time.
+    await openSection(page, 'Questions');
+    await page.getByRole('heading', { level: 1, name: 'Questions' }).waitFor();
     const questions = page.getByRole('list', { name: 'Questions' });
     const line = page.getByPlaceholder("What don't you get? Write it down…");
     await line.fill('What does a foreign key point at?');

@@ -12,7 +12,7 @@ test.use({ reducedMotion: 'reduce' });
 async function openJournal(page) {
     await openStudentHome(page, makeStudentWithJournal());
     await page.goto('/journal');
-    await page.getByRole('heading', { name: 'Journal', exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Study record', exact: true }).waitFor();
     await page.waitForLoadState('load');
 }
 
@@ -22,7 +22,7 @@ async function openCorrectAttempt(page) {
     await page.waitForLoadState('load');
 }
 
-test('a student opens Journal, reads an attempt, and goes back', async ({ page }) => {
+test('a student opens the study record, reads an attempt, and goes back', async ({ page }) => {
     await page.setViewportSize(desktop);
     await openStudentHome(page, makeStudentWithJournal());
 
@@ -30,8 +30,8 @@ test('a student opens Journal, reads an attempt, and goes back', async ({ page }
     await page.locator('.app-sidebar').getByRole('link', { name: 'Settings' }).click();
     await page.waitForURL('**/settings');
     await page.getByRole('link', { name: 'Your data' }).click();
-    await page.getByRole('link', { name: 'Open the journal' }).click();
-    await page.getByRole('heading', { name: 'Journal', exact: true }).waitFor();
+    await page.getByRole('link', { name: 'Open your study record' }).click();
+    await page.getByRole('heading', { name: 'Study record', exact: true }).waitFor();
     await expect(page.locator('main').getByRole('listitem')).toHaveCount(5);
     await expect(page.locator('main').getByRole('listitem').first()).toContainText(/Attempt\s*Correct/);
 
@@ -39,7 +39,7 @@ test('a student opens Journal, reads an attempt, and goes back', async ({ page }
     await expect(page.getByText('LEFT JOIN orders')).toBeVisible();
     await expect(page.locator('.app-sidebar').getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
 
-    await page.getByRole('link', { name: 'Back to Journal' }).click();
+    await page.getByRole('link', { name: 'Back to Study record' }).click();
     await page.waitForURL('**/journal');
 });
 
