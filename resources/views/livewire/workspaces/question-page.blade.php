@@ -15,6 +15,7 @@
     <x-workspace.section-header :workspace="$workspace" :title="$new ? 'New question' : 'Question'" :back-href="$backUrl" :back-to="$backTo"
         :eyebrow="$workspace->name.($module ? ' · '.$module->title : '')">
         @unless ($new)
+            <x-ai-menu kind="question" :id="$questionId" :label="\Illuminate\Support\Str::limit($question, 60)" />
             <span @class(['question-status', "ws-colour-{$look[$status][1]}"])>
                 <x-icon :name="$look[$status][0]" class="size-4" />{{ Questions::STATUSES[$status] }}
             </span>

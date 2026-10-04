@@ -72,13 +72,18 @@ final class Stack
 
     /**
      * The helper's standing context: its short rules, the read-only tools beside them, and at most the module it is
-     * asked about (title, instructions, topics), nothing else. Another student's module is not found.
+     * asked about (title, instructions, topics) or the course's name, nothing else. Another student's module or course
+     * is not found.
      *
      * @param  list<array<string, mixed>>  $tools
      */
-    public function helper(Principal $by, ?string $moduleId, array $tools): Built
+    public function helper(Principal $by, ?string $moduleId, array $tools, ?string $workspaceId = null): Built
     {
         $facts = new Facts(courseName: '');
+        if ($moduleId === null && $workspaceId !== null) {
+            // Asked about the course as a whole: it knows the course's name, and looks the rest up.
+            $facts = new Facts(courseName: $this->workspaces->find($by, $workspaceId)->name);
+        }
         if ($moduleId !== null) {
             $module = $this->modules->find($by, $moduleId);
             $workspace = $this->workspaces->find($by, $module->workspaceId);
@@ -103,7 +108,8 @@ final class Stack
      */
     public function composeHelper(Facts $facts, array $tools): Built
     {
-        $layers = [0 => ['Rules', [[self::helperRules(), true]], self::HELPER_BUDGET], 4 => ['Module', $this->module($facts), self::BUDGETS[4]]];
+        $about = $facts->moduleTitle === null && $facts->courseName !== '' ? [["## The course: {$facts->courseName}", true]] : $this->module($facts);
+        $layers = [0 => ['Rules', [[self::helperRules(), true]], self::HELPER_BUDGET], 4 => ['Module', $about, self::BUDGETS[4]]];
         $report = [];
         $texts = [];
         foreach ($layers as $number => [$name, $lines, $budget]) {

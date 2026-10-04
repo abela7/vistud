@@ -156,6 +156,19 @@ export function turnOnCopyPaste(email) {
     execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
 }
 
+/**
+ * Sets up the AI for the student as one who has done it: a key, and the fake service's model for each role (the tutor, the
+ * reader and the helper), with consent. Needs the fake engine (tests/Browser/chat.spec.js starts it).
+ */
+export function turnOnAi(email, extra = {}) {
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
+        `app(\\App\\Engine\\Settings::class)->setKey($p, 'sk-or-browser-test-0000000000');`,
+        `app(\\App\\Engine\\Settings::class)->set($p, ${JSON.stringify({ tutor_model: 'fake/tutor', reader_model: 'fake/tutor', helper_model: 'fake/tutor', consent: true, ...extra }).replace(/^{/, '[').replace(/}$/, ']').replace(/"([a-z_]+)":/g, "'$1' => ").replace(/"/g, "'")});`,
+    ].join(' ');
+    execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
+}
+
 /** Opens the session page's ⋯ menu and chooses an item from it. */
 export async function fromSessionMenu(page, item) {
     await page.getByRole('button', { name: /^More for / }).click();

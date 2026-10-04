@@ -996,6 +996,7 @@ export async function mount(host) {
     const items = [...toolbar.querySelectorAll('[data-toolbar-scroll] button, [data-toolbar-scroll] select, .toolbar-more-button')];
     const blockStyle = toolbar.querySelector('[data-block-style]');
     const highlightMenu = host.querySelector('#note-highlight-menu');
+    const aiMenu = host.querySelector('#note-ai-menu');
     const alignMenu = host.querySelector('#note-align-menu');
     const calloutMenu = host.querySelector('#note-callout-menu');
     const mathMenu = host.querySelector('#note-math-menu');
@@ -1522,7 +1523,7 @@ export async function mount(host) {
     });
 
     // The menus (highlight colours, alignment, callouts, math, more tools) open under their button.
-    for (const menu of [highlightMenu, alignMenu, calloutMenu, mathMenu, moreToolsMenu].filter(Boolean)) {
+    for (const menu of [highlightMenu, aiMenu, alignMenu, calloutMenu, mathMenu, moreToolsMenu].filter(Boolean)) {
         const opener = toolbar.querySelector(`[data-menu-for="${menu.id}"]`);
         if (!opener) continue;
         menu.addEventListener('toggle', (event) => {
@@ -1626,6 +1627,40 @@ export async function mount(host) {
             }
         });
     }
+    // The AI menu: explain, shorten or fix the selected text. The helper's answer comes back as a proposal on the
+    // sheet (App\Livewire\Workspaces\AiAssist), and only when the student keeps it does it reach the note.
+    let aiSelection = null;
+    aiMenu?.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-ai]');
+        if (!item) return;
+        aiMenu.hidePopover();
+        const { from, to } = editor.state.selection;
+        const text = editor.state.doc.textBetween(from, to, '\n').trim();
+        if (lastFocused === 'title' || from === to || text === '') {
+            toast('Select some of the note\'s text first.', 'warning');
+            return;
+        }
+        aiSelection = { from, to, text: editor.state.doc.textBetween(from, to, '\n') };
+        window.Livewire?.dispatch('ai-assist', { action: `note.${item.dataset.ai}`, text });
+    });
+    window.addEventListener('ai-assist-keep', (event) => {
+        const { verb, text } = event.detail ?? {};
+        if (!aiSelection || !text || !['explain', 'shorten', 'fix'].includes(verb)) return;
+        const { from, to, text: asked } = aiSelection;
+        aiSelection = null;
+        // The words are where they were when it was asked, or nothing is changed.
+        if (to > editor.state.doc.content.size || editor.state.doc.textBetween(from, to, '\n') !== asked) {
+            toast('The note changed meanwhile, so nothing was replaced.', 'warning');
+            return;
+        }
+        const paragraphs = text.split(/\n{2,}/).map((part) => part.trim()).filter(Boolean);
+        if (verb === 'explain') {
+            const after = editor.state.doc.resolve(to).after(1);
+            editor.chain().focus().insertContentAt(after, [{ type: 'blockquote', content: paragraphs.map((part) => ({ type: 'paragraph', content: [{ type: 'text', text: part }] })) }]).run();
+        } else {
+            editor.chain().focus().insertContentAt({ from, to }, text.replace(/\n+/g, ' ')).run();
+        }
+    });
     highlightMenu.addEventListener('click', (event) => {
         const item = event.target.closest('[data-highlight]');
         if (!item) return;

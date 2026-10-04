@@ -28,6 +28,7 @@
                     <a href="{{ route('workspaces.folders.show', [$workspaceId, $folder->id]) }}" class="tile-link">{{ $folder->name }}</a>
                     <span class="item-meta">{{ $inside === 0 ? 'Empty' : ($inside === 1 ? '1 item' : $inside.' items') }}</span>
                 </span>
+                <x-ai-menu kind="folder" :id="$folder->id" :label="$folder->name" />
                 @include('livewire.workspaces.partials.row-menu', ['id' => $folder->id, 'label' => $folder->name, 'items' => [
                     ['Rename', 'pencil', "renameFolder('{$folder->id}')", false],
                     ['Move to…', 'folder-input', "moveFolder('{$folder->id}')", false],
@@ -53,6 +54,7 @@
                     <a href="{{ route('workspaces.notes.show', [$note->workspaceId, $note->id]) }}" class="tile-link">{{ $note->displayTitle() }}</a>
                     <span class="item-meta">Note · {{ Carbon::parse($note->updatedAt)->diffForHumans() }}</span>
                 </span>
+                <x-ai-menu kind="note" :id="$note->id" :label="$note->displayTitle()" />
                 @include('livewire.workspaces.partials.row-menu', ['id' => $note->id, 'label' => $note->displayTitle(), 'items' => [
                     ['Open in a new window', 'picture-in-picture-2', null, false, route('workspaces.notes.show', [$note->workspaceId, $note->id, 'window' => 1]), "vistud-note-{$note->id}"],
                     $note->isPinned() ? ['Unpin', 'pin-off', "unpinNote('{$note->id}')", false] : ['Pin to the corner', 'pin', "pinNote('{$note->id}')", false],
@@ -98,6 +100,9 @@
                         <span class="digest"><button type="button" class="digest-chip is-action" wire:click="readFile('{{ $file->id }}')" wire:loading.attr="aria-busy" wire:target="readFile('{{ $file->id }}')">Read now</button></span>
                     @endif
                 </span>
+                @if ($file->kind !== 'image')
+                    <x-ai-menu kind="file" :id="$file->id" :label="$file->fileName()" />
+                @endif
                 @include('livewire.workspaces.partials.row-menu', ['id' => $file->id, 'label' => $file->fileName(), 'items' => [
                     ['Download', 'download', null, false, route('files.content', [$file->id, 'download' => 1])],
                     ['Rename', 'pencil', "renameFile('{$file->id}')", false],

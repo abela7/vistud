@@ -53,7 +53,15 @@
             @endif
 
             @if ($area === 'student' && $isStudent)
-                <div class="ml-auto">
+                <div class="ml-auto flex items-center gap-1">
+                    @if ($workspace)
+                        {{-- A quick question about this course, to the helper: the button here, the sheet in the page (App\Livewire\Workspaces\Ask). --}}
+                        <button type="button" class="topbar-button ask-button" aria-haspopup="dialog" aria-controls="ask-sheet" x-data
+                            x-on:click="document.getElementById('ask-sheet')?.showModal(); document.getElementById('ask-text')?.focus()">
+                            <x-icon name="sparkles" class="size-5" />
+                            <span class="ask-label max-sm:sr-only">Ask</span>
+                        </button>
+                    @endif
                     <livewire:study.session-bar />
                 </div>
             @endif
@@ -120,6 +128,10 @@
                 @if ($area === 'student' && $isStudent)
                     {{-- The pinned notes' button in the corner, on every student page (`pinnedCurrent`: the note this page shows). --}}
                     <livewire:study.pinned-notes :current="$pinnedCurrent" />
+                    @if ($workspace)
+                        {{-- Ask's sheet: in the page, not the top bar, which re-points the text colours. --}}
+                        <livewire:workspaces.ask :workspace-id="$workspace->id" key="ask" />
+                    @endif
                 @endif
             </main>
         </div>

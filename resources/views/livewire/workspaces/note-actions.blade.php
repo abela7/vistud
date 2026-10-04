@@ -14,6 +14,7 @@
             $downloads = ['pdf' => ['Download as PDF', 'file-text'], 'docx' => ['Download as Word', 'file-type'], 'md' => ['Download as Markdown', 'file-code'], 'txt' => ['Download as text', 'file']];
             $items = array_map(fn ($format) => [$downloads[$format][0], $downloads[$format][1], null, false, route('workspaces.notes.export', [$note->workspaceId, $note->id, $format])], \App\Study\NoteExports::available());
         @endphp
+        <x-ai-menu kind="note" :id="$note->id" :label="$note->displayTitle()" />
         @include('livewire.workspaces.partials.row-menu', ['id' => 'note-'.$note->id, 'label' => $note->displayTitle(), 'items' => [
             ...$items,
             ['Move to trash', 'trash-2', 'trash', false],

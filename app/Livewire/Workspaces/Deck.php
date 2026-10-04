@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Workspaces;
 
+use App\Engine\Settings;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\BulkActions;
 use App\Livewire\Concerns\Notices;
@@ -21,7 +22,8 @@ use Livewire\Component;
  * due today, the cards by module (each with what's due and a review of its
  * own), a module's cards by topic with when each is next due, and the ways to
  * add cards (by hand, or with an AI). Writing and deleting happen in
- * App\Livewire\Workspaces\FlashcardEditor; making cards with an AI in
+ * App\Livewire\Workspaces\FlashcardEditor; making cards from a topic, a note or a file in the ✦ sheet
+ * (App\Livewire\Workspaces\AiAssist); making them with another AI by copy-paste, for those who use that, in
  * App\Livewire\Workspaces\CardMaker; reviewing on its own page.
  */
 final class Deck extends Component
@@ -45,10 +47,13 @@ final class Deck extends Component
 
     private Modules $modules;
 
+    private Settings $settings;
+
     private PrincipalFactory $principals;
 
-    public function boot(Flashcards $flashcards, Topics $topics, Modules $modules, PrincipalFactory $principals): void
+    public function boot(Flashcards $flashcards, Topics $topics, Modules $modules, Settings $settings, PrincipalFactory $principals): void
     {
+        $this->settings = $settings;
         $this->flashcards = $flashcards;
         $this->topics = $topics;
         $this->modules = $modules;
@@ -167,6 +172,8 @@ final class Deck extends Component
             'here' => $here,
             'counts' => $this->flashcards->counts($by, $this->workspaceId, $topicFilter, $moduleFilter),
             'today' => $this->flashcards->today($by),
+            // The old way, with another AI by copy-paste, only for those who turned it on.
+            'copyPaste' => $this->settings->get($by)->copyPasteAi,
         ]);
     }
 

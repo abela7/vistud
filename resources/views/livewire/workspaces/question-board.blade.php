@@ -140,6 +140,9 @@
                                         @endif
                                     </p>
                                     <div class="question-card-menu">
+                                        @if ($q->status !== 'answered')
+                                            <x-ai-menu kind="question" :id="$q->id" :label="Str::limit($q->text, 60)" />
+                                        @endif
                                         @include('livewire.workspaces.partials.row-menu', ['id' => 'q-'.$q->id, 'label' => Str::limit($q->text, 60), 'items' => array_values(array_filter([
                                             ['Open', 'pencil', null, false, $url],
                                             $q->status !== 'answered' ? ['Answered…', 'circle-check', null, false, route('workspaces.questions.show', [$workspaceId, $q->id, 'status' => 'answered'])] : null,
@@ -175,6 +178,9 @@
                                             <span class="question-answer">{{ Str::limit($q->answer, 160) }}</span>
                                         @endif
                                     </span>
+                                    @if ($q->status !== 'answered')
+                                        <x-ai-menu kind="question" :id="$q->id" :label="Str::limit($q->text, 60)" />
+                                    @endif
                                     @include('livewire.workspaces.partials.row-menu', ['id' => 'q-'.$q->id, 'label' => Str::limit($q->text, 60), 'items' => array_values(array_filter([
                                         ['Open', 'pencil', null, false, $url],
                                         $q->status !== 'answered' ? ['Answered…', 'circle-check', null, false, route('workspaces.questions.show', [$workspaceId, $q->id, 'status' => 'answered'])] : null,

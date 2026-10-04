@@ -14,6 +14,7 @@ use App\Study\Topics;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -93,6 +94,21 @@ final class QuestionPage extends Component
         $topic = collect($this->topics->list($by, $workspaceId))->firstWhere('id', $aboutTopic);
         $module = collect($this->modules->list($by, $workspaceId))->firstWhere('id', $inModule ?? $topic?->moduleId);
         [$this->topicId, $this->moduleId] = [$topic?->id ?? '', $module?->id ?? ''];
+    }
+
+    /** The question was changed by a ✦ job (clarified, split, answered from the notes): show it as it is now. */
+    #[On('questions-changed')]
+    public function reloadQuestion(): void
+    {
+        if ($this->questionId === null) {
+            return;
+        }
+        try {
+            $asked = $this->questions->find($this->principal(), $this->questionId);
+        } catch (NotFound) {
+            return;
+        }
+        [$this->question, $this->status, $this->answer] = [$asked->text, $asked->status, (string) $asked->answer];
     }
 
     public function save(): void

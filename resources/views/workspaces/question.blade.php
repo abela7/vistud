@@ -15,4 +15,5 @@
         :about-topic="$topic ?? null"
         :from="$from"
         :with-status="$status ?? null" />
+    <livewire:workspaces.ai-assist :workspace-id="$workspace->id" key="ai-assist" />
 </x-layouts.app>

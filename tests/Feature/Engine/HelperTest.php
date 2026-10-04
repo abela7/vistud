@@ -117,6 +117,30 @@ class HelperTest extends TestCase
         $this->assertSame(['done', 'module', $this->week2, $this->workspace, 4_000, 200], [$job->status, $job->target_type, $job->target_id, $job->workspace_id, (int) $job->cost_micros, (int) $job->tokens_in]);
     }
 
+    public function test_asked_about_the_course_as_a_whole_it_knows_the_course_and_looks_things_up(): void
+    {
+        $this->engine->will(
+            Fake::calls('topics', [], 'call_1'),
+            Fake::says('Joins, in Week 2.', 2_000, 'fake/quick'),
+        );
+
+        $answer = $this->helper()->quick($this->by, 'What did I find hard?', '', null, $this->workspace);
+
+        $this->assertSame('Joins, in Week 2.', $answer);
+        [$first] = $this->engine->requests;
+        $this->assertSame(Helper::TOOLS, array_map(fn (array $t) => $t['function']['name'], $first->tools));
+        $this->assertStringContainsString('## The course: Databases', $first->system);
+        $this->assertStringNotContainsString('## The module', $first->system);
+        [$job] = $this->jobs();
+        $this->assertSame(['done', $this->workspace, null], [$job->status, $job->workspace_id, $job->target_id]);
+
+        // Another student's course is not found, and nothing is sent.
+        $bob = $this->principal($this->student());
+        $theirs = app(Workspaces::class)->create($bob, ['name' => 'Private'])->id;
+        $this->assertThrows(fn () => $this->helper()->quick($this->by, 'What is in it?', '', null, $theirs), NotFound::class);
+        $this->assertCount(2, $this->engine->requests);
+    }
+
     public function test_a_tool_that_changes_something_is_not_the_helpers_to_run(): void
     {
         $this->engine->will(

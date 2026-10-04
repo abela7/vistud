@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithCards, makeStudentWithModuleCards, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithCards, makeStudentWithModuleCards, openStudentHome, THEMES, turnOnCopyPaste, useSentinelTheme, useTheme } from './support.js';
 
 /* Flashcards: the deck, writing cards, making them with an AI, and reviewing (docs/specs/study-memory.md §4.5). */
 
@@ -17,8 +17,11 @@ const REPLY = `Here are your cards:
 test.use({ reducedMotion: 'reduce' });
 test.describe.configure({ timeout: 60_000 });
 
-async function openDeck(page) {
+async function openDeck(page, { copyPaste = false } = {}) {
     const student = makeStudentWithCards();
+    if (copyPaste) {
+        turnOnCopyPaste(student.email);
+    }
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}/flashcards`);
     await page.getByRole('heading', { level: 1, name: 'Flashcards' }).waitFor();
@@ -86,12 +89,12 @@ test('cards are written one after another, and a round is reviewed with the keyb
     await expect(page.getByRole('link', { name: 'Practise anyway' })).toBeVisible();
 });
 
-test('cards are made with an AI: copy the prompt, paste the reply, keep the new ones', async ({ page }) => {
+test('cards are made with another AI by copy-paste, for those who use one: copy the prompt, paste the reply, keep the new ones', async ({ page }) => {
     await page.setViewportSize(desktop);
-    await openDeck(page);
+    await openDeck(page, { copyPaste: true });
     await page.getByLabel('Topic', { exact: true }).selectOption({ label: 'Joins (3)' });
     await expect(page.getByRole('heading', { name: '3 cards to review today in Joins' })).toBeVisible();
-    await page.getByRole('button', { name: 'Make cards with an AI' }).click();
+    await page.getByRole('button', { name: 'Make cards with another AI' }).click();
     const maker = page.locator('#card-maker-dialog');
     await expect(maker.getByLabel('About')).toHaveValue(/.+/);
     const prompt = maker.getByLabel('The prompt', { exact: true });
@@ -123,9 +126,9 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await page.locator('#flashcard-dialog').getByLabel('Front').waitFor();
         states.editor = await foreignColours(page);
         await page.keyboard.press('Escape');
-        await page.getByRole('button', { name: 'Make cards with an AI' }).click();
-        await page.locator('#card-maker-dialog').getByLabel('The prompt', { exact: true }).waitFor();
-        states.maker = await foreignColours(page);
+        await page.getByRole('button', { name: 'Make cards from…' }).click();
+        await page.locator('#ai-sheet').getByLabel('How many').waitFor();
+        states['make cards from'] = await foreignColours(page);
 
         await page.goto(`/workspaces/${student.workspace}/flashcards/review`);
         await page.getByText('Card 1 of 4').waitFor();
@@ -150,9 +153,9 @@ for (const theme of THEMES) {
         await page.locator('#flashcard-dialog').getByLabel('Front').waitFor();
         expect(await analyse(page), 'editor').toEqual([]);
         await page.keyboard.press('Escape');
-        await page.getByRole('button', { name: 'Make cards with an AI' }).click();
-        await page.locator('#card-maker-dialog').getByLabel('The prompt', { exact: true }).waitFor();
-        expect(await analyse(page), 'maker').toEqual([]);
+        await page.getByRole('button', { name: 'Make cards from…' }).click();
+        await page.locator('#ai-sheet').getByLabel('How many').waitFor();
+        expect(await analyse(page), 'make cards from').toEqual([]);
 
         await page.goto(`/workspaces/${student.workspace}/flashcards/review`);
         await page.getByText('Card 1 of 4').waitFor();

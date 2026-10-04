@@ -3,5 +3,6 @@
     <div class="mx-auto max-w-6xl">
         <livewire:workspaces.contents :workspace-id="$workspace->id" :view="$view" :place-id="$placeId" />
         <livewire:workspaces.study-time :workspace-id="$workspace->id" />
+        <livewire:workspaces.ai-assist :workspace-id="$workspace->id" key="ai-assist" />
     </div>
 </x-layouts.app>

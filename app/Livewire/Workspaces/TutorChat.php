@@ -108,6 +108,11 @@ final class TutorChat extends Component
         // module page, or `?ask=`): the tutor asks nothing before they do.
         $ask = request()->query('ask');
         $ask = in_array($ask, ['quiz', 'test'], true) ? $ask : (in_array($session->mode, ['quiz', 'test'], true) && $this->chat->transcript($by, $sessionId) === [] ? $session->mode : null);
+        // A question taken to the tutor (✦ on a question): free mode, with the question waiting in the box.
+        $say = trim((string) request()->query('say'));
+        if ($session->isOpen() && request()->query('ask') === 'free' && $session->mode === 'free' && $say !== '' && $this->chat->transcript($by, $sessionId) === []) {
+            $this->text = mb_substr($say, 0, 500);
+        }
         if ($session->isOpen() && $ask !== null) {
             $this->text = $ask === 'quiz'
                 ? ($this->quizzes($by, $session)[0]['text'] ?? 'Quiz me on what I find hardest in this course.')

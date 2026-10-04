@@ -8,5 +8,6 @@
         <x-page :title="$module->title" :back-href="route('workspaces.show', [$workspace->id, 'modules'])" back-to="Modules" :eyebrow="$workspace->name" />
         <x-module.tabs :workspace-id="$workspace->id" :module-id="$module->id" current="questions" :counts="$counts" />
         <livewire:workspaces.question-board :workspace-id="$workspace->id" :module-id="$module->id" :page="true" />
+        <livewire:workspaces.ai-assist :workspace-id="$workspace->id" key="ai-assist" />
     </div>
 </x-layouts.app>

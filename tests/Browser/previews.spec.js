@@ -824,8 +824,9 @@ test('save from the chat: paste, review, and the session afterwards', async ({ p
     await page.screenshot({ path: out('capture-desktop-vistud-light-saved'), fullPage: true });
 });
 
-test('flashcards: the deck, writing a card, making cards with an AI, and a round of review', async ({ page }) => {
+test('flashcards: the deck, writing a card, the ✦ menu, making cards from…, Ask, copy-paste, and a round of review', async ({ page }) => {
     const student = makeStudentWithCards();
+    turnOnCopyPaste(student.email);
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}/flashcards`);
@@ -848,7 +849,24 @@ test('flashcards: the deck, writing a card, making cards with an AI, and a round
     await editor.getByLabel('Topic').selectOption({ label: 'Joins' });
     await page.screenshot({ path: out('flashcards-desktop-vistud-light-new') });
     await page.keyboard.press('Escape');
-    await page.getByRole('button', { name: 'Make cards with an AI' }).click();
+    // The ✦ menu on a card, the sheet that asks what to make cards from, and Ask.
+    const first = page.locator('.card-row').first();
+    await first.getByRole('button', { name: /^AI help with/ }).click();
+    await page.screenshot({ path: out('flashcards-desktop-vistud-light-ai-menu') });
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Make cards from…' }).click();
+    await page.locator('#ai-sheet').getByLabel('How many').waitFor();
+    await page.screenshot({ path: out('flashcards-desktop-vistud-light-make-cards') });
+    await page.keyboard.press('Escape');
+    for (const [size, viewport] of Object.entries(sizes)) {
+        await page.setViewportSize(viewport);
+        await page.locator('.app-topbar').getByRole('button', { name: 'Ask', exact: true }).click();
+        await page.locator('#ask-sheet').getByLabel('Your question', { exact: true }).waitFor();
+        await page.screenshot({ path: out(`ask-${size}-vistud-light`) });
+        await page.keyboard.press('Escape');
+    }
+    await page.setViewportSize(sizes.desktop);
+    await page.getByRole('button', { name: 'Make cards with another AI' }).click();
     await page.locator('#card-maker-dialog').getByLabel('About').selectOption({ label: 'Joins' });
     await page.locator('#card-maker-dialog').getByLabel('The prompt', { exact: true }).filter({ hasText: 'about Joins' }).waitFor();
     await page.screenshot({ path: out('flashcards-desktop-vistud-light-ai') });

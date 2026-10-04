@@ -20,6 +20,7 @@
             @if ($topic)
                 <div class="modal-head">
                     <h2 id="topic-sheet-title" class="min-w-0 flex-1 text-lg font-semibold break-words">{{ $topic->name }}</h2>
+                    <x-ai-menu kind="topic" :id="$topic->id" :label="$topic->name" />
                     <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()"><x-icon name="x" /></button>
                 </div>
                 <div class="space-y-5 px-5 pt-2">

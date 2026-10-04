@@ -26,23 +26,29 @@
     }
     $groups = [...array_map(fn ($t) => [$t->id, $t->name], $topics), ['', 'No topic']];
     $newCard = \Illuminate\Support\Js::from(['topicId' => $chosen, 'moduleId' => $chosenModule]);
+    $makeCards = \Illuminate\Support\Js::from(['action' => 'cards.pick', 'id' => $chosen ? 'topic' : '', 'text' => (string) $chosen]);
 @endphp
 <div class="space-y-6" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     <div role="status" aria-live="polite" class="empty:hidden">
         <x-toast :message="$notice" />
     </div>
 
-    <livewire:workspaces.card-maker :workspace-id="$workspaceId" />
+    @if ($copyPaste)
+        <livewire:workspaces.card-maker :workspace-id="$workspaceId" />
+    @endif
 
     @if ($all['total'] === 0)
         <section class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border-strong px-6 py-12 text-center">
             <span class="ws-chip size-14"><x-icon name="gallery-vertical-end" class="size-6" /></span>
             <h2 class="text-lg font-semibold">No flashcards yet</h2>
             <p class="max-w-md text-fg-muted">A card asks one thing on the front, like “What does a LEFT JOIN keep?”, and answers it on the back. You review each one a day later, then a few days later, then weeks later: the ones you know come back less, the ones you miss come back sooner.</p>
-            <p class="max-w-md text-fg-muted">Write your own, have an AI make them from your notes, or save the ones the tutor makes in a study session.</p>
+            <p class="max-w-md text-fg-muted">Write your own, make them from a note, a file or a topic, or save the ones the tutor makes in a study session.</p>
             <div class="flex flex-wrap justify-center gap-2">
                 <x-button icon="plus" x-data x-on:click="Livewire.dispatch('flashcard-new')">Write a card</x-button>
-                <x-button variant="primary" icon="wand-sparkles" x-data x-on:click="Livewire.dispatch('card-maker-open')">Make cards with an AI</x-button>
+                <x-button variant="primary" icon="wand-sparkles" x-data x-on:click="Livewire.dispatch('ai-assist', {{ $makeCards }})">Make cards from…</x-button>
+                @if ($copyPaste)
+                    <x-button x-data x-on:click="Livewire.dispatch('card-maker-open')">Make cards with another AI</x-button>
+                @endif
             </div>
         </section>
     @else
@@ -111,7 +117,10 @@
                     </button>
                 @endif
                 <x-button icon="plus" x-data x-on:click="Livewire.dispatch('flashcard-new', {{ $newCard }})">New card</x-button>
-                <x-button icon="wand-sparkles" x-data x-on:click="Livewire.dispatch('card-maker-open', {{ $newCard }})">Make cards with an AI</x-button>
+                <x-button icon="wand-sparkles" x-data x-on:click="Livewire.dispatch('ai-assist', {{ $makeCards }})">Make cards from…</x-button>
+                @if ($copyPaste)
+                    <x-button x-data x-on:click="Livewire.dispatch('card-maker-open', {{ $newCard }})">Make cards with another AI</x-button>
+                @endif
             </div>
         </div>
 
@@ -196,6 +205,7 @@
                                             @endif
                                         </p>
                                     </div>
+                                    <x-ai-menu kind="card" :id="$card->id" :label="\Illuminate\Support\Str::limit($card->front, 60)" />
                                     @include('livewire.workspaces.partials.row-menu', ['id' => 'card-'.$card->id, 'label' => \Illuminate\Support\Str::limit($card->front, 60), 'items' => [
                                         ['Edit', 'pencil', "editCard('{$card->id}')", false],
                                         ['Delete', 'trash-2', "deleteCard('{$card->id}')", false],

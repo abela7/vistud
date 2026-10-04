@@ -92,6 +92,27 @@ final class Runner
     }
 
     /**
+     * Runs a job now, in this request, as one recorded run (Read now on a file, from a screen that wants it done). Whatever
+     * goes wrong is thrown, after the row has said so; a job that skips itself ends as skipped and returns null.
+     *
+     * @throws AppError when the run isn't set up, is over the limit, or the job fails with one
+     */
+    public function now(Principal $by, Job $job): void
+    {
+        $this->run($by, $job->role(), $job->kind(), $job->workspaceId, $job->targetType, $job->targetId, fn (Run $run) => $job->handle($by, $run));
+    }
+
+    /**
+     * Runs a job the student waits for, now, and returns what it came to.
+     *
+     * @throws AppError when the run isn't set up, is over the limit, or the job fails with one
+     */
+    public function answer(Principal $by, Answering $job): mixed
+    {
+        return $this->run($by, $job->role(), $job->kind(), $job->workspaceId, $job->targetType, $job->targetId, fn (Run $run) => $job->answer($by, $run));
+    }
+
+    /**
      * What a run came to, for a screen that waits for it.
      *
      * @return array{id: string, kind: string, status: string, error_code: ?string, model: ?string, attempts: int, cost_micros: int}

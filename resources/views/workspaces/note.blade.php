@@ -215,6 +215,11 @@
                         <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-highlight-menu" popovertarget="note-highlight-menu" title="Highlight" aria-label="Highlight" aria-haspopup="menu" tabindex="-1">
                             <x-icon name="highlighter" class="size-5" /><x-icon name="chevron-down" class="size-3" />
                         </button>
+                        @unless ($window)
+                            <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-ai-menu" popovertarget="note-ai-menu" title="Ask the AI about the selected text" aria-label="AI help with the selection" aria-haspopup="menu" tabindex="-1">
+                                <x-icon name="sparkles" class="size-5" /><x-icon name="chevron-down" class="size-3" />
+                            </button>
+                        @endunless
                         @foreach ($scripts as [$command, $icon, $label, $toggle])
                             <button type="button" class="toolbar-button" data-command="{{ $command }}" title="{{ $label }}" aria-label="{{ $label }}" tabindex="-1" aria-pressed="false"><x-icon :name="$icon" class="size-5" /></button>
                         @endforeach
@@ -267,6 +272,13 @@
                         <x-icon name="x" class="size-4" />No highlight
                     </button>
                 </div>
+                @unless ($window)
+                    <div id="note-ai-menu" class="toolbar-menu" popover role="menu" aria-label="AI help with the selection">
+                        @foreach ([['explain', 'message-square-text', 'Explain'], ['shorten', 'minus', 'Shorten'], ['fix', 'check', 'Fix the text']] as [$verb, $icon, $word])
+                            <button type="button" class="toolbar-menu-item" role="menuitem" data-ai="{{ $verb }}"><x-icon :name="$icon" class="size-4" />{{ $word }}</button>
+                        @endforeach
+                    </div>
+                @endunless
                 <div id="note-align-menu" class="toolbar-menu" popover role="menu" aria-label="Align">
                     @foreach ($aligns as $value => [$icon, $word])
                         <button type="button" class="toolbar-menu-item" role="menuitemradio" aria-checked="{{ $value === 'left' ? 'true' : 'false' }}" data-align="{{ $value }}">
@@ -678,4 +690,7 @@
             </article>
         @endif
     </div>
+    @unless ($window)
+        <livewire:workspaces.ai-assist :workspace-id="$workspace->id" key="ai-assist" />
+    @endunless
 </x-dynamic-component>

@@ -203,5 +203,9 @@
         @endif
     </div>
 
+    @if (in_array($section, ['modules', 'notes', 'flashcards', 'progress'], true))
+        <livewire:workspaces.ai-assist :workspace-id="$workspace->id" key="ai-assist" />
+    @endif
+
     <livewire:workspaces.form :workspace-id="$workspace->id" />
 </x-layouts.app>

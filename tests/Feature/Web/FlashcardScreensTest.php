@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Web;
 
+use App\Engine\Settings;
 use App\Livewire\Workspaces\CardMaker;
 use App\Livewire\Workspaces\Deck;
 use App\Livewire\Workspaces\FlashcardEditor;
@@ -49,7 +50,7 @@ class FlashcardScreensTest extends TestCase
     public function test_the_section_starts_empty_and_then_shows_whats_due_by_topic(): void
     {
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->databases->id, 'flashcards']))
-            ->assertOk()->assertSee('No flashcards yet')->assertSee('Make cards with an AI')->assertSee('Cards');
+            ->assertOk()->assertSee('No flashcards yet')->assertSee('Make cards from…')->assertDontSee('another AI')->assertSee('Cards');
 
         $this->card($this->joins->id, 'What does a LEFT JOIN keep?', 'Every left row.');
         $this->card($this->keys->id, 'What is a primary key?', 'A column that names each row.');
@@ -120,6 +121,17 @@ class FlashcardScreensTest extends TestCase
 
         $fronts = array_map(fn ($c) => [$c->front, $c->author], app(Flashcards::class)->list($this->principal($this->ada), $this->databases->id, $this->joins->id));
         $this->assertSame([['When is a RIGHT JOIN useful?', 'ai'], ['What does a LEFT JOIN keep?', 'student']], $fronts);
+    }
+
+    public function test_the_deck_makes_cards_from_a_topic_a_note_or_a_file_and_keeps_the_copy_paste_way_for_those_who_use_it(): void
+    {
+        $this->card($this->joins->id, 'What does a LEFT JOIN keep?', 'Every left row.');
+        $deck = route('workspaces.show', [$this->databases->id, 'flashcards']);
+
+        // The sheet's button, and not the prompt to copy into another AI, unless the student said they use one.
+        $this->actingAs($this->ada)->get($deck)->assertOk()->assertSee('Make cards from…')->assertDontSee('Make cards with another AI')->assertDontSeeLivewire(CardMaker::class);
+        app(Settings::class)->set($this->principal($this->ada), ['copy_paste_ai' => true]);
+        $this->actingAs($this->ada)->get($deck)->assertOk()->assertSee('Make cards from…')->assertSee('Make cards with another AI')->assertSeeLivewire(CardMaker::class);
     }
 
     public function test_a_round_of_review_turns_cards_over_brings_missed_ones_back_and_ends_with_a_summary(): void

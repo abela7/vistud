@@ -33,6 +33,41 @@ foreach (array_reverse($messages) as $message) {
         break;
     }
 }
+// The helper's and the reader's jobs (tests/Browser/helper.spec.js): one plain answer each, never streamed.
+$system = (string) (($messages[0]['role'] ?? '') === 'system' ? ($messages[0]['content'] ?? '') : '');
+$quick = null;
+if (str_contains($system, "You make flashcards from a student's material")) {
+    $quick = json_encode(['cards' => [
+        ['front' => 'What does the scheduler decide?', 'back' => 'Which process runs next.'],
+        ['front' => 'What is round robin?', 'back' => 'Each process gets a quantum in turn.', 'topic' => 'Scheduling'],
+    ]]);
+} elseif (str_contains($system, 'You write study notes from one file')) {
+    $quick = "## Scheduling\n\n- The **scheduler** picks the next process.";
+} elseif (str_contains($system, "You answer a student's question from their own notes")) {
+    $quick = json_encode(['found' => true, 'answer' => 'The fixed slice of CPU time a process gets.', 'from' => ['Lecture 3 notes']]);
+} elseif (str_contains($system, "You read one file of a student's course")) {
+    $quick = json_encode(['summary' => 'How the CPU picks the next process.', 'outline' => [['page' => 1, 'heading' => 'Scheduling']], 'topics' => ['Round robin', 'Priority scheduling'], 'language' => 'English']);
+} elseif (str_contains($system, "ViStud's quick helper")) {
+    $quick = match (true) {
+        str_contains($asked, 'Improve this flashcard') => "Front: What does a LEFT JOIN keep?\nBack: Every row of the left table, matched or not.",
+        str_contains($asked, 'flashcard shorter') => "Front: LEFT JOIN keeps?\nBack: The left rows.",
+        str_contains($asked, 'Fix the wording of this flashcard') => "Front: What does a LEFT JOIN keep?\nBack: Every row of the left table.",
+        str_contains($asked, 'two more flashcards') => "Front: What does a RIGHT JOIN keep?\nBack: Every row of the right table.\n\nFront: What does a CROSS JOIN make?\nBack: Every pair of rows.",
+        str_contains($asked, 'Rewrite this question') => 'Why does a left join keep the unmatched rows?',
+        str_contains($asked, 'asks more than one thing') => "Why does a left join keep unmatched rows?\nWhat does a right join keep?",
+        str_contains($asked, 'Shorten this text') => 'Four conditions cause a deadlock.',
+        str_contains($asked, 'Explain this simply') => 'A deadlock is when processes wait on each other for ever.',
+        str_contains($asked, 'Fix the spelling') => 'Deadlock needs four conditions.',
+        str_contains($asked, 'Say which module each') => 'Lecture 3.txt → Week 3: CPU scheduling',
+        default => 'You found Deadlocks hard, and Joins confusing.',
+    };
+}
+if ($quick !== null) {
+    header('Content-Type: application/json');
+    echo json_encode(['model' => 'fake/tutor', 'choices' => [['message' => ['content' => $quick], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 10, 'cost' => 0.0001]]);
+
+    return;
+}
 $words = ['A ', 'left ', 'join ', 'keeps ', 'every ', 'row ', 'of ', 'the ', '**left** ', 'table.'];
 // Acting in the course: "make cards" saves two cards, "jot" writes in the study note, "mark it" sets the topic's status; each answers after its tool ran.
 $acts = ['mark it' => ['set_topic_status', ['status' => 'understood', 'reason' => 'Two right answers in a row.']], 'make cards' => ['make_flashcards', ['cards' => [['front' => 'What is an OS?', 'back' => 'The layer between hardware and apps.'], ['front' => 'What is a kernel?', 'back' => 'The core of the OS.']]]], 'jot more' => ['write_note', ['text' => '- System calls ask the kernel for help.']], 'jot' => ['write_note', ['text' => "## Kernels\n\n- The kernel is the core of the OS."]]];

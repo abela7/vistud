@@ -3,7 +3,8 @@ import AxeBuilder from '@axe-core/playwright';
 import { spawn, execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { makeStudentWithSession, openStudentHome } from './support.js';
+import { foreignColours, makeStudentWithCards, makeStudentWithModulePage, makeStudentWithNote, makeStudentWithTopics, openStudentHome, THEMES, turnOnAi, useSentinelTheme, useTheme } from './support.js';
+import { makeStudentWithSession } from './support.js';
 
 /*
  * The tutor's chat on a session page, against a fake service that streams its answer slowly
@@ -298,7 +299,7 @@ test('the chips ask the tutor, and the + menu holds a question, a card and a not
     await menu.getByRole('button', { name: 'Ask a question' }).click();
     const panel = page.locator('#session-dialog');
     await expect(panel.getByRole('heading', { name: 'Ask a question' })).toBeVisible();
-    await panel.getByLabel('Your question').fill('Why does a left join keep unmatched rows?');
+    await panel.getByLabel('Your question', { exact: true }).fill('Why does a left join keep unmatched rows?');
     await panel.getByRole('button', { name: 'Keep question' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'The question is kept.' })).toBeVisible();
     await expect(panel).not.toBeVisible();
@@ -372,4 +373,196 @@ test('on a phone the rail is a sheet from the topic, and the box stays in view',
 async function analyseChat(page) {
     return (await new AxeBuilder({ page }).include('.chat').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
         .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
+}
+
+
+/*
+ * The helper everywhere (docs/specs/vistud-2-blueprint.md §3.6.5): the ✦ menus on a card, a question, a selection of a note and a
+ * file, and Ask in the top bar. They live in this file because it owns the fake service: one at a time may point the app at it.
+ */
+
+const ai = async (page, student, path, viewport = { width: 1440, height: 900 }) => {
+    turnOnAi(student.email);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize(viewport);
+    await openStudentHome(page, student.email);
+    await page.goto(path);
+    await page.waitForLoadState('load');
+};
+const sheet = (page) => page.locator('#ai-sheet');
+const analyseSheet = async (page) => (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
+    .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
+const cardRow = (page, front) => page.locator('.card-row').filter({ hasText: front });
+
+test('helper: a card\'s ✦ shows it before and after, and Keep changes the card', async ({ page }) => {
+    const student = makeStudentWithCards();
+    await ai(page, student, `/workspaces/${student.workspace}/flashcards`);
+    const row = cardRow(page, 'What does a LEFT JOIN keep?');
+    await row.getByRole('button', { name: /^AI help with/ }).click();
+    await row.getByRole('button', { name: 'Improve', exact: true }).click();
+
+    await expect(sheet(page).getByRole('heading', { name: 'Improve this card' })).toBeVisible();
+    await expect(sheet(page).getByRole('heading', { name: 'After' })).toBeVisible({ timeout: 15_000 });
+    await expect(sheet(page).getByRole('region', { name: 'After' })).toContainText('matched or not');
+    await expect(sheet(page).getByRole('region', { name: 'Before' })).toContainText('with NULLs where the right table has no match');
+    // Nothing is changed until it is kept.
+    await expect(cardRow(page, 'with NULLs where the right table has no match')).toHaveCount(1);
+    await sheet(page).getByRole('button', { name: 'Keep', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'The card is changed.' })).toBeVisible();
+    await expect(cardRow(page, 'Every row of the left table, matched or not.')).toHaveCount(1);
+});
+
+test('helper: discarding leaves the card, and two more like this are added as the AI\'s', async ({ page }) => {
+    const student = makeStudentWithCards();
+    await ai(page, student, `/workspaces/${student.workspace}/flashcards`);
+    const row = cardRow(page, 'What does an INNER JOIN keep?');
+    await row.getByRole('button', { name: /^AI help with/ }).click();
+    await row.getByRole('button', { name: 'Shorter', exact: true }).click();
+    await sheet(page).getByRole('heading', { name: 'After' }).waitFor({ timeout: 15_000 });
+    await sheet(page).getByRole('button', { name: 'Discard' }).click();
+    await expect(cardRow(page, 'Only the rows that match on both sides.')).toHaveCount(1);
+
+    await row.getByRole('button', { name: /^AI help with/ }).click();
+    await row.getByRole('button', { name: 'Two more like this' }).click();
+    await expect(sheet(page).getByRole('button', { name: 'Add 2 cards' })).toBeVisible({ timeout: 15_000 });
+    await sheet(page).getByRole('button', { name: 'Add 2 cards' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Added 2 cards.' })).toBeVisible();
+    await expect(cardRow(page, 'What does a RIGHT JOIN keep?')).toContainText('Made with an AI');
+    await expect(page.locator('.card-row')).toHaveCount(7);
+});
+
+test('helper: Make cards from… asks what from, shows the cards ticked, and adds only the ones kept', async ({ page }) => {
+    const student = makeStudentWithCards();
+    await ai(page, student, `/workspaces/${student.workspace}/flashcards`);
+    await page.getByRole('button', { name: 'Make cards from…' }).click();
+    await expect(sheet(page).getByRole('heading', { name: 'Make cards from…' })).toBeVisible();
+    await sheet(page).getByRole('button', { name: 'Make cards' }).click();
+    await expect(sheet(page)).toContainText('Choose what to make cards from.');
+    await sheet(page).getByLabel('Topic', { exact: true }).selectOption({ label: 'Joins' });
+    await sheet(page).getByLabel('How many').selectOption('5');
+    await sheet(page).getByRole('button', { name: 'Make cards' }).click();
+
+    await expect(sheet(page).getByRole('button', { name: 'Add 2 cards' })).toBeVisible({ timeout: 15_000 });
+    await sheet(page).getByRole('checkbox', { name: 'Add card 2' }).uncheck();
+    await expect(sheet(page).getByRole('button', { name: 'Add 1 card' })).toBeVisible();
+    await sheet(page).getByRole('button', { name: 'Add 1 card' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Added 1 card.' })).toBeVisible();
+    await expect(cardRow(page, 'What does the scheduler decide?')).toContainText('Made with an AI');
+    await expect(cardRow(page, 'What is round robin?')).toHaveCount(0);
+});
+
+test('helper: a question is clarified on its page, and Keep puts the clearer words in the box', async ({ page }) => {
+    const student = makeStudentWithTopics();
+    await ai(page, student, `/workspaces/${student.workspace}/progress`);
+    await page.getByRole('link', { name: 'Why does a left join keep the unmatched rows?' }).first().click();
+    await page.getByRole('heading', { level: 1, name: 'Question' }).waitFor();
+    await page.waitForLoadState('load');
+    await page.getByRole('button', { name: /^AI help with/ }).click();
+    await page.getByRole('button', { name: 'Clarify', exact: true }).click();
+    await expect(sheet(page).getByRole('heading', { name: 'Clarify the question' })).toBeVisible();
+    await expect(sheet(page).getByRole('region', { name: 'After' })).toContainText('Why does a left join keep the unmatched rows?', { timeout: 15_000 });
+    await sheet(page).getByRole('button', { name: 'Use this' }).click();
+    await expect(page.getByLabel("What don't you get?")).toHaveValue('Why does a left join keep the unmatched rows?');
+});
+
+test('helper: a file is read for its summary, makes a note, and makes cards, from its ✦', async ({ page }) => {
+    const student = makeStudentWithModulePage();
+    await ai(page, student, `${student.module}?tab=files`);
+    const row = page.locator('.item-row').filter({ hasText: 'Lecture 3.txt' });
+    await row.getByRole('button', { name: /^AI help with/ }).click();
+    await row.getByRole('button', { name: 'Summarise', exact: true }).click();
+    await expect(sheet(page)).toContainText('Scheduling policies and their trade-offs.', { timeout: 15_000 });
+    await sheet(page).getByRole('button', { name: 'Close', exact: true }).last().click();
+
+    await row.getByRole('button', { name: /^AI help with/ }).click();
+    await row.getByRole('button', { name: 'Make cards from it' }).click();
+    await expect(sheet(page).getByRole('button', { name: 'Add 2 cards' })).toBeVisible({ timeout: 15_000 });
+    await expect(sheet(page).getByLabel('Front of card 1')).toHaveValue('What does the scheduler decide?');
+    await sheet(page).getByRole('button', { name: 'Add 2 cards' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Added 2 cards.' })).toBeVisible();
+
+    await row.getByRole('button', { name: /^AI help with/ }).click();
+    await row.getByRole('button', { name: 'Make a note from it' }).click();
+    await expect(sheet(page)).toContainText('Notes · Lecture 3', { timeout: 15_000 });
+    await sheet(page).getByRole('link', { name: 'Open it' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Notes · Lecture 3' }).waitFor();
+});
+
+test('helper: a selection of a note is shortened, and only Keep puts it in the note', async ({ page }) => {
+    const note = makeStudentWithNote();
+    await ai(page, note, note.url);
+    const editor = page.locator('.ProseMirror').first();
+    await editor.waitFor();
+    await editor.click();
+    await editor.press('Control+A');
+    await page.getByRole('button', { name: 'AI help with the selection' }).click();
+    await page.getByRole('menuitem', { name: 'Shorten' }).click();
+    await expect(sheet(page).getByRole('heading', { name: 'Shorten this' })).toBeVisible();
+    await expect(sheet(page).getByRole('button', { name: 'Replace the text' })).toBeVisible({ timeout: 15_000 });
+    await expect(editor).toContainText('Mitosis');
+    await sheet(page).getByRole('button', { name: 'Replace the text' }).click();
+    await expect(editor).toContainText('Four conditions cause a deadlock.');
+    await expect(editor).not.toContainText('Mitosis');
+});
+
+test('helper: Ask answers a quick question about the course on a phone, and the way to the tutor is one line away', async ({ page }) => {
+    const student = makeStudentWithTopics();
+    await ai(page, student, `/workspaces/${student.workspace}`, { width: 390, height: 844 });
+    await page.locator('.app-topbar').getByRole('button', { name: 'Ask', exact: true }).click();
+    const ask = page.locator('#ask-sheet');
+    await expect(ask.getByRole('heading', { name: 'Ask' })).toBeVisible();
+    await expect(ask.getByLabel('Your question', { exact: true })).toBeFocused();
+    await ask.getByLabel('Your question', { exact: true }).fill('What did I find hard?');
+    await ask.getByLabel('Your question', { exact: true }).press('Enter');
+    await expect(ask.getByRole('log')).toContainText('You found Deadlocks hard, and Joins confusing.', { timeout: 15_000 });
+    await expect(ask.getByRole('log')).toContainText('What did I find hard?');
+    await expect(ask.getByText('Need teaching?')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    await ask.getByRole('button', { name: 'Start a session' }).click();
+    await page.waitForURL(/\/sessions\//);
+});
+
+for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } })) {
+    test(`helper: every colour of the sheets comes from a token: ${name}`, async ({ page }) => {
+        const student = makeStudentWithCards();
+        await ai(page, student, `/workspaces/${student.workspace}/flashcards`, viewport);
+        await useSentinelTheme(page);
+        const row = cardRow(page, 'What does a LEFT JOIN keep?');
+        await row.getByRole('button', { name: /^AI help with/ }).click();
+        const states = { menu: await foreignColours(page) };
+        await row.getByRole('button', { name: 'Improve', exact: true }).click();
+        await sheet(page).getByRole('heading', { name: 'After' }).waitFor({ timeout: 15_000 });
+        states['before and after'] = await foreignColours(page);
+        await sheet(page).getByRole('button', { name: 'Discard' }).click();
+        await page.locator('.app-topbar').getByRole('button', { name: 'Ask', exact: true }).click();
+        await page.locator('#ask-sheet').getByLabel('Your question', { exact: true }).fill('Hello?');
+        await page.locator('#ask-sheet').getByLabel('Your question', { exact: true }).press('Enter');
+        await expect(page.locator('#ask-sheet').getByRole('log')).toContainText('You found Deadlocks hard', { timeout: 15_000 });
+        states.ask = await foreignColours(page);
+        for (const [state, colours] of Object.entries(states)) {
+            expect(colours, `${state}: colours not from a token`).toEqual([]);
+        }
+    });
+}
+
+for (const theme of THEMES) {
+    test(`helper: axe finds no violations in the ✦ menu, its sheet and Ask: ${theme}`, async ({ page }) => {
+        const student = makeStudentWithCards();
+        await ai(page, student, `/workspaces/${student.workspace}/flashcards`);
+        await useTheme(page, theme);
+        const row = cardRow(page, 'What does a LEFT JOIN keep?');
+        await row.getByRole('button', { name: /^AI help with/ }).click();
+        expect(await analyseSheet(page), 'menu').toEqual([]);
+        await row.getByRole('button', { name: 'Improve', exact: true }).click();
+        await sheet(page).getByRole('heading', { name: 'After' }).waitFor({ timeout: 15_000 });
+        expect(await analyseSheet(page), 'sheet').toEqual([]);
+        await sheet(page).getByRole('button', { name: 'Discard' }).click();
+        await page.getByRole('button', { name: 'Make cards from…' }).click();
+        await sheet(page).getByLabel('How many').waitFor();
+        expect(await analyseSheet(page), 'choose').toEqual([]);
+        await page.keyboard.press('Escape');
+        await page.locator('.app-topbar').getByRole('button', { name: 'Ask', exact: true }).click();
+        await page.locator('#ask-sheet').getByLabel('Your question', { exact: true }).waitFor();
+        expect(await analyseSheet(page), 'ask').toEqual([]);
+    });
 }
