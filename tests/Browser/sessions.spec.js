@@ -32,7 +32,8 @@ test('a session is started from the Overview, and its clock runs, pauses, breaks
     await page.waitForLoadState('load');
     await expect(pill(page)).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Start studying' }).first().click();
+    await page.getByRole('button', { name: /^More for / }).click();
+    await page.getByRole('button', { name: 'Study with options' }).click();
     const dialog = page.locator('#study-dialog');
     await dialog.getByLabel('Topic (optional)').selectOption({ label: 'Normalisation' });
     await dialog.getByRole('button', { name: 'Start' }).click();
@@ -141,7 +142,8 @@ test('a Pomodoro session is started from the Overview, and the sound can be turn
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}`);
     await page.waitForLoadState('load');
-    await page.getByRole('button', { name: 'Start studying' }).first().click();
+    await page.getByRole('button', { name: /^More for / }).click();
+    await page.getByRole('button', { name: 'Study with options' }).click();
     const dialog = page.locator('#study-dialog');
     await dialog.getByLabel('Pomodoro').check();
     await dialog.getByLabel('Rhythm').selectOption('short');

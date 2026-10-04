@@ -89,12 +89,12 @@ class WorkspaceScreensTest extends TestCase
         $this->actingAs($adminOnly)->get(route('workspaces.show', 'anything'))->assertForbidden();
     }
 
-    public function test_creating_through_the_form_opens_the_new_workspace(): void
+    public function test_creating_through_the_form_opens_the_new_course_with_its_setup_sheet(): void
     {
         $this->form()
             ->set('name', 'Biology')->set('colour', 'green')->set('icon', 'microscope')->set('code', 'BIO101')
             ->call('save')
-            ->assertRedirect(route('workspaces.show', app(Workspaces::class)->list($this->principal($this->ada))[0]->id));
+            ->assertRedirect(route('workspaces.show', ['workspace' => app(Workspaces::class)->list($this->principal($this->ada))[0]->id, 'setup' => 1]));
     }
 
     public function test_the_form_shows_the_services_refusals_on_their_fields(): void
@@ -123,7 +123,7 @@ class WorkspaceScreensTest extends TestCase
         $this->assertTrue($this->find($biology->id)->archived());
         $this->assertStringContainsString('Human biology is archived.', session('workspace-notice'));
 
-        $this->form($biology->id)->assertSee('Restore workspace')->call('restore')->assertRedirect(route('workspaces.show', $biology->id));
+        $this->form($biology->id)->assertSee('Restore course')->call('restore')->assertRedirect(route('workspaces.show', $biology->id));
         $this->assertFalse($this->find($biology->id)->archived());
     }
 

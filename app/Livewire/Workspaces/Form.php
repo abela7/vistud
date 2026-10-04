@@ -82,7 +82,10 @@ final class Form extends Component
             return null;
         }
 
-        return $this->redirectRoute('workspaces.show', $workspace->id, navigate: true);
+        // A new course goes straight on to setting it up (docs/specs/vistud-2-blueprint.md §3.5.2); an edited one stays.
+        return $this->workspaceId === null
+            ? $this->redirectRoute('workspaces.show', ['workspace' => $workspace->id, 'setup' => 1], navigate: true)
+            : $this->redirectRoute('workspaces.show', $workspace->id, navigate: true);
     }
 
     public function archive(): mixed

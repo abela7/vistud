@@ -48,7 +48,7 @@ class ModulesScreenTest extends TestCase
             ->assertSee('wire:sort="sortModules"', false);
 
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->biology->id))
-            ->assertSee('Open a module to begin');
+            ->assertSee('Nothing to pick up yet');
     }
 
     public function test_adding_and_editing_a_module_through_the_dialog(): void

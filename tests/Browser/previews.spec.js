@@ -652,7 +652,8 @@ test('session: an open space with a slim clock, what to do next, the end dialog,
     await page.screenshot({ path: out('session-desktop-vistud-light-ended') });
 
     await page.goto(`/workspaces/${student.workspace}`);
-    await page.getByRole('button', { name: 'Start studying' }).first().click();
+    await page.getByRole('button', { name: /^More for / }).click();
+    await page.getByRole('button', { name: 'Study with options' }).click();
     await page.locator('#study-dialog').getByLabel('Topic (optional)').selectOption({ label: 'Normalisation' });
     await page.screenshot({ path: out('session-desktop-vistud-light-start') });
 });
@@ -817,7 +818,8 @@ test('briefing: the dialog, how the AI teaches, and the start options', async ({
     await page.locator('#session-dialog').getByRole('button', { name: 'End session' }).click();
     await page.getByRole('status').filter({ hasText: 'Session ended.' }).waitFor();
     await page.goto(`/workspaces/${student.workspace}`);
-    await page.getByRole('button', { name: 'Start studying' }).first().click();
+    await page.getByRole('button', { name: /^More for / }).click();
+    await page.getByRole('button', { name: 'Study with options' }).click();
     await page.locator('#study-dialog').getByRole('button', { name: 'Change' }).click();
     await page.locator('#study-dialog').getByLabel('How to teach').waitFor();
     await page.screenshot({ path: out('briefing-start-desktop-vistud-light') });

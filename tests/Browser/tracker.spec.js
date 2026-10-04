@@ -21,18 +21,25 @@ async function open(page, section = '') {
     return student;
 }
 
-test('the Overview is short: the rhythm, what to continue, what\'s coming up', async ({ page }) => {
+test('Progress ends with the student\'s rhythm', async ({ page }) => {
     await page.setViewportSize(desktop);
-    await open(page);
+    await open(page, 'progress');
     await expect(page.locator('.stat-row')).toContainText('Streak');
     await expect(page.locator('.stat-row')).toContainText('Last 7 days');
     await expect(page.locator('.stat-row')).toContainText('Cards to review');
+});
+
+test('the Overview is short: what is next, what to continue, what\'s coming up', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await open(page);
+    await expect(page.getByText('Next:')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Lecture 3: joins' })).toBeVisible();
     // The modules, small: each with where it runs and how many of its topics are understood.
     await expect(page.getByRole('region', { name: /^Modules/ }).getByRole('link', { name: 'Week 1: Relational model' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'All modules' })).toBeVisible();
-    // Topics live in Progress now.
-    await expect(page.getByText('Primary and foreign keys')).toHaveCount(0);
+    // Topics live in Progress; the home names only the one to do next, in its Next line.
+    await expect(page.getByText('Primary and foreign keys')).toHaveCount(1);
+    await expect(page.locator('.next-line')).toContainText('Primary and foreign keys');
 
     const todo = page.getByRole('group', { name: 'To do' });
     await expect(todo.getByRole('listitem')).toHaveCount(3);

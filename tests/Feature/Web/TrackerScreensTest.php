@@ -51,8 +51,10 @@ class TrackerScreensTest extends TestCase
 
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))
             ->assertOk()
-            ->assertSeeInOrder(['Databases', 'Edit course', 'Instructions for the AI', 'Log time', 'Start studying'])
-            ->assertSeeInOrder(['Streak', 'Last 7 days', 'Cards to review'])
+            ->assertSeeInOrder(['Databases', 'Edit course', 'About this course', 'How you learn', 'Instructions for the AI', 'Log time', 'Study'])
+            // The one line of what to do next, first; the rhythm moved to Progress.
+            ->assertSeeInOrder(['Next:', 'Add your first module'])
+            ->assertDontSee('Streak')
             ->assertSeeInOrder(['Continue', 'Lecture 3: joins'])
             ->assertSeeInOrder(['Coming up', 'ER diagram', 'Assignment', 'Due tomorrow'])
             // Topics live in Progress, and the instructions in their dialog.
@@ -103,11 +105,11 @@ class TrackerScreensTest extends TestCase
             }
         }
 
+        // Five show, around where the student is (Week 3 runs today): one before it, and the three after.
         $page = $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))->assertOk()
-            ->assertSeeInOrder(['Modules', '7', 'All modules', 'Week 3', '10 Oct – 16 Oct', 'Week 4', 'Week 5', 'Week 6', 'Week 7'])
+            ->assertSeeInOrder(['Modules', '7', 'All modules', 'Week 2', 'Week 3', '(where you are)', '10 Oct – 16 Oct', 'Week 4', 'Week 5', 'Week 6'])
             ->assertSee('Topics understood in Week 3')->assertSee('aria-valuenow="1"', false)->assertSee('1/2')
-            // Five show; the two that have ended wait on the Modules page.
-            ->assertDontSee('Week 1')->assertDontSee('Week 2');
+            ->assertDontSee('Week 1')->assertDontSee('Week 7');
         $this->assertSame(1, substr_count($page->getContent(), 'id="modules-heading"'));
     }
 
@@ -115,8 +117,8 @@ class TrackerScreensTest extends TestCase
     {
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))
             ->assertOk()
-            ->assertSee('Add your first module, like “Week 1”', false)
-            ->assertSee(route('workspaces.show', [$this->databases->id, 'modules']), false)
+            ->assertSeeInOrder(['Next:', 'Add your first module', 'Add module'])
+            ->assertSee(route('workspaces.show', [$this->databases->id, 'modules']).'?new=1', false)
             ->assertSee('Nothing due')->assertSee('Add an assignment')
             // The Modules box would only repeat the first module's prompt.
             ->assertDontSee('All modules');

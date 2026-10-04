@@ -26,7 +26,7 @@ use Livewire\Component;
 /**
  * Starting a study session and logging time studied without the clock
  * (docs/specs/study-memory.md §4), from anywhere in a workspace: the
- * `study-start` event (optionally with a module or topic) and `study-log`.
+ * `study-start` event (optionally with a module or topic), `study-next` (the same with no dialog) and `study-log`.
  * One session at a time: with one open, starting says so and offers to go
  * back to it or end it first; the two never mix.
  * With $stats, as on the Overview, it also shows the student's rhythm: the
@@ -108,6 +108,32 @@ final class StudyTime extends Component
         $last = $this->sessions->lastChoices($this->principal(), $this->workspaceId);
         $this->fillPomodoro($last['pomodoro']);
         $this->fillTeaching($last['tutoring']);
+    }
+
+    /**
+     * Study now, with no dialog (the course home's Study and the Next line): in the module and on the topic given,
+     * the clock and teaching the student chose last (or, the first time, their answers to "How you learn"). With
+     * another session open, the usual panel says so; if the session can't be started, the dialog opens.
+     */
+    #[On('study-next')]
+    public function studyNext(?string $moduleId = null, ?string $topicId = null): void
+    {
+        $by = $this->principal();
+        if ($this->sessions->current($by) !== null) {
+            $this->newSession($moduleId, $topicId);
+
+            return;
+        }
+        $last = $this->sessions->lastChoices($by, $this->workspaceId);
+        try {
+            $session = $this->sessions->start($by, $this->workspaceId, $topicId ?: null, $moduleId ?: null, $last['pomodoro'], $last['tutoring']);
+        } catch (Unprocessable|Conflict|NotFound) {
+            $this->newSession($moduleId, $topicId);
+
+            return;
+        }
+        $this->dispatch('session-changed');
+        $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id], navigate: true);
     }
 
     /** Ends the open session, then goes on to start the new one. */

@@ -67,7 +67,8 @@ test('how the AI teaches is chosen at the start and changed during the session',
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}`);
     await page.waitForLoadState('load');
-    await page.getByRole('button', { name: 'Start studying' }).first().click();
+    await page.getByRole('button', { name: /^More for / }).click();
+    await page.getByRole('button', { name: 'Study with options' }).click();
     const start = page.locator('#study-dialog');
     await expect(start).toContainText('Explain, then check · checks after every section');
     await start.getByRole('button', { name: 'Change' }).click();

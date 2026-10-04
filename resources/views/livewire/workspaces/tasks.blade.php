@@ -60,7 +60,6 @@
         <div class="empty-place">
             <span class="item-icon" aria-hidden="true"><x-icon name="calendar-clock" class="size-5" /></span>
             <p class="font-medium">Nothing due</p>
-            <p class="text-sm text-fg-muted">Add assignments, quizzes and exams, and the soonest shows here.</p>
             <button type="button" class="btn btn-secondary" wire:click="newTask"><x-icon name="plus" class="size-4" />Add an assignment</button>
         </div>
     @else

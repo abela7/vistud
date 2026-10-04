@@ -44,7 +44,11 @@ class SessionScreensTest extends TestCase
         $joins = app(Topics::class)->create($this->principal($this->ada), $this->databases->id, 'Joins');
 
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))
-            ->assertOk()->assertSee('Start studying')->assertSeeInOrder(['Streak', '0 days', 'Last 7 days', '0 min', 'Cards to review', '0']);
+            ->assertOk()->assertSee('Study with options')->assertSee('Next:');
+
+        // The student's rhythm sits at the bottom of Progress.
+        $this->actingAs($this->ada)->get(route('workspaces.show', [$this->databases->id, 'progress']))
+            ->assertOk()->assertSeeInOrder(['Streak', '0 days', 'Last 7 days', '0 min', 'Cards to review', '0']);
 
         $this->livewire(StudyTime::class)
             ->call('newSession')->assertDispatched('study-dialog-open')->assertSee('Topic (optional)')

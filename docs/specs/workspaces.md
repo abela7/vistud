@@ -67,7 +67,7 @@ The owner chose this design ("B: workspace spaces") over one big file tree.
 1. **My workspaces** (`workspace-home-*`): a card per workspace with its
    colour, what's next and what it holds, plus **New workspace**. The sidebar
    lists every workspace for quick access.
-2. **Overview**: short on purpose (the owner's review, 2026-09-27). A
+2. **Overview** (replaced by the course home of ViStud 2, Phase 1, 2026-10-07: one "Next" line, the ring, the modules and Study; see [vistud-2-blueprint.md](vistud-2-blueprint.md) §3.5.1): short on purpose (the owner's review, 2026-09-27). A
    greeting and **Start studying**; three tiles (the streak, the last 7 days
    day by day, the cards to review); **Continue** (the last study session
    and where it stopped, the notes edited last); **Coming up** (assignments

@@ -404,7 +404,7 @@ Additive only. Never `migrate:fresh`; every migration backfills.
 | `engine_settings.quick_model` → `reader_model`; `+ helper_model`, `+ auto_read_files` (bool, on), `+ tutor_marks_topics` (bool, on), `+ copy_paste_ai` (bool, off) | Three roles and the trust toggles | 0 |
 | `platform_settings`: `engine.reader_model`, `engine.helper_model` | Owner defaults | 0 |
 | `engine_jobs` (id, learner_id, workspace_id, role (`reader`/`helper`, added in Phase 0 for *Usage this month*), kind, target_type, target_id, status, model, tokens_in, tokens_out, cost_micros, error_code, attempts, started_at, finished_at, created_at) | Reader and Helper runs; cost accounting | 0 |
-| `course_profiles` (id, learner_id, workspace_id, about, outcomes JSON, assessment JSON, textbook, syllabus_file_id, source (`manual`/`file`), model, built_at, updated_at) | The course's own description | 1 |
+| `course_profiles` (id, learner_id, workspace_id, about, outcomes JSON, assessment JSON, textbook, syllabus_file_id, source (`manual`/`file`), model, built_at, updated_at; Phase 1 added `syllabus_text` and `proposed_modules JSON` so a pasted syllabus and the reader's module list can wait for the student) | The course's own description | 1 |
 | `learner_profiles` (id, learner_id, workspace_id, preferences JSON, note, updated_at) | How the student likes to learn, per course | 1 |
 | `file_digests` (id, learner_id, file_id, content_hash, status, summary, outline JSON, topics JSON, language, pages, chars, model, cost_micros, created_at) | What the Reader found in a file | 2 |
 | `topic_suggestions` (id, learner_id, module_id, name, source_file_id, status `suggested`/`added`/`dismissed`, created_at) | Topics found, until the student acts | 2 |
@@ -696,7 +696,7 @@ Everything else is a job (Reader) or `Helper::quick`, not a tool.
 | Phase | State | Note |
 |---|---|---|
 | 0 Groundwork | done (2026-10-06) | Roles, jobs, the context Stack, the helper, the settings page, `<x-page>`, the word Course. Handoff: [docs/handoff/v2-phase-0.md](../handoff/v2-phase-0.md). |
-| 1 Course setup and home | not started | |
+| 1 Course setup and home | done (2026-10-07) | Course and learner profiles, the reader's `profile_course` job, the setup sheet, `NextStep`, the course home. Handoff: [docs/handoff/v2-phase-1.md](../handoff/v2-phase-1.md). |
 | 2 Module page | not started | |
 | 3 Session | not started | |
 | 4 Progress | not started | |

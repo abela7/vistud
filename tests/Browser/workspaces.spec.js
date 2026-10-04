@@ -16,6 +16,13 @@ const analyse = async (page) =>
 test.use({ reducedMotion: 'reduce' });
 test.describe.configure({ timeout: 60_000 });
 
+/** A new course opens its setup sheet (course-setup.spec.js); these tests are about something else, so they close it. */
+async function dismissSetup(page) {
+    await expect(page.locator('#course-setup')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#course-setup')).toBeHidden();
+}
+
 async function openForm(page) {
     await page.getByRole('button', { name: 'New course' }).first().click();
     await expect(form(page)).toBeVisible();
@@ -38,6 +45,7 @@ test('a student creates their first workspace, opens it, and creates a second fr
     await form(page).getByRole('button', { name: 'Create course' }).click();
 
     await expect(heading(page, 'Biology')).toBeVisible();
+    await dismissSetup(page);
     await page.getByRole('button', { name: 'More for Biology' }).click();
     await page.getByRole('button', { name: 'Edit course' }).click();
     await expect(form(page).getByLabel('Course code (optional)')).toHaveValue('BIO101');
@@ -55,6 +63,7 @@ test('a student creates their first workspace, opens it, and creates a second fr
     await form(page).getByLabel('Name').fill('Mathematics');
     await form(page).getByRole('button', { name: 'Create course' }).click();
     await expect(heading(page, 'Mathematics')).toBeVisible();
+    await dismissSetup(page);
 
     await sidebar.locator('.ws-switcher').click();
     await expect(sidebar.locator('.ws-menu').getByRole('link')).toHaveText(['Biology', 'Mathematics', 'All courses', 'New course']);

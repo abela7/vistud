@@ -16,9 +16,6 @@
             <div class="modal-head">
                 <div class="min-w-0 flex-1 space-y-1">
                     <h2 id="workspace-form-title" class="text-lg font-semibold">{{ $workspaceId ? 'Edit course' : 'New course' }}</h2>
-                    @unless ($workspaceId)
-                        <p class="text-fg-muted">One course per subject: its modules, notes, files, calendar and progress live inside it.</p>
-                    @endunless
                 </div>
                 <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
                     <x-icon name="x" />
@@ -68,7 +65,7 @@
                 @if ($workspaceId)
                     <div class="flex flex-wrap items-center gap-2 sm:mr-auto">
                         @if ($archived)
-                            <x-button icon="archive-restore" wire:click="restore" wire:loading.attr="aria-busy" wire:target="restore" busy-label="Restoring…">Restore workspace</x-button>
+                            <x-button icon="archive-restore" wire:click="restore" wire:loading.attr="aria-busy" wire:target="restore" busy-label="Restoring…">Restore course</x-button>
                         @else
                             <x-button variant="ghost" icon="archive" wire:click="archive" wire:loading.attr="aria-busy" wire:target="archive" busy-label="Archiving…">Archive</x-button>
                         @endif
