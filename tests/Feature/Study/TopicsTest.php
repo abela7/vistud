@@ -200,6 +200,52 @@ class TopicsTest extends TestCase
         $this->assertSame('Secret', $this->topics->find($bob, $topic->id)->name);
     }
 
+    public function test_the_student_sets_a_status_and_the_tutor_marks_one_that_can_be_undone_but_never_over_the_students(): void
+    {
+        $joins = $this->topics->create($this->by, $this->databases->id, 'Joins', $this->week1->id);
+        $keys = $this->topics->create($this->by, $this->databases->id, 'Keys', $this->week1->id);
+        $this->assertSame([null, null, null], [$joins->status, $joins->statusBy, $joins->statusAt]);
+        $this->assertFalse($joins->byTutor());
+
+        // The student's word is theirs.
+        $this->topics->report($this->by, $keys->id, 'understood');
+        $mine = $this->topics->find($this->by, $keys->id);
+        $this->assertSame(['understood', 'student', false], [$mine->status, $mine->statusBy, $mine->byTutor()]);
+        $this->assertNotNull($mine->statusAt);
+
+        // The tutor's word on a topic with none: shown as the tutor's, and not evidence in the journal.
+        $before = count($this->entries());
+        $undo = $this->topics->mark($this->by, $joins->id, 'confused');
+        $marked = $this->topics->find($this->by, $joins->id);
+        $this->assertSame(['status' => null, 'by' => null, 'at' => null], $undo);
+        $this->assertSame(['confused', 'tutor', true, 'confused'], [$marked->status, $marked->statusBy, $marked->byTutor(), $marked->shown()]);
+        $this->assertSame($before, count($this->entries()));
+
+        // Never over the student's own, and nothing changes when it already says that.
+        $this->assertNull($this->topics->mark($this->by, $keys->id, 'confused'));
+        $this->assertNull($this->topics->mark($this->by, $joins->id, 'confused'));
+        $this->assertSame('understood', $this->topics->find($this->by, $keys->id)->status);
+
+        // The tutor can change its own word, and undo goes back to what was before each.
+        $second = $this->topics->mark($this->by, $joins->id, 'understood');
+        $this->assertSame('confused', $second['status']);
+        $this->topics->unmark($this->by, $joins->id, $second);
+        $this->assertSame(['confused', 'tutor'], [$this->topics->find($this->by, $joins->id)->status, $this->topics->find($this->by, $joins->id)->statusBy]);
+        $this->topics->unmark($this->by, $joins->id, $undo);
+        $cleared = $this->topics->find($this->by, $joins->id);
+        $this->assertSame([null, null, null], [$cleared->status, $cleared->statusBy, $cleared->statusAt]);
+
+        // Once the student has said something, the tutor's undo leaves their word alone.
+        $this->topics->mark($this->by, $joins->id, 'covered');
+        $this->topics->report($this->by, $joins->id, 'understood');
+        $this->topics->unmark($this->by, $joins->id, $undo);
+        $this->assertSame(['understood', 'student'], [$this->topics->find($this->by, $joins->id)->status, $this->topics->find($this->by, $joins->id)->statusBy]);
+
+        // Only the three statuses, and only the student's own topics.
+        $this->assertThrows(fn () => $this->topics->mark($this->by, $joins->id, 'mastered'), Unprocessable::class);
+        $this->assertThrows(fn () => $this->topics->mark($this->principal($this->student()), $joins->id, 'covered'), NotFound::class);
+    }
+
     private function entries(): array
     {
         return app(JournalReader::class)->entries($this->learnerScopeOf($this->ada));

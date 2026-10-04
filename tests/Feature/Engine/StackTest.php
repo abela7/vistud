@@ -212,7 +212,12 @@ class StackTest extends TestCase
         $plain = Stack::rules(false);
         $this->assertStringContainsString('## Your tools in this chat', $with);
         $this->assertStringContainsString('(add_topics, set_topic)', $with);
-        $this->assertStringContainsString('Key points, questions and flashcards are saved with the tools, not marks.', $with);
+        $this->assertStringContainsString('Key points, questions and flashcards are saved with the tools, not marks, and so are statuses and quizzes (set_topic_status, record_quiz).', $with);
+        $this->assertStringContainsString('(set_topic_status)', $with);
+        $this->assertStringContainsString('(record_quiz)', $with);
+        $this->assertStringContainsString('## Study modes', $with);
+        $this->assertStringNotContainsString('<status topic=', $with);
+        $this->assertStringContainsString('<status topic="Topic name" proposed="confused">', $plain);
         $this->assertStringNotContainsString('<flashcard topic=', $with);
         $this->assertStringNotContainsString('## Your tools in this chat', $plain);
         $this->assertStringContainsString('<flashcard topic="Topic name"><front>The question</front><back>The answer</back></flashcard>', $plain);
@@ -220,7 +225,7 @@ class StackTest extends TestCase
 
         // What both keep: the role, the order of rules, the path, the marks ViStud reads, the diagrams, the ending.
         foreach ([$with, $plain] as $rules) {
-            foreach (['## Your job', '## When instructions clash', '## The path of a session', '## Words the student can use', '```mermaid', 'Write formulas in $…$ inside a line or $$…$$', '<checkpoint>', '<status topic="Topic name" proposed="confused">', '<attempt topic="Topic name" form="apply" support="unaided" result="partial">', '<asked>', '<right>', '<fix>', '<summary>', '## Ending', 'Don\'t write graded work'] as $needle) {
+            foreach (['## Your job', '## When instructions clash', '## The path of a session', '## Words the student can use', '```mermaid', 'Write formulas in $…$ inside a line or $$…$$', '<checkpoint>', '## Study modes', '<attempt topic="Topic name" form="apply" support="unaided" result="partial">', '<asked>', '<right>', '<fix>', '<summary>', '## Ending', 'Don\'t write graded work'] as $needle) {
                 $this->assertStringContainsString($needle, $rules);
             }
         }
@@ -326,6 +331,26 @@ class StackTest extends TestCase
         $this->assertStringNotContainsString('## Your tools in this chat', $plain->system);
         $this->assertStringNotContainsString('Topics: keep them yourself', $plain->system, 'no topic tools, no topic line');
         $this->assertStringContainsString('<flashcard topic="Topic name">', $plain->system);
+    }
+
+    public function test_the_session_layer_says_what_the_session_is_for_and_who_set_the_topics_status(): void
+    {
+        $sessions = app(Sessions::class);
+        $built = $this->stack()->build($this->by, $sessions->find($this->by, $this->session->id), null, true);
+        $this->assertStringContainsString('Mode: one topic. Teach the topic now only; offer the next, don\'t start it.', $built->system);
+        $this->assertStringContainsString('Topic now: Joins (the student says confused; practice:', $built->system);
+
+        // Each mode is one line, and a status the tutor set is said to be the tutor's own.
+        app(Topics::class)->unmark($this->by, $this->joins, ['status' => null, 'by' => null, 'at' => null]);
+        $sessions->end($this->by, $this->session->id);
+        foreach (['module' => 'Mode: whole module.', 'quiz' => 'Mode: quiz.', 'test' => 'Mode: test.', 'free' => 'Mode: free.'] as $mode => $line) {
+            $session = $sessions->start($this->by, $this->workspace, null, $this->week2, null, null, $mode);
+            $this->assertStringContainsString($line, $this->stack()->build($this->by, $session, null, true)->system);
+            $sessions->end($this->by, $session->id);
+        }
+        $keys = $sessions->start($this->by, $this->workspace, $this->keys, null);
+        app(Topics::class)->mark($this->by, $this->keys, 'covered');
+        $this->assertStringContainsString('Topic now: Keys (you marked it covered;', $this->stack()->build($this->by, $sessions->find($this->by, $keys->id), null, true)->system);
     }
 
     public function test_a_session_without_a_topic_or_a_module_says_so_and_nothing_of_the_briefing_comes_along(): void

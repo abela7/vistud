@@ -53,7 +53,7 @@ final class SetTopicTool implements Tool
             return "The session's topic is \"{$topic->name}\" already.";
         }
         $this->sessions->setTopic($by, $context->sessionId, $topic->id);
-        $context->effects->topic($topic->name);
+        $context->effects->topic($topic->name, $topic->id);
         if ($made) {
             $context->effects->saved('topic', 1);
         }

@@ -198,6 +198,8 @@ final class SessionChat
         $pendingSaved = [];
         $pendingNotes = [];
         $pendingTopic = null;
+        $pendingStatuses = [];
+        $pendingQuizzes = [];
         foreach ($this->rows($scope, $thread->id) as $row) {
             if ($row->role === 'tool') {
                 $effects = isset($row->effects) && is_string($row->effects) ? (json_decode($row->effects, true) ?: []) : [];
@@ -208,6 +210,8 @@ final class SessionChat
                     $pendingNotes[(string) $note['id']] = ['id' => (string) $note['id'], 'title' => (string) $note['title']];
                 }
                 $pendingTopic = is_string($effects['topic'] ?? null) ? $effects['topic'] : $pendingTopic;
+                array_push($pendingStatuses, ...array_values(array_filter(is_array($effects['statuses'] ?? null) ? $effects['statuses'] : [], 'is_array')));
+                array_push($pendingQuizzes, ...array_values(array_filter(is_array($effects['quizzes'] ?? null) ? $effects['quizzes'] : [], 'is_array')));
 
                 continue;
             }
@@ -226,20 +230,62 @@ final class SessionChat
                 'saved' => $row->role === 'assistant' ? $pendingSaved : [],
                 'notes' => $row->role === 'assistant' ? array_values($pendingNotes) : [],
                 'topic' => $row->role === 'assistant' ? $pendingTopic : null,
+                'statuses' => $row->role === 'assistant' ? $pendingStatuses : [],
+                'quizzes' => $row->role === 'assistant' ? $pendingQuizzes : [],
                 'cost_micros' => (int) $row->cost_micros + ($row->role === 'assistant' ? $pendingCost : 0),
                 'folded' => (int) $row->position <= (int) $thread->folded_through,
                 'at' => (string) $row->created_at,
             ];
             if ($row->role === 'assistant') {
-                [$pendingTools, $pendingCost, $pendingSaved, $pendingNotes, $pendingTopic] = [[], 0, [], [], null];
+                [$pendingTools, $pendingCost, $pendingSaved, $pendingNotes, $pendingTopic, $pendingStatuses, $pendingQuizzes] = [[], 0, [], [], null, [], []];
             }
         }
         if ($pendingTools !== []) {
             // A turn that ended in look-ups without an answer (the engine failed after them).
-            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'saved' => $pendingSaved, 'notes' => array_values($pendingNotes), 'topic' => $pendingTopic, 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
+            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'saved' => $pendingSaved, 'notes' => array_values($pendingNotes), 'topic' => $pendingTopic, 'statuses' => $pendingStatuses, 'quizzes' => $pendingQuizzes, 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
         }
 
         return $turns;
+    }
+
+    /**
+     * What the tutor did in the course during this session, from what its tools reported: how much it saved, the
+     * topics it set, and the status it set or proposed for each topic (the last word on each). For the session's rail
+     * and its end screen.
+     *
+     * @return array{saved: array<string, int>, topics: list<string>, statuses: array<string, array<string, mixed>>, quizzes: int}
+     */
+    public function activity(Principal $by, string $sessionId): array
+    {
+        $scope = Guard::learner($by);
+        $this->sessions->find($by, $sessionId);
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first();
+        $out = ['saved' => [], 'topics' => [], 'statuses' => [], 'quizzes' => 0];
+        if ($thread === null) {
+            return $out;
+        }
+        foreach ($this->rows($scope, $thread->id) as $row) {
+            if ($row->role !== 'tool' || ! isset($row->effects) || ! is_string($row->effects)) {
+                continue;
+            }
+            $effects = json_decode($row->effects, true) ?: [];
+            foreach (is_array($effects['saved'] ?? null) ? $effects['saved'] : [] as $kind => $count) {
+                $out['saved'][$kind] = ($out['saved'][$kind] ?? 0) + (int) $count;
+            }
+            if (is_string($effects['topic_id'] ?? null)) {
+                $out['topics'][] = $effects['topic_id'];
+            }
+            foreach (is_array($effects['statuses'] ?? null) ? $effects['statuses'] : [] as $status) {
+                if (is_array($status) && is_string($status['topic_id'] ?? null)) {
+                    $out['topics'][] = $status['topic_id'];
+                    $out['statuses'][$status['topic_id']] = $status;
+                }
+            }
+            $out['quizzes'] += count(is_array($effects['quizzes'] ?? null) ? $effects['quizzes'] : []);
+        }
+        $out['topics'] = array_values(array_unique($out['topics']));
+
+        return $out;
     }
 
     /**

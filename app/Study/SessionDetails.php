@@ -37,6 +37,7 @@ final readonly class SessionDetails
         public array $material = [],
         public ?string $summary = null,
         public ?string $checkpoint = null,
+        public string $mode = 'topic',
     ) {}
 
     /** Whether a note or file (`note:{id}`, `file:{id}`) is in the session's material. */

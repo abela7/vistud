@@ -32,6 +32,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class Sessions
 {
+    /** What a session is for (docs/specs/vistud-2-blueprint.md §3.9): never mixed. */
+    public const MODES = ['module', 'topic', 'quiz', 'test', 'free'];
+
     public const IDLE_MINUTES = 30;
 
     public const BREAK_MINUTES = 60;
@@ -193,9 +196,11 @@ final class Sessions
      *
      * @param  ?array{focus?: mixed, short?: mixed, long?: mixed, every?: mixed, auto?: mixed}  $pomodoro
      * @param  ?array{method?: mixed, check_ins?: mixed, quiz?: mixed, pace?: mixed}  $tutoring  how the assistant should teach; the student's answers in "How you learn", else the defaults, when null
+     * @param  ?string  $mode  one of MODES; not given, a topic means topic, a module alone means module and neither means free
      */
-    public function start(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $pomodoro = null, ?array $tutoring = null): SessionDetails
+    public function start(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $pomodoro = null, ?array $tutoring = null, ?string $mode = null): SessionDetails
     {
+        Input::refuse($mode === null || in_array($mode, self::MODES, true) ? [] : ['mode' => 'Unknown way to study.']);
         $scope = Guard::learner($by);
         $pomodoro = $pomodoro === null ? null : self::pomodoroSettings($pomodoro);
         // Not chosen: the way the student said they like to learn in this course, if they said.
@@ -206,14 +211,15 @@ final class Sessions
         }
         $id = Ids::new();
 
-        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $pomodoro, $tutoring, $id) {
+        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $pomodoro, $tutoring, $mode, $id) {
             Input::workspace($scope, $workspaceId, lock: true);
             [$topicId, $moduleId] = $this->place($scope, $workspaceId, $topicId, $moduleId);
+            $mode ??= $topicId !== null ? 'topic' : ($moduleId !== null ? 'module' : 'free');
             $now = self::now();
             // The database keeps one open session per student (open_learner is unique): a start in another tab at the same moment loses.
             try {
                 LearnerTables::insert($scope, 'study_sessions', [
-                    'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'topic_id' => $topicId,
+                    'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'topic_id' => $topicId, 'mode' => $mode,
                     'pomodoro' => $pomodoro === null ? null : json_encode($pomodoro), 'phase' => $pomodoro === null ? null : 'focus',
                     'phase_started_at' => $pomodoro === null ? null : $now, 'tutoring' => json_encode($tutoring),
                     'state' => 'running', 'started_at' => $now, 'last_activity_at' => $now, 'revision' => 1,
@@ -544,6 +550,8 @@ final class Sessions
         DB::transaction(function () use ($scope, $by, $id) {
             $row = $this->lock($scope, $id);
             LearnerTables::query($scope, 'session_segments')->where('session_id', $id)->delete();
+            // What was recorded in it stays: a quiz, a test.
+            LearnerTables::query($scope, 'quizzes')->where('session_id', $id)->update(['session_id' => null]);
             LearnerTables::query($scope, 'study_sessions')->where('id', $id)->delete();
             $row->revision++;
             $this->record($scope, $by, $row, deleted: true);
@@ -890,6 +898,7 @@ final class Sessions
             Tutoring::normalised($row->tutoring === null ? null : json_decode((string) $row->tutoring, true)),
             $row->material === null ? [] : array_values(json_decode((string) $row->material, true) ?: []),
             $row->summary, $row->checkpoint,
+            in_array($row->mode ?? null, self::MODES, true) ? $row->mode : 'topic',
         );
     }
 

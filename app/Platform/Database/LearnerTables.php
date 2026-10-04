@@ -56,6 +56,7 @@ final class LearnerTables
         'file_digests',
         'topic_suggestions',
         'module_briefs',
+        'quizzes',
     ];
 
     public static function query(LearnerScope $scope, string $table): Builder

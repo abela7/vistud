@@ -163,6 +163,7 @@ final class Workspaces
                 LearnerTables::query($scope, 'topic_suggestions')->whereIn('module_id', $moduleIds)->delete();
                 LearnerTables::query($scope, 'module_briefs')->whereIn('module_id', $moduleIds)->delete();
             }
+            LearnerTables::query($scope, 'quizzes')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'files')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'folders')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'modules')->where('workspace_id', $id)->delete();

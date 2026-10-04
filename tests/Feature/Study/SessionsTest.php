@@ -47,6 +47,37 @@ class SessionsTest extends TestCase
         $this->databases = app(Workspaces::class)->create($this->by, ['name' => 'Databases']);
     }
 
+    public function test_a_session_has_a_mode_that_says_what_it_is_for(): void
+    {
+        $topics = app(Topics::class);
+        $module = app(Modules::class)->create($this->by, $this->databases->id, ['title' => 'Week 2: joins']);
+        $joins = $topics->create($this->by, $this->databases->id, 'Joins', $module->id);
+
+        // Not said: a topic means topic, a module alone the whole module, neither free.
+        $byTopic = $this->sessions->start($this->by, $this->databases->id, $joins->id);
+        $this->assertSame('topic', $byTopic->mode);
+        $this->sessions->end($this->by, $byTopic->id);
+        $whole = $this->sessions->start($this->by, $this->databases->id, null, $module->id);
+        $this->assertSame('module', $whole->mode);
+        $this->sessions->end($this->by, $whole->id);
+        $free = $this->sessions->start($this->by, $this->databases->id);
+        $this->assertSame('free', $free->mode);
+        $this->sessions->end($this->by, $free->id);
+
+        // Said: a quiz or a test, kept with the session.
+        $quiz = $this->sessions->start($this->by, $this->databases->id, $joins->id, null, null, null, 'quiz');
+        $this->assertSame('quiz', $this->sessions->find($this->by, $quiz->id)->mode);
+        $this->sessions->end($this->by, $quiz->id);
+        $test = $this->sessions->start($this->by, $this->databases->id, null, $module->id, null, null, 'test');
+        $this->assertSame('test', $this->sessions->find($this->by, $test->id)->mode);
+        $this->sessions->end($this->by, $test->id);
+
+        // Anything else is refused, and a logged session is a topic one.
+        $this->assertThrows(fn () => $this->sessions->start($this->by, $this->databases->id, null, null, null, null, 'cram'), Unprocessable::class);
+        $this->assertSame(['module', 'topic', 'quiz', 'test', 'free'], Sessions::MODES);
+        $this->assertSame('topic', $this->sessions->log($this->by, $this->databases->id, ['date' => '2026-10-04', 'time' => '09:00', 'minutes' => 30], 'UTC')->mode);
+    }
+
     public function test_study_and_breaks_are_counted_apart_and_a_pause_counts_nothing(): void
     {
         $joins = app(Topics::class)->create($this->by, $this->databases->id, 'Joins');

@@ -127,6 +127,7 @@ final class Modules
             LearnerTables::query($scope, 'instructions')->where('scope', "module:{$id}")->delete();
             LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $id)->delete();
             LearnerTables::query($scope, 'module_briefs')->where('module_id', $id)->delete();
+            LearnerTables::query($scope, 'quizzes')->where('module_id', $id)->update(['module_id' => null]);
             LearnerTables::query($scope, 'modules')->where('id', $id)->delete();
             $row->revision++;
             $this->record($scope, $row, deleted: true);

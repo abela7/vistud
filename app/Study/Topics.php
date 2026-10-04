@@ -124,7 +124,45 @@ final class Topics
             'understood' => Memory::observation($scope, $by, 'self_report', ['stance' => 'confident'], $about),
             'confused' => Memory::observation($scope, $by, 'self_report', ['stance' => 'confused'], $about),
         }], $row->workspace_id);
-        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $status, 'updated_at' => now()]);
+        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $status, 'status_by' => 'student', 'status_at' => now(), 'updated_at' => now()]);
+    }
+
+    /**
+     * The tutor's word on a topic (docs/specs/vistud-2-blueprint.md §3.8): shown as the tutor's, and never over the
+     * student's own, which always wins. Only the row changes: the journal holds what the student reported and did, so
+     * a status the tutor set is not evidence. Returns what it was before (for undo), or null when nothing changed: the
+     * student's word stood, or the topic already had that status.
+     *
+     * @return ?array{status: ?string, by: ?string, at: ?string}
+     */
+    public function mark(Principal $by, string $id, string $status): ?array
+    {
+        $scope = Guard::learner($by);
+        Input::refuse(in_array($status, self::STATUSES, true) ? [] : ['status' => 'Unknown status.']);
+        $row = $this->row($scope, $id);
+        if ($row->status === $status || ($row->status !== null && $row->status_by !== 'tutor')) {
+            return null;
+        }
+        $before = ['status' => $row->status, 'by' => $row->status_by, 'at' => $row->status_at];
+        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $status, 'status_by' => 'tutor', 'status_at' => now(), 'updated_at' => now()]);
+
+        return $before;
+    }
+
+    /**
+     * Puts a topic's status back as it was before the tutor marked it ($before is what mark() returned), unless the
+     * student has said something about it since.
+     *
+     * @param  array{status: ?string, by: ?string, at: ?string}  $before
+     */
+    public function unmark(Principal $by, string $id, array $before): void
+    {
+        $scope = Guard::learner($by);
+        $row = $this->row($scope, $id);
+        if ($row->status_by !== 'tutor') {
+            return;
+        }
+        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $before['status'], 'status_by' => $before['status'] === null ? null : $before['by'], 'status_at' => $before['status'] === null ? null : $before['at'], 'updated_at' => now()]);
     }
 
     /** Retires the topic: it leaves the screens, and its evidence stays in the journal. */
@@ -139,6 +177,7 @@ final class Topics
             ], $row->workspace_id);
             LearnerTables::query($scope, 'topics')->where('id', $id)->update(['retired_at' => now(), 'updated_at' => now()]);
             LearnerTables::query($scope, 'questions')->where('topic_id', $id)->update(['topic_id' => null]);
+            LearnerTables::query($scope, 'quizzes')->where('topic_id', $id)->update(['topic_id' => null]);
         });
     }
 
@@ -177,6 +216,7 @@ final class Topics
         return new TopicDetails(
             $row->id, $row->workspace_id, $row->module_id, $row->name, $row->status, (int) $row->position,
             $derived['label'] ?? 'not_started', $derived['flags'] ?? [], $derived['facts']['last_contact'] ?? null,
+            $row->status === null ? null : ($row->status_by ?? 'student'), $row->status === null || $row->status_at === null ? null : (string) $row->status_at,
         );
     }
 }

@@ -446,6 +446,37 @@ class SessionChatTest extends TestCase
         $this->assertCount(1, array_filter(app(Notes::class)->list($this->by, $this->databases->id), fn ($n) => str_starts_with($n->title, 'Study notes')));
     }
 
+    public function test_a_status_and_a_quiz_the_tutor_records_are_told_kept_and_shown_on_the_answer_and_in_the_sessions_activity(): void
+    {
+        $this->engine->will(
+            Fake::calls('set_topic_status', ['status' => 'understood', 'reason' => 'Two right answers in a row.'], 'call_1'),
+            Fake::calls('record_quiz', ['kind' => 'quiz', 'questions' => [['asked' => 'What does a left join keep?', 'answer' => 'Every left row.', 'result' => 'correct']]], 'call_2'),
+            Fake::calls('make_flashcards', ['cards' => [['front' => 'A?', 'back' => 'B.']]], 'call_3'),
+            Fake::says('Marked it understood, and your quiz is kept.'),
+        );
+        $events = [];
+        $this->chat()->send($this->by, $this->session->id, 'Quiz me on joins', function (string $kind, string $value) use (&$events) {
+            $events[] = [$kind, $value];
+        });
+
+        $saved = array_map(fn ($e) => json_decode($e[1], true), array_values(array_filter($events, fn ($e) => $e[0] === 'saved')));
+        $this->assertSame([true, 'understood', 'Joins'], [$saved[0]['statuses'][0]['applied'], $saved[0]['statuses'][0]['to'], $saved[0]['statuses'][0]['topic']]);
+        $this->assertSame(['quiz', 100, 1], [$saved[1]['quizzes'][0]['kind'], $saved[1]['quizzes'][0]['score'], $saved[1]['quizzes'][0]['asked']]);
+
+        $turn = $this->chat()->transcript($this->by, $this->session->id)[1];
+        $this->assertSame(['understood'], array_column($turn['statuses'], 'to'));
+        $this->assertSame([100], array_column($turn['quizzes'], 'score'));
+        $this->assertSame(['set_topic_status', 'record_quiz', 'make_flashcards'], $turn['tools']);
+
+        // What the session's rail and end screen read: what was saved, the topics touched and the last word on each.
+        $activity = $this->chat()->activity($this->by, $this->session->id);
+        $this->assertSame([['flashcard' => 1], 1, 'understood'], [$activity['saved'], $activity['quizzes'], array_values($activity['statuses'])[0]['to']]);
+        $this->assertSame([$this->session->topicId], $activity['topics']);
+
+        // Another student's session is not found.
+        $this->assertThrows(fn () => $this->chat()->activity($this->principal($this->student()), $this->session->id), NotFound::class);
+    }
+
     public function test_a_models_reasoning_goes_back_with_its_own_messages_to_the_same_model_only_and_empty_answers_are_left_out(): void
     {
         $reasoning = [['type' => 'reasoning.text', 'text' => 'Look it up first.', 'signature' => 'sig-1', 'index' => 0]];

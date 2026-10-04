@@ -40,6 +40,8 @@ final readonly class TopicDetails
         public string $label,
         public array $flags,
         public ?string $lastContact,
+        public ?string $statusBy = null,
+        public ?string $statusAt = null,
     ) {}
 
     /** The one word shown: mastered is earned, the rest is the student's word. */
@@ -51,6 +53,12 @@ final readonly class TopicDetails
             $this->label !== 'not_started' => 'covered',
             default => 'not_started',
         };
+    }
+
+    /** Whether the tutor set the status shown, rather than the student: it says so, and can be undone. */
+    public function byTutor(): bool
+    {
+        return $this->status !== null && $this->statusBy === 'tutor';
     }
 
     /** "Evidence: seen, not practised · not practised yet" */

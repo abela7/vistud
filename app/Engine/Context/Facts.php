@@ -45,6 +45,7 @@ final readonly class Facts
         public array $moduleKeyPoints = [],
         public ?string $moduleLast = null,
         // 5 · the session
+        public string $mode = 'topic',
         public ?string $topicNow = null,
         public ?string $topicPractice = null,
         public string $clock = 'free: the student pauses and takes breaks when they like',

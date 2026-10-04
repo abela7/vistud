@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Engine;
 
+use App\Engine\Settings;
 use App\Engine\Toolbox;
 use App\Engine\Tools\Context;
 use App\Models\User;
@@ -16,6 +17,7 @@ use App\Study\NoteDoc;
 use App\Study\Notes;
 use App\Study\Plans;
 use App\Study\Questions;
+use App\Study\Quizzes;
 use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\WorkspaceDetails;
@@ -305,6 +307,87 @@ class ToolboxTest extends TestCase
         $this->assertSame(['saved' => ['flashcard' => 2, 'question' => 1]], $this->context->effects->take());
     }
 
+    public function test_the_tutor_marks_a_topic_when_the_student_lets_it_and_only_proposes_when_not(): void
+    {
+        $topics = app(Topics::class);
+        $outer = $topics->create($this->by, $this->databases->id, 'Outer joins', $this->context->moduleId);
+        $sessions = app(Sessions::class);
+        $sessions->setTopic($this->by, $this->context->sessionId, $outer->id);
+
+        // On (the default): set at once, shown as the tutor's, with what it was to undo it.
+        $this->assertSame('Marked "Outer joins" as covered. It shows as yours and the student can undo it. Say so in a line.', $this->look('set_topic_status', ['status' => 'covered', 'reason' => 'We went through it.']));
+        $marked = $topics->find($this->by, $outer->id);
+        $this->assertSame(['covered', 'tutor'], [$marked->status, $marked->statusBy]);
+        $effects = $this->context->effects->take();
+        $this->assertSame(['topic_id' => $outer->id, 'topic' => 'Outer joins', 'from' => null, 'to' => 'covered', 'applied' => true, 'reason' => 'We went through it.', 'before' => ['status' => null, 'by' => null, 'at' => null]], $effects['statuses'][0]);
+        $this->assertStringContainsString('already', $this->look('set_topic_status', ['status' => 'covered', 'reason' => 'Again.']));
+        $this->assertSame([], $this->context->effects->take());
+
+        // The tutor can move its own word, naming the topic; "confusing" is the status "confused".
+        $this->assertStringContainsString('Marked "Outer joins" as confusing', $this->look('set_topic_status', ['topic' => 'outer joins', 'status' => 'confusing', 'reason' => 'Two wrong answers.']));
+        $this->assertSame('confused', $topics->find($this->by, $outer->id)->status);
+        $this->context->effects->take();
+
+        // The student's own word stays: it is told to them as a suggestion, nothing changes.
+        $this->assertStringContainsString('themselves, so it stays', $this->look('set_topic_status', ['topic' => 'Joins', 'status' => 'understood', 'reason' => 'They answered well.']));
+        $this->assertSame(['confused', 'student'], [$topics->find($this->by, $this->joins)->status, $topics->find($this->by, $this->joins)->statusBy]);
+        $kept = $this->context->effects->take()['statuses'][0];
+        $this->assertSame([false, 'confused', 'understood'], [$kept['applied'], $kept['from'], $kept['to']]);
+
+        // Off: only proposed.
+        app(Settings::class)->set($this->by, ['tutor_marks_topics' => false]);
+        $other = $topics->create($this->by, $this->databases->id, 'Self joins', $this->context->moduleId);
+        $this->assertStringContainsString('Proposed "Self joins" as understood', $this->look('set_topic_status', ['topic' => 'Self joins', 'status' => 'understood', 'reason' => 'Right first time.']));
+        $this->assertNull($topics->find($this->by, $other->id)->status);
+        $proposed = $this->context->effects->take()['statuses'][0];
+        $this->assertSame([false, null, 'understood'], [$proposed['applied'], $proposed['before'], $proposed['to']]);
+
+        // What it can't do: an unknown status or topic, and a session with no topic to default to.
+        $this->assertSame('The status is covered, understood or confusing.', $this->look('set_topic_status', ['status' => 'mastered', 'reason' => 'x']));
+        $this->assertStringContainsString('no topic called "Nothing"', $this->look('set_topic_status', ['topic' => 'Nothing', 'status' => 'covered', 'reason' => 'x']));
+        $sessions->setTopic($this->by, $this->context->sessionId, null);
+        $this->assertSame('Say which topic: the session has none yet.', $this->look('set_topic_status', ['status' => 'covered', 'reason' => 'x']));
+    }
+
+    public function test_the_tutor_records_a_quiz_and_a_test_proposes_statuses_from_the_score(): void
+    {
+        $topics = app(Topics::class);
+        $scheduling = $topics->create($this->by, $this->databases->id, 'Cross joins', $this->context->moduleId);
+        $questions = fn (array $results, ?string $topic = null) => array_map(fn ($r, $i) => ['asked' => 'Question '.($i + 1), 'answer' => 'Their answer', 'result' => $r] + ($topic === null ? [] : ['topic' => $topic]), $results, array_keys($results));
+
+        // A quiz is kept with its score; the session's topic is its topic.
+        $out = $this->look('record_quiz', ['kind' => 'quiz', 'questions' => $questions(['correct', 'correct', 'incorrect', 'partial', 'correct'])]);
+        $this->assertSame('Quiz recorded: 3 of 5 right, 70 %. Say in a line that it is kept.', $out);
+        $recorded = $this->context->effects->take();
+        $this->assertSame(['kind' => 'quiz', 'score' => 70, 'asked' => 5], array_diff_key($recorded['quizzes'][0], ['id' => 1]));
+        $this->assertSame(1, count(app(Quizzes::class)->forSession($this->by, $this->context->sessionId)));
+        $this->assertArrayNotHasKey('statuses', $recorded);
+
+        // A test marks the topics it touched from their scores (the setting is on), unless the student's own word stands.
+        $out = $this->look('record_quiz', ['kind' => 'test', 'questions' => [...$questions(['correct', 'correct', 'correct', 'correct', 'partial'], 'Cross joins'), ...$questions(['correct', 'correct', 'incorrect'], 'Joins')]]);
+        $this->assertStringContainsString('Test recorded: 6 of 8 right, 81 %.', $out);
+        $this->assertStringContainsString('Cross joins: marked understood', $out);
+        $this->assertStringContainsString("Joins: covered proposed (the student's own word stays)", $out);
+        $effects = $this->context->effects->take();
+        $by = array_column($effects['statuses'], null, 'topic');
+        $this->assertSame([true, 'understood', '90 % in the test'], [$by['Cross joins']['applied'], $by['Cross joins']['to'], $by['Cross joins']['reason']]);
+        $this->assertSame([false, 'covered'], [$by['Joins']['applied'], $by['Joins']['to']]);
+        $this->assertSame(['understood', 'tutor'], [$topics->find($this->by, $scheduling->id)->status, $topics->find($this->by, $scheduling->id)->statusBy]);
+
+        // With the setting off, every one is only proposed.
+        app(Settings::class)->set($this->by, ['tutor_marks_topics' => false]);
+        $topics->mark($this->by, $scheduling->id, 'covered');
+        $this->look('record_quiz', ['kind' => 'test', 'questions' => $questions(['correct', 'correct'], 'Cross joins')]);
+        $proposed = $this->context->effects->take()['statuses'][0];
+        $this->assertSame(['understood', false], [$proposed['to'], $proposed['applied']]);
+        $this->assertSame('covered', $topics->find($this->by, $scheduling->id)->status);
+
+        // What it refuses is said as words, and nothing is kept.
+        $this->assertStringContainsString('Say whether it was a quiz or a test.', $this->look('record_quiz', ['kind' => 'exam', 'questions' => $questions(['correct'])]));
+        $this->assertStringContainsString('Give the questions that were asked.', $this->look('record_quiz', ['kind' => 'quiz', 'questions' => []]));
+        $this->assertCount(3, app(Quizzes::class)->forSession($this->by, $this->context->sessionId));
+    }
+
     public function test_the_tutor_sets_the_sessions_topic_and_adds_topics_to_the_course(): void
     {
         $sessions = app(Sessions::class);
@@ -315,7 +398,7 @@ class ToolboxTest extends TestCase
         $this->assertSame('The session\'s topic is now "Outer joins", new in the course in Week 2: SQL joins. Tell the student in a line.', $this->look('set_topic', ['topic' => 'Outer joins']));
         $outer = collect($topics->list($this->by, $this->databases->id))->firstWhere('name', 'Outer joins');
         $this->assertSame([$outer->id, $this->context->moduleId], [$sessions->find($this->by, $this->context->sessionId)->topicId, $outer->moduleId]);
-        $this->assertSame(['saved' => ['topic' => 1], 'topic' => 'Outer joins'], $this->context->effects->take());
+        $this->assertSame(['saved' => ['topic' => 1], 'topic' => 'Outer joins', 'topic_id' => $outer->id], $this->context->effects->take());
         $this->assertStringContainsString('already', $this->look('set_topic', ['topic' => 'outer joins']));
 
         // One the course has is used, whatever the case.

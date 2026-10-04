@@ -194,8 +194,9 @@ final class Stack
             moduleQuestions: $brief?->questions ?? [],
             moduleKeyPoints: $brief?->keyPoints ?? [],
             moduleLast: $brief?->last,
+            mode: $session->mode,
             topicNow: $topic?->name,
-            topicPractice: $topic === null ? null : "the student says {$status($topic)}; practice: {$topic->evidence()}",
+            topicPractice: $topic === null ? null : ($topic->byTutor() ? "you marked it {$status($topic)}" : "the student says {$status($topic)}").'; practice: '.$topic->evidence(),
             clock: self::clock($session),
             teaching: array_map(fn (string $key) => Tutoring::CHOICES[$key][$tutoring[$key]][1], array_keys(Tutoring::DEFAULTS)),
             material: $material,
@@ -320,10 +321,20 @@ final class Stack
         return $lines;
     }
 
+    /** What each study mode means for this session, in one line (the paragraph per mode is in the tutor's rules). */
+    private const MODES = [
+        'module' => 'Mode: whole module. Go through the module\'s material in order, topic by topic.',
+        'topic' => 'Mode: one topic. Teach the topic now only; offer the next, don\'t start it.',
+        'quiz' => 'Mode: quiz. Five questions, one at a time, on the topic now or what they find hardest.',
+        'test' => 'Mode: test. Ten to fifteen exam-level questions over the module, scored at the end.',
+        'free' => 'Mode: free. Answer what they ask; no plan and no checkpoints.',
+    ];
+
     /** @return list<array{0: string, 1: bool}> */
     private function session(Facts $f): array
     {
         $lines = [['## This session', true]];
+        $lines[] = [self::MODES[$f->mode] ?? self::MODES['topic'], true];
         $lines[] = [$f->topicNow !== null
             ? "Topic now: {$f->topicNow} ({$f->topicPractice})."
             : 'Topic now: none chosen. Propose one and ask whether to take it.', true];
