@@ -10,7 +10,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
 /**
- * Reviewing flashcards: /workspaces/{workspace}/flashcards/review, with
+ * Reviewing flashcards: /courses/{workspace}/flashcards/review, with
  * ?module= and ?topic= (an id, or none) and ?early=1 to practise cards not
  * due yet. Another student's workspace answers 404; an unknown module or
  * topic reviews them all. The page itself is

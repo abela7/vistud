@@ -115,6 +115,27 @@ class NavigationTest extends TestCase
         $this->get(route('journal.index'))->assertOk()->assertSee('title="Settings"  aria-current="page"', false);
     }
 
+    public function test_course_pages_live_at_courses_and_the_old_address_leads_to_them_with_its_query(): void
+    {
+        $id = $this->workspace;
+        $this->assertSame(url("/courses/{$id}"), route('workspaces.show', $id));
+        $this->assertSame(url("/courses/{$id}/progress"), route('workspaces.show', [$id, 'progress']));
+
+        $this->get("/courses/{$id}/modules")->assertOk();
+        $this->get("/workspaces/{$id}")->assertStatus(301)->assertRedirect("/courses/{$id}");
+        $this->get("/workspaces/{$id}/modules?new=1")->assertStatus(301)->assertRedirect("/courses/{$id}/modules?new=1");
+        $this->get("/workspaces/{$id}/notes/abc/export/pdf")->assertStatus(301)->assertRedirect("/courses/{$id}/notes/abc/export/pdf");
+        $this->get('/workspaces')->assertStatus(301)->assertRedirect('/courses');
+        $this->get('/courses')->assertStatus(301)->assertRedirect('/');
+    }
+
+    public function test_the_old_address_asks_a_visitor_who_is_not_signed_in_to_log_in_first(): void
+    {
+        auth()->logout();
+        $this->get("/workspaces/{$this->workspace}/progress")->assertRedirect("/courses/{$this->workspace}/progress");
+        $this->get("/courses/{$this->workspace}/progress")->assertRedirect(route('login'));
+    }
+
     public function test_settings_is_for_a_signed_in_student(): void
     {
         auth()->logout();

@@ -327,7 +327,7 @@ class NotesScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$theirs->id, $theirNote->id, 'md']))->assertNotFound();
         $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $theirNote->id, 'md']))->assertNotFound();
         $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$maths->id, $note->id, 'md']))->assertNotFound();
-        $this->actingAs($this->ada)->get("/workspaces/{$this->biology->id}/notes/{$note->id}/export/html")->assertNotFound();
+        $this->actingAs($this->ada)->get("/courses/{$this->biology->id}/notes/{$note->id}/export/html")->assertNotFound();
         $this->actingAs($bob)->get(route('workspaces.notes.export', [$this->biology->id, $note->id, 'txt']))->assertNotFound();
     }
 

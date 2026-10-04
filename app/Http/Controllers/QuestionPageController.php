@@ -10,8 +10,8 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
 /**
- * A question on a page of its own, /workspaces/{workspace}/questions/{question},
- * and a new one, /workspaces/{workspace}/questions/new (`module` and `topic` say
+ * A question on a page of its own, /courses/{workspace}/questions/{question},
+ * and a new one, /courses/{workspace}/questions/new (`module` and `topic` say
  * where it starts, `from` the page to go back to). Another student's question,
  * or one from another workspace, answers 404 like a missing one. The page itself
  * is App\Livewire\Workspaces\QuestionPage (the owner's review, 2026-09-29).

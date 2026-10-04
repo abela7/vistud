@@ -69,7 +69,7 @@ class WorkspaceScreensTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.show', [$biology->id, 'modules']))->assertOk()->assertSee('All notes &amp; files', false)->assertSee(route('workspaces.show', [$biology->id, 'notes']), false);
         $this->actingAs($this->ada)->get(route('workspaces.show', [$biology->id, 'notes']))->assertOk()->assertSee('Notes &amp; files', false);
         $this->actingAs($this->ada)->get(route('workspaces.show', [$biology->id, 'calendar']))->assertOk()->assertDontSee('is coming next')->assertSee('Cards');
-        $this->actingAs($this->ada)->get("/workspaces/{$biology->id}/nonsense")->assertNotFound();
+        $this->actingAs($this->ada)->get("/courses/{$biology->id}/nonsense")->assertNotFound();
     }
 
     public function test_another_students_workspace_is_exactly_as_missing_as_one_that_does_not_exist(): void

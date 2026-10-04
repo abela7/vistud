@@ -14,8 +14,8 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
 /**
- * An assignment on a page of its own, /workspaces/{workspace}/assignments/{assignment}, with its deadline, where
- * the student is with it and its files; and a new one, /workspaces/{workspace}/assignments/new (`module` says
+ * An assignment on a page of its own, /courses/{workspace}/assignments/{assignment}, with its deadline, where
+ * the student is with it and its files; and a new one, /courses/{workspace}/assignments/new (`module` says
  * where it starts). Another student's assignment, or one from another workspace, answers 404 like a missing
  * one. The page itself is App\Livewire\Workspaces\AssignmentPage (the owner's review, 2026-10-02).
  */

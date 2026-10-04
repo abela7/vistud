@@ -14,10 +14,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
 /**
- * A note: /workspaces/{workspace}/notes/{note}. Another student's note, or
+ * A note: /courses/{workspace}/notes/{note}. Another student's note, or
  * a note that belongs to another workspace, answers 404 like a missing one.
  * The editor on the page saves through the JSON API, not through here.
- * /workspaces/{workspace}/notes/new?in=module:{id} (or folder:{id}; the top
+ * /courses/{workspace}/notes/new?in=module:{id} (or folder:{id}; the top
  * level without) is the editor for a note that doesn't exist yet: it is made
  * by its first words (POST /api/v1/notes), and never if none are written.
  * With &from=file:{id} it starts by importing that Markdown or text file;

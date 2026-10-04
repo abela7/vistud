@@ -218,7 +218,9 @@ final class QuestionPage extends Component
     /** A page of this workspace (its path, and its query), never another site. */
     private function pageOfThisWorkspace(?string $from): ?string
     {
-        if ($from === null || ! str_starts_with($from, "/workspaces/{$this->workspaceId}/") || str_contains($from, '//') || str_contains($from, '\\') || str_contains($from, '..')) {
+        // An address from before the course pages moved to /courses is the same page.
+        $from = $from === null ? null : (string) preg_replace('#^/workspaces/#', '/courses/', $from);
+        if ($from === null || ! str_starts_with($from, "/courses/{$this->workspaceId}/") || str_contains($from, '//') || str_contains($from, '\\') || str_contains($from, '..')) {
             return null;
         }
 

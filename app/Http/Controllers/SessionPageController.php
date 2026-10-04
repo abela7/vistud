@@ -10,7 +10,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
 /**
- * A study session: /workspaces/{workspace}/sessions/{session}. Another
+ * A study session: /courses/{workspace}/sessions/{session}. Another
  * student's session, or one from another workspace, answers 404 like a
  * missing one. The page itself is App\Livewire\Workspaces\StudySession.
  */

@@ -16,7 +16,7 @@ use Symfony\Component\HttpFoundation\HeaderUtils;
 
 /**
  * A note as a file to keep, share, or open elsewhere (the owner's reviews,
- * 2026-09-28 and 2026-10-01): /workspaces/{workspace}/notes/{note}/export/pdf
+ * 2026-09-28 and 2026-10-01): /courses/{workspace}/notes/{note}/export/pdf
  * and /export/docx are PDF and Word, made by LibreOffice when it is on this
  * computer (App\Study\NoteExports); /export/md is Markdown (the title as its
  * heading, then App\Study\NoteDoc::markdown), /export/txt the same as plain

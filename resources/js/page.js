@@ -71,7 +71,7 @@ new MutationObserver((changes) => {
 // The browser's Back shows Livewire's copy of that page at once, as it was when it was left. What changed
 // since (a note written there, a question answered) is fetched straight after, so the page is never stale.
 // A note is opened fresh instead: its editor must start from the latest saved version, never an old copy.
-const NOTE_PAGE = /\/workspaces\/[^/]+\/notes\/[^/]+$/;
+const NOTE_PAGE = /\/(?:courses|workspaces)\/[^/]+\/notes\/[^/]+$/;
 let refreshWhenBack = false;
 document.addEventListener('livewire:navigate', (event) => {
     if (!event.detail?.history || !event.detail?.cached) return;

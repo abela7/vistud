@@ -15,7 +15,7 @@ use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
-/** A module's dedicated study sessions page: /workspaces/{workspace}/modules/{module}/sessions */
+/** A module's dedicated study sessions page: /courses/{workspace}/modules/{module}/sessions */
 class ModuleSessionsScreenTest extends TestCase
 {
     use CreatesAccounts, RefreshesDatabase;

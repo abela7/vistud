@@ -16,7 +16,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
 /**
- * A file's page: /workspaces/{workspace}/files/{file}, with a large preview
+ * A file's page: /courses/{workspace}/files/{file}, with a large preview
  * where the browser can show the file, and its download. Another student's
  * file, or one from another workspace, answers 404 like a missing one.
  */

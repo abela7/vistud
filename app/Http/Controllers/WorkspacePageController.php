@@ -12,7 +12,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 
 /**
- * A workspace's pages: /workspaces/{workspace}/{section?}. The service finds
+ * A workspace's pages: /courses/{workspace}/{section?}. The service finds
  * the workspace first, so another student's ID answers 404 before anything
  * is drawn, exactly like one that doesn't exist. The Overview, the course's home,
  * is gathered by App\Study\CourseHome (what to do next, how far, the modules) and
