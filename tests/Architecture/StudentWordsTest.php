@@ -164,7 +164,8 @@ class StudentWordsTest extends TestCase
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(base_path($folder), RecursiveDirectoryIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
             if (str_ends_with($file->getPathname(), $suffix)) {
-                $files[] = str_replace(base_path().'/', '', $file->getPathname());
+                // Relative to the project, with forward slashes (a Windows path has backslashes).
+                $files[] = str_replace('\\', '/', substr($file->getPathname(), strlen(base_path()) + 1));
             }
         }
         sort($files);
