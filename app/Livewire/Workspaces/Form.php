@@ -13,7 +13,7 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
- * The workspace dialog: creating one (on My workspaces), or editing,
+ * The workspace dialog: creating one (on My courses), or editing,
  * archiving and restoring one (on its page). A thin adapter over
  * App\Study\Workspaces, which checks everything; the workspace ID is locked.
  */
@@ -133,7 +133,7 @@ final class Form extends Component
             return null;
         }
         $this->workspaces->restore($this->principal(), $this->workspaceId);
-        session()->flash('workspace-notice', "{$this->name} is back in your workspaces.");
+        session()->flash('workspace-notice', "{$this->name} is back in your courses.");
 
         return $this->redirectRoute('workspaces.show', $this->workspaceId, navigate: true);
     }

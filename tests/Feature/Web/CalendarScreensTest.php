@@ -51,7 +51,7 @@ class CalendarScreensTest extends TestCase
     public function test_a_workspaces_calendar_is_its_section_and_the_one_across_all_is_its_own_page(): void
     {
         $this->get(route('workspaces.show', [$this->databases->id, 'calendar']))->assertOk()->assertSee('October 2026')->assertSee('Cell essay')->assertDontSee('Lab report')->assertDontSee('is coming next');
-        $this->get(route('calendar.index'))->assertOk()->assertSee('from all your workspaces')->assertSee('Cell essay')->assertSee('Lab report');
+        $this->get(route('calendar.index'))->assertOk()->assertSee('from all your courses')->assertSee('Cell essay')->assertSee('Lab report');
         $this->get(route('workspaces.show', [$this->databases->id, 'overview']))->assertOk()->assertSee('Calendar');
         auth()->logout();
         $this->get(route('calendar.index'))->assertRedirect();

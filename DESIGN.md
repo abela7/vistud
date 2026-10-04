@@ -306,6 +306,21 @@ Bulk actions allow students to select multiple items across any list (folders, n
   - **Non-destructive vs. Destructive Actions:** Non-destructive actions (moving to trash) show a transient toast with an "Undo" action that immediately restores items without a modal interrupt. Truly destructive actions (deleting permanently or deleting items with dependencies) open a single modal dialog (`.modal`) confirming the count and names before proceeding.
   - **Batch execution:** Handled via domain services with atomic, non-blocking operations and validation (max 200 items per request, format `type:id`, ownership verification). Items that cannot be deleted due to dependencies (such as non-empty folders or modules) are gracefully skipped and reported in the completion notice (e.g. "1 skipped: “Week 1” isn't empty").
 
+### 5.8 The top of a page (`<x-page>`)
+
+Every new or rebuilt page starts the same way (ViStud 2, [docs/specs/vistud-2-blueprint.md](docs/specs/vistud-2-blueprint.md) §3.9): `<x-page title back-href back-to eyebrow context>` draws one row, Back as a round button, the title with a small line above it (usually the course's name), and **one line under it saying what the page is for** (`context`, 60 characters at most). On the right: the page's **one primary action** in the `action` slot, and everything else in the `menu` slot (`.menu-item` links and buttons) behind a ⋯ button named "More for …". It reuses the section header's styles (`.section-header*`), so the older `x-workspace.section-header` and this look alike; a page that has to show a count or a view switch keeps using the older one until it is rebuilt. The page's content starts straight under it, with no paragraph of help between.
+
+### 5.9 Writing for the screen
+
+The rules for every word a student reads (blueprint §3.11):
+
+- **A hint is one line of at most 60 characters, or nothing.** `<x-field hint>`, `<x-checkbox hint>` and a panel's hint are quiet lines under a label, not paragraphs. If a screen needs more words to be understood, make the screen clearer instead.
+- **Buttons are verbs:** Study, Add, Review, Done. Never "Click here to…".
+- **A status is an icon and one word** (a `.badge`).
+- **An empty state is one line and one button**, never a paragraph.
+- **No internal words.** A student never reads "evidence", "marks", "briefing", "write-back", "journal" or "engine"; they read "AI" where a model is meant, "AI settings" for the page, and "tutor", "reader" and "helper" for the three roles. A student's workspace is a **course** on every screen (the code and the routes keep `workspaces` until Phase 6).
+- **Errors say what to do next, in one line.**
+
 ## 6. Layout and responsive behaviour
 
 ### 6.1 Breakpoints and layouts

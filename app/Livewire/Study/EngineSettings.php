@@ -3,8 +3,10 @@
 namespace App\Livewire\Study;
 
 use App\Engine\Models;
+use App\Engine\Role as EngineRole;
 use App\Engine\Settings;
 use App\Engine\Setup;
+use App\Engine\Usage;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Guard;
@@ -16,9 +18,10 @@ use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
- * A student's AI engine page (docs/specs/study-memory.md §6): their own key for the service (pasted once and
- * tried at once; without one, the key an admin set up for everyone), the models they choose by id with the
- * prices shown, their spending limits, the training opt-out and their consent to the chat. A thin adapter over
+ * A student's AI settings (docs/specs/study-memory.md §6, docs/specs/vistud-2-blueprint.md §3.6.1): their own key for
+ * the service (pasted once and tried at once; without one, the key an admin set up for everyone), the model for each
+ * of the three roles chosen by id with the prices shown, what the month has cost by role, how the tutor works (the
+ * language and the trust toggles), their spending limits, the training opt-out and their consent. A thin adapter over
  * App\Engine\Settings. The key typed here is sent once and never kept in the component.
  */
 final class EngineSettings extends Component
@@ -67,12 +70,15 @@ final class EngineSettings extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(Settings $settings, Models $models, Setup $setup, PrincipalFactory $principals): void
+    private Usage $usage;
+
+    public function boot(Settings $settings, Models $models, Setup $setup, PrincipalFactory $principals, Usage $usage): void
     {
         $this->settings = $settings;
         $this->models = $models;
         $this->setup = $setup;
         $this->principals = $principals;
+        $this->usage = $usage;
     }
 
     public function mount(): void
@@ -139,7 +145,7 @@ final class EngineSettings extends Component
 
             return;
         }
-        $this->notify('Your AI engine settings are saved.');
+        $this->notify('Your AI settings are saved.');
         $this->load();
     }
 
@@ -158,6 +164,8 @@ final class EngineSettings extends Component
 
         return view('livewire.study.engine-settings', [
             'choices' => $choices,
+            'roles' => EngineRole::cases(),
+            'usage' => $this->usage->month($by),
             'keyState' => $keyState,
             'models' => $models,
             'setupUrl' => $by->hasRole(Role::Admin) ? route('admin.engine') : null,
@@ -165,7 +173,7 @@ final class EngineSettings extends Component
             'readerWords' => $words($this->readerModel),
             'helperWords' => $words($this->helperModel),
             'fallbackWords' => $words($this->fallbackModel),
-        ])->title('AI engine');
+        ])->title('AI settings');
     }
 
     private function load(): void

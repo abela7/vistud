@@ -22,12 +22,12 @@ test('desktop: the sidebar is always there, collapses to icons, and remembers it
 
     await expect(sidebar).toBeVisible();
     await expect(menuButton(page)).toBeHidden();
-    await expect(sidebar.getByRole('link', { name: 'All workspaces' })).toHaveAttribute('aria-current', 'page');
+    await expect(sidebar.getByRole('link', { name: 'All courses' })).toHaveAttribute('aria-current', 'page');
 
     await sidebar.getByRole('button', { name: 'Collapse sidebar' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-sidebar', 'collapsed');
     expect((await sidebar.boundingBox()).width).toBeLessThan(90);
-    await expect(sidebar.getByRole('link', { name: 'All workspaces' })).toBeVisible();
+    await expect(sidebar.getByRole('link', { name: 'All courses' })).toBeVisible();
 
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-sidebar', 'collapsed');

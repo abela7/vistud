@@ -15,9 +15,9 @@
         <form wire:submit="save" novalidate class="modal-panel" x-data="{ colour: $wire.entangle('colour') }">
             <div class="modal-head">
                 <div class="min-w-0 flex-1 space-y-1">
-                    <h2 id="workspace-form-title" class="text-lg font-semibold">{{ $workspaceId ? 'Edit workspace' : 'New workspace' }}</h2>
+                    <h2 id="workspace-form-title" class="text-lg font-semibold">{{ $workspaceId ? 'Edit course' : 'New course' }}</h2>
                     @unless ($workspaceId)
-                        <p class="text-fg-muted">One workspace per subject: its modules, notes, files, calendar and progress live inside it.</p>
+                        <p class="text-fg-muted">One course per subject: its modules, notes, files, calendar and progress live inside it.</p>
                     @endunless
                 </div>
                 <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
@@ -72,11 +72,11 @@
                         @else
                             <x-button variant="ghost" icon="archive" wire:click="archive" wire:loading.attr="aria-busy" wire:target="archive" busy-label="Archiving…">Archive</x-button>
                         @endif
-                        <x-button variant="danger" icon="trash-2" wire:click="delete" wire:confirm="Are you sure you want to delete this workspace? All its contents will be permanently deleted." wire:loading.attr="aria-busy" wire:target="delete" busy-label="Deleting…">Delete</x-button>
+                        <x-button variant="danger" icon="trash-2" wire:click="delete" wire:confirm="Are you sure you want to delete this course? All its contents will be permanently deleted." wire:loading.attr="aria-busy" wire:target="delete" busy-label="Deleting…">Delete</x-button>
                     </div>
                 @endif
                 <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
-                <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ $workspaceId ? 'Save changes' : 'Create workspace' }}</x-button>
+                <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ $workspaceId ? 'Save changes' : 'Create course' }}</x-button>
             </div>
         </form>
     </dialog>

@@ -17,7 +17,7 @@
         @if ($area === 'admin')
             <x-back :href="route('admin.overview')" to="Admin overview" />
         @else
-            <x-back :href="route('home')" to="All workspaces" />
+            <x-back :href="route('home')" to="All courses" />
         @endif
         <div class="space-y-6 sm:card sm:p-8">
                 <h1 class="text-2xl font-semibold tracking-tight">{{ $title }}</h1>

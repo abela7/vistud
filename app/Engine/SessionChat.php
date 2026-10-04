@@ -395,7 +395,7 @@ final class SessionChat
     private function refuseOverCap(LearnerScope $scope, object $thread, Choices $choices, string $zone): void
     {
         if ($choices->sessionCapMicros > 0 && (int) $thread->spent_micros >= $choices->sessionCapMicros) {
-            throw new Unprocessable('engine_cap', 'This session\'s chat has reached its limit of '.Choices::dollars($choices->sessionCapMicros).'. Raise it in the AI engine settings to keep going.');
+            throw new Unprocessable('engine_cap', 'This session\'s chat has reached its limit of '.Choices::dollars($choices->sessionCapMicros).'. Raise it in your AI settings to keep going.');
         }
         $this->usage->refuseOverMonthCap($scope, $choices, $zone, chat: true);
     }

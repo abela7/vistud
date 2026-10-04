@@ -165,7 +165,7 @@ final class OpenRouter implements Engine
     {
         $key = $key !== null && $key !== '' ? $key : $this->setup->key();
         if ($key === '') {
-            throw new EngineFailed('engine_not_set_up', 'No key for the AI engine yet. Add your own OpenRouter key in your AI engine settings, or ask the owner to set one up for everyone.');
+            throw new EngineFailed('engine_not_set_up', 'No key for the AI yet. Add your own OpenRouter key in your AI settings, or ask the owner to set one up for everyone.');
         }
         $http = Http::baseUrl(rtrim($this->setup->url(), '/'))
             ->withToken($key)
@@ -191,7 +191,7 @@ final class OpenRouter implements Engine
         $said = self::said(is_array($data['error'] ?? null) ? $data['error'] : []);
         if ($response->failed() || isset($data['error'])) {
             throw new EngineFailed('engine_refused', match ($response->status()) {
-                401, 403 => 'The service refused the key. Check it in the AI engine settings.',
+                401, 403 => 'The service refused the key. Check it in your AI settings.',
                 402 => 'The engine account is out of credit. Top it up at the service.',
                 404 => 'The engine does not know that model, or no provider offers it with what the chat needs.'.$said,
                 429 => 'The engine is busy right now. Wait a moment and try again.',

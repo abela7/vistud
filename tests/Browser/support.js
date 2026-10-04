@@ -369,7 +369,7 @@ export async function openConfirmPassword(page, email = makeStudentAccount()) {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
-    await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
+    await page.getByRole('heading', { name: 'My courses' }).waitFor();
     await page.goto('/user/confirm-password');
     await page.waitForURL('**/user/confirm-password');
 
@@ -399,7 +399,7 @@ export async function openTwoFactorSetup(page, email = makeStudentAccount()) {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
-    await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
+    await page.getByRole('heading', { name: 'My courses' }).waitFor();
     // The account menu works once the page's script has run.
     await page.waitForLoadState('load');
     await page.locator('[data-menu-button]').click();
@@ -428,7 +428,7 @@ export async function openAdminOverview(page) {
     await page.getByRole('button', { name: 'Use a recovery code instead' }).click();
     await page.getByLabel('Recovery code').fill('code-one-aaaa');
     await page.getByRole('button', { name: 'Verify' }).click();
-    await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
+    await page.getByRole('heading', { name: 'My courses' }).waitFor();
     // The account menu works once the page's script has run.
     await page.waitForLoadState('load');
     await page.locator('[data-menu-button]').click();
@@ -447,7 +447,7 @@ export async function openStudentHome(page, email = makeStudentAccount()) {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
-    await page.getByRole('heading', { name: 'My workspaces' }).waitFor();
+    await page.getByRole('heading', { name: 'My courses' }).waitFor();
     await page.waitForLoadState('load');
 
     return email;

@@ -13,7 +13,7 @@ use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
-/** My workspaces and a workspace's pages (docs/specs/workspaces.md, M2 step 1). */
+/** My courses and a workspace's pages (docs/specs/workspaces.md, M2 step 1). */
 class WorkspaceScreensTest extends TestCase
 {
     use CreatesAccounts, RefreshesDatabase;
@@ -31,8 +31,8 @@ class WorkspaceScreensTest extends TestCase
     {
         $this->actingAs($this->ada)->get('/')
             ->assertOk()
-            ->assertSee('<title>My workspaces', false)
-            ->assertSeeInOrder(['Welcome back, Ada', 'My workspaces', 'Create your first workspace'])
+            ->assertSee('<title>My courses', false)
+            ->assertSeeInOrder(['Welcome back, Ada', 'My courses', 'Create your first course'])
             ->assertSee('id="workspace-form"', false);
     }
 
@@ -43,7 +43,7 @@ class WorkspaceScreensTest extends TestCase
         app(Workspaces::class)->archive($this->principal($this->ada), $old->id);
 
         $this->actingAs($this->ada)->get('/')
-            ->assertSeeInOrder(['All workspaces', 'Journal', 'Workspaces', 'Biology'])
+            ->assertSeeInOrder(['All courses', 'Journal', 'Courses', 'Biology'])
             ->assertSee('ws-colour-green', false)
             ->assertSee('BIO101 · Autumn 2026')
             ->assertSee(route('workspaces.show', $biology->id), false)
@@ -60,7 +60,7 @@ class WorkspaceScreensTest extends TestCase
             ->assertSee('<title>Biology', false)
             ->assertSee('id="ws-menu-sidebar"', false)
             ->assertSee('id="ws-menu-drawer"', false)
-            ->assertSeeInOrder(['Biology', 'Mathematics', 'All workspaces', 'New workspace'])
+            ->assertSeeInOrder(['Biology', 'Mathematics', 'All courses', 'New course'])
             ->assertSeeInOrder(['Overview', 'Modules', 'Notes &amp; files', 'Calendar', 'Progress'], false)
             ->assertSee('class="app-tabbar"', false)
             ->assertSee('BIO101');
@@ -85,7 +85,7 @@ class WorkspaceScreensTest extends TestCase
     {
         $adminOnly = $this->admin(student: false, attributes: ['name' => 'Grace Hopper']);
 
-        $this->actingAs($adminOnly)->get('/')->assertOk()->assertSee('Welcome back, Grace')->assertDontSee('My workspaces');
+        $this->actingAs($adminOnly)->get('/')->assertOk()->assertSee('Welcome back, Grace')->assertDontSee('My courses');
         $this->actingAs($adminOnly)->get(route('workspaces.show', 'anything'))->assertForbidden();
     }
 
@@ -103,7 +103,7 @@ class WorkspaceScreensTest extends TestCase
             ->set('name', '')->set('startsOn', '2026-10-01')->set('endsOn', '2026-09-01')
             ->call('save')
             ->assertHasErrors(['name', 'endsOn'])
-            ->assertSee('Give the workspace a name.')
+            ->assertSee('Give the course a name.')
             ->assertSee('The end date is before the start date.')
             ->assertNoRedirect();
     }
@@ -134,7 +134,7 @@ class WorkspaceScreensTest extends TestCase
 
         $this->livewire(Index::class)
             ->call('restore', $biology->id)
-            ->assertSee('Biology is back in your workspaces.');
+            ->assertSee('Biology is back in your courses.');
         $this->assertFalse($this->find($biology->id)->archived());
     }
 

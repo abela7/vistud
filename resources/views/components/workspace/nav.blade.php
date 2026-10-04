@@ -8,10 +8,10 @@
 @props(['workspace', 'workspaces', 'section', 'menuId'])
 <div class="space-y-3">
     <div class="ws-switcher-wrap">
-        <button type="button" class="ws-switcher" data-menu-button aria-controls="{{ $menuId }}" aria-expanded="false" title="{{ $workspace->name }}: switch workspace">
+        <button type="button" class="ws-switcher" data-menu-button aria-controls="{{ $menuId }}" aria-expanded="false" title="{{ $workspace->name }}: switch course">
             <x-workspace.chip :workspace="$workspace" />
             <span class="ws-switcher-text min-w-0 flex-1">
-                <span class="block text-xs text-fg-muted">Workspace</span>
+                <span class="block text-xs text-fg-muted">Course</span>
                 <span class="block truncate font-semibold">{{ $workspace->name }}</span>
             </span>
             <x-icon name="chevrons-up-down" class="ws-switcher-caret size-4 text-fg-muted" />
@@ -23,8 +23,8 @@
                 </a>
             @endforeach
             <div class="mt-1.5 border-t border-divider pt-1.5">
-                <a href="{{ route('home') }}" class="menu-item"><x-icon name="house" class="size-4" />All workspaces</a>
-                <a href="{{ route('home', ['new' => 1]) }}" class="menu-item"><x-icon name="plus" class="size-4" />New workspace</a>
+                <a href="{{ route('home') }}" class="menu-item"><x-icon name="house" class="size-4" />All courses</a>
+                <a href="{{ route('home', ['new' => 1]) }}" class="menu-item"><x-icon name="plus" class="size-4" />New course</a>
             </div>
         </div>
     </div>
@@ -40,8 +40,8 @@
     <div>
         <p class="nav-section">Everywhere</p>
         <ul class="nav-list">
-            <li><a href="{{ route('home') }}" class="nav-item" title="All workspaces"><x-icon name="house" /><span class="nav-label">All workspaces</span></a></li>
-            <li><a href="{{ route('calendar.index') }}" class="nav-item" title="Calendar of every workspace"><x-icon name="calendar-days" /><span class="nav-label">All calendars</span></a></li>
+            <li><a href="{{ route('home') }}" class="nav-item" title="All courses"><x-icon name="house" /><span class="nav-label">All courses</span></a></li>
+            <li><a href="{{ route('calendar.index') }}" class="nav-item" title="Calendar of every course"><x-icon name="calendar-days" /><span class="nav-label">All calendars</span></a></li>
             <li><a href="{{ route('journal.index') }}" class="nav-item" title="Journal"><x-icon name="notebook-text" /><span class="nav-label">Journal</span></a></li>
         </ul>
     </div>

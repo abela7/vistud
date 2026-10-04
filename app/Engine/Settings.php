@@ -77,14 +77,14 @@ final class Settings
         $choices = $this->get($by);
         $key = $this->key($by);
         if ($key === null && ! $this->setup->keySet()) {
-            throw new Unprocessable('engine_key', 'Add your OpenRouter key in your AI engine settings first.');
+            throw new Unprocessable('engine_key', 'Add your OpenRouter key in your AI settings first.');
         }
         $model = $choices->modelFor($role);
         if ($model === '') {
-            throw new Unprocessable('engine_model', 'Choose a model in your AI engine settings first.');
+            throw new Unprocessable('engine_model', 'Choose a model in your AI settings first.');
         }
         if ($choices->consentedAt === null) {
-            throw new Unprocessable('engine_consent', 'Agree to the chat in your AI engine settings first.');
+            throw new Unprocessable('engine_consent', 'Agree to the chat in your AI settings first.');
         }
 
         return [$choices, $key, $model];

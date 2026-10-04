@@ -17,29 +17,29 @@ test.use({ reducedMotion: 'reduce' });
 test.describe.configure({ timeout: 60_000 });
 
 async function openForm(page) {
-    await page.getByRole('button', { name: 'New workspace' }).first().click();
+    await page.getByRole('button', { name: 'New course' }).first().click();
     await expect(form(page)).toBeVisible();
 }
 
 test('a student creates their first workspace, opens it, and creates a second from the switcher', async ({ page }) => {
     await page.setViewportSize(desktop);
     await openStudentHome(page);
-    await expect(page.getByText('Create your first workspace')).toBeVisible();
+    await expect(page.getByText('Create your first course')).toBeVisible();
 
     await openForm(page);
     await expect(form(page).getByLabel('Name')).toBeFocused();
-    await form(page).getByRole('button', { name: 'Create workspace' }).click();
-    await expect(form(page).getByText('Give the workspace a name.')).toBeVisible();
+    await form(page).getByRole('button', { name: 'Create course' }).click();
+    await expect(form(page).getByText('Give the course a name.')).toBeVisible();
 
     await form(page).getByLabel('Name').fill('Biology');
     await form(page).getByText('Green', { exact: true }).click({ force: true });
     await form(page).getByText('Microscope', { exact: true }).click({ force: true });
     await form(page).getByLabel('Course code (optional)').fill('BIO101');
-    await form(page).getByRole('button', { name: 'Create workspace' }).click();
+    await form(page).getByRole('button', { name: 'Create course' }).click();
 
     await expect(heading(page, 'Biology')).toBeVisible();
     await page.getByRole('button', { name: 'More for Biology' }).click();
-    await page.getByRole('button', { name: 'Edit workspace' }).click();
+    await page.getByRole('button', { name: 'Edit course' }).click();
     await expect(form(page).getByLabel('Course code (optional)')).toHaveValue('BIO101');
     await page.keyboard.press('Escape');
     const sidebar = page.locator('.app-sidebar');
@@ -50,14 +50,14 @@ test('a student creates their first workspace, opens it, and creates a second fr
     await expect(page.getByRole('button', { name: 'New module' })).toBeVisible();
 
     await sidebar.locator('.ws-switcher').click();
-    await sidebar.locator('.ws-menu').getByRole('link', { name: 'New workspace' }).click();
+    await sidebar.locator('.ws-menu').getByRole('link', { name: 'New course' }).click();
     await expect(form(page)).toBeVisible();
     await form(page).getByLabel('Name').fill('Mathematics');
-    await form(page).getByRole('button', { name: 'Create workspace' }).click();
+    await form(page).getByRole('button', { name: 'Create course' }).click();
     await expect(heading(page, 'Mathematics')).toBeVisible();
 
     await sidebar.locator('.ws-switcher').click();
-    await expect(sidebar.locator('.ws-menu').getByRole('link')).toHaveText(['Biology', 'Mathematics', 'All workspaces', 'New workspace']);
+    await expect(sidebar.locator('.ws-menu').getByRole('link')).toHaveText(['Biology', 'Mathematics', 'All courses', 'New course']);
     await page.keyboard.press('Escape');
     await expect(sidebar.locator('.ws-switcher')).toBeFocused();
     await sidebar.locator('.ws-switcher').click();
@@ -72,14 +72,14 @@ test('editing, archiving and restoring a workspace', async ({ page }) => {
     await expect(heading(page, 'Biology')).toBeVisible();
 
     await page.getByRole('button', { name: 'More for Biology' }).click();
-    await page.getByRole('button', { name: 'Edit workspace' }).click();
+    await page.getByRole('button', { name: 'Edit course' }).click();
     await expect(form(page).getByLabel('Name')).toHaveValue('Biology');
     await form(page).getByLabel('Name').fill('Human biology');
     await form(page).getByRole('button', { name: 'Save changes' }).click();
     await expect(heading(page, 'Human biology')).toBeVisible();
 
     await page.getByRole('button', { name: 'More for Human biology' }).click();
-    await page.getByRole('button', { name: 'Edit workspace' }).click();
+    await page.getByRole('button', { name: 'Edit course' }).click();
     await form(page).getByRole('button', { name: 'Archive' }).click();
     await expect(page.getByText('Human biology is archived.')).toBeVisible();
     await expect(page.locator('main').getByRole('link', { name: 'Human biology' })).toBeHidden();
@@ -87,7 +87,7 @@ test('editing, archiving and restoring a workspace', async ({ page }) => {
     await page.getByText('Archived (1)').click();
     await markPage(page);
     await page.getByRole('button', { name: 'Restore Human biology' }).click();
-    await expect(page.getByText('Human biology is back in your workspaces.')).toBeVisible();
+    await expect(page.getByText('Human biology is back in your courses.')).toBeVisible();
     await expect(page.locator('main').getByRole('link', { name: 'Human biology' })).toBeVisible();
     expect(await wasReloaded(page)).toBe(false);
 });
@@ -97,13 +97,13 @@ test('deleting a workspace from the card menu with confirmation modal', async ({
     await openStudentHome(page, makeStudentWithWorkspaces([['Biology', 'green', 'microscope'], ['Spanish', 'amber', 'languages']]));
 
     await page.getByRole('button', { name: 'Actions for Biology' }).click();
-    await page.getByRole('button', { name: 'Delete workspace' }).click();
+    await page.getByRole('button', { name: 'Delete course' }).click();
 
     const dialog = page.locator('#workspace-delete-dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('Are you sure you want to delete Biology?')).toBeVisible();
 
-    await dialog.getByRole('button', { name: 'Delete workspace' }).click();
+    await dialog.getByRole('button', { name: 'Delete course' }).click();
     await expect(page.getByText('Biology was deleted.')).toBeVisible();
     await expect(page.locator('main').getByRole('link', { name: 'Biology' })).toBeHidden();
     await expect(page.locator('main').getByRole('link', { name: 'Spanish' })).toBeVisible();
@@ -132,8 +132,8 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         const states = { 'my workspaces': await foreignColours(page) };
 
         await openForm(page);
-        await form(page).getByRole('button', { name: 'Create workspace' }).click();
-        await form(page).getByText('Give the workspace a name.').waitFor();
+        await form(page).getByRole('button', { name: 'Create course' }).click();
+        await form(page).getByText('Give the course a name.').waitFor();
         await form(page).getByText('Purple', { exact: true }).click({ force: true });
         await form(page).getByText('Brain', { exact: true }).click({ force: true });
         states['form, error, colour and icon picked'] = await foreignColours(page);
@@ -176,7 +176,7 @@ for (const theme of THEMES) {
 }
 
 test('workspaces never scroll sideways at 320 px, even with 200% text', async ({ page }) => {
-    await openStudentHome(page, makeStudentWithWorkspaces([['A workspace with a rather long name indeed', 'teal', 'globe']]));
+    await openStudentHome(page, makeStudentWithWorkspaces([['A course with a rather long name indeed', 'teal', 'globe']]));
     await page.setViewportSize({ width: 320, height: 800 });
     const check = async (where) => {
         for (const zoom of ['100%', '200%']) {
@@ -192,6 +192,6 @@ test('workspaces never scroll sideways at 320 px, even with 200% text', async ({
     await page.getByRole('heading', { level: 1, name: /rather long/ }).waitFor();
     await check('workspace overview');
     await page.getByRole('button', { name: /^More for/ }).click();
-    await page.getByRole('button', { name: 'Edit workspace' }).click();
+    await page.getByRole('button', { name: 'Edit course' }).click();
     await check('edit dialog');
 });

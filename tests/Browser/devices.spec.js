@@ -48,7 +48,7 @@ for (const [name, device] of Object.entries(devices)) {
             const note = (where, problem) => problem && issues.push(`${where}: ${problem}`);
             await openStudentHome(page, urls.email);
 
-            // 1. My workspaces: cards, card menu, delete dialog.
+            // 1. My courses: cards, card menu, delete dialog.
             await page.goto('/');
             await page.locator('main').getByRole('link', { name: 'Operating Systems' }).waitFor();
             note('home', await overflow(page));
@@ -56,7 +56,7 @@ for (const [name, device] of Object.entries(devices)) {
             const menu = page.locator('.row-menu:popover-open');
             await menu.waitFor();
             note('home card menu', await inside(page, menu));
-            await menu.getByRole('button', { name: 'Delete workspace' }).click();
+            await menu.getByRole('button', { name: 'Delete course' }).click();
             const del = page.locator('#workspace-delete-dialog');
             await expect(del).toBeVisible();
             await page.waitForTimeout(600);

@@ -1,5 +1,5 @@
 {{--
-    Home. A student's is My workspaces (docs/specs/workspaces.md); an account
+    Home. A student's is My courses (docs/specs/workspaces.md); an account
     that is only an admin has no workspaces, so its home shows the account's
     security and the way into the admin area.
 --}}
@@ -12,14 +12,14 @@
     $isStudent = app(\App\Identity\PrincipalFactory::class)->fromRequest(request())->hasRole(\App\Platform\Access\Role::Student);
 @endphp
 @if ($isStudent)
-<x-layouts.app title="My workspaces">
+<x-layouts.app title="My courses">
     <div class="mx-auto max-w-7xl space-y-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <div class="space-y-1">
                 <p class="text-fg-muted">{{ $isNew ? 'Welcome' : 'Welcome back' }}, {{ $firstName }}</p>
-                <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">My workspaces</h1>
+                <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">My courses</h1>
             </div>
-            <x-button variant="primary" icon="plus" x-data x-on:click="$dispatch('workspace-form-open')">New workspace</x-button>
+            <x-button variant="primary" icon="plus" x-data x-on:click="$dispatch('workspace-form-open')">New course</x-button>
         </div>
 
         @if ($isNew)
@@ -38,7 +38,7 @@
     <div class="mx-auto max-w-4xl space-y-8">
         <div class="space-y-1.5">
             <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ $isNew ? 'Welcome' : 'Welcome back' }}, {{ $firstName }}</h1>
-            <p class="text-fg-muted">Signed in as {{ $user->email }}. Your notes, courses and calendar arrive with the study workspace.</p>
+            <p class="text-fg-muted">Signed in as {{ $user->email }}. Your notes, courses and calendar arrive in the student area.</p>
         </div>
 
         @if ($isNew)

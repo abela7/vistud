@@ -366,7 +366,7 @@ test('workspaces: my workspaces, the form, a workspace and its switcher', async 
 
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
-    await page.getByRole('button', { name: 'New workspace' }).first().click();
+    await page.getByRole('button', { name: 'New course' }).first().click();
     await page.locator('#workspace-form').getByLabel('Name').fill('Physics');
     await page.locator('#workspace-form').getByText('Purple', { exact: true }).click({ force: true });
     await page.locator('#workspace-form').getByText('Flask conical', { exact: true }).click({ force: true });

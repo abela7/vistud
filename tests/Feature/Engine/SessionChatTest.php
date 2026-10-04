@@ -205,7 +205,7 @@ class SessionChatTest extends TestCase
 
         app(Settings::class)->removeKey($this->by);
         config(['vistud.engine.key' => '']);
-        $this->expectCode(fn () => $this->chat()->send($this->by, $this->session->id, 'Hi'), 'engine_key', 'your AI engine settings');
+        $this->expectCode(fn () => $this->chat()->send($this->by, $this->session->id, 'Hi'), 'engine_key', 'your AI settings');
     }
 
     public function test_ending_wraps_the_chat_into_the_sessions_summary_and_checkpoint_once_for_the_next_briefing(): void

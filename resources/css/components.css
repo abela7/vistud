@@ -222,6 +222,17 @@
         cursor: pointer;
     }
 
+    /* With a hint under the label: the box lines up with the label's first line. */
+    .checkbox-row-hinted {
+        display: flex;
+        align-items: flex-start;
+        padding-block: 0.5rem;
+    }
+
+    .checkbox-row-hinted .checkbox-box {
+        margin-top: 0.125rem;
+    }
+
     .checkbox-box {
         position: relative;
         display: inline-grid;
@@ -631,6 +642,14 @@
         line-height: 1.25;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    /* A page's one line of what it is for (x-page): quiet, under the title. */
+    .section-header-context {
+        margin-top: 0.125rem;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        line-height: 1.35;
     }
 
     .section-header-title {

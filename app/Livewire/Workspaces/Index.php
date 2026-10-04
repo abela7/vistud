@@ -9,7 +9,7 @@ use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
-/** My workspaces: the student's workspaces as cards, and the archived ones to restore. */
+/** My courses: the student's workspaces as cards, and the archived ones to restore. */
 final class Index extends Component
 {
     use Notices;
@@ -35,7 +35,7 @@ final class Index extends Component
     {
         $by = $this->principals->fromRequest(request());
         $this->workspaces->restore($by, $workspaceId);
-        $this->notice = $this->workspaces->find($by, $workspaceId)->name.' is back in your workspaces.';
+        $this->notice = $this->workspaces->find($by, $workspaceId)->name.' is back in your courses.';
     }
 
     public function archive(string $workspaceId): void
@@ -67,7 +67,7 @@ final class Index extends Component
             return;
         }
         $by = $this->principals->fromRequest(request());
-        $name = $this->deletingName ?? 'Workspace';
+        $name = $this->deletingName ?? 'The course';
         $this->workspaces->delete($by, $this->deletingId);
         $this->deletingId = null;
         $this->deletingName = null;

@@ -18,13 +18,13 @@
 <x-layouts.app :title="$section === 'overview' ? $workspace->name : $label.' · '.$workspace->name" :workspace="$workspace" :section="$section">
     <div class="mx-auto max-w-6xl space-y-6">
         @if ($workspace->archived())
-            <x-alert tone="warning" title="This workspace is archived">
+            <x-alert tone="warning" title="This course is archived">
                 <button type="button" class="font-semibold underline underline-offset-2" x-data x-on:click="Livewire.dispatch('workspace-restore')">Restore it</button>
             </x-alert>
         @endif
 
         @if ($section === 'overview')
-            <x-back :href="route('home')" to="All workspaces" />
+            <x-back :href="route('home')" to="All courses" />
             <div class="flex flex-wrap items-center justify-between gap-4">
                 <div class="flex min-w-0 items-center gap-3">
                     <x-workspace.chip :workspace="$workspace" size="lg" class="max-sm:hidden" />
@@ -39,9 +39,9 @@
                             <x-icon name="ellipsis" class="size-5" /><span class="sr-only">More for {{ $workspace->name }}</span>
                         </button>
                         <div id="overview-menu" class="row-menu" data-menu-panel popover="manual" hidden>
-                            <button type="button" class="menu-item" x-data x-on:click="$dispatch('workspace-form-open')"><x-icon name="pencil" class="size-4" />Edit workspace</button>
+                            <button type="button" class="menu-item" x-data x-on:click="$dispatch('workspace-form-open')"><x-icon name="pencil" class="size-4" />Edit course</button>
                             <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('instructions-open')"><x-icon name="message-square-text" class="size-4" />Instructions for the AI</button>
-                            <a href="{{ route('engine.settings') }}" class="menu-item"><x-icon name="brain" class="size-4" />AI engine</a>
+                            <a href="{{ route('engine.settings') }}" class="menu-item"><x-icon name="brain" class="size-4" />AI settings</a>
                             <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('study-log')"><x-icon name="history" class="size-4" />Log time</button>
                         </div>
                     </div>

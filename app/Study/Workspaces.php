@@ -176,7 +176,7 @@ final class Workspaces
             LearnerTables::query($scope, 'activities')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'instructions')->where('scope', "workspace:{$id}")->delete();
 
-            // Delete workspace
+            // Delete course
             LearnerTables::query($scope, 'workspaces')->where('id', $id)->delete();
 
             $fields = array_intersect_key((array) $row, array_flip(['name', 'code', 'term', 'starts_on', 'ends_on', 'colour', 'icon']));
@@ -309,7 +309,7 @@ final class Workspaces
 
         Input::refuse(array_filter([
             'name' => match (true) {
-                $fields['name'] === null => 'Give the workspace a name.',
+                $fields['name'] === null => 'Give the course a name.',
                 mb_strlen($fields['name']) > self::MAX_NAME => 'Keep the name to '.self::MAX_NAME.' characters.',
                 default => null,
             },

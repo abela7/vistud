@@ -40,7 +40,7 @@ final class Usage
     {
         if ($choices->monthCapMicros > 0 && $this->monthTotal($scope, $zone) >= $choices->monthCapMicros) {
             $limit = Choices::dollars($choices->monthCapMicros);
-            throw new Unprocessable('engine_cap', ($chat ? "This month's chats have reached their limit of {$limit}." : "This month's AI use has reached its limit of {$limit}.").' Raise it in the AI engine settings to keep going.');
+            throw new Unprocessable('engine_cap', ($chat ? "This month's chats have reached their limit of {$limit}." : "This month's AI use has reached its limit of {$limit}.").' Raise it in your AI settings to keep going.');
         }
     }
 

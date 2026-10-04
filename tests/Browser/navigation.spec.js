@@ -22,7 +22,7 @@ for (const [device, size] of [['desktop', { width: 1440, height: 900 }], ['phone
             [null, /\/modules\/[^/]+$/],
             ['Modules', /\/modules$/],
             ['Overview', new RegExp(`/workspaces/${note.workspace}$`)],
-            ['All workspaces', /\/$/],
+            ['All courses', /\/$/],
         ];
         for (const [name, url] of steps) {
             const link = back(page);

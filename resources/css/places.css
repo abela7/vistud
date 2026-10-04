@@ -1843,6 +1843,27 @@
         font-size: 0.875rem;
     }
 
+    /* What a role has cost this month (AI settings): a label and an amount in a quiet box. */
+    .usage-tile {
+        display: grid;
+        gap: 0.125rem;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+    }
+
+    .usage-tile dt {
+        color: var(--text-muted);
+        font-size: 0.875rem;
+    }
+
+    .usage-tile dd {
+        font-size: 1.25rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
     .panel-head-actions {
         display: flex;
         flex-wrap: wrap;

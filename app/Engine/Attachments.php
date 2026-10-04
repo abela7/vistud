@@ -121,7 +121,7 @@ final class Attachments
         self::sameCourse($file->workspaceId, $session);
         $name = $file->fileName();
         if ($file->kind === 'image') {
-            Input::refuse($model !== null && ! $model->images ? ['attach' => 'Your tutor model can\'t see pictures. Choose one that can in your AI engine settings (it says "pictures"), or describe it in words.'] : []);
+            Input::refuse($model !== null && ! $model->images ? ['attach' => 'Your tutor model can\'t see pictures. Choose one that can in your AI settings (it says "pictures"), or describe it in words.'] : []);
 
             return ['ref' => "file:{$id}", 'name' => $name, 'kind' => 'picture'];
         }

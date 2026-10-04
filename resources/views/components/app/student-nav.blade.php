@@ -2,8 +2,8 @@
 @props(['workspaces'])
 <ul class="nav-list">
     <li>
-        <a href="{{ route('home') }}" class="nav-item" title="All workspaces" @if (request()->routeIs('home')) aria-current="page" @endif>
-            <x-icon name="house" /><span class="nav-label">All workspaces</span>
+        <a href="{{ route('home') }}" class="nav-item" title="All courses" @if (request()->routeIs('home')) aria-current="page" @endif>
+            <x-icon name="house" /><span class="nav-label">All courses</span>
         </a>
     </li>
     <li>
@@ -13,7 +13,7 @@
     </li>
 </ul>
 @if ($workspaces !== [])
-    <p class="nav-section">Workspaces</p>
+    <p class="nav-section">Courses</p>
     <ul class="nav-list">
         @foreach ($workspaces as $workspace)
             <li>

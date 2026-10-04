@@ -51,7 +51,7 @@ class TrackerScreensTest extends TestCase
 
         $this->actingAs($this->ada)->get(route('workspaces.show', $this->databases->id))
             ->assertOk()
-            ->assertSeeInOrder(['Databases', 'Edit workspace', 'Instructions for the AI', 'Log time', 'Start studying'])
+            ->assertSeeInOrder(['Databases', 'Edit course', 'Instructions for the AI', 'Log time', 'Start studying'])
             ->assertSeeInOrder(['Streak', 'Last 7 days', 'Cards to review'])
             ->assertSeeInOrder(['Continue', 'Lecture 3: joins'])
             ->assertSeeInOrder(['Coming up', 'ER diagram', 'Assignment', 'Due tomorrow'])

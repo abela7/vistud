@@ -92,7 +92,7 @@ class OpenRouterTest extends TestCase
             app(OpenRouter::class)->reply(new Request('m', 's', []));
             $this->fail('Should fail without a key.');
         } catch (EngineFailed $e) {
-            $this->assertStringContainsString('AI engine settings', $e->getMessage());
+            $this->assertStringContainsString('AI settings', $e->getMessage());
         }
         Http::assertNothingSent();
     }

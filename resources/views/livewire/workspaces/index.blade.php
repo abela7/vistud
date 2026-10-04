@@ -14,10 +14,10 @@
         <section class="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border-strong px-6 py-12 text-center">
             <span class="ws-chip size-14"><x-icon name="layout-grid" class="size-6" /></span>
             <div class="space-y-1">
-                <h2 class="text-lg font-semibold">Create your first workspace</h2>
-                <p class="max-w-md text-fg-muted">One workspace per subject, like Biology or Spanish. Its modules, notes, files, calendar and progress all live inside it.</p>
+                <h2 class="text-lg font-semibold">Create your first course</h2>
+                <p class="max-w-md text-fg-muted">One course per subject, like Biology or Spanish. Its modules, notes, files, calendar and progress all live inside it.</p>
             </div>
-            <x-button variant="primary" icon="plus" x-data x-on:click="$dispatch('workspace-create')">New workspace</x-button>
+            <x-button variant="primary" icon="plus" x-data x-on:click="$dispatch('workspace-create')">New course</x-button>
         </section>
     @else
         <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" role="list">
@@ -43,13 +43,13 @@
                             </button>
                             <div id="ws-menu-{{ $workspace->id }}" class="row-menu" wire:ignore.self data-menu-panel popover="manual" hidden>
                                 <button type="button" class="menu-item" x-data x-on:click="$dispatch('workspace-edit', { workspaceId: '{{ $workspace->id }}' })">
-                                    <x-icon name="pencil" class="size-4" />Edit workspace
+                                    <x-icon name="pencil" class="size-4" />Edit course
                                 </button>
                                 <button type="button" class="menu-item" wire:click="archive('{{ $workspace->id }}')">
-                                    <x-icon name="archive" class="size-4" />Archive workspace
+                                    <x-icon name="archive" class="size-4" />Archive course
                                 </button>
                                 <button type="button" class="menu-item text-danger" wire:click="confirmDelete('{{ $workspace->id }}')">
-                                    <x-icon name="trash-2" class="size-4" />Delete workspace
+                                    <x-icon name="trash-2" class="size-4" />Delete course
                                 </button>
                             </div>
                         </div>
@@ -80,7 +80,7 @@
                                 </span>
                             @endif
                             @if ($wsCounts['modules'] === 0 && $wsCounts['notes'] === 0 && $wsCounts['files'] === 0)
-                                <span class="text-fg-subtle">Empty workspace</span>
+                                <span class="text-fg-subtle">Empty course</span>
                             @endif
                         </div>
                         <x-icon name="arrow-right" class="size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" />
@@ -92,7 +92,7 @@
                     <span class="flex size-10 items-center justify-center rounded-full bg-surface-sunken transition-transform group-hover:scale-105">
                         <x-icon name="plus" class="size-5" />
                     </span>
-                    <span class="text-sm font-semibold">New workspace</span>
+                    <span class="text-sm font-semibold">New course</span>
                 </button>
             </li>
         </ul>
@@ -132,7 +132,7 @@
         <div class="modal-panel max-w-md">
             <div class="modal-head">
                 <div class="min-w-0 flex-1 space-y-1">
-                    <h2 id="workspace-delete-title" class="text-lg font-semibold text-danger">Delete workspace</h2>
+                    <h2 id="workspace-delete-title" class="text-lg font-semibold text-danger">Delete course</h2>
                     <p class="text-sm text-fg-muted">This action cannot be undone.</p>
                 </div>
                 <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
@@ -144,12 +144,12 @@
                     Are you sure you want to delete <strong class="font-semibold text-fg">{{ $deletingName }}</strong>?
                 </p>
                 <p class="text-xs text-fg-muted">
-                    Everything in this workspace will be deleted permanently, including all modules, notes, uploaded files, and study records.
+                    Everything in this course will be deleted permanently, including all modules, notes, uploaded files, and study records.
                 </p>
             </div>
             <div class="modal-actions">
                 <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
-                <x-button variant="danger" icon="trash-2" wire:click="delete" wire:loading.attr="aria-busy" wire:target="delete" busy-label="Deleting…">Delete workspace</x-button>
+                <x-button variant="danger" icon="trash-2" wire:click="delete" wire:loading.attr="aria-busy" wire:target="delete" busy-label="Deleting…">Delete course</x-button>
             </div>
         </div>
     </dialog>

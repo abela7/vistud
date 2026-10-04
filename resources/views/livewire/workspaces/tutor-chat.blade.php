@@ -40,9 +40,9 @@
 
     @if (! $ready)
         <div class="chat-empty">
-            <p class="font-medium">Set the AI engine up first</p>
+            <p class="font-medium">Set up your AI first</p>
             <p class="text-sm text-fg-muted">Your key, the model that tutors you, and your consent: one page, a few minutes.</p>
-            <a href="{{ route('engine.settings') }}" class="btn btn-primary"><x-icon name="brain" class="size-4" />AI engine settings</a>
+            <a href="{{ route('engine.settings') }}" class="btn btn-primary"><x-icon name="brain" class="size-4" />AI settings</a>
         </div>
     @else
         @if ($turns === [])
@@ -160,7 +160,7 @@
                                 <x-icon name="upload" class="size-4" />Upload a file or picture
                                 <input type="file" class="sr-only" multiple accept="{{ $upload['accept'] }}" x-on:change="chosen($event)">
                             </label>
-                            <p class="text-xs text-fg-muted">{{ $sees ? 'You can also paste a screenshot into the box, or drop files on it.' : 'Your tutor model can\'t see pictures: choose one that can in the AI engine settings.' }}</p>
+                            <p class="text-xs text-fg-muted">{{ $sees ? 'You can also paste a screenshot into the box, or drop files on it.' : 'Your tutor model can\'t see pictures: choose one that can in your AI settings.' }}</p>
                         </div>
                     </div>
                 </div>

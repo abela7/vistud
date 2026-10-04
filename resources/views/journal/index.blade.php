@@ -7,7 +7,7 @@
 @endphp
 <x-layouts.app title="Journal">
     <div class="mx-auto max-w-4xl space-y-6">
-        <x-back :href="route('home')" to="All workspaces" />
+        <x-back :href="route('home')" to="All courses" />
         <div class="space-y-2">
             <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">Journal</h1>
             <p class="max-w-2xl text-fg-muted">

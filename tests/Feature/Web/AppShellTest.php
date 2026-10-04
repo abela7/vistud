@@ -29,7 +29,7 @@ class AppShellTest extends TestCase
             ->assertSee('aria-controls="app-drawer"', false)
             ->assertSee('<dialog id="app-drawer"', false)
             ->assertSee('data-sidebar-toggle', false)
-            ->assertSee('<a href="'.route('home').'" class="nav-item" title="All workspaces"  aria-current="page"', false)
+            ->assertSee('<a href="'.route('home').'" class="nav-item" title="All courses"  aria-current="page"', false)
             ->assertSee('AL')
             ->assertSee('action="'.route('logout').'"', false)
             ->assertSee('href="'.route('two-factor.setup').'" class="menu-item"', false)
@@ -69,6 +69,6 @@ class AppShellTest extends TestCase
         $this->actingAs($admin)->withSession($this->confirmedSession(Area::Admin))->get('/user/two-factor')
             ->assertOk()->assertSee('class="admin-marker"', false);
         $this->actingAs($admin)->withSession($this->confirmedSession(Area::Student))->get('/user/two-factor')
-            ->assertOk()->assertDontSee('class="admin-marker"', false)->assertSee('title="All workspaces"', false);
+            ->assertOk()->assertDontSee('class="admin-marker"', false)->assertSee('title="All courses"', false);
     }
 }
