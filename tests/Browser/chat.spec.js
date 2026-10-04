@@ -162,3 +162,46 @@ test('notes and pictures go with a message: picked, uploaded or pasted', async (
     expect(violations).toEqual([]);
 });
 
+test('a diagram and a formula in a reply are drawn, with the diagram as text under it', async ({ page }) => {
+    const student = makeStudentWithSession();
+    tinker([
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `app(\\App\\Engine\\Settings::class)->setKey($p, 'sk-or-browser-test-0000000000');`,
+        `app(\\App\\Engine\\Settings::class)->set($p, ['tutor_model' => 'fake/tutor', 'consent' => true]);`,
+    ].join(' '));
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { name: 'Your tutor' }).waitFor();
+    await page.waitForLoadState('load');
+    const chat = page.locator('.chat');
+    const box = chat.getByLabel('Write to your tutor');
+    await box.fill('Please draw the process states');
+    await box.press('Enter');
+
+    const reply = chat.locator('li[data-turn].is-tutor .chat-markdown').last();
+    const diagram = reply.locator('figure.chat-diagram');
+    await expect(diagram.locator('svg')).toBeVisible({ timeout: 20_000 });
+    await expect(diagram.locator('svg')).toContainText('Running');
+    await expect(reply.locator('code.language-mermaid')).toHaveCount(0);
+    await diagram.getByText('The diagram as text').click();
+    await expect(diagram.locator('details pre')).toContainText('A[New] --> B[Ready]');
+    await expect(reply.locator('.katex').first()).toBeVisible();
+
+    // Another turn leaves the drawn reply as it is, and a theme change draws it again.
+    await box.fill('Thanks');
+    await box.press('Enter');
+    await expect(chat.locator('li[data-turn].is-tutor')).toHaveCount(2, { timeout: 15_000 });
+    await expect(chat.locator('li[data-turn].is-tutor').first().locator('figure.chat-diagram svg')).toBeVisible();
+    await page.evaluate(() => window.dispatchEvent(new CustomEvent('vistud:theme-changed')));
+    await expect(chat.locator('figure.chat-diagram svg')).toHaveCount(1);
+
+    // On a phone the diagram scrolls in its own box; the page never scrolls sideways.
+    await page.setViewportSize({ width: 320, height: 700 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    const violations = (await new AxeBuilder({ page }).include('.chat').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
+        .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
+    expect(violations).toEqual([]);
+});
+

@@ -443,6 +443,17 @@ tutor model is known not to see pictures. What went with a note or a file
 is kept with the message (`engine_messages.attachments`), so the chat reads
 the same on every turn (`App\Engine\Attachments`).
 
+**Diagrams and formulas** (built, 2026-10-05). The tutor may draw a small
+Mermaid diagram (a flowchart, sequence, state, class or ER diagram) in a
+```` ```mermaid ```` block, and write formulas in `$…$` or `$$…$$`; the chat
+draws them in finished replies (`resources/js/diagrams.js`, Mermaid and
+KaTeX loaded only when a reply has one), in the theme's own colours read
+from its tokens, and again when the theme changes. The diagram's text stays
+under it (*The diagram as text*), for screen readers and copying; one that
+can't be drawn stays as code and says so. On a phone a wide diagram keeps a
+readable size and scrolls sideways in its box. Only ViStud's chat is told it
+can draw: a briefing pasted into another AI isn't.
+
 **Failures** come back as `App\Engine\EngineFailed` (503) with a plain
 message: not set up, the key refused, out of credit, the model unknown, busy,
 down, unreachable; never the key. `php artisan vistud:doctor` checks the key

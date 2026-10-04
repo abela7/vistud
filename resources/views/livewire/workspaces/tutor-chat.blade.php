@@ -69,7 +69,8 @@
                         @endif
                     @else
                         @if ($turn['text'] !== '')
-                            <div class="chat-bubble chat-markdown">{!! $turn['html'] !!}</div>
+                            {{-- A finished reply never changes; ignored by updates, so its drawn diagrams and formulas stay. --}}
+                            <div class="chat-bubble chat-markdown" wire:ignore>{!! $turn['html'] !!}</div>
                         @endif
                         @if ($turn['looked'] !== [] || $turn['cost_micros'] > 0)
                             <p class="chat-meta">{{ implode(' · ', array_filter([

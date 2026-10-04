@@ -90,6 +90,8 @@ class SessionChatTest extends TestCase
         $this->assertTrue($first->noTraining);
         $this->assertStringStartsWith('# You are the student\'s tutor', $first->system);
         $this->assertStringContainsString('## Looking things up', $first->system);
+        $this->assertStringContainsString('```mermaid', $first->system);
+        $this->assertStringContainsString('Write formulas in $…$ inside a line or $$…$$', $first->system);
         $this->assertStringContainsString('Joins', $first->system);
         $this->assertSame([['role' => 'user', 'content' => 'What did my lecture say about left joins?']], $first->messages);
         $this->assertContains('read_note', array_map(fn ($t) => $t['function']['name'], $first->tools));

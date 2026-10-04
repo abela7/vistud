@@ -31,6 +31,7 @@
         "katex": "^0.18.9",
         "laravel-vite-plugin": "3.2.0",
         "lucide-static": "1.48.0",
+        "mermaid": "12.1.0",
         "tailwindcss": "4.3.3",
         "vite": "8.3.1"
     },

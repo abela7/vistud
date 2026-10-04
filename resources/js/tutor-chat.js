@@ -4,7 +4,8 @@
 | the log follows it unless the student has scrolled up. Notes and files from the module can be attached to a
 | message (four at most), and a file or picture chosen, pasted or dropped is uploaded first, one at a time,
 | into the module's "From the chat" folder (POST /api/v1/files, as the upload dialog does). Words and attachments
-| the chat refused come back to the box.
+| the chat refused come back to the box. Diagrams and formulas in finished replies are drawn by
+| resources/js/diagrams.js, loaded only when a reply has one.
 */
 
 const MOST = 4;
@@ -53,7 +54,35 @@ export function tutorChat({ upload }) {
 
         init() {
             this.stick();
-            if (this.$refs.log) new MutationObserver(() => this.stick()).observe(this.$refs.log, { childList: true, subtree: true, characterData: true });
+            this.decorate();
+            if (this.$refs.log) {
+                let queued = false;
+                new MutationObserver(() => {
+                    this.stick();
+                    if (queued) return;
+                    queued = true;
+                    requestAnimationFrame(() => {
+                        queued = false;
+                        this.decorate();
+                    });
+                }).observe(this.$refs.log, { childList: true, subtree: true, characterData: true });
+            }
+            window.addEventListener('vistud:theme-changed', () => {
+                if (this.$refs.log?.querySelector('figure.chat-diagram')) import('./diagrams.js').then(({ redrawDiagrams }) => redrawDiagrams(this.$refs.log));
+            });
+        },
+
+        /** Diagrams and formulas in the finished replies, drawn once each (the drawing code loads only if needed). */
+        decorate() {
+            const replies = [...(this.$refs.log?.querySelectorAll('li[data-turn] .chat-markdown') ?? [])];
+            const waiting = replies.filter((reply) => reply.querySelector('code.language-mermaid:not([data-tried])') || (reply.textContent.includes('$') && !reply.dataset.formulas));
+            if (waiting.length === 0) return;
+            import('./diagrams.js').then(({ drawDiagrams }) => {
+                for (const reply of waiting) {
+                    reply.dataset.formulas = '';
+                    drawDiagrams(reply);
+                }
+            });
         },
 
         stick() {

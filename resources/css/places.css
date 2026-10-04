@@ -3079,6 +3079,51 @@
         color: var(--text);
     }
 
+    /* A diagram the tutor drew: as wide as the reply, scrolling sideways when it must; its text under it. */
+    /* A reply with a diagram takes the chat's width, so the drawing isn't shrunk to the words around it. */
+    .chat-turn.is-tutor:has(.chat-diagram) {
+        align-items: stretch;
+    }
+
+    .chat-diagram {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+        margin: 0.5rem 0;
+    }
+
+    .chat-diagram-drawing {
+        overflow-x: auto;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background-color: var(--surface);
+    }
+
+    .chat-diagram-drawing svg {
+        display: block;
+        height: auto;
+        margin: 0 auto;
+    }
+
+    .chat-diagram summary {
+        width: fit-content;
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        cursor: pointer;
+    }
+
+    .chat-diagram-failed {
+        color: var(--text-muted);
+        font-size: 0.75rem;
+    }
+
+    .chat-markdown .katex-display {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0.25rem 0;
+    }
+
     /* The answer under way: hidden until its first words, and what the tutor is looking up meanwhile. */
     .chat-live:empty,
     .chat-status:empty {

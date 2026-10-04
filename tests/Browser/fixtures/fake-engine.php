@@ -35,7 +35,9 @@ foreach (array_reverse($messages) as $message) {
 }
 $words = ['A ', 'left ', 'join ', 'keeps ', 'every ', 'row ', 'of ', 'the ', '**left** ', 'table.'];
 // What was attached, said back, so a test can see it arrived.
-if ($picture) {
+if (str_contains($asked, 'draw')) {
+    $words = ['Here ', 'it ', 'is:', "\n\n```mermaid\nflowchart LR\n  A[New] --> B[Ready]\n  B --> C[Running]\n```\n\n", 'And ', 'energy: ', '$$E = mc^2$$'];
+} elseif ($picture) {
     $words = ['I ', 'can ', 'see ', 'the ', 'picture.'];
 } elseif (str_contains($asked, "[Attached: the student's note")) {
     $words = ['I ', 'have ', 'your ', 'note.'];
