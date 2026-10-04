@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Appearance\Themes;
 use App\Engine\Engine;
+use App\Engine\Jobs\Heartbeat;
 use App\Engine\OpenRouter;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureTwoFactorEnrolled;
@@ -11,6 +12,8 @@ use App\Http\Middleware\EnterAdminArea;
 use App\Platform\Database\RuntimeGrants;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\MigrationsEnded;
+use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Queue\Events\Looping;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
@@ -38,6 +41,11 @@ class AppServiceProvider extends ServiceProvider
         // the next move reloads once, so the new scripts and styles are used.
         Vite::useScriptTagAttributes(['data-navigate-track' => 'reload']);
         Vite::useStyleTagAttributes(['data-navigate-track' => 'reload']);
+
+        // A queue worker says it is there while it loops and whenever it takes a job: the reader's and the helper's
+        // jobs go on the queue only while one is (App\Engine\Jobs\Runner), otherwise they run after the response.
+        Event::listen(Looping::class, fn () => Heartbeat::beat());
+        Event::listen(JobProcessing::class, fn () => Heartbeat::beat());
 
         // New tables get their runtime-user privileges as soon as the schema
         // owner has created them (docs/development/setup.md).

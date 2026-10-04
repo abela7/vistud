@@ -2,6 +2,8 @@
 
 namespace App\Engine;
 
+use App\Engine\Jobs\Run;
+use App\Engine\Jobs\Runner;
 use App\Engine\Tools\Context;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
@@ -14,7 +16,6 @@ use App\Study\Input;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\WriteBack;
-use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Support\Facades\DB;
 
@@ -26,8 +27,9 @@ use Illuminate\Support\Facades\DB;
  * month's chats theirs. When a chat grows long, its oldest turns are folded into a short summary the engine
  * reads instead, so a long session stays sharp and cheap. Saving what the tutor marked goes through the
  * write-back, as a pasted chat does: nothing is remembered until the student ticks it. When the session ends, the
- * chat is wrapped up once: the quick model writes the session's summary and checkpoint from it, so the next
- * session's briefing starts from what happened without the student explaining again.
+ * chat is wrapped up once: the reader writes the session's summary and checkpoint from it, so the next
+ * session starts from what happened without the student explaining again. Folding and wrapping up are recorded as the
+ * reader's runs (App\Engine\Jobs\Runner), so the month's limit counts them.
  */
 final class SessionChat
 {
@@ -50,8 +52,9 @@ final class SessionChat
         private Models $models,
         private Toolbox $toolbox,
         private WriteBack $writeBack,
-        private Setup $setup,
         private Attachments $attachments,
+        private Runner $runner,
+        private Usage $usage,
     ) {}
 
     /**
@@ -168,7 +171,7 @@ final class SessionChat
         LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update([
             'turns' => DB::raw('turns + 1'), 'model' => $choices->tutorModel, 'updated_at' => now(),
         ]);
-        $this->foldIfLong($scope, $thread->id, $choices, $key);
+        $this->foldIfLong($by, $session->workspaceId, $thread->id);
 
         return $reply;
     }
@@ -265,7 +268,7 @@ final class SessionChat
     /**
      * Writes what the chat came to into the session's record (its summary and checkpoint, §4.3), once, when the
      * session ends: the next session's briefing and the earlier-sessions look-up start from them, so the student
-     * never explains again what happened. The quick model writes them from the chat (the folded part's summary
+     * never explains again what happened. The reader writes them from the chat (the folded part's summary
      * and the rest); a summary or checkpoint the student already ticked from the tutor's marks stays as it is.
      * Nothing happens without a chat with an answer in it, or when the engine isn't set up; a failed try is
      * left for the next.
@@ -289,9 +292,10 @@ final class SessionChat
 
             return null;
         }
-        $choices = $this->settings->get($by);
-        $key = $this->settings->key($by);
-        if (($key === null && ! $this->setup->keySet()) || $choices->modelFor(Role::Reader) === '' || $choices->consentedAt === null) {
+        try {
+            $this->settings->ready($by, Role::Reader);
+        } catch (Unprocessable) {
+            // Not set up, or no consent: nothing is tried, and nothing is recorded.
             return null;
         }
 
@@ -302,15 +306,12 @@ final class SessionChat
             $text = "[The chat's start is cut; this is its end.]\n".mb_substr($text, -self::WRAP_INPUT_CHARS);
         }
         try {
-            $reply = $this->engine->reply(new Request(
-                $choices->modelFor(Role::Reader),
+            $reply = $this->runner->run($by, Role::Reader, 'wrap_up', $session->workspaceId, 'session', $sessionId, fn (Run $run) => $run->ask(
                 'You write the record of one study session\'s chat between a student and their tutor, for the student\'s own study memory in ViStud. Answer with one JSON object and nothing else: {"summary": "...", "checkpoint": "..."}. summary: what was studied and explained, what the student got right or wrong, and what still confuses them, in plain prose of at most '.self::WRAP_SUMMARY_CHARS.' characters, no headings or lists. checkpoint: where the session stopped (like slide 7 of 18) and what comes next, in one or two sentences of at most '.self::WRAP_CHECKPOINT_CHARS.' characters. Write in the language the student wrote in. Only what is in the chat: never invent what wasn\'t said.',
-                [['role' => 'user', 'content' => $text]],
-                maxTokens: 900,
-                noTraining: $choices->noTraining,
-                key: $key,
+                $text,
+                900,
             ));
-        } catch (EngineFailed) {
+        } catch (EngineFailed|Unprocessable) {
             return null;
         }
 
@@ -347,7 +348,7 @@ final class SessionChat
 
         return [
             'session' => (int) ($thread->spent_micros ?? 0),
-            'month' => $this->monthSpend($scope, $this->sessions->timezone($by)),
+            'month' => $this->usage->monthTotal($scope, $this->sessions->timezone($by)),
             'session_cap' => $choices->sessionCapMicros,
             'month_cap' => $choices->monthCapMicros,
         ];
@@ -396,16 +397,7 @@ final class SessionChat
         if ($choices->sessionCapMicros > 0 && (int) $thread->spent_micros >= $choices->sessionCapMicros) {
             throw new Unprocessable('engine_cap', 'This session\'s chat has reached its limit of '.Choices::dollars($choices->sessionCapMicros).'. Raise it in the AI engine settings to keep going.');
         }
-        if ($choices->monthCapMicros > 0 && $this->monthSpend($scope, $zone) >= $choices->monthCapMicros) {
-            throw new Unprocessable('engine_cap', 'This month\'s chats have reached their limit of '.Choices::dollars($choices->monthCapMicros).'. Raise it in the AI engine settings to keep going.');
-        }
-    }
-
-    private function monthSpend(LearnerScope $scope, string $zone): int
-    {
-        $since = CarbonImmutable::now($zone)->startOfMonth()->utc();
-
-        return (int) LearnerTables::query($scope, 'engine_messages')->where('created_at', '>=', $since)->sum('cost_micros');
+        $this->usage->refuseOverMonthCap($scope, $choices, $zone, chat: true);
     }
 
     /** @param array<string, mixed> $values */
@@ -516,10 +508,11 @@ final class SessionChat
 
     /**
      * Past a size, the oldest turns (all but the last few messages, cut at a student's message so a look-up
-     * never loses its result) are summarised by the quick model and kept only as that summary.
+     * never loses its result) are summarised by the reader and kept only as that summary.
      */
-    private function foldIfLong(LearnerScope $scope, string $threadId, Choices $choices, ?string $key): void
+    private function foldIfLong(Principal $by, string $workspaceId, string $threadId): void
     {
+        $scope = Guard::learner($by);
         $thread = LearnerTables::query($scope, 'engine_threads')->where('id', $threadId)->first();
         $rows = array_values(array_filter($this->rows($scope, $threadId), fn ($row) => (int) $row->position > (int) $thread->folded_through));
         $size = array_sum(array_map(fn ($row) => mb_strlen((string) $row->content), $rows));
@@ -538,15 +531,12 @@ final class SessionChat
         $earlier = $thread->summary !== null && trim((string) $thread->summary) !== '' ? "What was already folded:\n".trim((string) $thread->summary)."\n\n---\n\n" : '';
 
         try {
-            $reply = $this->engine->reply(new Request(
-                $choices->modelFor(Role::Reader),
+            $reply = $this->runner->run($by, Role::Reader, 'fold', $workspaceId, 'thread', $threadId, fn (Run $run) => $run->ask(
                 'You summarise one study session\'s chat between a student and their tutor, so the tutor can go on with it later. Keep what was explained and how far the student got, what they got right or wrong, what still confuses them, and where the chat stands. Plain text, at most '.self::SUMMARY_CHARS.' characters, no headings.',
-                [['role' => 'user', 'content' => $earlier.$transcript]],
-                maxTokens: 800,
-                noTraining: $choices->noTraining,
-                key: $key,
+                $earlier.$transcript,
+                800,
             ));
-        } catch (EngineFailed) {
+        } catch (EngineFailed|Unprocessable) {
             return;
         }
         $summary = mb_substr(trim($reply->text), 0, self::SUMMARY_CHARS * 2);
@@ -586,7 +576,7 @@ final class SessionChat
     }
 
     /**
-     * Messages as a plain transcript for the quick model: the student's and the tutor's words, a look-up as a line.
+     * Messages as a plain transcript for the reader: the student's and the tutor's words, a look-up as a line.
      *
      * @param  list<object>  $rows
      */
