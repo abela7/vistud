@@ -274,6 +274,25 @@ export function makeStudentWithTopics() {
 }
 
 /**
+ * makeStudentWithTopics(), plus a second module (Week 2: Transactions) with two topics, one of them marked
+ * understood by the tutor, and Primary and foreign keys confusing for nine days: two of five topics are understood
+ * (40 %) and one needs attention.
+ */
+export function makeStudentWithProgressTree() {
+    const student = makeStudentWithTopics();
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `$w = '${student.workspace}'; $t = app(\\App\\Study\\Topics::class);`,
+        `$m2 = app(\\App\\Study\\Modules::class)->create($p, $w, ['title' => 'Week 2: Transactions']);`,
+        `$acid = $t->create($p, $w, 'ACID', $m2->id); $t->create($p, $w, 'Isolation levels', $m2->id); $t->mark($p, $acid->id, 'understood');`,
+        `\\Illuminate\\Support\\Facades\\DB::table('topics')->where('workspace_id', $w)->where('name', 'Primary and foreign keys')->update(['status_at' => now()->subDays(9)]);`,
+        `echo json_encode(['workspace' => $w]);`,
+    ].join(' ');
+    execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });
+    return student;
+}
+
+/**
  * makeStudentWithTopics(), plus study time: 1 h 30 min logged yesterday,
  * and a session on Joins that started 40 minutes ago (25 min of study, a
  * 5-minute break, and the clock running again for the last 10 minutes).

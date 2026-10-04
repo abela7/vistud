@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { foreignColours, makeStudentWithTopics, newHere, openStudentHome, openTab, THEMES, useSentinelTheme, useTheme } from './support.js';
 
-/* The tracker's step 1b: the Overview, assignments and tasks, instructions, findings and links (docs/specs/study-memory.md §3). */
+/* The tracker's step 1b: the Overview, assignments and tasks, instructions and links (docs/specs/study-memory.md §3); findings are kept on the topic sheet (progress.spec.js). */
 
 const desktop = { width: 1440, height: 900 };
 const phone = { width: 390, height: 844 };
@@ -69,28 +69,6 @@ test('the Overview is short: what is next, what to continue, what\'s coming up',
     await expect(page.getByRole('status').filter({ hasText: 'Instructions saved.' })).toBeVisible();
 });
 
-test('findings open under their topic and are added with their source', async ({ page }) => {
-    await page.setViewportSize(desktop);
-    await open(page, 'progress');
-    const joins = page.locator('.topic-row').filter({ has: page.getByText('Joins', { exact: true }) });
-    await joins.getByRole('button', { name: '2 findings' }).click();
-    const list = page.getByRole('list', { name: 'Findings about Joins' });
-    await expect(list).toContainText('A left join keeps every row of the left table, matched or not.');
-    await expect(list).toContainText('From Lecture 3: joins, slide 12');
-    await expect(list).toContainText('From a study session');
-    await expect(joins.getByRole('button', { name: '2 findings' })).toHaveAttribute('aria-expanded', 'true');
-
-    await page.getByRole('button', { name: 'Add a finding' }).click();
-    const dialog = page.locator('#progress-dialog');
-    await expect(dialog.getByLabel('What you need to know')).toBeFocused();
-    await dialog.getByLabel('What you need to know').fill('A right join is a left join the other way round.');
-    await dialog.getByLabel('From (optional)').selectOption({ label: 'Lecture 3: joins' });
-    await dialog.getByLabel('Where in it (optional)').fill('slide 14');
-    await dialog.getByRole('button', { name: 'Add finding' }).click();
-    await expect(list).toContainText('A right join is a left join the other way round.');
-    await expect(joins.getByRole('button', { name: '3 findings' })).toBeVisible();
-});
-
 test('a web link sits in its module and opens in a new tab', async ({ page }) => {
     await page.setViewportSize(desktop);
     await open(page, 'modules');
@@ -123,13 +101,6 @@ const screens = {
         states['task dialog'] = await foreignColours(page);
         return states;
     },
-    progress: async (page) => {
-        await open(page, 'progress');
-        await useSentinelTheme(page);
-        await page.getByRole('button', { name: '2 findings' }).click();
-        await page.getByRole('list', { name: 'Findings about Joins' }).waitFor();
-        return { 'progress with findings': await foreignColours(page) };
-    },
 };
 
 for (const [name, viewport] of Object.entries({ desktop, phone })) {
@@ -145,9 +116,9 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
 }
 
 for (const theme of THEMES) {
-    test(`axe finds no violations in the Overview and findings: ${theme}`, async ({ page }) => {
+    test(`axe finds no violations in the Overview and its dialogs: ${theme}`, async ({ page }) => {
         await page.setViewportSize(desktop);
-        const student = await open(page);
+        await open(page);
         await useTheme(page, theme);
         expect(await analyse(page)).toEqual([]);
         await page.getByRole('button', { name: 'More for Databases' }).click();
@@ -155,11 +126,6 @@ for (const theme of THEMES) {
         await page.locator('#instructions-dialog').getByLabel('This course').waitFor();
         expect(await analyse(page)).toEqual([]);
 
-        await page.goto(`/workspaces/${student.workspace}/progress`);
-        await page.getByRole('button', { name: '2 findings' }).click();
-        await page.getByRole('list', { name: 'Findings about Joins' }).waitFor();
-        await useTheme(page, theme);
-        expect(await analyse(page)).toEqual([]);
     });
 }
 

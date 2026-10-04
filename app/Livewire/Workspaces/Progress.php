@@ -9,33 +9,41 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
-use App\Study\Findings;
-use App\Study\Flashcards;
 use App\Study\Modules;
+use App\Study\Rollups;
 use App\Study\Sessions;
-use App\Study\TopicDetails;
+use App\Study\TopicRoll;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * A workspace's Progress section (docs/specs/study-memory.md §3): its
- * topics with the student's status and the evidence behind it, the
- * findings pinned to each, and the questions (App\Livewire\Workspaces\QuestionBoard). Every click is a journal event through the
- * services; the IDs the dialog acts on are locked.
+ * A workspace's Progress section (docs/specs/vistud-2-blueprint.md §3.5.5, §3.8): the course's ring and its numbers, then
+ * the tree: modules (the one the student is in open, the rest folded) and under each its topics with where they stand,
+ * what needs another look, and Study. A topic's name opens the topic sheet (App\Livewire\Workspaces\TopicSheet), where the
+ * student says where they stand; the tutor sets statuses in the chat. The numbers are App\Study\Rollups', the same the course
+ * home and the Modules page show. Every click goes through the services; the IDs the dialog acts on are locked.
  */
 final class Progress extends Component
 {
     use BulkActions, Notices;
 
+    /** What the filter row offers. */
+    public const FILTERS = ['all', 'attention', 'not_started', 'mastered'];
+
     #[Locked]
     public string $workspaceId;
 
+    /** All, the topics that need attention, those not started, or those mastered. */
+    #[Url(except: 'all')]
+    public string $filter = 'all';
+
     public string $bulkModuleId = '';
 
-    /** topic (new or rename), move, finding, or null when the dialog is closed. */
+    /** topic (a new one) or move, or null when the dialog is closed. */
     #[Locked]
     public ?string $mode = null;
 
@@ -43,45 +51,25 @@ final class Progress extends Component
     #[Locked]
     public ?string $targetId = null;
 
-    /** The finding being edited; null adds one to the topic. */
-    #[Locked]
-    public ?string $findingId = null;
-
-    /** The topics whose findings are showing. */
-    #[Locked]
-    public array $expanded = [];
-
     public string $name = '';
 
     public string $moduleId = '';
 
-    public string $text = '';
-
-    public string $topicId = '';
-
-    /** Where a finding came from: note:{id}, file:{id} or empty. */
-    public string $source = '';
-
-    public string $locator = '';
-
     private Topics $topics;
-
-    private Findings $findings;
 
     private Modules $modules;
 
     private Sessions $sessions;
 
-    private Flashcards $flashcards;
+    private Rollups $rollups;
 
     private PrincipalFactory $principals;
 
-    public function boot(Topics $topics, Findings $findings, Modules $modules, Sessions $sessions, Flashcards $flashcards, PrincipalFactory $principals): void
+    public function boot(Topics $topics, Modules $modules, Sessions $sessions, Rollups $rollups, PrincipalFactory $principals): void
     {
         $this->sessions = $sessions;
-        $this->flashcards = $flashcards;
+        $this->rollups = $rollups;
         $this->topics = $topics;
-        $this->findings = $findings;
         $this->modules = $modules;
         $this->principals = $principals;
     }
@@ -99,13 +87,6 @@ final class Progress extends Component
         $this->moduleId = (string) $moduleId;
     }
 
-    public function renameTopic(string $id): void
-    {
-        $topic = $this->topics->find($this->principal(), $id);
-        $this->open('topic', $topic->id);
-        $this->name = $topic->name;
-    }
-
     public function moveTopic(string $id): void
     {
         $topic = $this->topics->find($this->principal(), $id);
@@ -113,19 +94,19 @@ final class Progress extends Component
         $this->moduleId = (string) $topic->moduleId;
     }
 
-    /** The student's word: covered, understood or confused. */
-    public function report(string $id, string $status): void
-    {
-        $this->topics->report($this->principal(), $id, $status);
-        $this->notice = null;
-    }
-
+    /** Moves a topic one place up or down among its module's topics. */
     public function moveTopicBy(string $id, int $step): void
     {
-        $ids = array_map(fn (TopicDetails $t) => $t->id, $this->topics->list($this->principal(), $this->workspaceId));
-        $index = array_search($id, $ids, true);
-        if ($index !== false) {
-            $this->topics->reorder($this->principal(), $id, max(0, $index + $step));
+        $all = $this->topics->list($this->principal(), $this->workspaceId);
+        $ids = array_map(fn ($topic) => $topic->id, $all);
+        $mine = array_values(array_filter($all, fn ($topic) => $topic->id === $id))[0] ?? null;
+        if ($mine === null) {
+            return;
+        }
+        $same = array_values(array_map(fn ($topic) => $topic->id, array_filter($all, fn ($topic) => $topic->moduleId === $mine->moduleId)));
+        $sibling = $same[(int) array_search($id, $same, true) + $step] ?? null;
+        if ($sibling !== null && array_search($id, $same, true) + $step >= 0) {
+            $this->topics->reorder($this->principal(), $id, (int) array_search($sibling, $ids, true));
         }
     }
 
@@ -246,14 +227,7 @@ final class Progress extends Component
         $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id], navigate: true);
     }
 
-    // ---------- Findings ----------
-
-    public function toggleFindings(string $topicId): void
-    {
-        $this->expanded = in_array($topicId, $this->expanded, true)
-            ? array_values(array_diff($this->expanded, [$topicId]))
-            : [...$this->expanded, $topicId];
-    }
+    // ---------- Cards and questions ----------
 
     /** Opens App\Livewire\Workspaces\FlashcardEditor for a card on the topic. */
     public function newFlashcard(string $topicId): void
@@ -262,29 +236,10 @@ final class Progress extends Component
     }
 
     #[On('flashcards-changed')]
-    public function refreshCards(): void
+    #[On('topics-changed')]
+    public function refreshTree(): void
     {
-        // Drawing again updates each topic's count of cards.
-    }
-
-    public function newFinding(string $topicId): void
-    {
-        $topic = $this->topics->find($this->principal(), $topicId);
-        $this->open('finding', $topic->id);
-    }
-
-    public function editFinding(string $id): void
-    {
-        $finding = $this->findings->find($this->principal(), $id);
-        $this->open('finding', $finding->topicId);
-        $this->findingId = $finding->id;
-        [$this->text, $this->source, $this->locator] = [$finding->text, $finding->sourceName === null ? '' : (string) $finding->source, (string) $finding->locator];
-    }
-
-    public function deleteFinding(string $id): void
-    {
-        $this->findings->delete($this->principal(), $id);
-        $this->notice = 'The finding is removed.';
+        // Drawing again updates the numbers: cards, statuses, names.
     }
 
     // ---------- Questions ----------
@@ -293,6 +248,13 @@ final class Progress extends Component
     public function newQuestion(?string $topicId = null): void
     {
         $this->dispatch('question-new', topicId: $topicId);
+    }
+
+    // ---------- The filter ----------
+
+    public function showOnly(string $filter): void
+    {
+        $this->filter = in_array($filter, self::FILTERS, true) ? $filter : 'all';
     }
 
     // ---------- The dialog ----------
@@ -304,11 +266,8 @@ final class Progress extends Component
 
         try {
             $this->notice = match ($this->mode) {
-                'topic' => $this->targetId === null
-                    ? $this->topics->create($by, $this->workspaceId, $this->name, $this->moduleId ?: null)->name.' is added.'
-                    : $this->renamed($by),
+                'topic' => $this->topics->create($by, $this->workspaceId, $this->name, $this->moduleId ?: null)->name.' is added.',
                 'move' => $this->moved($by),
-                'finding' => $this->savedFinding($by),
                 default => null,
             };
         } catch (Unprocessable $e) {
@@ -318,7 +277,7 @@ final class Progress extends Component
 
             return;
         } catch (NotFound) {
-            $this->addError(['finding' => 'text'][$this->mode] ?? 'moduleId', 'That no longer exists. Close this and try again.');
+            $this->addError('moduleId', 'That no longer exists. Close this and try again.');
 
             return;
         }
@@ -329,40 +288,38 @@ final class Progress extends Component
 
     public function close(): void
     {
-        $this->reset('mode', 'targetId', 'findingId', 'name', 'moduleId', 'text', 'topicId', 'source', 'locator');
+        $this->reset('mode', 'targetId', 'name', 'moduleId');
         $this->resetErrorBag();
     }
 
     public function render(): View
     {
         $by = $this->principal();
-        $modules = $this->modules->list($by, $this->workspaceId);
-        $topics = $this->topics->list($by, $this->workspaceId);
-
-        $byModule = [];
-        foreach ($topics as $topic) {
-            $byModule[$topic->moduleId ?? ''][] = $topic;
-        }
-        $counts = array_fill_keys(['not_started', 'covered', 'understood', 'confused', 'mastered'], 0);
-        foreach ($topics as $topic) {
-            $counts[$topic->shown()]++;
-        }
-        $topicNames = [];
-        foreach ($topics as $topic) {
-            $topicNames[$topic->id] = $topic->name;
+        $roll = $this->rollups->for($by, $this->workspaceId);
+        $filter = in_array($this->filter, self::FILTERS, true) ? $this->filter : 'all';
+        $names = [];
+        foreach ($roll->topics() as $topic) {
+            $names[$topic->id()] = $topic->topic->name;
         }
 
         return view('livewire.workspaces.progress', [
-            'modules' => $modules,
-            'topics' => $topics,
-            'byModule' => $byModule,
-            'findings' => $this->findings->byTopic($by, $this->workspaceId),
-            'sources' => $this->mode === 'finding' ? $this->findings->sources($by, $this->workspaceId) : [],
-            'counts' => $counts,
-            'cards' => $this->flashcards->counts($by, $this->workspaceId)['topics'],
-            'topicNames' => $topicNames,
-            'target' => $this->targetId === null ? null : ($topicNames[$this->targetId] ?? null),
+            'roll' => $roll,
+            'filter' => $filter,
+            'modules' => $this->modules->list($by, $this->workspaceId),
+            'counts' => ['all' => $roll->total(), 'attention' => count($roll->attention), 'not_started' => $roll->notStarted(), 'mastered' => $roll->mastered()],
+            'target' => $this->targetId === null ? null : ($names[$this->targetId] ?? null),
         ]);
+    }
+
+    /** Whether a topic shows under the filter. */
+    public static function shows(string $filter, TopicRoll $topic): bool
+    {
+        return match ($filter) {
+            'attention' => $topic->needsAttention(),
+            'not_started' => ! $topic->started(),
+            'mastered' => $topic->shown === 'mastered',
+            default => true,
+        };
     }
 
     private function open(string $mode, ?string $targetId = null): void
@@ -370,27 +327,6 @@ final class Progress extends Component
         $this->close();
         [$this->mode, $this->targetId] = [$mode, $targetId];
         $this->dispatch('progress-dialog-open');
-    }
-
-    private function savedFinding(Principal $by): string
-    {
-        $input = ['text' => $this->text, 'source' => $this->source, 'locator' => $this->locator];
-        if ($this->findingId !== null) {
-            $this->findings->update($by, $this->findingId, $input);
-
-            return 'The finding is saved.';
-        }
-        $this->findings->add($by, (string) $this->targetId, $input);
-        $this->expanded = array_values(array_unique([...$this->expanded, (string) $this->targetId]));
-
-        return 'The finding is added.';
-    }
-
-    private function renamed(Principal $by): string
-    {
-        $this->topics->rename($by, (string) $this->targetId, $this->name);
-
-        return $this->topics->find($by, (string) $this->targetId)->name.' is renamed.';
     }
 
     private function moved(Principal $by): string

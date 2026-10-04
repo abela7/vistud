@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { fromSessionMenu, loginToChallenge, makeNamedStudent, makeStudentWithCards, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithPomodoro, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, newHere, openAccounts, openAdminOverview, openConfirmPassword, openStudentHome, openTab, openTwoFactorSetup, startTwoFactorSetup, totp, turnOnCopyPaste, useTheme } from './support.js';
+import { fromSessionMenu, loginToChallenge, makeNamedStudent, makeStudentWithCards, makeStudentWithJournal, makeStudentWithModules, makeStudentWithNote, makeStudentWithPomodoro, makeStudentWithProgressTree, makeStudentWithSession, makeStudentWithTopics, makeStudentWithWorkspaces, newHere, openAccounts, openAdminOverview, openConfirmPassword, openStudentHome, openTab, openTwoFactorSetup, startTwoFactorSetup, totp, turnOnCopyPaste, useTheme } from './support.js';
 
 /*
 | Screenshots for UI handoff and PM visual review (DESIGN.md §10).
@@ -554,15 +554,14 @@ test('files: the upload dialog, a module with files, and file pages', async ({ p
     }
 });
 
-test('progress: topics with statuses and evidence, questions, the topic dialog', async ({ page }) => {
-    const student = makeStudentWithTopics();
+test('progress: the tree with its ring and filters, what needs attention, the topic sheet', async ({ page }) => {
+    const student = makeStudentWithProgressTree();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
     await page.goto(`/workspaces/${student.workspace}/progress`);
     await page.getByRole('heading', { level: 1, name: 'Progress' }).waitFor();
     await page.waitForLoadState('load');
-    await page.getByRole('button', { name: '2 findings' }).click();
-    await page.getByRole('list', { name: 'Findings about Joins' }).waitFor();
+    await page.getByRole('button', { name: /^Week 2/ }).click();
     for (const [size, viewport] of Object.entries(sizes)) {
         for (const theme of ['vistud-light', 'vistud-dark']) {
             await page.setViewportSize(viewport);
@@ -573,21 +572,15 @@ test('progress: topics with statuses and evidence, questions, the topic dialog',
     }
     await page.setViewportSize(sizes.desktop);
     await useTheme(page, 'vistud-light');
-    const normalisation = page.locator('.topic-row').filter({ hasText: 'Normalisation' });
-    await normalisation.getByRole('button', { name: /Actions for/ }).click();
-    await normalisation.getByRole('button', { name: 'Add a finding' }).click();
-    await page.locator('#progress-dialog').getByLabel('What you need to know').fill('Third normal form: no column depends on another non-key column.');
-    await page.locator('#progress-dialog').getByLabel('From (optional)').selectOption({ label: 'Lecture 3: joins' });
-    await page.locator('#progress-dialog').getByLabel('Where in it (optional)').fill('slide 20');
-    await page.screenshot({ path: out('progress-desktop-vistud-light-finding') });
-    await page.keyboard.press('Escape');
-    await page.setViewportSize(sizes.desktop);
-    await useTheme(page, 'vistud-light');
-    await page.getByRole('button', { name: 'New question' }).click();
-    await page.locator('#question-dialog').getByLabel('Question', { exact: true }).fill('When is a table in third normal form?');
-    await page.locator('#question-dialog').getByLabel(/^Topic/).selectOption({ label: 'Normalisation' });
-    await page.locator('#question-dialog').getByText('Stuck', { exact: true }).click();
-    await page.screenshot({ path: out('progress-desktop-vistud-light-question') });
+    await page.getByRole('group', { name: 'Show topics', exact: true }).getByRole('button', { name: /^Needs attention/ }).click();
+    await page.locator('.topic-row:visible').first().waitFor();
+    await page.screenshot({ path: out('progress-desktop-vistud-light-attention') });
+    await page.getByRole('group', { name: 'Show topics', exact: true }).getByRole('button', { name: /^All/ }).click();
+    await page.getByRole('button', { name: 'Joins', exact: true }).click();
+    await page.locator('#topic-sheet').getByRole('heading', { name: 'Joins' }).waitFor();
+    await page.screenshot({ path: out('progress-desktop-vistud-light-sheet') });
+    await page.setViewportSize(sizes.mobile);
+    await page.screenshot({ path: out('progress-mobile-vistud-light-sheet') });
 });
 
 test('overview: the rhythm, what to continue, coming up, and its dialogs', async ({ page }) => {

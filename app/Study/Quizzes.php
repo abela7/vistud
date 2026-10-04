@@ -127,6 +127,15 @@ final class Quizzes
         return LearnerTables::query($scope, 'quizzes')->where('module_id', $moduleId)->orderByDesc('finished_at')->orderByDesc('id')->get()->map(fn ($row) => self::details($row))->all();
     }
 
+    /** @return list<QuizDetails> every quiz and test of a course, newest first */
+    public function forWorkspace(Principal $by, string $workspaceId): array
+    {
+        $scope = Guard::learner($by);
+        Input::workspace($scope, $workspaceId);
+
+        return LearnerTables::query($scope, 'quizzes')->where('workspace_id', $workspaceId)->orderByDesc('finished_at')->orderByDesc('id')->get()->map(fn ($row) => self::details($row))->all();
+    }
+
     /**
      * The score of these questions, 0 to 100: a correct answer counts one, a partial one half.
      *

@@ -11,8 +11,10 @@ use App\Study\Flashcards;
 use App\Study\LearnerProfiles;
 use App\Study\Modules;
 use App\Study\Notes;
+use App\Study\Quizzes;
 use App\Study\Sessions;
 use App\Study\Topics;
+use App\Study\TopicSuggestions;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
 use Illuminate\Testing\TestResponse;
@@ -119,6 +121,46 @@ class CourseHomeScreenTest extends TestCase
             // Anchored on Week 3: the topic still to do in it.
             ->assertSeeInOrder(['Next:', 'Scheduling: 2 topics left in Module 3']);
         $this->assertSame(1, substr_count($page->getContent(), 'id="modules-heading"'));
+    }
+
+    public function test_a_topic_confusing_for_a_week_leads_the_next_line_and_the_ring_says_how_many_need_a_look(): void
+    {
+        $one = $this->module('Introduction', ['Processes' => 'understood']);
+        $this->module('Memory', ['Paging' => 'confused', 'Segments' => null]);
+        // The student last studied in module one, which is done.
+        $session = app(Sessions::class)->start($this->by, $this->workspace, null, $one);
+        app(Sessions::class)->end($this->by, $session->id);
+        $this->home()->assertSeeInOrder(['Next:', 'Start Module 2'])->assertDontSee('another look');
+
+        $this->travel(8)->days();
+        $paging = collect(app(Topics::class)->list($this->by, $this->workspace))->firstWhere('name', 'Paging');
+        $this->home()->assertSeeInOrder(['Next:', 'Go over Paging again', 'Study'])
+            ->assertSeeInOrder(['1 topic needs another look'])
+            ->assertSee(route('workspaces.show', [$this->workspace, 'progress']).'?filter=attention', false);
+
+        // The number on the home is the one Progress shows.
+        $this->actingAs($this->ada)->get(route('workspaces.show', [$this->workspace, 'progress']))->assertOk()->assertSee('33 % · 1 of 3 topics');
+        $this->home()->assertSee('1 of 3 topics');
+        $this->assertSame($paging->id, app(CourseHome::class)->for($this->by, $this->workspace)->step->topicId);
+    }
+
+    public function test_topics_the_reader_found_lead_the_next_line_and_a_modules_test_score_shows_on_its_row(): void
+    {
+        $module = $this->module('Scheduling');
+        app(Notes::class)->create($this->by, 'module', $module, 'Lecture notes');
+        app(TopicSuggestions::class)->suggest($this->by, $module, null, ['Quantum', 'Aging']);
+        $this->home()->assertSeeInOrder(['Next:', 'Add the topics found in', 'Add topics']);
+
+        $topic = $this->topicNamed('Quantum', $module);
+        $session = app(Sessions::class)->start($this->by, $this->workspace, $topic, null, null, null, 'quiz');
+        app(Quizzes::class)->record($this->by, $session->id, ['kind' => 'quiz', 'questions' => [['asked' => 'Q', 'answer' => 'A', 'result' => 'correct', 'right' => 'R', 'fix' => 'F']]]);
+        app(Sessions::class)->end($this->by, $session->id);
+        $this->home()->assertSee('tested 100 %');
+    }
+
+    private function topicNamed(string $name, string $module): string
+    {
+        return app(Topics::class)->create($this->by, $this->workspace, $name, $module)->id;
     }
 
     public function test_ten_cards_due_lead_to_the_review(): void

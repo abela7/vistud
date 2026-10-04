@@ -35,9 +35,10 @@ final class Questions
     /**
      * @param  ?string  $moduleId  only a module's questions (asked in it, or about one of its topics)
      * @param  ?string  $sessionId  only those asked in a study session
+     * @param  ?array  $snapshot  the derived state, when the caller has taken it already (Memory::snapshot)
      * @return list<QuestionDetails> newest first, with the derived state of each
      */
-    public function list(Principal $by, string $workspaceId, ?string $moduleId = null, ?string $sessionId = null): array
+    public function list(Principal $by, string $workspaceId, ?string $moduleId = null, ?string $sessionId = null, ?array $snapshot = null): array
     {
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
@@ -52,7 +53,7 @@ final class Questions
         if ($rows->isEmpty()) {
             return [];
         }
-        $derived = $this->memory->snapshot($scope)['questions'];
+        $derived = ($snapshot ?? $this->memory->snapshot($scope))['questions'];
 
         return $rows->map(fn ($row) => self::details($row, $derived[$row->id] ?? null))->all();
     }

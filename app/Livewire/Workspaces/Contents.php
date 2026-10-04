@@ -25,6 +25,7 @@ use App\Study\Modules;
 use App\Study\NoteDetails;
 use App\Study\Notes;
 use App\Study\Questions;
+use App\Study\Rollups;
 use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\TopicSuggestions;
@@ -144,8 +145,11 @@ final class Contents extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, Questions $questions, Flashcards $flashcards, FileDigests $digests, FileReading $reading, TopicSuggestions $suggestions, PrincipalFactory $principals): void
+    private Rollups $rollups;
+
+    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, Questions $questions, Flashcards $flashcards, FileDigests $digests, FileReading $reading, TopicSuggestions $suggestions, Rollups $rollups, PrincipalFactory $principals): void
     {
+        $this->rollups = $rollups;
         $this->digests = $digests;
         $this->reading = $reading;
         $this->suggestions = $suggestions;
@@ -963,13 +967,13 @@ final class Contents extends Component
     }
 
     /** @return array<string, array{done: int, total: int}> module id => its topics understood (or mastered), of all */
+    /** @return array<string, array{total: int, done: int, tested: ?int}> by module id: the numbers Progress and the course home show */
     private function moduleProgress(Principal $by): array
     {
         $progress = [];
-        foreach ($this->topics->list($by, $this->workspaceId) as $topic) {
-            if ($topic->moduleId !== null) {
-                $progress[$topic->moduleId]['total'] = ($progress[$topic->moduleId]['total'] ?? 0) + 1;
-                $progress[$topic->moduleId]['done'] = ($progress[$topic->moduleId]['done'] ?? 0) + (int) in_array($topic->shown(), ['understood', 'mastered'], true);
+        foreach ($this->rollups->for($by, $this->workspaceId)->modules as $module) {
+            if ($module->total() > 0) {
+                $progress[$module->id()] = ['total' => $module->total(), 'done' => $module->done(), 'tested' => $module->tested];
             }
         }
 

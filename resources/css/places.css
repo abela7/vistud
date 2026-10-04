@@ -3845,3 +3845,108 @@
         border-radius: var(--radius-lg);
     }
 }
+
+/* ---------- Progress, the tree (docs/specs/vistud-2-blueprint.md §3.5.5): the ring, the filters, modules with their topics ---------- */
+@layer components {
+    .progress-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .progress-head .progress-summary {
+        padding: 0;
+    }
+
+    .tree-module {
+        overflow: clip;
+    }
+
+    .tree-module-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem 0.75rem;
+        padding: 0.375rem 0.5rem 0.375rem 0.75rem;
+    }
+
+    /* The module's name folds and opens its topics; the numbers sit beside it, under it on a phone. */
+    .tree-toggle {
+        display: flex;
+        flex: 1 1 12rem;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+        min-height: 2.75rem;
+        border-radius: var(--radius-md);
+        text-align: left;
+        font-weight: 600;
+    }
+
+    .tree-toggle:focus-visible,
+    .tree-topic-name:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .tree-chevron {
+        display: inline-flex;
+        flex: none;
+        color: var(--text-muted);
+    }
+
+    .tree-chevron.is-open {
+        transform: rotate(90deg);
+    }
+
+    .tree-title {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .tree-numbers {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem 0.75rem;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .tree-numbers .meter {
+        width: 6rem;
+        height: 0.3125rem;
+    }
+
+    .tree-module .topic-main {
+        flex: 1 1 9rem;
+    }
+
+    .tree-topic-name {
+        min-height: 1.75rem;
+        border-radius: var(--radius-md);
+        text-align: left;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+    .tree-topic-name:hover {
+        color: var(--accent);
+    }
+
+    /* Why a topic needs another look, under its name. */
+    .tree-attention {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.875rem;
+    }
+
+    .tree-attention svg {
+        flex: none;
+        color: var(--warning);
+    }
+}

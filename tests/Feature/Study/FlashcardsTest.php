@@ -124,7 +124,7 @@ class FlashcardsTest extends TestCase
         // By module: the cards, the counts and the reviews.
         $this->assertEqualsCanonicalizing([$chosen, $fromSession], array_column($this->cards->list($this->by, $this->databases->id, null, $week1), 'id'));
         $this->assertSame([$loose], array_column($this->cards->list($this->by, $this->databases->id, null, ''), 'id'));
-        $this->assertEquals([$week1 => ['total' => 2, 'due' => 2], $week2 => ['total' => 1, 'due' => 1], '' => ['total' => 1, 'due' => 1]], $this->cards->counts($this->by, $this->databases->id)['modules']);
+        $this->assertEquals([$week1 => ['total' => 2, 'due' => 2, 'overdue' => 0], $week2 => ['total' => 1, 'due' => 1, 'overdue' => 0], '' => ['total' => 1, 'due' => 1, 'overdue' => 0]], $this->cards->counts($this->by, $this->databases->id)['modules']);
         $this->assertSame(1, $this->cards->counts($this->by, $this->databases->id, null, $week2)['total']);
         $this->assertSame([$onJoins], $this->cards->queue($this->by, $this->databases->id, null, false, $week2));
 
@@ -143,13 +143,31 @@ class FlashcardsTest extends TestCase
         $this->assertSame([null, null, null], [$module($onJoins), $module($chosen), $module($fromSession)]);
     }
 
+    public function test_a_card_a_week_or_more_past_its_day_is_overdue_for_the_course_its_topic_and_its_module(): void
+    {
+        $week1 = app(Modules::class)->create($this->by, $this->databases->id, ['title' => 'Week 1'])->id;
+        $late = $this->cards->add($this->by, $this->databases->id, $this->joins->id, 'Late?', 'Yes.', moduleId: $week1);
+        $recent = $this->cards->add($this->by, $this->databases->id, $this->joins->id, 'Recent?', 'Yes.');
+        $this->cards->add($this->by, $this->databases->id, $this->keys->id, 'New?', 'Yes.');
+        // The student's day is 2026-10-06: a week before it is the 29th.
+        DB::table('flashcards')->where('id', $late)->update(['due_on' => '2026-09-29']);
+        DB::table('flashcards')->where('id', $recent)->update(['due_on' => '2026-09-30']);
+
+        $counts = $this->cards->counts($this->by, $this->databases->id);
+        $this->assertSame(1, $counts['overdue']);
+        $this->assertSame(3, $counts['due']);
+        $this->assertSame([1, 0], [$counts['topics'][$this->joins->id]['overdue'], $counts['topics'][$this->keys->id]['overdue']]);
+        $this->assertSame(1, $counts['modules'][$this->joins->moduleId ?? $week1]['overdue']);
+        $this->assertSame(7, Flashcards::OVERDUE_DAYS);
+    }
+
     public function test_answers_move_cards_on_the_ladder_by_the_students_day_and_become_self_judged_attempts(): void
     {
         $left = $this->cards->add($this->by, $this->databases->id, $this->joins->id, 'What does a LEFT JOIN keep?', 'Every left row.');
         $inner = $this->cards->add($this->by, $this->databases->id, $this->joins->id, 'What does an INNER JOIN keep?', 'Matching rows only.');
         $this->assertSame('2026-10-06', $this->cards->today($this->by));
         $this->assertSame([$left, $inner], $this->cards->queue($this->by, $this->databases->id));
-        $this->assertSame(['total' => 2, 'due' => 2, 'new' => 2, 'next_on' => null, 'next_count' => 0], array_diff_key($this->cards->counts($this->by, $this->databases->id), ['topics' => 1, 'modules' => 1]));
+        $this->assertSame(['total' => 2, 'due' => 2, 'new' => 2, 'overdue' => 0, 'next_on' => null, 'next_count' => 0], array_diff_key($this->cards->counts($this->by, $this->databases->id), ['topics' => 1, 'modules' => 1]));
 
         $card = $this->cards->answer($this->by, $left, 'correct');
         $this->assertSame(['2026-10-07', 1, 1, 0, 'correct'], [$card->dueOn, $card->step, $card->reviews, $card->lapses, $card->lastResult]);

@@ -8,7 +8,6 @@ use App\Livewire\Workspaces\Progress;
 use App\Livewire\Workspaces\Tasks;
 use App\Models\User;
 use App\Study\Activities;
-use App\Study\Findings;
 use App\Study\Instructions as InstructionTexts;
 use App\Study\Links;
 use App\Study\Modules;
@@ -23,7 +22,7 @@ use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
-/** The tracker's screens from step 1b: the Overview, tasks, instructions, findings and links (docs/specs/study-memory.md §3). */
+/** The tracker's screens from step 1b: the Overview, tasks, instructions and links (docs/specs/study-memory.md §3); key points are kept on the topic sheet (TopicSheetScreenTest). */
 class TrackerScreensTest extends TestCase
 {
     use CreatesAccounts, RefreshesDatabase;
@@ -162,31 +161,6 @@ class TrackerScreensTest extends TestCase
         );
     }
 
-    public function test_findings_are_pinned_under_their_topic_in_progress(): void
-    {
-        $by = $this->principal($this->ada);
-        $joins = app(Topics::class)->create($by, $this->databases->id, 'Joins');
-        $note = app(Notes::class)->create($by, 'workspace', $this->databases->id, 'Lecture 3');
-
-        $page = $this->livewire(Progress::class)
-            ->call('newFinding', $joins->id)->assertDispatched('progress-dialog-open')->assertSee('New finding · Joins')->assertSee('Lecture 3')
-            ->call('save')->assertHasErrors('text')
-            ->set('text', 'A left join keeps every row of the left table.')->set('source', "note:{$note->id}")->set('locator', 'slide 12')
-            ->call('save')->assertSee('The finding is added.')
-            ->assertSeeInOrder(['Joins', '1 finding', 'A left join keeps every row of the left table.', 'From', 'Lecture 3', ', slide 12']);
-        $finding = app(Findings::class)->byTopic($by, $this->databases->id)[$joins->id][0];
-
-        $page->call('toggleFindings', $joins->id)->assertDontSee('A left join keeps every row')->assertSee('1 finding')
-            ->call('toggleFindings', $joins->id)
-            ->call('editFinding', $finding->id)->assertSet('text', 'A left join keeps every row of the left table.')->assertSet('source', "note:{$note->id}")
-            ->set('text', 'LEFT JOIN keeps the left rows.')->call('save')->assertSee('The finding is saved.')->assertSee('LEFT JOIN keeps the left rows.')
-            ->call('deleteFinding', $finding->id)->assertSee('The finding is removed.')->assertDontSee('1 finding');
-
-        // What a study session wrote says so.
-        app(Findings::class)->add($by, $joins->id, ['text' => 'Inner joins keep only matches.'], 'ai');
-        $page->call('$refresh')->assertSee('From a study session');
-    }
-
     public function test_links_sit_beside_notes_and_files(): void
     {
         $by = $this->principal($this->ada);
@@ -235,7 +209,7 @@ class TrackerScreensTest extends TestCase
         $this->assertThrows(fn () => $this->livewire(Tasks::class)->set('workspaceId', 'other'), CannotUpdateLockedPropertyException::class);
         $this->assertThrows(fn () => $this->livewire(Tasks::class)->call('editTask', $task->id)->set('targetId', 'other'), CannotUpdateLockedPropertyException::class);
         $this->assertThrows(fn () => $this->livewire(Instructions::class)->call('edit')->set('editing', false), CannotUpdateLockedPropertyException::class);
-        $this->assertThrows(fn () => $this->livewire(Progress::class)->set('findingId', 'other'), CannotUpdateLockedPropertyException::class);
+        $this->assertThrows(fn () => $this->livewire(Progress::class)->set('targetId', 'other'), CannotUpdateLockedPropertyException::class);
     }
 
     public function test_another_students_things_cannot_be_reached(): void

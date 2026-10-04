@@ -1,6 +1,7 @@
 {{--
     One topic on a sheet (App\Livewire\Workspaces\TopicSheet): where the student says they stand, its cards, open
-    questions and key points, its sessions; rename, move, Study. Opened from a topic's row.
+    questions and key points (added and removed here), its sessions; rename, move, remove, Study. Opened from a topic's
+    row, on the module page and on Progress.
 --}}
 @php
     $statusWords = ['covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Still confusing'];
@@ -37,6 +38,9 @@
                                 </label>
                             @endforeach
                         </div>
+                        @if ($topic->byTutor())
+                            <p class="text-sm text-fg-muted">Set by the tutor{{ $topic->statusAt !== null ? ', '.\Illuminate\Support\Carbon::parse($topic->statusAt, 'UTC')->format('j M') : '' }}. Pick another to change it.</p>
+                        @endif
                         @error('status') <p class="field-error">{{ $message }}</p> @enderror
                     </fieldset>
 
@@ -62,16 +66,27 @@
                         </section>
                     @endif
 
-                    @if ($points !== [])
-                        <section class="space-y-1" aria-labelledby="topic-sheet-points">
-                            <h3 id="topic-sheet-points" class="field-label">Key points</h3>
+                    <section class="space-y-2" aria-labelledby="topic-sheet-points">
+                        <h3 id="topic-sheet-points" class="field-label">Key points</h3>
+                        @if ($points !== [])
                             <ul class="grid gap-1 text-sm" role="list">
-                                @foreach (array_slice($points, 0, 8) as $point)
-                                    <li>{{ $point->text }}</li>
+                                @foreach ($points as $keyPoint)
+                                    <li class="flex items-start gap-2" wire:key="point-{{ $keyPoint->id }}">
+                                        <span class="min-w-0 flex-1 break-words">{{ $keyPoint->text }}@if ($keyPoint->sourceName !== null)<span class="text-fg-muted"> · from {{ $keyPoint->sourceName }}{{ $keyPoint->locator ? ', '.$keyPoint->locator : '' }}</span>@endif</span>
+                                        <button type="button" class="topbar-button -my-1 shrink-0" wire:click="removePoint('{{ $keyPoint->id }}')" aria-label="Remove key point: {{ \Illuminate\Support\Str::limit($keyPoint->text, 40) }}"><x-icon name="x" class="size-4" /></button>
+                                    </li>
                                 @endforeach
                             </ul>
-                        </section>
-                    @endif
+                        @endif
+                        <form wire:submit="addPoint" novalidate class="flex items-end gap-2">
+                            <div class="min-w-0 flex-1">
+                                <label for="topic-sheet-point" class="sr-only">New key point</label>
+                                <input id="topic-sheet-point" class="input" type="text" wire:model="point" maxlength="500" autocomplete="off" placeholder="Something you must know about it">
+                                @error('point') <p class="field-error">{{ $message }}</p> @enderror
+                            </div>
+                            <x-button type="submit" wire:loading.attr="aria-busy" wire:target="addPoint" busy-label="Adding…">Add</x-button>
+                        </form>
+                    </section>
 
                     <form wire:submit="rename" novalidate class="flex items-end gap-2">
                         <div class="min-w-0 flex-1">
@@ -94,10 +109,21 @@
                         <x-button wire:click="move" wire:loading.attr="aria-busy" wire:target="move" busy-label="Moving…">Move</x-button>
                     </div>
                 </div>
-                <div class="modal-actions">
-                    <x-button x-on:click="$el.closest('dialog').close()">Close</x-button>
-                    <x-button variant="primary" icon="play" wire:click="study">Study</x-button>
-                </div>
+                @if ($confirmingRemove)
+                    <div class="px-5 pt-3">
+                        <p class="text-sm">Remove {{ $topic->name }}? What you did on it stays in your journal.</p>
+                    </div>
+                    <div class="modal-actions">
+                        <x-button wire:click="keep">Keep it</x-button>
+                        <x-button variant="danger" icon="trash-2" wire:click="remove" wire:loading.attr="aria-busy" wire:target="remove" busy-label="Removing…">Remove</x-button>
+                    </div>
+                @else
+                    <div class="modal-actions">
+                        <x-button variant="ghost" icon="trash-2" wire:click="askRemove">Remove topic</x-button>
+                        <x-button x-on:click="$el.closest('dialog').close()">Close</x-button>
+                        <x-button variant="primary" icon="play" wire:click="study">Study</x-button>
+                    </div>
+                @endif
             @endif
         </div>
     </dialog>

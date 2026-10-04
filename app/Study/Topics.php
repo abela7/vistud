@@ -26,8 +26,11 @@ final class Topics
 
     public function __construct(private Memory $memory) {}
 
-    /** @return list<TopicDetails> in order, with the derived state of each */
-    public function list(Principal $by, string $workspaceId): array
+    /**
+     * @param  ?array  $snapshot  the derived state, when the caller has taken it already (Memory::snapshot): reading the journal is the costly part
+     * @return list<TopicDetails> in order, with the derived state of each
+     */
+    public function list(Principal $by, string $workspaceId, ?array $snapshot = null): array
     {
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
@@ -36,7 +39,7 @@ final class Topics
         if ($rows->isEmpty()) {
             return [];
         }
-        $derived = $this->memory->snapshot($scope)['topics'];
+        $derived = ($snapshot ?? $this->memory->snapshot($scope))['topics'];
 
         return $rows->map(fn ($row) => self::details($row, $derived[$row->id] ?? null))->all();
     }

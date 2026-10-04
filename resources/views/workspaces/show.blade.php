@@ -85,6 +85,9 @@
                                 @if ($home->progress['stuck'] > 0)
                                     <li>{{ $home->progress['stuck'] }} stuck {{ $home->progress['stuck'] === 1 ? 'question' : 'questions' }}</li>
                                 @endif
+                                @if ($home->progress['attention'] > 0)
+                                    <li><a href="{{ route('workspaces.show', [$workspace->id, 'progress']) }}?filter=attention" class="quiet-link">{{ $home->progress['attention'] }} {{ $home->progress['attention'] === 1 ? 'topic needs' : 'topics need' }} another look</a></li>
+                                @endif
                             </ul>
                         </div>
                     </section>
@@ -128,6 +131,9 @@
                                         <span class="module-row-progress" title="Topics understood in {{ $module->title }}">
                                             <span class="meter" role="progressbar" aria-label="Topics understood in {{ $module->title }}" aria-valuemin="0" aria-valuemax="{{ $row['topics'] }}" aria-valuenow="{{ $row['done'] }}"><span style="width: {{ round($row['done'] / $row['topics'] * 100) }}%"></span></span>
                                             <span class="tabular-nums">{{ $row['done'] }}/{{ $row['topics'] }}</span>
+                                            @if ($row['tested'] !== null)
+                                                <span class="item-meta">tested {{ $row['tested'] }} %</span>
+                                            @endif
                                         </span>
                                     @endif
                                 </li>

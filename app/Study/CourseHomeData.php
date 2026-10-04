@@ -6,8 +6,8 @@ namespace App\Study;
 final readonly class CourseHomeData
 {
     /**
-     * @param  list<array{module: ModuleDetails, number: int, topics: int, done: int, current: bool, url: string}>  $modules  in order
-     * @param  array{done: int, total: int, percent: int, cardsDue: int, stuck: int}  $progress
+     * @param  list<array{module: ModuleDetails, number: int, topics: int, done: int, tested: ?int, current: bool, url: string}>  $modules  in order
+     * @param  array{done: int, total: int, percent: int, cardsDue: int, stuck: int, attention: int}  $progress
      * @param  array{moduleId: ?string, topicId: ?string}  $studyTarget  where Study starts, with no dialog
      */
     public function __construct(

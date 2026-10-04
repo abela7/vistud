@@ -1,28 +1,37 @@
 {{--
-    A workspace's Progress section (App\Livewire\Workspaces\Progress): the
-    topics, each with the student's own status, what the evidence says and
-    the findings pinned to it, and the questions they registered.
+    A workspace's Progress section (App\Livewire\Workspaces\Progress; docs/specs/vistud-2-blueprint.md §3.5.5): the
+    course's ring, the filters, and the tree: modules (the one the student is in open, the rest folded) with their bars,
+    and under each its topics with where they stand and Study. A topic's name opens the topic sheet. The numbers are
+    App\Study\Rollups', the ones the course home shows too.
 --}}
 @php
-    use App\Study\TopicDetails;
-    use Illuminate\Support\Carbon;
     use Illuminate\Support\Str;
 
-    $statusWords = ['not_started' => 'Not started', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Confused', 'mastered' => 'Mastered'];
     $statusIcons = ['not_started' => 'circle-dot', 'covered' => 'check', 'understood' => 'circle-check', 'confused' => 'circle-alert', 'mastered' => 'shield-check'];
-    $headings = ['topic' => $targetId === null ? 'New topic' : 'Rename topic', 'move' => 'Move “'.$target.'”', 'finding' => ($findingId === null ? 'New finding' : 'Edit finding').' · '.$target];
-    $submit = ['topic' => $targetId === null ? 'Add topic' : 'Rename', 'move' => 'Move', 'finding' => $findingId === null ? 'Add finding' : 'Save'];
-    $groups = [...array_map(fn ($m) => [$m->id, $m->title], $modules), ['', $modules === [] ? '' : 'Not in a module']];
+    $filters = ['all' => 'All', 'attention' => 'Needs attention', 'not_started' => 'Not started', 'mastered' => 'Mastered'];
+    $nothing = ['attention' => 'Nothing needs another look.', 'not_started' => 'Everything has been started.', 'mastered' => 'Nothing is mastered yet.'];
+    $ordered = $roll->groups();
+    $allTopics = $roll->topics();
 @endphp
-<div class="space-y-8" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <ul class="flex flex-wrap gap-2" role="list" aria-label="Topics by status">
-            @foreach ($counts as $status => $count)
-                <li @class(['status-count', "status-{$status}"])><x-icon :name="$statusIcons[$status]" class="size-4" />{{ $count }} {{ strtolower($statusWords[$status]) }}</li>
-            @endforeach
-        </ul>
+<div class="space-y-6" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
+    <div class="progress-head">
+        <div class="progress-summary">
+            <div class="ring" role="progressbar" aria-label="Topics understood" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $roll->percent() }}">
+                <svg viewBox="0 0 36 36" aria-hidden="true" focusable="false"><circle class="ring-track" cx="18" cy="18" r="15.9155" /><circle class="ring-bar" cx="18" cy="18" r="15.9155" stroke-dasharray="{{ $roll->percent() }} 100" /></svg>
+                <span>{{ $roll->percent() }}%</span>
+            </div>
+            <ul class="progress-facts" role="list">
+                <li>{{ $roll->percent() }} % · {{ $roll->done() }} of {{ $roll->total() }} {{ $roll->total() === 1 ? 'topic' : 'topics' }}</li>
+                @if ($roll->cards['due'] > 0)
+                    <li><a href="{{ route('workspaces.flashcards.review', $workspaceId) }}" class="quiet-link">{{ $roll->cards['due'] }} {{ $roll->cards['due'] === 1 ? 'card' : 'cards' }} due</a></li>
+                @endif
+                @if ($roll->stuck > 0)
+                    <li>{{ $roll->stuck }} stuck {{ $roll->stuck === 1 ? 'question' : 'questions' }}</li>
+                @endif
+            </ul>
+        </div>
         <div class="flex flex-wrap gap-2">
-            @if ($topics !== [])
+            @if ($allTopics !== [])
                 <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
                     <x-icon name="list-checks" class="size-4" />
                     <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
@@ -40,7 +49,7 @@
     <x-selection-bar>
         <x-button variant="secondary" size="sm" icon="check" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'covered' })">Covered</x-button>
         <x-button variant="secondary" size="sm" icon="circle-check" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'understood' })">Understood</x-button>
-        <x-button variant="secondary" size="sm" icon="circle-alert" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'confused' })">Confused</x-button>
+        <x-button variant="secondary" size="sm" icon="circle-alert" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'confused' })">Still confusing</x-button>
         @if ($modules !== [])
             <x-button variant="secondary" size="sm" icon="folder-input" ::disabled="count === 0" x-on:click="$wire.openBulkMove(selectedKeys())">Move to module…</x-button>
         @endif
@@ -48,106 +57,102 @@
     </x-selection-bar>
 
     <section aria-labelledby="topics-heading" class="space-y-4">
-        <h2 id="topics-heading" class="text-lg font-semibold">Topics</h2>
-        @if ($topics === [])
-            <div class="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border-strong px-6 py-12 text-center">
-                <span class="ws-chip size-14"><x-icon name="trending-up" class="size-6" /></span>
-                <h3 class="text-lg font-semibold">No topics yet</h3>
-                <p class="max-w-md text-fg-muted">Topics are the spine of the course, like “Joins” or “Normalisation”. Add them as you go, and say for each one whether it's covered, understood or still confusing. The evidence line under each shows what your practice says, and its findings keep what you must know.</p>
+        <h2 id="topics-heading" class="sr-only">Topics</h2>
+        @if ($allTopics === [])
+            <div class="empty-place">
+                <span class="item-icon" aria-hidden="true"><x-icon name="trending-up" class="size-5" /></span>
+                <p class="font-medium">No topics yet</p>
+                <x-button variant="primary" icon="plus" wire:click="newTopic">New topic</x-button>
             </div>
         @else
-            @foreach ($groups as [$groupId, $groupTitle])
-                @if (isset($byModule[$groupId]))
-                    <div class="space-y-2" wire:key="group-{{ $groupId ?: 'none' }}">
-                        @if ($groupTitle !== '')
-                            <h3 class="text-sm font-semibold text-fg-muted">{{ $groupTitle }}</h3>
+            <div class="segmented segmented-sm" role="group" aria-label="Show topics">
+                @foreach ($filters as $key => $word)
+                    <button type="button" @class(['segmented-option', 'is-current' => $filter === $key]) wire:click="showOnly('{{ $key }}')" aria-pressed="{{ $filter === $key ? 'true' : 'false' }}">{{ $word }}<span class="tabular-nums"> {{ $counts[$key] }}</span></button>
+                @endforeach
+            </div>
+
+            @php $any = false; @endphp
+            @foreach ($ordered as $group)
+                @php
+                    $shown = array_values(array_filter($group->topics, fn ($topic) => \App\Livewire\Workspaces\Progress::shows($filter, $topic)));
+                    $isCurrent = $group->id() !== '' && $group->id() === $roll->currentId;
+                    $open = $filter !== 'all' || $isCurrent || ($roll->currentId === null && $loop->first);
+                @endphp
+                @continue ($group->total() === 0 || $shown === [])
+                @php $any = true; @endphp
+                <section class="tree-module module-card" wire:key="tree-{{ $group->id() ?: 'none' }}-{{ $filter }}" x-data="{ open: {{ $open ? 'true' : 'false' }} }" aria-label="{{ $group->title() }}">
+                    <div class="tree-module-head">
+                        <button type="button" class="tree-toggle" x-on:click="open = ! open" x-bind:aria-expanded="open ? 'true' : 'false'" aria-controls="tree-{{ $group->id() ?: 'none' }}">
+                            <span class="tree-chevron" x-bind:class="{ 'is-open': open }" aria-hidden="true"><x-icon name="chevron-right" class="size-4" /></span>
+                            @if ($group->number > 0)
+                                <span class="module-number" aria-hidden="true">{{ $group->number }}</span>
+                            @endif
+                            <span class="tree-title">{{ $group->title() }}@if ($isCurrent)<span class="sr-only"> (where you are)</span>@endif</span>
+                            @if ($isCurrent)
+                                <span class="current-dot" aria-hidden="true" title="Where you are"></span>
+                            @endif
+                        </button>
+                        <span class="tree-numbers">
+                            <span class="meter" role="progressbar" aria-label="Topics understood in {{ $group->title() }}" aria-valuemin="0" aria-valuemax="{{ $group->total() }}" aria-valuenow="{{ $group->done() }}"><span style="width: {{ $group->percent() }}%"></span></span>
+                            <span class="tabular-nums">{{ $group->done() }}/{{ $group->total() }}</span>
+                            @if ($group->tested !== null)
+                                <span class="item-meta">tested {{ $group->tested }} %</span>
+                            @endif
+                            @if ($group->attention() > 0)
+                                <span class="status-chip status-confused"><x-icon name="circle-alert" class="size-3.5" />{{ $group->attention() }} to look at</span>
+                            @endif
+                        </span>
+                        @if ($group->module !== null)
+                            <a href="{{ route('workspaces.modules.show', [$workspaceId, $group->id()]) }}" class="topbar-button" aria-label="Open {{ $group->title() }}" title="Open the module"><x-icon name="chevron-right" class="size-5" /></a>
                         @endif
-                        <ul class="module-card divide-y divide-divider" role="list">
-                            @foreach ($byModule[$groupId] as $topic)
-                                @php
-                                    $shown = $topic->shown();
-                                    $i = array_search($topic, $topics, true);
-                                    $topicFindings = $findings[$topic->id] ?? [];
-                                    $showFindings = $topicFindings !== [] && in_array($topic->id, $expanded, true);
-                                @endphp
-                                <li wire:key="topic-{{ $topic->id }}" class="topic-row"
-                                    data-select-key="topic:{{ $topic->id }}"
-                                    :class="{ 'is-selected': isSelected('topic:{{ $topic->id }}') }"
-                                    x-on:click="handleRowClick($event, 'topic:{{ $topic->id }}')">
-                                    <x-selection-check key="topic:{{ $topic->id }}" label="Select {{ $topic->name }}" />
-                                    <div class="topic-main">
-                                        <p class="flex flex-wrap items-center gap-2">
-                                            <span class="font-semibold break-words">{{ $topic->name }}</span>
-                                            <span @class(['status-chip', "status-{$shown}"])><x-icon :name="$statusIcons[$shown]" class="size-3.5" />{{ $statusWords[$shown] }}</span>
-                                        </p>
-                                        <p class="text-sm text-fg-muted">Evidence: {{ $topic->evidence() }}</p>
-                                        @if (isset($cards[$topic->id]))
-                                            <a href="{{ route('workspaces.show', [$workspaceId, 'flashcards']) }}?topic={{ $topic->id }}" class="item-link text-sm">{{ Str::plural('flashcard', $cards[$topic->id]['total'], prependCount: true) }}{{ $cards[$topic->id]['due'] > 0 ? ', '.$cards[$topic->id]['due'].' due' : '' }}</a>
-                                        @endif
-                                        @if ($topicFindings !== [])
-                                            <button type="button" class="disclosure" wire:click="toggleFindings('{{ $topic->id }}')" aria-expanded="{{ $showFindings ? 'true' : 'false' }}" @if ($showFindings) aria-controls="findings-{{ $topic->id }}" @endif>
-                                                <x-icon name="chevron-right" @class(['size-4 transition-transform', 'rotate-90' => $showFindings]) />
-                                                {{ count($topicFindings) }} {{ Str::plural('finding', count($topicFindings)) }}
-                                            </button>
-                                        @endif
-                                    </div>
-                                    <div class="segmented" role="group" aria-label="Status of {{ $topic->name }}">
-                                        @foreach (['covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Confused'] as $status => $word)
-                                            <button type="button" @class(['segmented-option', 'is-current' => $topic->status === $status]) wire:click="report('{{ $topic->id }}', '{{ $status }}')" @if ($topic->status === $status) aria-pressed="true" @else aria-pressed="false" @endif>
-                                                <x-icon :name="$statusIcons[$status]" class="size-4" />{{ $word }}
-                                            </button>
-                                        @endforeach
-                                    </div>
-                                    @include('livewire.workspaces.partials.row-menu', ['id' => $topic->id, 'label' => $topic->name, 'items' => [
-                                        ['Study this now', 'play', "study('{$topic->id}')", false],
-                                        ['Add a finding', 'lightbulb', "newFinding('{$topic->id}')", false],
-                                        ['New flashcard', 'gallery-vertical-end', "newFlashcard('{$topic->id}')", false],
-                                        ['New question about it', 'circle-help', "newQuestion('{$topic->id}')", false],
-                                        ['Rename', 'pencil', "renameTopic('{$topic->id}')", false],
-                                        ['Move to module…', 'folder-input', "moveTopic('{$topic->id}')", $modules === []],
-                                        ['Move up', 'arrow-up', "moveTopicBy('{$topic->id}', -1)", $i === 0],
-                                        ['Move down', 'arrow-down', "moveTopicBy('{$topic->id}', 1)", $i === count($topics) - 1],
-                                        ['Remove', 'trash-2', "retireTopic('{$topic->id}')", false],
-                                    ]])
-                                    @if ($showFindings)
-                                        <div id="findings-{{ $topic->id }}" class="findings">
-                                            <ul role="list" aria-label="Findings about {{ $topic->name }}">
-                                                @foreach ($topicFindings as $finding)
-                                                    <li wire:key="finding-{{ $finding->id }}" class="finding-row">
-                                                        <x-icon name="lightbulb" class="mt-0.5 size-4 shrink-0 text-fg-muted" />
-                                                        <div class="min-w-0 flex-1">
-                                                            <p class="break-words">{{ $finding->text }}</p>
-                                                            @if ($finding->sourceName !== null || $finding->author === 'ai')
-                                                                <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-fg-muted">
-                                                                    @if ($finding->sourceName !== null)
-                                                                        <span>From <a href="{{ $finding->sourceUrl() }}" class="inline-link">{{ $finding->sourceName }}</a>{{ $finding->locator ? ', '.$finding->locator : '' }}</span>
-                                                                    @endif
-                                                                    @if ($finding->author === 'ai')
-                                                                        <span class="status-chip"><x-icon name="sparkles" class="size-3.5" />From a study session</span>
-                                                                    @endif
-                                                                </p>
-                                                            @endif
-                                                        </div>
-                                                        @include('livewire.workspaces.partials.row-menu', ['id' => $finding->id, 'label' => Str::limit($finding->text, 60), 'items' => [
-                                                            ['Edit', 'pencil', "editFinding('{$finding->id}')", false],
-                                                            ['Remove', 'trash-2', "deleteFinding('{$finding->id}')", false],
-                                                        ]])
-                                                    </li>
-                                                @endforeach
-                                            </ul>
-                                            <x-button variant="ghost" icon="plus" wire:click="newFinding('{{ $topic->id }}')">Add a finding</x-button>
-                                        </div>
-                                    @endif
-                                </li>
-                            @endforeach
-                        </ul>
                     </div>
-                @endif
+                    <ul id="tree-{{ $group->id() ?: 'none' }}" class="divide-y divide-divider" role="list" x-show="open || isSelecting" @unless ($open) x-cloak @endunless>
+                        @foreach ($shown as $topic)
+                            @php
+                                $t = $topic->topic;
+                                $siblings = $group->topics;
+                                $at = array_search($topic, $siblings, true);
+                            @endphp
+                            <li wire:key="topic-{{ $t->id }}" class="topic-row"
+                                data-select-key="topic:{{ $t->id }}"
+                                :class="{ 'is-selected': isSelected('topic:{{ $t->id }}') }"
+                                x-on:click="handleRowClick($event, 'topic:{{ $t->id }}')">
+                                <x-selection-check key="topic:{{ $t->id }}" label="Select {{ $t->name }}" />
+                                <div class="topic-main">
+                                    <button type="button" class="tree-topic-name" x-on:click="isSelecting ? toggle('topic:{{ $t->id }}', $event.shiftKey) : Livewire.dispatch('topic-sheet-open', { topicId: '{{ $t->id }}' })">{{ $t->name }}</button>
+                                    <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-muted">
+                                        <span @class(['status-chip', "status-{$topic->shown}"]) title="{{ $topic->evidence() }}"><x-icon :name="$statusIcons[$topic->shown]" class="size-3.5" />{{ $topic->word() }}<span class="sr-only">. {{ $topic->evidence() }}</span></span>
+                                        @if ($topic->small() !== '')
+                                            <span>{{ $topic->small() }}</span>
+                                        @endif
+                                    </p>
+                                    @if ($topic->needsAttention())
+                                        <p class="tree-attention"><x-icon name="circle-alert" class="size-4" />{{ ucfirst($topic->attentionWords()) }}</p>
+                                    @endif
+                                </div>
+                                <x-button size="sm" icon="play" wire:click="study('{{ $t->id }}')" aria-label="Study {{ $t->name }}">Study</x-button>
+                                @include('livewire.workspaces.partials.row-menu', ['id' => $t->id, 'label' => $t->name, 'items' => [
+                                    ['New flashcard', 'gallery-vertical-end', "newFlashcard('{$t->id}')", false],
+                                    ['New question about it', 'circle-help', "newQuestion('{$t->id}')", false],
+                                    ['Move to module…', 'folder-input', "moveTopic('{$t->id}')", $modules === []],
+                                    ['Move up', 'arrow-up', "moveTopicBy('{$t->id}', -1)", $at === 0],
+                                    ['Move down', 'arrow-down', "moveTopicBy('{$t->id}', 1)", $at === count($siblings) - 1],
+                                    ['Remove', 'trash-2', "retireTopic('{$t->id}')", false],
+                                ]])
+                            </li>
+                        @endforeach
+                    </ul>
+                </section>
             @endforeach
+            @unless ($any)
+                <p class="text-fg-muted">{{ $nothing[$filter] ?? 'No topics yet.' }}</p>
+            @endunless
         @endif
     </section>
 
-    <livewire:workspaces.question-board :workspace-id="$workspaceId" />
+    <livewire:workspaces.question-board :workspace-id="$workspaceId" key="progress-questions" />
+
+    <livewire:workspaces.topic-sheet :workspace-id="$workspaceId" key="progress-topic-sheet" />
 
     <dialog id="progress-dialog" class="modal" aria-labelledby="progress-dialog-title"
         wire:ignore.self
@@ -159,7 +164,7 @@
         @if ($mode)
             <form wire:submit="save" novalidate class="modal-panel" wire:key="dialog-{{ $mode }}-{{ $targetId }}">
                 <div class="modal-head">
-                    <h2 id="progress-dialog-title" class="min-w-0 flex-1 text-lg font-semibold break-words">{{ $headings[$mode] }}</h2>
+                    <h2 id="progress-dialog-title" class="min-w-0 flex-1 text-lg font-semibold break-words">{{ $mode === 'topic' ? 'New topic' : 'Move “'.$target.'”' }}</h2>
                     <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
                         <x-icon name="x" />
                     </button>
@@ -169,7 +174,7 @@
                     @if ($mode === 'topic')
                         <x-field name="name" label="Name" wire:model="name" maxlength="120" autocomplete="off" hint="Like “Joins” or “Normalisation”." autofocus />
                     @endif
-                    @if (($mode === 'topic' && $targetId === null && $modules !== []) || $mode === 'move')
+                    @if (($mode === 'topic' && $modules !== []) || $mode === 'move')
                         <div class="field">
                             <label for="topic-module" class="field-label">Module</label>
                             <select id="topic-module" class="input" wire:model="moduleId" @if ($mode === 'move') autofocus @endif>
@@ -181,44 +186,17 @@
                             @error('moduleId') <p class="field-error">{{ $message }}</p> @enderror
                         </div>
                     @endif
-                    @if ($mode === 'finding')
-                        <div class="field">
-                            <label for="finding-text" class="field-label">What you need to know</label>
-                            <textarea id="finding-text" class="input" rows="3" maxlength="500" wire:model="text" autofocus placeholder="A left join keeps every row of the left table."></textarea>
-                            @error('text') <p class="field-error">{{ $message }}</p> @enderror
-                        </div>
-                        @if ($sources !== [])
-                            <div class="field">
-                                <label for="finding-source" class="field-label">From (optional)</label>
-                                <select id="finding-source" class="input" wire:model="source">
-                                    <option value="">Not from a note or file</option>
-                                    @foreach (['note' => 'Notes', 'file' => 'Files'] as $type => $group)
-                                        @php $options = array_filter($sources, fn ($key) => str_starts_with($key, "{$type}:"), ARRAY_FILTER_USE_KEY); @endphp
-                                        @if ($options !== [])
-                                            <optgroup label="{{ $group }}">
-                                                @foreach ($options as $value => $sourceName)
-                                                    <option value="{{ $value }}">{{ $sourceName }}</option>
-                                                @endforeach
-                                            </optgroup>
-                                        @endif
-                                    @endforeach
-                                </select>
-                                @error('source') <p class="field-error">{{ $message }}</p> @enderror
-                            </div>
-                            <x-field name="locator" label="Where in it (optional)" wire:model="locator" maxlength="60" autocomplete="off" hint="Like “slide 12” or “p. 4”." />
-                        @endif
-                    @endif
                 </div>
 
                 <div class="modal-actions">
                     <x-button x-on:click="$el.closest('dialog').close()">Cancel</x-button>
-                    <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ $submit[$mode] }}</x-button>
+                    <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ $mode === 'topic' ? 'Add topic' : 'Move' }}</x-button>
                 </div>
             </form>
         @endif
     </dialog>
 
-    <livewire:workspaces.flashcard-editor :workspace-id="$workspaceId" />
+    <livewire:workspaces.flashcard-editor :workspace-id="$workspaceId" key="progress-card-editor" />
 
     <dialog id="bulk-topic-move-dialog" class="modal" aria-labelledby="bulk-topic-move-title"
         wire:ignore.self

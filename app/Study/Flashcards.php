@@ -40,6 +40,9 @@ final class Flashcards
     /** The most cards in one round of review. */
     public const ROUND = 20;
 
+    /** Days past its day after which a card counts as long overdue. */
+    public const OVERDUE_DAYS = 7;
+
     public function __construct(private Memory $memory, private Sessions $sessions, private JournalStore $journal) {}
 
     /** @return list<FlashcardDetails> newest first; $topicId narrows to a topic, $moduleId to a module ('' to cards with none) */
@@ -62,17 +65,21 @@ final class Flashcards
      * many are due today (new ones included), how many are new, when the
      * next are due after today and how many; and the same by topic.
      *
-     * @return array{total: int, due: int, new: int, next_on: ?string, next_count: int, topics: array<string, array{total: int, due: int}>, modules: array<string, array{total: int, due: int}>}
+     * @return array{total: int, due: int, new: int, overdue: int, next_on: ?string, next_count: int, topics: array<string, array{total: int, due: int, overdue: int}>, modules: array<string, array{total: int, due: int, overdue: int}>}
      */
     public function counts(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null): array
     {
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
         $today = $this->today($by);
-        $counts = ['total' => 0, 'due' => 0, 'new' => 0, 'next_on' => null, 'next_count' => 0, 'topics' => [], 'modules' => []];
+        // Overdue is long overdue: a week or more past its day (docs/specs/vistud-2-blueprint.md §3.8).
+        $overdueBy = CarbonImmutable::parse($today)->subDays(self::OVERDUE_DAYS)->toDateString();
+        $counts = ['total' => 0, 'due' => 0, 'new' => 0, 'overdue' => 0, 'next_on' => null, 'next_count' => 0, 'topics' => [], 'modules' => []];
         foreach ($this->query($scope, $workspaceId, $topicId, $moduleId)->get(['topic_id', 'module_id', 'due_on']) as $row) {
             $dueOn = $row->due_on === null ? null : substr((string) $row->due_on, 0, 10);
             $due = $dueOn === null || $dueOn <= $today;
+            $overdue = $dueOn !== null && $dueOn <= $overdueBy;
+            $counts['overdue'] += (int) $overdue;
             $topic = (string) $row->topic_id;
             $counts['total']++;
             $counts['due'] += (int) $due;
@@ -85,9 +92,11 @@ final class Flashcards
             }
             $counts['topics'][$topic]['total'] = ($counts['topics'][$topic]['total'] ?? 0) + 1;
             $counts['topics'][$topic]['due'] = ($counts['topics'][$topic]['due'] ?? 0) + (int) $due;
+            $counts['topics'][$topic]['overdue'] = ($counts['topics'][$topic]['overdue'] ?? 0) + (int) $overdue;
             $module = (string) $row->module_id;
             $counts['modules'][$module]['total'] = ($counts['modules'][$module]['total'] ?? 0) + 1;
             $counts['modules'][$module]['due'] = ($counts['modules'][$module]['due'] ?? 0) + (int) $due;
+            $counts['modules'][$module]['overdue'] = ($counts['modules'][$module]['overdue'] ?? 0) + (int) $overdue;
         }
 
         return $counts;

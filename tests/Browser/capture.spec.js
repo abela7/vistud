@@ -63,10 +63,12 @@ test('the tutor\'s marks are pasted, reviewed and saved where they belong', asyn
     await expect(page.getByRole('status').filter({ hasText: 'Saved 1 question.' })).toBeVisible();
 
     await page.goto(`/workspaces/${student.workspace}/progress`);
-    const joins = page.getByRole('region', { name: 'Topics' }).locator('.topic-row').filter({ has: page.getByText('Joins', { exact: true }) });
-    await expect(joins).toContainText('3 findings');
+    const joins = page.locator('.topic-row').filter({ has: page.getByRole('button', { name: 'Joins', exact: true }) });
     // The answer is evidence: the rules no longer say "not practised yet".
     await expect(joins).not.toContainText('not practised yet');
+    // The key points are kept on the topic's sheet: the two it had, and the one saved from the chat.
+    await joins.getByRole('button', { name: 'Joins', exact: true }).click();
+    await expect(page.locator('#topic-sheet').getByRole('region', { name: 'Key points' }).getByRole('listitem')).toHaveCount(3);
     await expect(page.getByRole('list', { name: 'Questions' })).toContainText('Why are unmatched columns NULL rather than empty?');
 });
 

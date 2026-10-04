@@ -227,7 +227,7 @@ class FlashcardScreensTest extends TestCase
             ->assertSee(route('workspaces.flashcards.review', $this->databases->id), false);
 
         $this->livewire(Progress::class)
-            ->assertSee('2 flashcards, 2 due')->assertSee('New flashcard')
+            ->assertSee('2 cards, 2 due')->assertSee('New flashcard')
             ->call('newFlashcard', $this->joins->id)->assertDispatched('flashcard-new', topicId: $this->joins->id);
     }
 

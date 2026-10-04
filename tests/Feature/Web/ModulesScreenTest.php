@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Study\Folders;
 use App\Study\Modules as ModuleService;
 use App\Study\Notes;
+use App\Study\Quizzes;
+use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
@@ -189,6 +191,22 @@ class ModulesScreenTest extends TestCase
         $this->place('module', $cells->id)->call('studyModule')->assertDispatched('study-next', moduleId: $cells->id);
         $this->place('folder', $week2->id)->call('studyModule')->assertDispatched('study-next', moduleId: $cells->id);
         $this->livewire(StudyTime::class)->call('newSession', $cells->id)->assertSet('moduleId', $cells->id)->assertSet('mode', 'start');
+    }
+
+    public function test_a_module_card_says_how_far_it_is_and_how_its_latest_test_went(): void
+    {
+        $by = $this->principal($this->ada);
+        $cells = $this->module('Cells');
+        $mitosis = app(Topics::class)->create($by, $this->biology->id, 'Mitosis', $cells->id);
+        app(Topics::class)->report($by, $mitosis->id, 'understood');
+        $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
+            ->assertSeeInOrder(['Cells', 'Topics understood', '1/1'])->assertDontSee('tested');
+
+        $session = app(Sessions::class)->start($by, $this->biology->id, $mitosis->id, null, null, null, 'test');
+        $result = fn ($result) => ['asked' => 'Q', 'answer' => 'A', 'result' => $result, 'right' => 'R', 'fix' => 'F'];
+        app(Quizzes::class)->record($by, $session->id, ['kind' => 'test', 'questions' => [$result('correct'), $result('correct'), $result('correct'), $result('incorrect')]]);
+        $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
+            ->assertSeeInOrder(['Cells', 'Topics understood', '1/1', 'tested 75 %']);
     }
 
     public function test_deleting_the_page_you_are_on_goes_up_a_level(): void

@@ -20,8 +20,9 @@ use Livewire\Component;
 /**
  * One topic on a sheet (docs/specs/vistud-2-blueprint.md §3.5.3): how the student says they stand on it (covered, understood,
  * still confusing), its cards, open questions and key points, and the sessions on it; and to rename it, move it to another
- * module or study it. Opened by the `topic-sheet-open` event from a topic's row (the module page; later Progress). A thin
- * adapter over App\Study\Topics and the services that know the rest; the topic's id is locked.
+ * module, study it or remove it. Opened by the `topic-sheet-open` event from a topic's row (the module page and Progress); it
+ * says when the tutor set the status, and keeps the key points (add, remove). A thin adapter over App\Study\Topics and the
+ * services that know the rest; the topic's id is locked.
  */
 final class TopicSheet extends Component
 {
@@ -34,6 +35,13 @@ final class TopicSheet extends Component
     public string $name = '';
 
     public string $moduleId = '';
+
+    /** A key point being written. */
+    public string $point = '';
+
+    /** Asking whether to remove the topic. */
+    #[Locked]
+    public bool $confirmingRemove = false;
 
     #[Locked]
     public ?string $notice = null;
@@ -76,6 +84,8 @@ final class TopicSheet extends Component
         $this->topicId = $topic->id;
         $this->name = $topic->name;
         $this->moduleId = (string) $topic->moduleId;
+        $this->point = '';
+        $this->confirmingRemove = false;
         $this->notice = null;
         $this->resetErrorBag();
         $this->dispatch('topic-sheet-dialog-open');
@@ -125,6 +135,46 @@ final class TopicSheet extends Component
         $this->topicId = null;
     }
 
+    public function addPoint(): void
+    {
+        $this->resetErrorBag();
+        try {
+            $this->findings->add($this->principal(), (string) $this->topicId, ['text' => $this->point]);
+        } catch (Unprocessable $e) {
+            $this->addError('point', array_values($e->details['fields'] ?? [])[0][0] ?? $e->getMessage());
+
+            return;
+        }
+        $this->point = '';
+        $this->notice = 'Key point added.';
+    }
+
+    public function removePoint(string $id): void
+    {
+        $this->findings->delete($this->principal(), $id);
+        $this->notice = 'Key point removed.';
+    }
+
+    public function askRemove(): void
+    {
+        $this->confirmingRemove = true;
+    }
+
+    public function keep(): void
+    {
+        $this->confirmingRemove = false;
+    }
+
+    /** Takes the topic out of the course; what was done on it stays in the journal. */
+    public function remove(): void
+    {
+        $this->topics->retire($this->principal(), (string) $this->topicId);
+        $this->dispatch('topics-changed');
+        $this->dispatch('topic-sheet-dialog-close');
+        $this->topicId = null;
+        $this->confirmingRemove = false;
+    }
+
     /** Study it now, with no dialog. */
     public function study(): void
     {
@@ -136,6 +186,7 @@ final class TopicSheet extends Component
     public function close(): void
     {
         $this->topicId = null;
+        $this->confirmingRemove = false;
         $this->notice = null;
         $this->resetErrorBag();
     }

@@ -99,7 +99,7 @@
 
                     @if ($topics)
                         <div class="module-progress">
-                            <p class="module-progress-label"><span>Topics understood</span><span class="tabular-nums">{{ $topics['done'] }}/{{ $topics['total'] }}</span></p>
+                            <p class="module-progress-label"><span>Topics understood</span><span class="tabular-nums">{{ $topics['done'] }}/{{ $topics['total'] }}@if ($topics['tested'] !== null) · tested {{ $topics['tested'] }} %@endif</span></p>
                             <div class="meter" role="progressbar" aria-label="Topics understood in {{ $module->title }}" aria-valuemin="0" aria-valuemax="{{ $topics['total'] }}" aria-valuenow="{{ $topics['done'] }}">
                                 <span style="width: {{ round($topics['done'] / $topics['total'] * 100) }}%"></span>
                             </div>
