@@ -13,6 +13,7 @@ use App\Engine\Tools\EarlierSessionsTool;
 use App\Engine\Tools\FilesTool;
 use App\Engine\Tools\FindingsTool;
 use App\Engine\Tools\MakeFlashcardsTool;
+use App\Engine\Tools\ModuleFilesTool;
 use App\Engine\Tools\NotesTool;
 use App\Engine\Tools\QuestionsTool;
 use App\Engine\Tools\ReadFileTool;
@@ -52,6 +53,7 @@ final class Toolbox
         ReadFileTool::class,
         SearchNotesTool::class,
         FilesTool::class,
+        ModuleFilesTool::class,
         EarlierSessionsTool::class,
         SetTopicTool::class,
         AddTopicsTool::class,

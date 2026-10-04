@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Identity\PrincipalFactory;
+use App\Study\FileReading;
 use App\Study\Files;
 use App\Study\Folders;
 use App\Study\Input;
@@ -14,13 +15,13 @@ use Illuminate\Support\Number;
 /**
  * POST /api/v1/files (docs/api/openapi.json): one uploaded file, into a workspace's top level, a module or a
  * folder, and, for a file from an uploaded folder, into the folders it was in (`folder`, "Week 1/Lectures"),
- * made where they don't exist yet. The upload dialog sends a student's files one at a time, so each has its
+ * made where they don't exist yet. A file into a module is also read by the AI, when the student's settings say so (App\Study\FileReading). The upload dialog sends a student's files one at a time, so each has its
  * own progress and its own answer (the owner's review, 2026-09-30: a whole batch in one request went over
  * PHP's limits). The file is checked by its bytes (App\Study\FileTypes) before it is kept.
  */
 class FileController
 {
-    public function __construct(private Files $files, private Folders $folders, private PrincipalFactory $principals) {}
+    public function __construct(private Files $files, private Folders $folders, private PrincipalFactory $principals, private FileReading $reading) {}
 
     public function store(Request $request): JsonResponse
     {
@@ -43,6 +44,9 @@ class FileController
 
             return [$this->files->upload($by, $type, $placeId, (string) $upload->getRealPath(), $upload->getClientOriginalName()), $type, $placeId];
         });
+
+        // A file in a module is read by the reader at once, if the student's settings say so (docs/specs/vistud-2-blueprint.md §3.6.6).
+        $this->reading->afterUpload($by, $file);
 
         return response()->json([
             'id' => $file->id,

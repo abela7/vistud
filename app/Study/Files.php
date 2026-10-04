@@ -248,6 +248,9 @@ final class Files
     private function delete(LearnerScope $scope, object $row): void
     {
         LearnerTables::query($scope, 'files')->where('id', $row->id)->delete();
+        // What the AI read in it goes too; a topic it suggested stays, now from a file that is gone.
+        LearnerTables::query($scope, 'file_digests')->where('file_id', $row->id)->delete();
+        LearnerTables::query($scope, 'topic_suggestions')->where('source_file_id', $row->id)->update(['source_file_id' => null]);
         self::disk()->delete($row->storage_key);
         FilePreviews::forget($row->storage_key);
         FileTexts::forget($row->storage_key);
@@ -297,6 +300,7 @@ final class Files
             $row->id, $row->workspace_id, $row->module_id, $row->folder_id, $row->name, $row->extension, $row->kind,
             $row->mime, (int) $row->size, (int) $row->position, $time($row->created_at),
             $row->trashed_at === null ? null : $time($row->trashed_at),
+            $row->sha256,
         );
     }
 }

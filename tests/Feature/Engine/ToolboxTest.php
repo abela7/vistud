@@ -7,6 +7,7 @@ use App\Engine\Tools\Context;
 use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Study\Activities;
+use App\Study\FileDigests;
 use App\Study\Files;
 use App\Study\Findings;
 use App\Study\Flashcards;
@@ -223,6 +224,33 @@ class ToolboxTest extends TestCase
         $this->assertStringContainsString('ask for slides 1 to 8', $this->look('read_file', ['file' => 'deck', 'pages' => '12']));
         $this->assertStringContainsString('is a picture', $this->look('read_file', ['file' => 'Whiteboard']));
         $this->assertStringContainsString('no file called "Lecture 9"', $this->look('read_file', ['file' => 'Lecture 9']));
+    }
+
+    public function test_module_files_says_what_each_file_of_a_module_is_as_the_reader_summarised_it(): void
+    {
+        $files = app(Files::class);
+        $read = $files->upload($this->by, 'module', $this->week1, $this->temp("Relations and keys.\n"), 'Lecture 1.txt');
+        $fresh = $files->upload($this->by, 'module', $this->week1, $this->temp("Not read.\n"), 'Lecture 2.txt');
+        $picture = $files->upload($this->by, 'module', $this->week1, $this->temp($this->image()), 'Whiteboard.png');
+        app(FileDigests::class)->keep($this->by, $read->id, ['summary' => 'Relations, keys and the relational model.', 'outline' => [['page' => 1, 'heading' => 'Relations'], ['page' => 4, 'heading' => 'Keys']], 'topics' => ['Relations', 'Keys'], 'language' => 'English'], 6, 1_200, 'fake/quick');
+        app(FileDigests::class)->skipped($this->by, $picture->id, 'picture');
+
+        // With no module named, the session's module (week 2: no files); a module by title finds its files.
+        $this->assertSame('No files in that module yet.', $this->look('module_files'));
+        $rows = json_decode($this->look('module_files', ['module' => 'Week 1']), true);
+
+        $this->assertSame(['Lecture 1.txt', 'Lecture 2.txt', 'Whiteboard.png'], array_column($rows, 'file'));
+        $this->assertSame(['Relations, keys and the relational model.', ['Relations', 'Keys'], ['1: Relations', '4: Keys'], '6 pages', 'English'], [$rows[0]['summary'], $rows[0]['topics'], $rows[0]['outline'], $rows[0]['length'], $rows[0]['language']]);
+        $this->assertSame([false, 'not read yet: open it with read_file'], [$rows[1]['read'], $rows[1]['note']]);
+        $this->assertSame('a picture: the student attaches it in the chat', $rows[2]['note']);
+
+        // Without a module in the session or in the question, it says which to name.
+        $none = new Context($this->databases->id, null, null, 'UTC');
+        $this->assertStringContainsString('Say which module', app(Toolbox::class)->run($this->by, $none, 'module_files'));
+        $this->assertStringContainsString('no module called "Week 9"', $this->look('module_files', ['module' => 'Week 9']));
+        // Another student's module is not found for them.
+        $other = $this->principal($this->student());
+        $this->assertStringContainsString('Not found', app(Toolbox::class)->run($other, new Context($this->databases->id, $this->week1, null, 'UTC'), 'module_files'));
     }
 
     public function test_flashcards_key_points_and_questions_go_straight_into_the_course_once_each(): void

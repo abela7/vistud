@@ -154,7 +154,15 @@ final class Workspaces
                 LearnerTables::query($scope, 'instructions')->whereIn('scope', array_map(fn ($mId) => "module:{$mId}", $moduleIds))->delete();
             }
 
-            // Delete files, folders, modules
+            // Delete files (and what the AI read in them), folders, modules (and what the AI suggested for them)
+            $fileIds = LearnerTables::query($scope, 'files')->where('workspace_id', $id)->pluck('id')->all();
+            if ($fileIds !== []) {
+                LearnerTables::query($scope, 'file_digests')->whereIn('file_id', $fileIds)->delete();
+            }
+            if ($moduleIds !== []) {
+                LearnerTables::query($scope, 'topic_suggestions')->whereIn('module_id', $moduleIds)->delete();
+                LearnerTables::query($scope, 'module_briefs')->whereIn('module_id', $moduleIds)->delete();
+            }
             LearnerTables::query($scope, 'files')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'folders')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'modules')->where('workspace_id', $id)->delete();

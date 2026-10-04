@@ -20,6 +20,8 @@ final readonly class FileDetails
         public int $position,
         public string $uploadedAt,
         public ?string $trashedAt,
+        /** The file's content hash (sha256): the same bytes are read by the AI once. */
+        public ?string $sha256 = null,
     ) {}
 
     public function fileName(): string

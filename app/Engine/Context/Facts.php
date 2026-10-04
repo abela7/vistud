@@ -13,6 +13,9 @@ final readonly class Facts
      * @param  list<string>  $courseOutcomes  what the course should teach, a line each
      * @param  list<string>  $courseAssessment  how it is assessed, a line each ("Midterm 30 % (12 Oct)")
      * @param  list<string>  $preferences  how the student likes to learn in this course, a short phrase each
+     * @param  list<string>  $moduleFiles  the module's files, a line each ("Lecture 3.pdf (18 pages: scheduling)")
+     * @param  list<string>  $moduleQuestions  its open questions, stuck first
+     * @param  list<string>  $moduleKeyPoints  what the student keeps on its topics
      * @param  list<array{name: string, status: string}>  $topics  the module's topics, with the student's word on each
      * @param  list<string>  $teaching  how to teach in this session, one instruction a line
      * @param  list<string>  $material  the session's chosen material, a line each
@@ -37,6 +40,10 @@ final readonly class Facts
         public ?string $moduleDates = null,
         public string $moduleInstructions = '',
         public array $topics = [],
+        public array $moduleFiles = [],
+        public array $moduleQuestions = [],
+        public array $moduleKeyPoints = [],
+        public ?string $moduleLast = null,
         // 5 · the session
         public ?string $topicNow = null,
         public ?string $topicPractice = null,

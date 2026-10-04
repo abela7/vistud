@@ -393,6 +393,17 @@ million tokens and whether they take tools, pictures and files, from the
 service's own list (`App\Engine\Models`, one list kept for a day for
 everyone; `php artisan vistud:engine:models`).
 
+**Reading files** (2026-10-07; `App\Engine\Jobs\ReadFile`, `App\Study\FileReading`, `FileDigests`). When a file is
+put in a module and the student has *Read my files automatically* on and their AI set up, the *reader* reads it
+(a job; `resources/prompts/reader-file.md`): the first 30,000 characters of its text, page by page, come back as a
+summary, an outline, the topics it covers and its language, kept in `file_digests` for that content. A picture is
+never sent; a file with no words is noted as skipped; without the setting, or without a key, the file waits for
+**Read now**. The topics become *suggestions* on the module (`topic_suggestions`), added to the module only when the
+student presses **Add all** or picks some. A module's tutor layer (layer 4, built by `ModuleBriefs` and kept in
+`module_briefs`) lists its files with the one line of what each holds, the open questions (five at most, stuck first),
+the key points (eight at most) and the last session's checkpoint; the tutor's `module_files` look-up (also the
+helper's) returns the full digest of a module's files, so it knows what a file holds before it opens it with `read_file`.
+
 **The chat** (`App\Engine\SessionChat`; `engine_threads`,
 `engine_messages`): one per study session. A turn sends the standing context built in layers
 (`App\Engine\Context\Stack`: the tutor's rules from

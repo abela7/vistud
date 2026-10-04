@@ -10,15 +10,20 @@ use App\Engine\Toolbox;
 use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Study\CourseProfiles;
+use App\Study\FileDigests;
+use App\Study\Files;
+use App\Study\Findings;
 use App\Study\Instructions;
 use App\Study\LearnerProfiles;
 use App\Study\Modules;
 use App\Study\Notes;
+use App\Study\Questions;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
@@ -133,6 +138,40 @@ class StackTest extends TestCase
         // Both are in the stable front of the prompt: the same for every session of the course.
         $this->assertStringContainsString('Assessment:', $built->stable);
         $this->assertStringContainsString('How they like to learn', $built->stable);
+    }
+
+    public function test_the_module_layer_names_its_files_questions_key_points_and_where_the_last_session_stopped(): void
+    {
+        $upload = fn (string $text, string $name) => app(Files::class)->upload($this->by, 'module', $this->week2, $this->tempFile($text), $name);
+        $lecture = $upload("Joins.\n", 'Lecture 2.txt');
+        $upload("Not read.\n", 'Lab 2.txt');
+        app(FileDigests::class)->keep($this->by, $lecture->id, ['summary' => 'Joins.', 'outline' => [], 'topics' => ['Inner join', 'Left join'], 'language' => 'English'], 12, 900, 'fake/quick');
+        $questions = app(Questions::class);
+        $questions->ask($this->by, $this->workspace, 'What is a self join?', $this->joins, $this->week2);
+        $stuck = $questions->ask($this->by, $this->workspace, 'Why does a left join keep unmatched rows?', $this->joins, $this->week2);
+        $questions->setStatus($this->by, $stuck->id, 'stuck');
+        app(Findings::class)->add($this->by, $this->joins, ['text' => 'A left join keeps every row of the left table.']);
+        app(Sessions::class)->setCheckpoint($this->by, $this->session->id, 'Stopped before outer joins.');
+        $session = app(Sessions::class)->find($this->by, $this->session->id);
+
+        $built = $this->stack()->build($this->by, $session, null, true);
+
+        // After the topics: where it stopped, then what it holds, the open questions (stuck first) and the key points.
+        $this->assertStringContainsString("## The module: Week 2: SQL joins (5 Oct – 11 Oct)\nTopics, with what the student says of each:\n- Joins: confused\n- Keys: not started\nLast time: Stopped before outer joins.\nFiles:\n- Lecture 2.txt (12 pages: Inner join, Left join)\n- Lab 2.txt (not read yet)\nOpen questions:\n- \"Why does a left join keep unmatched rows?\" (stuck)\n- \"What is a self join?\"\nKey points:\n- A left join keeps every row of the left table.", $built->system);
+        $module = array_values(array_filter($built->report, fn (array $layer) => $layer['layer'] === 4))[0];
+        $this->assertSame(0, $module['cut']);
+        $this->assertLessThanOrEqual(Stack::BUDGETS[4], $module['tokens']);
+
+        // The brief is kept, and it changes only when something in the module does.
+        $kept = fn () => DB::table('module_briefs')->where('module_id', $this->week2)->first();
+        $first = $kept();
+        $this->stack()->build($this->by, $session, null, true);
+        $this->assertSame($first->built_at, $kept()->built_at);
+        $this->travel(5)->minutes();
+        $questions->setStatus($this->by, $stuck->id, 'answered', 'Because it keeps the left side.');
+        $this->stack()->build($this->by, $session, null, true);
+        $this->assertNotSame($first->fingerprint, $kept()->fingerprint);
+        $this->assertStringNotContainsString('Why does a left join', $this->stack()->build($this->by, $session, null, true)->system);
     }
 
     public function test_a_long_profile_is_cut_a_line_at_a_time_and_a_course_with_none_is_as_before(): void
@@ -315,5 +354,15 @@ class StackTest extends TestCase
         $this->assertSame(1, Tokens::of('abcd'));
         $this->assertSame(2, Tokens::of('abcde'));
         $this->assertGreaterThan(Tokens::of('abcdefghij'), Tokens::of('አማርኛ ቋንቋ'));
+    }
+
+    /** A temporary file holding $text, removed when the test ends. */
+    private function tempFile(string $text): string
+    {
+        $path = tempnam(sys_get_temp_dir(), 'vistud-stack-');
+        file_put_contents($path, $text);
+        $this->beforeApplicationDestroyed(fn () => @unlink($path));
+
+        return $path;
     }
 }

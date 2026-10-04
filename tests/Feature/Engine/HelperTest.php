@@ -128,7 +128,7 @@ class HelperTest extends TestCase
 
         // The write tool was never offered, and calling it anyway is answered as if it didn't exist.
         $this->assertNotContains('make_flashcards', array_map(fn (array $t) => $t['function']['name'], $this->engine->requests[0]->tools));
-        $this->assertStringContainsString('There is no tool called "make_flashcards". The tools are: course_overview, topics, questions, findings, notes, search_notes, files.', $this->engine->requests[1]->messages[2]['content']);
+        $this->assertStringContainsString('There is no tool called "make_flashcards". The tools are: course_overview, topics, questions, findings, notes, search_notes, files, module_files.', $this->engine->requests[1]->messages[2]['content']);
         $this->assertSame([], app(Flashcards::class)->list($this->by, $this->workspace));
     }
 

@@ -24,7 +24,7 @@ use App\Study\Sessions;
 final class Helper
 {
     /** What the helper may look up: all read-only. A call to any other tool is answered as if there were none. */
-    public const TOOLS = ['course_overview', 'topics', 'questions', 'findings', 'notes', 'search_notes', 'files'];
+    public const TOOLS = ['course_overview', 'topics', 'questions', 'findings', 'notes', 'search_notes', 'files', 'module_files'];
 
     /** Rounds of look-ups before the helper must answer with what it has. */
     public const ROUNDS = 3;

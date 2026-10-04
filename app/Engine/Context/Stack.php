@@ -10,6 +10,7 @@ use App\Study\CourseProfiles;
 use App\Study\Files;
 use App\Study\Instructions;
 use App\Study\LearnerProfiles;
+use App\Study\ModuleBriefs;
 use App\Study\ModuleDetails;
 use App\Study\Modules;
 use App\Study\NoteDoc;
@@ -60,6 +61,7 @@ final class Stack
         private Toolbox $toolbox,
         private CourseProfiles $courseProfiles,
         private LearnerProfiles $learnerProfiles,
+        private ModuleBriefs $briefs,
     ) {}
 
     /** The tutor's standing context for a session: its system prompt, its tools and the report on its layers. */
@@ -86,6 +88,10 @@ final class Stack
                 moduleDates: self::dates($module),
                 moduleInstructions: $this->instructions->forSession($by, $workspace->id, $module->id)['module'],
                 topics: self::topicsOf($this->topics->list($by, $workspace->id), $module),
+                moduleFiles: ($brief = $this->briefs->for($by, $module->id))->files,
+                moduleQuestions: $brief->questions,
+                moduleKeyPoints: $brief->keyPoints,
+                moduleLast: $brief->last,
             );
         }
 
@@ -164,6 +170,7 @@ final class Stack
         [$material, $materialText] = $this->material($by, $session, $withTools);
 
         $tutoring = Tutoring::normalised($session->tutoring);
+        $brief = $module === null ? null : $this->briefs->for($by, $module->id);
         $course = $this->courseProfiles->get($by, $workspace->id);
         $today = CarbonImmutable::now();
 
@@ -183,6 +190,10 @@ final class Stack
             moduleDates: $module === null ? null : self::dates($module),
             moduleInstructions: $instructions['module'],
             topics: $module === null ? [] : self::topicsOf($topics, $module),
+            moduleFiles: $brief?->files ?? [],
+            moduleQuestions: $brief?->questions ?? [],
+            moduleKeyPoints: $brief?->keyPoints ?? [],
+            moduleLast: $brief?->last,
             topicNow: $topic?->name,
             topicPractice: $topic === null ? null : "the student says {$status($topic)}; practice: {$topic->evidence()}",
             clock: self::clock($session),
@@ -292,6 +303,18 @@ final class Stack
         $lines[] = [$f->topics === [] ? 'Topics: none yet.' : 'Topics, with what the student says of each:', true];
         foreach ($f->topics as $topic) {
             $lines[] = ["- {$topic['name']}: {$topic['status']}", false];
+        }
+        if ($f->moduleLast !== null) {
+            $lines[] = ["Last time: {$f->moduleLast}", true];
+        }
+        // What can be fetched with a tool comes after what can't, and goes first when the layer is over its budget.
+        foreach (['Files' => $f->moduleFiles, 'Open questions' => $f->moduleQuestions, 'Key points' => $f->moduleKeyPoints] as $name => $items) {
+            if ($items !== []) {
+                $lines[] = ["{$name}:", true];
+                foreach ($items as $item) {
+                    $lines[] = ["- {$item}", false];
+                }
+            }
         }
 
         return $lines;
