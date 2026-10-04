@@ -68,6 +68,27 @@ final class Capture
         return $items;
     }
 
+    /**
+     * A key point, a question or a flashcard from its fields, as a parsed mark would be (cleaned, cut to its
+     * limits, with its fingerprint): for the tutor saving straight into the course. Null when it is empty.
+     *
+     * @param  array<string, mixed>  $fields  text, or front and back
+     * @return array<string, mixed>|null
+     */
+    public static function from(string $kind, mixed $topic, array $fields): ?array
+    {
+        $topic = self::clean(is_string($topic) ? $topic : '', 'topic');
+        $topic = $topic === '' ? null : $topic;
+        $item = match ($kind) {
+            'finding', 'question' => ($text = self::clean(is_string($fields['text'] ?? null) ? $fields['text'] : '', $kind)) === '' ? null : ['kind' => $kind, 'topic' => $topic, 'text' => $text],
+            'flashcard' => ($front = self::clean(is_string($fields['front'] ?? null) ? $fields['front'] : '', 'front')) === '' || ($back = self::clean(is_string($fields['back'] ?? null) ? $fields['back'] : '', 'back')) === ''
+                ? null : ['kind' => $kind, 'topic' => $topic, 'front' => $front, 'back' => $back],
+            default => null,
+        };
+
+        return $item === null ? null : $item + ['fingerprint' => self::fingerprint($item)];
+    }
+
     /** Names a mark's content, so the same mark pasted again is recognised. */
     public static function fingerprint(array $item): string
     {

@@ -10,8 +10,9 @@
     use App\Engine\Choices;
 @endphp
 <section class="chat" aria-labelledby="chat-heading-{{ $this->getId() }}"
-    x-data="tutorChat(@js(['upload' => $upload]))"
-    x-on:chat-done.window="done($event.detail.restore)">
+    x-data="tutorChat(@js(['upload' => $upload, 'account' => $account]))"
+    x-on:chat-done.window="done($event.detail.restore)"
+    x-on:notes-changed.window="noteChanged($event.detail.notes)">
     <div class="panel-head chat-head">
         <span class="item-icon ws-colour-purple" aria-hidden="true"><x-icon name="sparkles" class="size-5" /></span>
         <div class="panel-head-text">
@@ -83,6 +84,17 @@
                         @if ($turn['text'] !== '')
                             {{-- A finished reply never changes; ignored by updates, so its drawn diagrams and formulas stay. --}}
                             <div class="chat-bubble chat-markdown" wire:ignore>{!! $turn['html'] !!}</div>
+                        @endif
+                        @if ($turn['savedWords'] || $turn['notes'] !== [])
+                            {{-- What the tutor did in the course this turn: saved, and the notes it wrote in (open beside the chat). --}}
+                            <ul class="chat-files chat-did" role="list" aria-label="Done in your course">
+                                @if ($turn['savedWords'])
+                                    <li><span class="chat-file"><x-icon name="circle-check" class="size-4" /><span class="truncate">Saved {{ $turn['savedWords'] }}</span></span></li>
+                                @endif
+                                @foreach ($turn['notes'] as $note)
+                                    <li><a class="chat-file" href="{{ $note['url'] }}" target="_blank" data-note-window><x-icon name="notebook-pen" class="size-4" /><span class="truncate">Wrote in {{ $note['title'] }}</span></a></li>
+                                @endforeach
+                            </ul>
                         @endif
                         @if ($turn['looked'] !== [] || $turn['cost_micros'] > 0)
                             <p class="chat-meta">{{ implode(' · ', array_filter([

@@ -228,6 +228,40 @@ final class Notes
         });
     }
 
+    /**
+     * Adds blocks at the end of a note as its next version, for the tutor taking notes with the student
+     * (docs/specs/study-memory.md §6): built on the version that is there now, so it never overwrites the
+     * student's own saves; an editor open on the note hears of it and shows it (resources/js/note/editor.js).
+     * An empty note's lone empty paragraph is replaced rather than kept above.
+     *
+     * @param  list<array<string, mixed>>  $blocks
+     */
+    public function append(Principal $by, string $id, array $blocks, string $kind = 'tutor'): SavedVersion
+    {
+        $scope = Guard::learner($by);
+
+        return DB::transaction(function () use ($scope, $id, $blocks, $kind) {
+            $note = $this->row($scope, $id, lock: true);
+            if ($note->trashed_at !== null) {
+                throw new Gone('trashed');
+            }
+            $current = LearnerTables::query($scope, 'note_versions')->where('note_id', $id)->where('version', $note->current_version)->first();
+            $doc = $current !== null ? (json_decode((string) $current->doc, true) ?: NoteDoc::empty()) : NoteDoc::empty();
+            $content = $doc['content'] ?? [];
+            if (trim(NoteDoc::text($doc)) === '' && count($content) <= 1) {
+                $content = [];
+            }
+            // The note's own settings (its layout) stay; the blocks go after what is there.
+            $doc = NoteDoc::clean(['type' => 'doc', 'content' => [...$content, ...$blocks]] + $doc);
+            $version = (int) $note->current_version + 1;
+            $at = now();
+            $this->addVersion($scope, $id, $version, (string) $note->title, $doc, (int) $note->current_version, null, null, $kind, $at);
+            LearnerTables::query($scope, 'notes')->where('id', $id)->update(['current_version' => $version, 'updated_at' => $at]);
+
+            return new SavedVersion($version, self::time($at));
+        });
+    }
+
     /** Moves a note to the end of another place in the same workspace. */
     public function move(Principal $by, string $id, string $placeType, string $placeId): void
     {

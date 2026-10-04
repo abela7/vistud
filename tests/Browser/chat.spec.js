@@ -214,3 +214,44 @@ test('a diagram and a formula in a reply are drawn, with the diagram as text und
     expect(violations).toEqual([]);
 });
 
+test('the tutor saves cards and writes in a note that updates while it is open', async ({ page, context }) => {
+    const student = makeStudentWithSession();
+    tinker([
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `app(\\App\\Engine\\Settings::class)->setKey($p, 'sk-or-browser-test-0000000000');`,
+        `app(\\App\\Engine\\Settings::class)->set($p, ['tutor_model' => 'fake/tutor', 'consent' => true]);`,
+    ].join(' '));
+    await openStudentHome(page, student.email);
+    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.getByRole('heading', { name: 'Your tutor' }).waitFor();
+    await page.waitForLoadState('load');
+    const chat = page.locator('.chat');
+    const box = chat.getByLabel('Write to your tutor');
+    const done = chat.getByRole('list', { name: 'Done in your course' });
+
+    // Cards go straight into the deck, and the answer says so.
+    await box.fill('Please make cards from the first slides');
+    await box.press('Enter');
+    await expect(done.last()).toContainText('Saved 2 flashcards', { timeout: 15_000 });
+    const cards = JSON.parse(tinker(`echo json_encode(DB::table('flashcards')->where('workspace_id', '${student.workspace}')->orderBy('front')->pluck('front')->all());`));
+    expect(cards).toEqual(['What is a kernel?', 'What is an OS?']);
+
+    // The first note: the session's study note, linked from the answer.
+    await box.fill('Please jot this down');
+    await box.press('Enter');
+    const link = done.last().getByRole('link', { name: /^Wrote in Study notes · Joins/ });
+    await expect(link).toBeVisible({ timeout: 15_000 });
+    await expect(link).toHaveAttribute('data-note-window', '');
+
+    // Open beside the chat, the note shows what the tutor wrote, and the next write appears without a reload.
+    const note = await context.newPage();
+    await note.goto(await link.getAttribute('href'));
+    const editor = note.locator('.ProseMirror');
+    await expect(editor).toContainText('The kernel is the core of the OS.', { timeout: 15_000 });
+    await box.fill('Please jot more about system calls');
+    await box.press('Enter');
+    await expect(editor).toContainText('System calls ask the kernel for help.', { timeout: 15_000 });
+    await expect(note.locator('[data-save-status]')).not.toHaveAttribute('data-state', 'conflict');
+    await note.close();
+});
+

@@ -11,6 +11,7 @@ use App\Study\Files;
 use App\Study\Findings;
 use App\Study\Flashcards;
 use App\Study\Modules;
+use App\Study\NoteDoc;
 use App\Study\Notes;
 use App\Study\Plans;
 use App\Study\Questions;
@@ -222,5 +223,75 @@ class ToolboxTest extends TestCase
         $this->assertStringContainsString('ask for slides 1 to 8', $this->look('read_file', ['file' => 'deck', 'pages' => '12']));
         $this->assertStringContainsString('is a picture', $this->look('read_file', ['file' => 'Whiteboard']));
         $this->assertStringContainsString('no file called "Lecture 9"', $this->look('read_file', ['file' => 'Lecture 9']));
+    }
+
+    public function test_flashcards_key_points_and_questions_go_straight_into_the_course_once_each(): void
+    {
+        $said = $this->look('make_flashcards', ['cards' => [
+            ['front' => 'What does a right join keep?', 'back' => 'Every right row.', 'topic' => 'joins'],
+            ['front' => 'What is a cross join?', 'back' => 'Every pair of rows.', 'topic' => 'Operating System Fundamentals'],
+            ['front' => '   ', 'back' => 'Nothing'],
+        ]]);
+        $this->assertStringStartsWith('Saved 2 flashcards in Joins. 1 was empty.', $said);
+        // A topic the course doesn't have goes to the session's topic: the tutor makes no topics of its own.
+        $cards = collect(app(Flashcards::class)->list($this->by, $this->databases->id))->keyBy('front');
+        $this->assertSame([$this->joins, 'ai', $this->context->sessionId], [$cards['What is a cross join?']->topicId, $cards['What is a cross join?']->author, $cards['What is a cross join?']->sessionId]);
+        $this->assertNotContains('Operating System Fundamentals', array_column(app(Topics::class)->list($this->by, $this->databases->id), 'name'));
+        $this->assertSame(['saved' => ['flashcard' => 2]], $this->context->effects->take());
+
+        // The same card again is recognised.
+        $this->assertStringStartsWith('Nothing new was saved. 1 was saved already in this session.', $this->look('make_flashcards', ['cards' => [['front' => 'What does a right join keep?', 'back' => 'Every right row.']]]));
+        $this->assertSame([], $this->context->effects->take());
+
+        $this->assertStringStartsWith('Saved 1 key point in Joins.', $this->look('save_key_points', ['points' => [['text' => 'A right join keeps every right row.']]]));
+        $this->assertContains('A right join keeps every right row.', array_map(fn ($f) => $f->text, app(Findings::class)->byTopic($this->by, $this->databases->id)[$this->joins]));
+        $this->assertStringStartsWith('Saved 1 question in Primary and foreign keys.', $this->look('add_questions', ['questions' => [['text' => 'Can a foreign key be NULL?', 'topic' => 'primary and foreign keys']]]));
+        $this->assertContains('Can a foreign key be NULL?', array_map(fn ($q) => $q->text, app(Questions::class)->list($this->by, $this->databases->id)));
+        $this->assertStringContainsString('Nothing to save', $this->look('add_questions', ['questions' => []]));
+
+        // Without a session there is nothing to save into.
+        $this->assertStringContainsString('needs a study session', app(Toolbox::class)->run($this->by, new Context($this->databases->id, null, null, 'UTC'), 'make_flashcards', ['cards' => [['front' => 'a', 'back' => 'b']]]));
+    }
+
+    public function test_the_tutor_writes_in_the_sessions_study_note_a_named_one_or_a_new_one(): void
+    {
+        $first = $this->look('write_note', ['text' => "## Joins\n\n- A **left** join keeps every left row.\n- Energy: \$E = mc^2\$"]);
+        $this->assertStringStartsWith('Started the note "Study notes · Joins · Mon 5 Oct".', $first);
+        $notes = app(Notes::class);
+        $study = collect($notes->list($this->by, $this->databases->id))->first(fn ($n) => $n->title === 'Study notes · Joins · Mon 5 Oct');
+        $this->assertSame($this->context->moduleId, $study->moduleId);
+        $effects = $this->context->effects->take();
+        $this->assertSame([[$study->id, 'Study notes · Joins · Mon 5 Oct', 1]], array_map(fn ($n) => [$n['id'], $n['title'], $n['version']], $effects['notes']));
+
+        // The next write adds to the same note, at its end.
+        $this->assertStringStartsWith('Added to the note "Study notes · Joins · Mon 5 Oct".', $this->look('write_note', ['text' => 'A right join keeps every right row.']));
+        $text = NoteDoc::markdown($notes->open($this->by, $study->id)->doc);
+        $this->assertStringContainsString("## Joins\n\n- A **left** join keeps every left row.", $text);
+        $this->assertStringContainsString('$E = mc^2$', $text);
+        $this->assertStringEndsWith('A right join keeps every right row.', trim($text));
+        $this->assertSame(2, $this->context->effects->take()['notes'][0]['version']);
+
+        // A note the student names, and a new one with a title (a title that's already a note's adds to it).
+        $this->assertStringStartsWith('Added to the note "Lecture 3: joins".', $this->look('write_note', ['text' => 'Self joins next week.', 'note' => 'Lecture 3']));
+        $this->assertStringEndsWith('Self joins next week.', trim(NoteDoc::markdown($notes->open($this->by, collect($notes->list($this->by, $this->databases->id))->firstWhere('title', 'Lecture 3: joins')->id)->doc)));
+        $this->assertStringStartsWith('Started the note "Join cheat sheet".', $this->look('write_note', ['text' => '| Join | Keeps |'."\n".'|---|---|'."\n".'| left | all left |', 'title' => 'Join cheat sheet']));
+        $this->assertStringStartsWith('Added to the note "Join cheat sheet".', $this->look('write_note', ['text' => 'More.', 'title' => 'join cheat sheet']));
+        $this->assertStringContainsString('Nothing to write', $this->look('write_note', ['text' => '  ']));
+        $this->assertStringContainsString('no note called "Lecture 9"', $this->look('write_note', ['text' => 'x', 'note' => 'Lecture 9']));
+    }
+
+    public function test_a_whole_file_can_be_seen_at_once_as_an_outline(): void
+    {
+        Storage::fake('local');
+        $slides = [];
+        foreach (['What is an OS?', 'Batch systems', 'Real-time systems'] as $i => $title) {
+            $slides['ppt/slides/slide'.($i + 1).'.xml'] = "<p:sld><a:p><a:r><a:t>{$title}</a:t></a:r></a:p><a:p><a:r><a:t>Details of {$title}</a:t></a:r></a:p></p:sld>";
+        }
+        app(Files::class)->upload($this->by, 'module', $this->week1, $this->temp($this->ooxml('ppt/presentation.xml', $slides)), 'OS types.pptx');
+
+        $outline = $this->look('read_file', ['file' => 'OS types', 'pages' => 'all']);
+        $this->assertStringStartsWith('"OS types.pptx": an outline of its 3 slides', $outline);
+        $this->assertStringEndsWith("Slide 1: What is an OS?\nSlide 2: Batch systems\nSlide 3: Real-time systems", $outline);
+        $this->assertStringNotContainsString('Details of', $outline);
     }
 }

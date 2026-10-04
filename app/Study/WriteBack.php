@@ -52,6 +52,17 @@ final class WriteBack
      */
     public function review(Principal $by, string $sessionId, string $text): array
     {
+        return $this->reviewItems($by, $sessionId, Capture::parse($text));
+    }
+
+    /**
+     * Marks already parsed (Capture::parse, Capture::from), matched and ticked as review() does.
+     *
+     * @param  list<array<string, mixed>>  $items
+     * @return list<array<string, mixed>>
+     */
+    public function reviewItems(Principal $by, string $sessionId, array $items): array
+    {
         $session = $this->sessions->find($by, $sessionId);
         $topics = $this->topics->list($by, $session->workspaceId);
         $names = [];
@@ -61,7 +72,6 @@ final class WriteBack
         $sessionTopic = $session->topicId !== null ? collect($topics)->firstWhere('id', $session->topicId) : null;
         $captured = array_flip($this->sessions->captured($by, $sessionId));
 
-        $items = Capture::parse($text);
         foreach (['summary', 'checkpoint'] as $single) {
             $last = null;
             foreach ($items as $i => $item) {

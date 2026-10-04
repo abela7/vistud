@@ -420,10 +420,33 @@ module before an exam.
 the same tools will serve the MCP server): `course_overview`, `topics`,
 `questions`, `findings`, `assignments`, `assignment_plan`, `calendar`,
 `notes`, `read_note` (up to 8,000 characters), `search_notes`, `files`
-(names, types and sizes), `read_file` (below) and `earlier_sessions`. Each
+(names, types and sizes), `read_file` (below; `pages: "all"` gives an outline, each
+page's first line) and `earlier_sessions`; and the tools that act in the course
+(below): `make_flashcards`, `save_key_points`, `add_questions` and `write_note`. Each
 runs through the services the pages use, so another student's things are
 "not found" exactly as on a page; an answer is capped at 12,000 characters;
 the student's name and email never go in.
+
+**Acting in the course** (built, 2026-10-05; the owner's ask after a real
+chat: "can't the AI make a flash card and I get it directly? can't it take a
+note so both of us update it at the same time?"). Inside ViStud's chat the
+tutor saves flashcards, key points and open questions straight into the
+course when the student asks or agrees (`make_flashcards`, `save_key_points`,
+`add_questions`, up to ten at a time). They go through the write-back
+(`WriteBack::reviewItems` and `apply`), so the same limits, evidence and
+topics apply, and the same item twice in a session is saved once; a topic the
+course doesn't have becomes the session's, so the tutor never fills the course
+with topics of its own naming. `write_note` adds Markdown (converted by
+`App\Study\MarkdownDoc`: headings, lists, checklists, tables, code,
+diagrams' code, formulas) at the end of a note as its next version
+(`Notes::append`, kind `tutor`): the session's own study note ("Study notes ·
+Joins · Mon 5 Oct", in the session's module, kept on the chat), a note the
+student names, or a new one with a title. An editor open on that note, in a
+window beside the chat, is told the way its own tabs tell each other and shows
+the new version, unless the student is typing in it (then it warns, as for any
+change made elsewhere). Each answer says what was saved and links the notes
+written in, opening beside the chat. A topic's status and an answer's result
+stay marks the student keeps: they are the student's to decide.
 
 **Material in the chat** (built, 2026-10-05). The tutor reads the student's
 files with `read_file`, a few pages at a time (at most five, about 11,000

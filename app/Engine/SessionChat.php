@@ -152,7 +152,12 @@ final class SessionChat
                     $onEvent('looking', $call->name);
                 }
                 $out = $this->toolbox->run($by, $context, $call->name, $call->arguments);
-                $this->keep($scope, $thread->id, ++$position, ['role' => 'tool', 'content' => $out, 'tool_call_id' => $call->id, 'tool_name' => $call->name]);
+                // What the tool did in the course, kept with its result and told to the page as it happens.
+                $effects = $context->effects->take();
+                $this->keep($scope, $thread->id, ++$position, ['role' => 'tool', 'content' => $out, 'tool_call_id' => $call->id, 'tool_name' => $call->name, 'effects' => $effects === [] ? null : json_encode($effects)]);
+                if ($onEvent !== null && $effects !== []) {
+                    $onEvent('saved', (string) json_encode($effects));
+                }
                 $messages[] = ['role' => 'tool', 'tool_call_id' => $call->id, 'content' => $out];
             }
         }
@@ -169,7 +174,7 @@ final class SessionChat
      * The chat as the student reads it: their turns and the tutor's, with the look-ups each turn made and what
      * it cost; the engine's tool results stay out.
      *
-     * @return list<array{role: string, text: string, tools: list<string>, cost_micros: int, folded: bool, at: string}>
+     * @return list<array{role: string, text: string, tools: list<string>, saved: array<string, int>, notes: list<array{id: string, title: string}>, cost_micros: int, folded: bool, at: string}>
      */
     public function transcript(Principal $by, string $sessionId): array
     {
@@ -183,8 +188,19 @@ final class SessionChat
         // The look-ups asked for before an answer, and what they cost, belong to that answer.
         $pendingTools = [];
         $pendingCost = 0;
+        // What the tools did in the course (saved, notes written in) belongs to the answer after them.
+        $pendingSaved = [];
+        $pendingNotes = [];
         foreach ($this->rows($scope, $thread->id) as $row) {
             if ($row->role === 'tool') {
+                $effects = isset($row->effects) && is_string($row->effects) ? (json_decode($row->effects, true) ?: []) : [];
+                foreach (is_array($effects['saved'] ?? null) ? $effects['saved'] : [] as $kind => $count) {
+                    $pendingSaved[$kind] = ($pendingSaved[$kind] ?? 0) + (int) $count;
+                }
+                foreach (is_array($effects['notes'] ?? null) ? $effects['notes'] : [] as $note) {
+                    $pendingNotes[(string) $note['id']] = ['id' => (string) $note['id'], 'title' => (string) $note['title']];
+                }
+
                 continue;
             }
             $tools = array_map(fn ($c) => (string) ($c['function']['name'] ?? ''), is_string($row->tool_calls) ? (json_decode($row->tool_calls, true) ?: []) : []);
@@ -199,17 +215,19 @@ final class SessionChat
                 'text' => (string) $row->content,
                 'attachments' => $row->role === 'user' ? array_map(fn (array $a) => ['ref' => (string) $a['ref'], 'name' => (string) $a['name'], 'kind' => (string) $a['kind']], self::attached($row)) : [],
                 'tools' => $row->role === 'assistant' ? [...$pendingTools, ...$tools] : [],
+                'saved' => $row->role === 'assistant' ? $pendingSaved : [],
+                'notes' => $row->role === 'assistant' ? array_values($pendingNotes) : [],
                 'cost_micros' => (int) $row->cost_micros + ($row->role === 'assistant' ? $pendingCost : 0),
                 'folded' => (int) $row->position <= (int) $thread->folded_through,
                 'at' => (string) $row->created_at,
             ];
             if ($row->role === 'assistant') {
-                [$pendingTools, $pendingCost] = [[], 0];
+                [$pendingTools, $pendingCost, $pendingSaved, $pendingNotes] = [[], 0, [], []];
             }
         }
         if ($pendingTools !== []) {
             // A turn that ended in look-ups without an answer (the engine failed after them).
-            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
+            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'saved' => $pendingSaved, 'notes' => array_values($pendingNotes), 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
         }
 
         return $turns;
@@ -448,7 +466,7 @@ final class SessionChat
     {
         $system = $this->briefings->forSession($by, $session->id)->markdown;
         if ($withTools) {
-            $system .= "\n\n## Looking things up\n\nYou are inside ViStud's own chat, so you can look things up with the tools: the course's modules and topics, the student's questions (all, or those on one topic or module), findings, assignments and their plans, the calendar, their notes and files, and earlier sessions (with what each used). Use them whenever the student asks about their own things, instead of guessing: what a tool returns is what ViStud holds. Before explaining a note or a topic, it's worth one look at the open questions on it. When you state a fact from a note, say which note. If something isn't in ViStud, say so plainly. Read a file with read_file, a few pages at a time, and say where you are (\"Page 4 of 18\"). What the student attaches comes with their message: a note's text, a file's first pages (read on with read_file), a picture to look at. If a file can't be read, say so and ask for the part they're on.";
+            $system .= "\n\n## Your tools in this chat\n\nYou are inside ViStud's own chat, so you have tools: to look things up (the course's modules and topics, the student's questions (all, or those on one topic or module), key points, assignments and their plans, the calendar, their notes and files, and earlier sessions with what each used), to read a file a few pages at a time (\"all\" gives its outline), and to act in the course: save flashcards, key points and questions straight in, and write in a note with the student. Use them whenever the student asks about their own things or asks you to save or note something; never say you can't. What a tool returns is what ViStud holds. Before explaining a note or a topic, it's worth one look at the open questions on it. When you state a fact from a note or a file, say which, and where (\"Page 4 of 18\"). What the student attaches comes with their message: a note's text, a file's first pages (read on with read_file), a picture to look at. If something isn't in ViStud, or a file can't be read, say so plainly.";
         }
         $language = $this->settings->get($by)->language;
         if ($language !== null) {

@@ -14,6 +14,7 @@ use App\Livewire\Workspaces\TutorChat;
 use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Study\Files;
+use App\Study\Flashcards;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\SessionDetails;
@@ -213,5 +214,22 @@ class TutorChatScreenTest extends TestCase
         // Once the session has ended, there is no quiz to start.
         app(Sessions::class)->end($this->by, $this->session->id);
         $this->chat()->assertDontSee('On what I find hardest');
+    }
+
+    public function test_an_answer_shows_what_was_saved_and_links_the_note_written_in_and_open_notes_are_told(): void
+    {
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+        $this->engine->will(
+            Fake::calls('make_flashcards', ['cards' => [['front' => 'What is a join?', 'back' => 'Rows combined.']]], 'call_1'),
+            Fake::calls('write_note', ['text' => 'Joins combine rows.'], 'call_2'),
+            Fake::says('Saved a card and noted it.'),
+        );
+
+        $chat = $this->chat()->call('send', 'Card and note please')
+            ->assertSee('Saved 1 flashcard')->assertSee('Wrote in Study notes · Joins')
+            ->assertDispatched('notes-changed')->assertDispatched('questions-changed');
+        $note = collect(app(Notes::class)->list($this->by, $this->databases->id))->first(fn ($n) => str_starts_with($n->title, 'Study notes'));
+        $chat->assertSee(route('workspaces.notes.show', [$this->databases->id, $note->id, 'window' => 1]), false);
+        $this->assertSame(1, count(app(Flashcards::class)->list($this->by, $this->databases->id)));
     }
 }

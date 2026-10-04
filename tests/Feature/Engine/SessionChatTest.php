@@ -89,7 +89,7 @@ class SessionChatTest extends TestCase
         $this->assertSame(['fake/plain'], $first->fallbacks);
         $this->assertTrue($first->noTraining);
         $this->assertStringStartsWith('# You are the student\'s tutor', $first->system);
-        $this->assertStringContainsString('## Looking things up', $first->system);
+        $this->assertStringContainsString('## Your tools in this chat', $first->system);
         $this->assertStringContainsString('```mermaid', $first->system);
         $this->assertStringContainsString('Write formulas in $…$ inside a line or $$…$$', $first->system);
         $this->assertStringContainsString('Joins', $first->system);
@@ -119,7 +119,7 @@ class SessionChatTest extends TestCase
         $this->engine->will(Fake::says('Hello.'));
         $this->chat()->send($this->by, $this->session->id, 'Hi');
         $this->assertSame([], $this->engine->last()->tools);
-        $this->assertStringNotContainsString('## Looking things up', $this->engine->last()->system);
+        $this->assertStringNotContainsString('## Your tools in this chat', $this->engine->last()->system);
 
         config(['vistud.engine.tool_rounds' => 2]);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
@@ -394,5 +394,32 @@ class SessionChatTest extends TestCase
         $system = $this->engine->last()->system;
         $this->assertStringContainsString("## Language\n\nThe student chose to be taught in Amharic. Write your messages in Amharic, whatever language they write in", $system);
         $this->assertStringContainsString('marks\' text (key points, cards, questions, answers) in the course\'s language', $system);
+    }
+
+    public function test_what_the_tools_did_in_the_course_is_kept_told_as_it_happens_and_shown_on_the_answer(): void
+    {
+        $this->engine->will(
+            Fake::calls('make_flashcards', ['cards' => [['front' => 'What does a left join keep?', 'back' => 'Every left row.'], ['front' => 'What does an inner join keep?', 'back' => 'Only matches.']]], 'call_1'),
+            Fake::calls('write_note', ['text' => '- Left joins keep every left row.'], 'call_2'),
+            Fake::says('Saved two cards and noted it.'),
+        );
+        $events = [];
+        $this->chat()->send($this->by, $this->session->id, 'Make cards and take a note', function (string $kind, string $value) use (&$events) {
+            $events[] = [$kind, $value];
+        });
+
+        $this->assertSame(['make_flashcards', 'write_note'], array_column(array_values(array_filter($events, fn ($e) => $e[0] === 'looking')), 1));
+        $saved = array_map(fn ($e) => json_decode($e[1], true), array_values(array_filter($events, fn ($e) => $e[0] === 'saved')));
+        $this->assertSame(['flashcard' => 2], $saved[0]['saved']);
+        $this->assertSame([1, 'Study notes · Joins · Mon 5 Oct'], [$saved[1]['notes'][0]['version'], $saved[1]['notes'][0]['title']]);
+
+        $turns = $this->chat()->transcript($this->by, $this->session->id);
+        $this->assertSame(['flashcard' => 2], $turns[1]['saved']);
+        $this->assertSame('Study notes · Joins · Mon 5 Oct', $turns[1]['notes'][0]['title']);
+        $this->assertSame(['make_flashcards', 'write_note'], $turns[1]['tools']);
+        // The study note is kept on the chat: the next write goes into it.
+        $this->engine->will(Fake::calls('write_note', ['text' => 'More.'], 'call_3'), Fake::says('Done.'));
+        $this->chat()->send($this->by, $this->session->id, 'Note more');
+        $this->assertCount(1, array_filter(app(Notes::class)->list($this->by, $this->databases->id), fn ($n) => str_starts_with($n->title, 'Study notes')));
     }
 }

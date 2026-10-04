@@ -34,7 +34,7 @@ final class ReadFileTool implements Tool
     {
         return ['type' => 'object', 'properties' => [
             'file' => ['type' => 'string', 'description' => 'The file\'s name (or part of it).'],
-            'pages' => ['type' => 'string', 'description' => 'Which pages (or slides, or parts): one, like "7", or a range, like "4-6"; at most '.self::PAGES.' at a time. The first three when left out.'],
+            'pages' => ['type' => 'string', 'description' => 'Which pages (or slides, or parts): one, like "7", or a range, like "4-6"; at most '.self::PAGES.' at a time. "all" gives an outline of the whole file: each page\'s first line. The first three when left out.'],
         ], 'required' => ['file'], 'additionalProperties' => false];
     }
 
@@ -62,6 +62,9 @@ final class ReadFileTool implements Tool
         if ($count === 0 || ! $text->hasWords()) {
             return "\"{$name}\" has {$text->size()} but no text in them: it is probably scanned, or made of pictures. Ask the student to attach the pages they're on as pictures.";
         }
+        if ($wanted !== null && in_array(mb_strtolower(trim($wanted)), ['all', 'outline', 'everything'], true)) {
+            return $this->outline($text);
+        }
         [$from, $to] = self::range($wanted, $count);
         if ($from === null) {
             return "\"{$name}\" has {$text->size()}: ask for {$text->unit}s 1 to {$count}.";
@@ -82,6 +85,18 @@ final class ReadFileTool implements Tool
         $span = $from === $to ? "{$text->unit} {$from}" : "{$text->unit}s {$from}-{$to}";
 
         return "\"{$name}\": {$span} of {$count}.\n\n".implode("\n\n", $out);
+    }
+
+    /** The whole file at a glance: each page's first line (its title, on slides), to see what it covers. */
+    private function outline(FileText $text): string
+    {
+        $lines = [];
+        foreach ($text->pages as $i => $page) {
+            $first = trim((string) strtok(trim($page)."\n", "\n"));
+            $lines[] = ucfirst($text->unit).' '.($i + 1).': '.($first !== '' ? mb_substr($first, 0, 100) : '(no text)');
+        }
+
+        return "\"{$text->file->fileName()}\": an outline of its {$text->size()}, each one's first line. Read any of them with pages.\n\n".implode("\n", $lines);
     }
 
     /**

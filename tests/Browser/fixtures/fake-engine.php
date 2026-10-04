@@ -34,8 +34,25 @@ foreach (array_reverse($messages) as $message) {
     }
 }
 $words = ['A ', 'left ', 'join ', 'keeps ', 'every ', 'row ', 'of ', 'the ', '**left** ', 'table.'];
-// What was attached, said back, so a test can see it arrived.
-if (str_contains($asked, 'draw')) {
+// Acting in the course: "make cards" saves two cards, "jot" writes in the study note; each answers after its tool ran.
+$acts = ['make cards' => ['make_flashcards', ['cards' => [['front' => 'What is an OS?', 'back' => 'The layer between hardware and apps.'], ['front' => 'What is a kernel?', 'back' => 'The core of the OS.']]]], 'jot more' => ['write_note', ['text' => '- System calls ask the kernel for help.']], 'jot' => ['write_note', ['text' => "## Kernels\n\n- The kernel is the core of the OS."]]];
+$act = null;
+foreach ($acts as $trigger => $call) {
+    if (str_contains($asked, $trigger)) {
+        $act = $call;
+        break;
+    }
+}
+if ($act !== null && ($last['role'] ?? '') === 'user') {
+    header('Content-Type: text/event-stream');
+    echo 'data: '.json_encode(['model' => 'fake/tutor', 'choices' => [['index' => 0, 'delta' => ['tool_calls' => [['index' => 0, 'id' => 'call_act', 'type' => 'function', 'function' => ['name' => $act[0], 'arguments' => json_encode($act[1])]]]], 'finish_reason' => 'tool_calls']]])."\n\n";
+    echo "data: [DONE]\n\n";
+
+    return;
+}
+if ($act !== null) {
+    $words = $act[0] === 'make_flashcards' ? ['Saved ', 'two ', 'cards.'] : ['Noted.'];
+} elseif (str_contains($asked, 'draw')) {
     $words = ['Here ', 'it ', 'is:', "\n\n```mermaid\nflowchart LR\n  A[New] --> B[Ready]\n  B --> C[Running]\n```\n\n", 'And ', 'energy: ', '$$E = mc^2$$'];
 } elseif ($picture) {
     $words = ['I ', 'can ', 'see ', 'the ', 'picture.'];

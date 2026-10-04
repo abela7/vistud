@@ -2,6 +2,7 @@
 
 namespace App\Engine;
 
+use App\Engine\Tools\AddQuestionsTool;
 use App\Engine\Tools\AssignmentPlanTool;
 use App\Engine\Tools\AssignmentsTool;
 use App\Engine\Tools\CalendarTool;
@@ -10,13 +11,16 @@ use App\Engine\Tools\CourseOverview;
 use App\Engine\Tools\EarlierSessionsTool;
 use App\Engine\Tools\FilesTool;
 use App\Engine\Tools\FindingsTool;
+use App\Engine\Tools\MakeFlashcardsTool;
 use App\Engine\Tools\NotesTool;
 use App\Engine\Tools\QuestionsTool;
 use App\Engine\Tools\ReadFileTool;
 use App\Engine\Tools\ReadNoteTool;
+use App\Engine\Tools\SaveKeyPointsTool;
 use App\Engine\Tools\SearchNotesTool;
 use App\Engine\Tools\Tool;
 use App\Engine\Tools\TopicsTool;
+use App\Engine\Tools\WriteNoteTool;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\AppError;
 use App\Platform\Errors\NotFound;
@@ -47,6 +51,10 @@ final class Toolbox
         SearchNotesTool::class,
         FilesTool::class,
         EarlierSessionsTool::class,
+        MakeFlashcardsTool::class,
+        SaveKeyPointsTool::class,
+        AddQuestionsTool::class,
+        WriteNoteTool::class,
     ];
 
     public function __construct(private Container $container) {}
@@ -64,9 +72,26 @@ final class Toolbox
         'read_note' => 'a note', 'search_notes' => 'your notes', 'files' => 'your files', 'read_file' => 'a file', 'earlier_sessions' => 'earlier sessions',
     ];
 
+    /** What each tool that changes the course does, as the chat says it while it works ("Saving flashcards…"). */
+    public const DOING = [
+        'make_flashcards' => 'Saving flashcards', 'save_key_points' => 'Saving key points', 'add_questions' => 'Adding questions', 'write_note' => 'Writing in your note',
+    ];
+
     public static function words(string $tool): string
     {
         return self::WORDS[$tool] ?? 'your course';
+    }
+
+    /** "Looking up your notes…" or "Saving flashcards…": what the tutor is doing while a tool runs. */
+    public static function doing(string $tool): string
+    {
+        return (self::DOING[$tool] ?? 'Looking up '.self::words($tool)).'…';
+    }
+
+    /** Whether a tool changes the course, rather than reading it. */
+    public static function writes(string $tool): bool
+    {
+        return isset(self::DOING[$tool]);
     }
 
     /** @return list<array<string, mixed>> the tools in the OpenAI chat format */
@@ -90,7 +115,8 @@ final class Toolbox
             } catch (NotFound) {
                 $out = 'Not found: there is no such thing in this course.';
             } catch (AppError $e) {
-                $out = 'That could not be looked up: '.$e->getMessage();
+                $fields = $e->details['fields'] ?? [];
+                $out = 'That didn\'t work: '.(is_array($fields) && $fields !== [] ? implode(' ', array_map(fn ($m) => is_array($m) ? (string) ($m[0] ?? '') : (string) $m, $fields)) : $e->getMessage());
             }
             if (mb_strlen($out) > self::MAX_OUTPUT) {
                 $out = rtrim(mb_substr($out, 0, self::MAX_OUTPUT))."\n\n(Cut here: the answer is longer than ".self::MAX_OUTPUT.' characters. Ask for less at a time.)';

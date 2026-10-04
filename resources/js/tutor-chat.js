@@ -39,7 +39,7 @@ function uploadOne(upload, file) {
     });
 }
 
-export function tutorChat({ upload }) {
+export function tutorChat({ upload, account }) {
     return {
         draft: '',
         pending: '',
@@ -126,6 +126,17 @@ export function tutorChat({ upload }) {
                 this.stick();
                 this.$refs.box?.focus();
             });
+        },
+
+        /**
+         * The tutor wrote in notes: an editor open on one (in another window or tab) is told the way its own
+         * tabs tell each other, and shows the new version unless the student is typing in it.
+         */
+        noteChanged(notes) {
+            if (!('BroadcastChannel' in window) || !Array.isArray(notes)) return;
+            const channel = new BroadcastChannel(`vistud-${account}`);
+            for (const note of notes) channel.postMessage({ type: 'note-saved', note: note.id, version: note.version, client: 'tutor' });
+            channel.close();
         },
 
         has(ref) {

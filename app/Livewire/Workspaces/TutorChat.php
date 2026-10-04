@@ -159,7 +159,9 @@ final class TutorChat extends Component
                 $presented = ChatMarks::present($turn['text']);
                 $marked = $marked || $presented !== $turn['text'];
                 $turn['html'] = MarkdownPreview::html($presented);
-                $turn['looked'] = array_values(array_unique(array_map(Toolbox::words(...), $turn['tools'])));
+                $turn['looked'] = array_values(array_unique(array_map(Toolbox::words(...), array_filter($turn['tools'], fn (string $tool) => ! Toolbox::writes($tool)))));
+                $turn['savedWords'] = self::savedWords($turn['saved'] ?? []);
+                $turn['notes'] = array_map(fn (array $note) => $note + ['url' => route('workspaces.notes.show', [$this->workspaceId, $note['id'], 'window' => 1])], $turn['notes'] ?? []);
             }
         }
         unset($turn);
@@ -174,6 +176,7 @@ final class TutorChat extends Component
             'spentWords' => Choices::dollars($spent['session']).($spent['session_cap'] > 0 ? ' of '.Choices::dollars($spent['session_cap']) : '').' this session',
             'suggestions' => self::SUGGESTIONS,
             'attachable' => $ready && $session->isOpen() ? $this->attachable($by, $session) : ['module' => null, 'items' => []],
+            'account' => (string) auth()->id(),
             'upload' => [
                 'url' => route('api.v1.files.store'),
                 'type' => ($module = $this->moduleOf($by, $session)) !== null ? 'module' : 'workspace',
@@ -185,6 +188,20 @@ final class TutorChat extends Component
             'quizzes' => $ready && $session->isOpen() ? $this->quizzes($by, $session) : [],
             'sees' => ($model = $this->models->find($choices->tutorModel, $this->settings->key($by))) === null || $model->images,
         ]);
+    }
+
+    /** "3 flashcards, 1 key point": what a turn saved in the course. */
+    private static function savedWords(array $saved): ?string
+    {
+        $words = ['flashcard' => ['flashcard', 'flashcards'], 'finding' => ['key point', 'key points'], 'question' => ['question', 'questions']];
+        $parts = [];
+        foreach ($words as $kind => [$one, $many]) {
+            if (($saved[$kind] ?? 0) > 0) {
+                $parts[] = $saved[$kind].' '.($saved[$kind] === 1 ? $one : $many);
+            }
+        }
+
+        return $parts === [] ? null : implode(', ', $parts);
     }
 
     /** The icon of each kind of attachment. */
@@ -282,9 +299,18 @@ final class TutorChat extends Component
         ignore_user_abort(true);
         $answer = '';
         $sent = 0.0;
-        $on = function (string $kind, string $value) use (&$answer, &$sent) {
+        $changed = [];
+        $on = function (string $kind, string $value) use (&$answer, &$sent, &$changed) {
             if ($kind === 'looking') {
-                $this->stream->push($this, 'status', e('Looking up '.Toolbox::words($value).'…'));
+                $this->stream->push($this, 'status', e(Toolbox::doing($value)));
+
+                return;
+            }
+            if ($kind === 'saved') {
+                // Notes the tutor wrote in: an editor open on one is told to show the new version.
+                foreach (json_decode($value, true)['notes'] ?? [] as $note) {
+                    $changed[$note['id']] = ['id' => (string) $note['id'], 'version' => (int) $note['version']];
+                }
 
                 return;
             }
@@ -301,6 +327,7 @@ final class TutorChat extends Component
         try {
             $run($on);
         } catch (Unprocessable $e) {
+            $this->announce($changed);
             // A field's own words ("Write something first.") over the general ones.
             $fields = is_array($e->details['fields'] ?? null) ? $e->details['fields'] : [];
             $first = $fields !== [] ? (array_values($fields)[0][0] ?? null) : null;
@@ -309,15 +336,31 @@ final class TutorChat extends Component
 
             return;
         } catch (EngineFailed $e) {
+            $this->announce($changed);
             $this->error = $e->getMessage();
             $this->text = '';
             $this->dispatch('chat-done', restore: null);
 
             return;
         }
+        $this->announce($changed);
         $this->text = '';
         $this->dispatch('chat-turn');
         $this->dispatch('chat-done', restore: null);
+    }
+
+    /**
+     * Tells the page what the tutor changed: open notes show their new version (resources/js/tutor-chat.js passes
+     * it on to the editor), and the question board looks again.
+     *
+     * @param  array<string, array{id: string, version: int}>  $notes
+     */
+    private function announce(array $notes): void
+    {
+        if ($notes !== []) {
+            $this->dispatch('notes-changed', notes: array_values($notes));
+        }
+        $this->dispatch('questions-changed');
     }
 
     private function principal(): Principal
