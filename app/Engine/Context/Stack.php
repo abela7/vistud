@@ -13,6 +13,7 @@ use App\Study\Modules;
 use App\Study\NoteDoc;
 use App\Study\Notes;
 use App\Study\SessionDetails;
+use App\Study\TopicDetails;
 use App\Study\Topics;
 use App\Study\Tutoring;
 use App\Study\Workspaces;
@@ -38,6 +39,11 @@ final class Stack
 
     public const PROMPT = 'resources/prompts/tutor-2.md';
 
+    /** The helper's rules and its budget: short enough for the smallest model, which runs the most often. */
+    public const HELPER_PROMPT = 'resources/prompts/helper.md';
+
+    public const HELPER_BUDGET = 300;
+
     /** The most of one note that goes into the prompt of a model that can't read notes itself, in characters. */
     public const NOTE_LIMIT = 8_000;
 
@@ -56,6 +62,49 @@ final class Stack
     public function build(Principal $by, SessionDetails $session, ?string $folded, bool $withTools): Built
     {
         return $this->compose($this->gather($by, $session, $folded, $withTools), $withTools, $withTools ? $this->toolbox->definitions() : []);
+    }
+
+    /**
+     * The helper's standing context: its short rules, the read-only tools beside them, and at most the module it is
+     * asked about (title, instructions, topics), nothing else. Another student's module is not found.
+     *
+     * @param  list<array<string, mixed>>  $tools
+     */
+    public function helper(Principal $by, ?string $moduleId, array $tools): Built
+    {
+        $facts = new Facts(courseName: '');
+        if ($moduleId !== null) {
+            $module = $this->modules->find($by, $moduleId);
+            $workspace = $this->workspaces->find($by, $module->workspaceId);
+            $facts = new Facts(
+                courseName: $workspace->name,
+                moduleTitle: $module->title,
+                moduleDates: self::dates($module),
+                moduleInstructions: $this->instructions->forSession($by, $workspace->id, $module->id)['module'],
+                topics: self::topicsOf($this->topics->list($by, $workspace->id), $module),
+            );
+        }
+
+        return $this->composeHelper($facts, $tools);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $tools
+     */
+    public function composeHelper(Facts $facts, array $tools): Built
+    {
+        $layers = [0 => ['Rules', [[self::helperRules(), true]], self::HELPER_BUDGET], 4 => ['Module', $this->module($facts), self::BUDGETS[4]]];
+        $report = [];
+        $texts = [];
+        foreach ($layers as $number => [$name, $lines, $budget]) {
+            [$text, $cut] = self::fit($lines, $budget);
+            $texts[$number] = $text;
+            $report[] = ['layer' => $number, 'name' => $name, 'tokens' => Tokens::of($text), 'budget' => $budget, 'cut' => $cut];
+        }
+        $tooling = $tools === [] ? '' : (string) json_encode($tools, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        array_splice($report, 1, 0, [['layer' => 1, 'name' => 'Tools', 'tokens' => Tokens::of($tooling), 'budget' => null, 'cut' => 0]]);
+
+        return new Built(self::join([$texts[0], $texts[4]]), $texts[0], $tools, $report);
     }
 
     /**
@@ -107,7 +156,7 @@ final class Stack
         $module = $this->moduleOf($by, $workspace->id, $session->moduleId ?? $topic?->moduleId);
         $instructions = $this->instructions->forSession($by, $workspace->id, $module?->id);
         $choices = $this->settings->get($by);
-        $status = fn ($t) => $t->shown() === 'not_started' ? 'not started' : $t->shown();
+        $status = fn ($t) => self::status($t);
         [$material, $materialText] = $this->material($by, $session, $withTools);
 
         $tutoring = Tutoring::normalised($session->tutoring);
@@ -122,7 +171,7 @@ final class Stack
             moduleTitle: $module?->title,
             moduleDates: $module === null ? null : self::dates($module),
             moduleInstructions: $instructions['module'],
-            topics: $module === null ? [] : array_map(fn ($t) => ['name' => $t->name, 'status' => $status($t)], array_values(array_filter($topics, fn ($t) => $t->moduleId === $module->id))),
+            topics: $module === null ? [] : self::topicsOf($topics, $module),
             topicNow: $topic?->name,
             topicPractice: $topic === null ? null : "the student says {$status($topic)}; practice: {$topic->evidence()}",
             clock: self::clock($session),
@@ -134,6 +183,12 @@ final class Stack
             materialText: $materialText,
             folded: $folded,
         );
+    }
+
+    /** The helper's rules, without the file's opening comment (for people). */
+    public static function helperRules(): string
+    {
+        return trim((string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', (string) file_get_contents(base_path(self::HELPER_PROMPT))));
     }
 
     /** The tutor's rules, for a model that can call tools or one that can't (the file marks the parts for each). */
@@ -284,6 +339,22 @@ final class Stack
         }
 
         return [$lines, $blocks];
+    }
+
+    /**
+     * The module's topics, each with the student's word on it.
+     *
+     * @param  list<TopicDetails>  $topics
+     * @return list<array{name: string, status: string}>
+     */
+    private static function topicsOf(array $topics, ModuleDetails $module): array
+    {
+        return array_map(fn ($t) => ['name' => $t->name, 'status' => self::status($t)], array_values(array_filter($topics, fn ($t) => $t->moduleId === $module->id)));
+    }
+
+    private static function status(TopicDetails $topic): string
+    {
+        return $topic->shown() === 'not_started' ? 'not started' : $topic->shown();
     }
 
     private static function dates(ModuleDetails $module): ?string

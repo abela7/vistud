@@ -3,6 +3,7 @@
 namespace App\Engine\Jobs;
 
 use App\Engine\Engine;
+use App\Engine\Models;
 use App\Engine\Role;
 use App\Engine\Settings;
 use App\Engine\Usage;
@@ -40,7 +41,7 @@ final class Runner
 
     public const AFTER_RESPONSE = 'after_response';
 
-    public function __construct(private Settings $settings, private Engine $engine, private Usage $usage, private Sessions $sessions) {}
+    public function __construct(private Settings $settings, private Engine $engine, private Usage $usage, private Sessions $sessions, private Models $models) {}
 
     /** How a started job is carried out now: at once, on the queue, or at the end of this request. */
     public function mode(): string
@@ -117,7 +118,7 @@ final class Runner
         $this->update($scope, $id, ['status' => 'running', 'started_at' => now(), 'attempts' => DB::raw('attempts + 1')]);
         try {
             [$choices, $key, $model] = $this->settings->ready($by, $role);
-            $result = $work(new Run($id, $role, $by, $choices, $key, $model, $this->sessions->timezone($by), $this->engine, $this->usage));
+            $result = $work(new Run($id, $role, $by, $choices, $key, $model, $this->sessions->timezone($by), $this->engine, $this->usage, $this->models));
             $this->update($scope, $id, ['status' => 'done', 'error_code' => null, 'finished_at' => now()]);
 
             return $result;

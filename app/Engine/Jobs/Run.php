@@ -5,6 +5,7 @@ namespace App\Engine\Jobs;
 use App\Engine\Choices;
 use App\Engine\Engine;
 use App\Engine\EngineFailed;
+use App\Engine\Models;
 use App\Engine\Reply;
 use App\Engine\Request;
 use App\Engine\Role;
@@ -32,7 +33,14 @@ final class Run
         private readonly string $zone,
         private readonly Engine $engine,
         private readonly Usage $usage,
+        private readonly Models $models,
     ) {}
+
+    /** Whether this run's model can call tools (one the service doesn't list is given the benefit of the doubt). */
+    public function canUseTools(): bool
+    {
+        return $this->models->find($this->model, $this->key)?->tools ?? true;
+    }
 
     /**
      * One call to the engine. $messages is one text for the user's turn, or a conversation in the OpenAI chat shape

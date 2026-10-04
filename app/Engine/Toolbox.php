@@ -61,12 +61,31 @@ final class Toolbox
         WriteNoteTool::class,
     ];
 
+    /** @var list<string>|null the names of the only tools this toolbox offers and runs; null for all of them */
+    private ?array $only = null;
+
     public function __construct(private Container $container) {}
+
+    /**
+     * The same toolbox with only the named tools: they alone are described to the engine, and a call to any other is
+     * answered as if it didn't exist (the helper's look-ups, which never change anything).
+     *
+     * @param  list<string>  $names
+     */
+    public function only(array $names): self
+    {
+        $toolbox = clone $this;
+        $toolbox->only = $names;
+
+        return $toolbox;
+    }
 
     /** @return list<Tool> */
     public function tools(): array
     {
-        return array_map(fn (string $class) => $this->container->make($class), self::TOOLS);
+        $tools = array_map(fn (string $class) => $this->container->make($class), self::TOOLS);
+
+        return $this->only === null ? $tools : array_values(array_filter($tools, fn (Tool $tool) => in_array($tool->name(), $this->only, true)));
     }
 
     /** What each look-up reads, as the chat tells the student ("Looking up your notes…", "Looked up: your notes"). */
