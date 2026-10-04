@@ -126,7 +126,7 @@ final class SessionChat
         $model = $this->models->find($choices->tutorModel, $key);
         $withTools = $model === null || $model->tools;
         $system = $this->system($by, $session, $thread->summary, $withTools);
-        $messages = $this->messagesOf($by, $thread, $model === null || $model->images);
+        $messages = $this->messagesOf($by, $thread, $model === null || $model->images, $choices->tutorModel);
         $tools = $withTools ? $this->toolbox->definitions() : [];
         $context = new Context($session->workspaceId, $session->moduleId, $session->id, $this->sessions->timezone($by));
         $fallbacks = $choices->fallbackModel !== '' ? [$choices->fallbackModel] : [];
@@ -134,16 +134,19 @@ final class SessionChat
         $reply = null;
 
         for ($round = 0; $round <= $rounds; $round++) {
-            $request = new Request($choices->tutorModel, $system, $messages, $round < $rounds ? $tools : [], $fallbacks, noTraining: $choices->noTraining, key: $key);
+            // Room for a model that thinks before it answers: its thinking counts against the limit.
+            $request = new Request($choices->tutorModel, $system, $messages, $round < $rounds ? $tools : [], $fallbacks, maxTokens: 8000, noTraining: $choices->noTraining, key: $key);
             $reply = $onEvent === null ? $this->engine->reply($request) : $this->engine->stream($request, fn (string $words) => $onEvent('text', $words));
-            $calls = array_map(fn (ToolCall $c) => ['id' => $c->id, 'type' => 'function', 'function' => ['name' => $c->name, 'arguments' => (string) json_encode($c->arguments)]], $reply->toolCalls);
+            // A call's arguments are always an object, even with none: a service refuses a list there.
+            $calls = array_map(fn (ToolCall $c) => ['id' => $c->id, 'type' => 'function', 'function' => ['name' => $c->name, 'arguments' => (string) json_encode($c->arguments === [] ? new \stdClass : $c->arguments)]], $reply->toolCalls);
             $this->keep($scope, $thread->id, ++$position, [
                 'role' => 'assistant', 'content' => $reply->text, 'tool_calls' => $calls === [] ? null : json_encode($calls), 'model' => $reply->model,
+                'reasoning' => $reply->reasoning === [] ? null : json_encode($reply->reasoning),
                 'tokens_in' => $reply->tokensIn, 'tokens_out' => $reply->tokensOut, 'cost_micros' => $reply->costMicros ?? 0,
             ]);
             // Counted round by round, so a turn the engine fails on later still counts what it cost.
             LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update(['spent_micros' => DB::raw('spent_micros + '.(int) ($reply->costMicros ?? 0)), 'updated_at' => now()]);
-            $messages[] = array_filter(['role' => 'assistant', 'content' => $reply->text !== '' ? $reply->text : null, 'tool_calls' => $calls ?: null], fn ($v) => $v !== null);
+            $messages[] = array_filter(['role' => 'assistant', 'content' => $reply->text !== '' ? $reply->text : null, 'tool_calls' => $calls ?: null, 'reasoning_details' => $reply->reasoning !== [] && $reply->model === $choices->tutorModel ? $reply->reasoning : null], fn ($v) => $v !== null);
             if (! $reply->wantsTools()) {
                 break;
             }
@@ -426,11 +429,13 @@ final class SessionChat
 
     /**
      * The unfolded messages, in the OpenAI chat shape. The student's attachments go with their words; pictures are
-     * shown only with the last message they wrote (when the model sees pictures), and named on earlier ones.
+     * shown only with the last message they wrote (when the model sees pictures), and named on earlier ones. A
+     * model's reasoning goes back with its own messages, to the same model only; an answer with nothing in it is
+     * left out (a service refuses an empty message).
      *
      * @return list<array<string, mixed>>
      */
-    private function messagesOf(Principal $by, object $thread, bool $see): array
+    private function messagesOf(Principal $by, object $thread, bool $see, string $model): array
     {
         $rows = $this->rows(Guard::learner($by), $thread->id);
         $lastAsked = 0;
@@ -443,14 +448,36 @@ final class SessionChat
                 continue;
             }
             $attached = self::attached($row);
+            if ($row->role === 'assistant' && trim((string) $row->content) === '' && ! is_string($row->tool_calls)) {
+                continue;
+            }
+            $reasoning = isset($row->reasoning) && is_string($row->reasoning) && (string) $row->model === $model ? json_decode($row->reasoning, true) : null;
             $messages[] = match ($row->role) {
                 'tool' => ['role' => 'tool', 'tool_call_id' => (string) $row->tool_call_id, 'content' => (string) $row->content],
-                'assistant' => array_filter(['role' => 'assistant', 'content' => (string) $row->content !== '' ? (string) $row->content : null, 'tool_calls' => is_string($row->tool_calls) ? json_decode($row->tool_calls, true) : null], fn ($v) => $v !== null),
+                'assistant' => array_filter(['role' => 'assistant', 'content' => (string) $row->content !== '' ? (string) $row->content : null, 'tool_calls' => is_string($row->tool_calls) ? self::objectArguments(json_decode($row->tool_calls, true) ?: []) : null, 'reasoning_details' => is_array($reasoning) && $reasoning !== [] ? $reasoning : null], fn ($v) => $v !== null),
                 default => ['role' => 'user', 'content' => $attached === [] ? (string) $row->content : $this->attachments->content($by, (string) $row->content, $attached, $see && (int) $row->position === $lastAsked)],
             };
         }
 
         return $messages;
+    }
+
+    /**
+     * Kept tool calls with their arguments as an object, even with none (older rows kept an empty list, which a
+     * service refuses).
+     *
+     * @param  list<array<string, mixed>>  $calls
+     * @return list<array<string, mixed>>
+     */
+    private static function objectArguments(array $calls): array
+    {
+        foreach ($calls as &$call) {
+            if (is_array($call) && isset($call['function']) && is_array($call['function']) && in_array($call['function']['arguments'] ?? null, ['[]', '', null], true)) {
+                $call['function']['arguments'] = '{}';
+            }
+        }
+
+        return $calls;
     }
 
     /** @return list<array<string, mixed>> what the student attached to a message */

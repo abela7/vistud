@@ -19,6 +19,13 @@ final readonly class Reply
         public ?int $costMicros = null,
         /** stop · tool_calls · length · other */
         public string $finish = 'stop',
+        /**
+         * The model's reasoning as the service hands it back (`reasoning_details`), to send back unchanged with
+         * this message: some models refuse a look-up's result without it.
+         *
+         * @var list<array<string, mixed>>
+         */
+        public array $reasoning = [],
     ) {}
 
     public function wantsTools(): bool

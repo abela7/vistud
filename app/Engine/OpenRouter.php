@@ -52,13 +52,13 @@ final class OpenRouter implements Engine
 
         $text = '';
         $calls = [];
+        $reasoning = [];
         $usage = [];
         $model = $request->model;
         $finish = null;
-        $this->events($response->toPsrResponse()->getBody(), function (array $chunk) use (&$text, &$calls, &$usage, &$model, &$finish, $onText) {
+        $this->events($response->toPsrResponse()->getBody(), function (array $chunk) use (&$text, &$calls, &$reasoning, &$usage, &$model, &$finish, $onText) {
             if (isset($chunk['error'])) {
-                $said = is_array($chunk['error']) && is_string($chunk['error']['message'] ?? null) ? ' It said: '.mb_substr($chunk['error']['message'], 0, 200) : '';
-                throw new EngineFailed('engine_cut', 'The answer was cut off by the service. Try again.'.$said);
+                throw new EngineFailed('engine_cut', 'The answer was cut off by the service. Try again.'.self::said(is_array($chunk['error']) ? $chunk['error'] : []));
             }
             if (is_string($chunk['model'] ?? null) && $chunk['model'] !== '') {
                 $model = $chunk['model'];
@@ -83,17 +83,29 @@ final class OpenRouter implements Engine
                 $calls[$i]['function']['name'] .= is_string($part['function']['name'] ?? null) ? $part['function']['name'] : '';
                 $calls[$i]['function']['arguments'] .= is_string($part['function']['arguments'] ?? null) ? $part['function']['arguments'] : '';
             }
+            foreach (is_array($delta['reasoning_details'] ?? null) ? $delta['reasoning_details'] : [] as $i => $part) {
+                // Reasoning comes in pieces too: the words grow, the rest (its id, format, signature) is the latest.
+                if (! is_array($part)) {
+                    continue;
+                }
+                $at = (int) ($part['index'] ?? $i);
+                $reasoning[$at] ??= [];
+                foreach ($part as $field => $value) {
+                    $reasoning[$at][$field] = in_array($field, ['text', 'summary', 'data'], true) && is_string($value) ? (($reasoning[$at][$field] ?? '').$value) : $value;
+                }
+            }
             if (is_string($choice['finish_reason'] ?? null)) {
                 $finish = $choice['finish_reason'];
             }
         });
         ksort($calls);
+        ksort($reasoning);
         $calls = array_values(array_filter($calls, fn (array $call) => $call['function']['name'] !== ''));
         if (trim($text) === '' && $calls === [] && $finish === null) {
             throw new EngineFailed('engine_empty', 'The engine sent back an empty answer. Try again.');
         }
 
-        return $this->make(trim($text), $calls, $model, $usage, $finish);
+        return $this->make(trim($text), $calls, $model, $usage, $finish, array_values($reasoning));
     }
 
     public function models(?string $key = null): array
@@ -176,7 +188,7 @@ final class OpenRouter implements Engine
     {
         $data = $response->json();
         $data = is_array($data) ? $data : [];
-        $said = is_array($data['error'] ?? null) && is_string($data['error']['message'] ?? null) ? ' It said: '.mb_substr($data['error']['message'], 0, 200) : '';
+        $said = self::said(is_array($data['error'] ?? null) ? $data['error'] : []);
         if ($response->failed() || isset($data['error'])) {
             throw new EngineFailed('engine_refused', match ($response->status()) {
                 401, 403 => 'The service refused the key. Check it in the AI engine settings.',
@@ -205,6 +217,7 @@ final class OpenRouter implements Engine
             is_string($data['model'] ?? null) ? $data['model'] : $request->model,
             is_array($data['usage'] ?? null) ? $data['usage'] : [],
             is_string($choice['finish_reason'] ?? null) ? $choice['finish_reason'] : null,
+            is_array($message['reasoning_details'] ?? null) ? array_values(array_filter($message['reasoning_details'], 'is_array')) : [],
         );
     }
 
@@ -212,7 +225,7 @@ final class OpenRouter implements Engine
      * @param  list<array<string, mixed>>  $calls  tool calls in the OpenAI shape
      * @param  array<string, mixed>  $usage
      */
-    private function make(string $text, array $calls, string $model, array $usage, ?string $finish): Reply
+    private function make(string $text, array $calls, string $model, array $usage, ?string $finish, array $reasoning = []): Reply
     {
         $cost = $usage['cost'] ?? null;
 
@@ -226,7 +239,35 @@ final class OpenRouter implements Engine
             finish: match ($finish) {
                 'stop' => 'stop', 'tool_calls' => 'tool_calls', 'length' => 'length', default => 'other'
             },
+            reasoning: $reasoning,
         );
+    }
+
+    /**
+     * What the service said went wrong, in its words and the provider's behind it (OpenRouter wraps a provider's
+     * refusal as "Provider returned error" and keeps the provider's own message in `metadata.raw`).
+     *
+     * @param  array<string, mixed>  $error
+     */
+    private static function said(array $error): string
+    {
+        $parts = [];
+        if (is_string($error['message'] ?? null) && trim($error['message']) !== '') {
+            $parts[] = trim($error['message']);
+        }
+        $meta = is_array($error['metadata'] ?? null) ? $error['metadata'] : [];
+        $raw = $meta['raw'] ?? null;
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? ($decoded['error']['message'] ?? $decoded['message'] ?? $raw) : $raw;
+        } elseif (is_array($raw)) {
+            $raw = $raw['error']['message'] ?? $raw['message'] ?? json_encode($raw);
+        }
+        if (is_string($raw) && trim($raw) !== '' && trim($raw) !== ($parts[0] ?? null)) {
+            $parts[] = (is_string($meta['provider_name'] ?? null) ? $meta['provider_name'].' says: ' : '').trim($raw);
+        }
+
+        return $parts === [] ? '' : ' It said: '.mb_substr(implode(' ', $parts), 0, 300);
     }
 
     /**

@@ -112,4 +112,15 @@ class SettingsTest extends TestCase
         }
         $this->assertNull($settings->set($by, ['language' => ''])->language);
     }
+
+    public function test_a_batch_model_is_refused_with_a_reason(): void
+    {
+        $by = $this->principal($this->student());
+        try {
+            app(Settings::class)->set($by, ['tutor_model' => 'anthropic/claude-sonnet-5.5:batch']);
+            $this->fail('Expected a refusal.');
+        } catch (Unprocessable $e) {
+            $this->assertStringContainsString('batch version', $e->details['fields']['tutor_model'][0]);
+        }
+    }
 }

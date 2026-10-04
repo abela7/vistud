@@ -490,6 +490,14 @@ right and what to fix (`<right>`, `<fix>`): shown in the chat's quote, the
 review and the session note, and kept with the answer in the journal (the
 attempt's `right` and `fix` content fields).
 
+**Models that think** (2026-10-05, from the owner's first Claude chat). A model's
+reasoning (`reasoning_details`) is kept with its message and sent back
+unchanged to the same model, since Claude refuses a look-up's result without
+it; another model never sees it. The tutor's answers get room for the thinking
+(8,000 tokens). A `:batch` model (answers hours later) is never offered or
+accepted. A refusal shows the provider's own words behind the service's
+wrapper ("Anthropic says: …").
+
 **Failures** come back as `App\Engine\EngineFailed` (503) with a plain
 message: not set up, the key refused, out of credit, the model unknown, busy,
 down, unreachable; never the key. `php artisan vistud:doctor` checks the key

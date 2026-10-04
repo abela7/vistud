@@ -119,6 +119,8 @@ final class Settings
             $value = is_string($input[$key] ?? null) ? trim($input[$key]) : '';
             if ($value !== '' && preg_match(self::MODEL_ID, $value) !== 1) {
                 $errors[$key] = 'Enter the model\'s id as the service names it, like "openai/gpt-4.1-mini".';
+            } elseif (str_ends_with($value, ':batch')) {
+                $errors[$key] = 'That is the batch version, which answers hours later. Choose the one without ":batch".';
             }
             $models[$key] = $value === '' ? null : $value;
         }

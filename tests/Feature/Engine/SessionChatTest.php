@@ -5,9 +5,11 @@ namespace Tests\Feature\Engine;
 use App\Engine\Engine;
 use App\Engine\EngineFailed;
 use App\Engine\Fake;
+use App\Engine\Reply;
 use App\Engine\Request;
 use App\Engine\SessionChat;
 use App\Engine\Settings;
+use App\Engine\ToolCall;
 use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
@@ -421,5 +423,36 @@ class SessionChatTest extends TestCase
         $this->engine->will(Fake::calls('write_note', ['text' => 'More.'], 'call_3'), Fake::says('Done.'));
         $this->chat()->send($this->by, $this->session->id, 'Note more');
         $this->assertCount(1, array_filter(app(Notes::class)->list($this->by, $this->databases->id), fn ($n) => str_starts_with($n->title, 'Study notes')));
+    }
+
+    public function test_a_models_reasoning_goes_back_with_its_own_messages_to_the_same_model_only_and_empty_answers_are_left_out(): void
+    {
+        $reasoning = [['type' => 'reasoning.text', 'text' => 'Look it up first.', 'signature' => 'sig-1', 'index' => 0]];
+        $this->engine->will(
+            new Reply('', [new ToolCall('call_1', 'topics', [])], 'fake/tutor', 100, 20, 1_000, 'tool_calls', $reasoning),
+            function (Request $request) use ($reasoning) {
+                // The look-up's result goes back with the reasoning that asked for it.
+                $this->assertSame($reasoning, $request->messages[1]['reasoning_details']);
+
+                return new Reply('Joins still confuse you.', [], 'fake/tutor', 100, 20, 1_000, 'stop', [['type' => 'reasoning.text', 'text' => 'Answer now.', 'signature' => 'sig-2', 'index' => 0]]);
+            },
+        );
+        $this->chat()->send($this->by, $this->session->id, 'What should I study?');
+
+        // The next turn carries it too, and an answer with nothing in it is left out.
+        $this->engine->will(Fake::says(''), Fake::says('Yes.'));
+        $this->chat()->send($this->by, $this->session->id, 'Sure?');
+        $this->chat()->send($this->by, $this->session->id, 'Really?');
+        $messages = $this->engine->last()->messages;
+        $this->assertSame('sig-2', $messages[3]['reasoning_details'][0]['signature']);
+        // A look-up with no arguments is an empty object, never an empty list (a service refuses that).
+        $this->assertSame('{}', $messages[1]['tool_calls'][0]['function']['arguments']);
+        $this->assertSame(['user', 'assistant', 'tool', 'assistant', 'user', 'user'], array_column($messages, 'role'));
+
+        // Another model never gets a model's reasoning.
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/plain', 'consent' => true]);
+        $this->engine->will(Fake::says('Hi.'));
+        $this->chat()->send($this->by, $this->session->id, 'Hi');
+        $this->assertSame([], array_filter($this->engine->last()->messages, fn ($m) => isset($m['reasoning_details'])));
     }
 }

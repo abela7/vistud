@@ -217,4 +217,47 @@ class OpenRouterTest extends TestCase
         $this->expectException(EngineFailed::class);
         app(OpenRouter::class)->stream(new Request('m', 's', []), $quiet);
     }
+
+    public function test_a_models_reasoning_comes_back_with_its_reply_whole_or_in_pieces(): void
+    {
+        $reasoning = [['type' => 'reasoning.text', 'text' => 'The student wants a card.', 'signature' => 'sig-1', 'id' => 'r1', 'format' => 'anthropic-claude-v1', 'index' => 0]];
+        Http::fake(['engine.test/api/v1/chat/completions' => Http::sequence()
+            ->push(['model' => 'anthropic/claude-sonnet-5.5', 'choices' => [['message' => ['content' => 'Here.', 'reasoning_details' => $reasoning], 'finish_reason' => 'stop']]])
+            ->push(self::events([
+                ['choices' => [['index' => 0, 'delta' => ['reasoning_details' => [['type' => 'reasoning.text', 'text' => 'The student ', 'id' => 'r1', 'format' => 'anthropic-claude-v1', 'index' => 0]]]]]],
+                ['choices' => [['index' => 0, 'delta' => ['reasoning_details' => [['type' => 'reasoning.text', 'text' => 'wants a card.', 'index' => 0]]]]]],
+                ['choices' => [['index' => 0, 'delta' => ['reasoning_details' => [['type' => 'reasoning.text', 'text' => '', 'signature' => 'sig-1', 'index' => 0]]]]]],
+                ['choices' => [['index' => 0, 'delta' => ['content' => 'Here.'], 'finish_reason' => 'stop']]],
+            ]), 200, ['Content-Type' => 'text/event-stream'])]);
+
+        $this->assertSame($reasoning, app(OpenRouter::class)->reply(new Request('m', 's', []))->reasoning);
+        $streamed = app(OpenRouter::class)->stream(new Request('m', 's', []), function () {});
+        $this->assertSame([['type' => 'reasoning.text', 'text' => 'The student wants a card.', 'id' => 'r1', 'format' => 'anthropic-claude-v1', 'index' => 0, 'signature' => 'sig-1']], $streamed->reasoning);
+        $this->assertSame('Here.', $streamed->text);
+    }
+
+    public function test_a_providers_own_words_are_shown_behind_the_services_wrapper(): void
+    {
+        Http::fake(['engine.test/*' => Http::response(['error' => ['message' => 'Provider returned error', 'code' => 400, 'metadata' => [
+            'raw' => json_encode(['type' => 'error', 'error' => ['type' => 'invalid_request_error', 'message' => 'messages.3: thinking blocks must precede tool_use when thinking is enabled']]),
+            'provider_name' => 'Anthropic',
+        ]]], 400)]);
+
+        try {
+            app(OpenRouter::class)->reply(new Request('m', 's', []));
+            $this->fail('Expected a refusal.');
+        } catch (EngineFailed $e) {
+            $this->assertStringContainsString('It said: Provider returned error Anthropic says: messages.3: thinking blocks must precede tool_use', $e->getMessage());
+        }
+    }
+
+    public function test_batch_models_are_never_offered(): void
+    {
+        Cache::flush();
+        Http::fake(['engine.test/api/v1/models' => Http::response(['data' => [
+            ['id' => 'anthropic/claude-sonnet-5.5', 'name' => 'Claude Sonnet 5.5', 'pricing' => ['prompt' => '0.000002', 'completion' => '0.00001']],
+            ['id' => 'anthropic/claude-sonnet-5.5:batch', 'name' => 'Claude Sonnet 5.5 (batch)', 'pricing' => ['prompt' => '0.000001', 'completion' => '0.000005']],
+        ]])]);
+        $this->assertSame(['anthropic/claude-sonnet-5.5'], array_map(fn ($m) => $m->id, app(Models::class)->all()));
+    }
 }

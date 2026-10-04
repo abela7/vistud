@@ -27,7 +27,8 @@ final class Models
             return array_map(fn (array $m) => new Model(...$m), $cached);
         }
         try {
-            $models = $this->engine->models($key);
+            // A ":batch" model answers hours later, so the chat can never use it: not offered.
+            $models = array_values(array_filter($this->engine->models($key), fn (Model $m) => ! str_ends_with($m->id, ':batch')));
         } catch (EngineFailed) {
             return [];
         }
