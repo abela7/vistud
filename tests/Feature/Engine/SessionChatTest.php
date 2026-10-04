@@ -3,6 +3,7 @@
 namespace Tests\Feature\Engine;
 
 use App\Engine\Engine;
+use App\Engine\EngineFailed;
 use App\Engine\Fake;
 use App\Engine\Request;
 use App\Engine\SessionChat;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\Briefings;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\SessionDetails;
@@ -194,6 +196,58 @@ class SessionChatTest extends TestCase
         app(Settings::class)->removeKey($this->by);
         config(['vistud.engine.key' => '']);
         $this->expectCode(fn () => $this->chat()->send($this->by, $this->session->id, 'Hi'), 'engine_key', 'your AI engine settings');
+    }
+
+    public function test_ending_wraps_the_chat_into_the_sessions_summary_and_checkpoint_once_for_the_next_briefing(): void
+    {
+        $this->engine->will(Fake::says('A left join keeps every left row.'), Fake::says('Right. **Slide 4 · Right joins** mirror it.'));
+        $this->chat()->send($this->by, $this->session->id, 'What is a left join?');
+        $this->chat()->send($this->by, $this->session->id, 'And a right join?');
+        app(Sessions::class)->end($this->by, $this->session->id);
+
+        $this->engine->will(Fake::says("```json\n{\"summary\": \"Left joins were explained and understood; right joins were started.\", \"checkpoint\": \"Slide 4 of 12; right joins next.\"}\n```", 300, 'fake/quick'));
+        $written = $this->chat()->wrapUp($this->by, $this->session->id);
+        $this->assertSame(['summary' => 'Left joins were explained and understood; right joins were started.', 'checkpoint' => 'Slide 4 of 12; right joins next.'], $written);
+        $request = $this->engine->last();
+        $this->assertSame('fake/quick', $request->model);
+        $this->assertStringContainsString('one JSON object', $request->system);
+        $this->assertStringContainsString('Student: What is a left join?', $request->messages[0]['content']);
+        $this->assertStringContainsString('Tutor: Right.', $request->messages[0]['content']);
+        $session = app(Sessions::class)->find($this->by, $this->session->id);
+        $this->assertSame([$written['summary'], $written['checkpoint']], [$session->summary, $session->checkpoint]);
+        $this->assertSame(2_300, $this->chat()->spent($this->by, $this->session->id)['session']);
+
+        // Once: a second call asks the engine nothing.
+        $asked = count($this->engine->requests);
+        $this->assertNull($this->chat()->wrapUp($this->by, $this->session->id));
+        $this->assertCount($asked, $this->engine->requests);
+
+        // The next session's briefing starts from it.
+        $next = app(Sessions::class)->start($this->by, $this->databases->id);
+        $this->assertStringContainsString('The tutor\'s summary: Left joins were explained', app(Briefings::class)->forSession($this->by, $next->id)->markdown);
+    }
+
+    public function test_the_wrap_up_needs_a_chat_keeps_what_the_student_ticked_and_leaves_a_failed_try_for_later(): void
+    {
+        // No chat yet: nothing to write from, nothing asked.
+        $this->assertNull($this->chat()->wrapUp($this->by, $this->session->id));
+        $this->assertSame([], $this->engine->requests);
+
+        $this->engine->will(Fake::says('A left join keeps every left row.'));
+        $this->chat()->send($this->by, $this->session->id, 'What is a left join?');
+        app(Sessions::class)->setSummary($this->by, $this->session->id, 'My own summary.');
+        app(Sessions::class)->end($this->by, $this->session->id);
+
+        // The engine fails: nothing is written, and the next try asks again.
+        $this->engine->will(fn () => throw new EngineFailed('engine_busy', 'The service is busy.'));
+        $this->assertNull($this->chat()->wrapUp($this->by, $this->session->id));
+        $this->assertNull(app(Sessions::class)->find($this->by, $this->session->id)->checkpoint);
+
+        // Only the blank is filled: the student\'s own summary stays.
+        $this->engine->will(Fake::says('{"summary": "The tutor\'s version.", "checkpoint": "Stopped at slide 2."}', 200, 'fake/quick'));
+        $this->assertSame(['summary' => null, 'checkpoint' => 'Stopped at slide 2.'], $this->chat()->wrapUp($this->by, $this->session->id));
+        $session = app(Sessions::class)->find($this->by, $this->session->id);
+        $this->assertSame(['My own summary.', 'Stopped at slide 2.'], [$session->summary, $session->checkpoint]);
     }
 
     public function test_another_student_cannot_read_or_write_the_chat(): void

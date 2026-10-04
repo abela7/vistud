@@ -9,6 +9,7 @@ use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Principal;
+use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\MarkdownPreview;
 use App\Study\Sessions;
@@ -60,6 +61,15 @@ final class TutorChat extends Component
     public function mount(string $workspaceId, string $sessionId): void
     {
         [$this->workspaceId, $this->sessionId] = [$workspaceId, $sessionId];
+        // A session that ended without its wrap-up (it ended by itself, or the engine was down) gets it once, here.
+        $by = $this->principal();
+        if (! $this->sessions->find($by, $sessionId)->isOpen()) {
+            try {
+                $this->chat->wrapUp($by, $sessionId);
+            } catch (Unprocessable|NotFound) {
+                // Nothing to wrap up, or not now.
+            }
+        }
     }
 
     public function send(): void

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Workspaces;
 
+use App\Engine\SessionChat;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Livewire\Concerns\PomodoroForm;
@@ -72,8 +73,11 @@ final class StudySession extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, Questions $questions, Folders $folders, PrincipalFactory $principals): void
+    private SessionChat $chat;
+
+    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, Questions $questions, Folders $folders, PrincipalFactory $principals, SessionChat $chat): void
     {
+        $this->chat = $chat;
         $this->folders = $folders;
         $this->briefings = $briefings;
         $this->questions = $questions;
@@ -251,7 +255,8 @@ final class StudySession extends Component
                 }
             });
             if ($this->error === null) {
-                $this->notice = 'Session ended. You studied '.SessionDetails::duration($this->sessions->find($by, $this->sessionId)->studySeconds).'.';
+                $wrapped = $this->wrapUp($by);
+                $this->notice = 'Session ended. You studied '.SessionDetails::duration($this->sessions->find($by, $this->sessionId)->studySeconds).'.'.($wrapped ? ' The tutor\'s summary of the chat is saved below.' : '');
             }
         }
         $this->close();
@@ -296,6 +301,7 @@ final class StudySession extends Component
 
         return view('livewire.workspaces.study-session', [
             'session' => $session,
+            'chatted' => $this->mode === 'end' && $this->chat->transcript($by, $this->sessionId) !== [],
             'topic' => $topic,
             'module' => $module,
             'groups' => $material['groups'],
@@ -435,6 +441,16 @@ final class StudySession extends Component
             'pomodoro' => 'Waiting to start the next focus',
             default => 'Paused',
         };
+    }
+
+    /** The chat's summary and checkpoint into the session's record, once; an engine that fails leaves them for later. */
+    private function wrapUp(Principal $by): bool
+    {
+        try {
+            return $this->chat->wrapUp($by, $this->sessionId) !== null;
+        } catch (Unprocessable|NotFound) {
+            return false;
+        }
     }
 
     private function act(callable $action, ?string $notice = null): void

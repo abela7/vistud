@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Workspaces;
 
+use App\Engine\SessionChat;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Livewire\Concerns\PomodoroForm;
@@ -73,8 +74,11 @@ final class StudyTime extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Flashcards $flashcards, Workspaces $workspaces, PrincipalFactory $principals): void
+    private SessionChat $chat;
+
+    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Flashcards $flashcards, Workspaces $workspaces, PrincipalFactory $principals, SessionChat $chat): void
     {
+        $this->chat = $chat;
         $this->workspaces = $workspaces;
         $this->flashcards = $flashcards;
         $this->sessions = $sessions;
@@ -114,7 +118,9 @@ final class StudyTime extends Component
         }
         try {
             $ended = $this->sessions->end($this->principal(), $this->busyId);
-            $this->notice = 'Session ended. You studied '.SessionDetails::duration($ended->studySeconds).'.';
+            // Its chat's summary and checkpoint into its record, for the next session to start from.
+            $wrapped = $this->chat->wrapUp($this->principal(), $this->busyId) !== null;
+            $this->notice = 'Session ended. You studied '.SessionDetails::duration($ended->studySeconds).'.'.($wrapped ? ' The chat\'s summary is saved with it.' : '');
         } catch (Conflict|NotFound) {
             // It ended meanwhile.
         }

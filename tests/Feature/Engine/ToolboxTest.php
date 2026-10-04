@@ -171,7 +171,11 @@ class ToolboxTest extends TestCase
 
         $sessions = json_decode($this->look('earlier_sessions'), true);
         $this->assertCount(1, $sessions);
-        $this->assertSame(['2026-10-05', 'Joins', 'We covered inner joins.', 'Stopped before outer joins.', ['the note "Lecture 3: joins"']], [$sessions[0]['on'], $sessions[0]['topic'], $sessions[0]['summary'], $sessions[0]['checkpoint'], $sessions[0]['used']]);
+        $this->assertSame(['2026-10-05', 'Week 2: SQL joins', 'Joins', 'We covered inner joins.', 'Stopped before outer joins.', ['the note "Lecture 3: joins"']], [$sessions[0]['on'], $sessions[0]['module'], $sessions[0]['topic'], $sessions[0]['summary'], $sessions[0]['checkpoint'], $sessions[0]['used']]);
+        // Narrowed to a module or a topic, for going over one before an exam.
+        $this->assertCount(1, json_decode($this->look('earlier_sessions', ['module' => 'Week 2']), true));
+        $this->assertCount(1, json_decode($this->look('earlier_sessions', ['topic' => 'Joins', 'limit' => 5]), true));
+        $this->assertStringContainsString('no module called "Week 9"', $this->look('earlier_sessions', ['module' => 'Week 9']));
     }
 
     public function test_an_unknown_tool_is_named_and_another_students_things_are_not_found(): void

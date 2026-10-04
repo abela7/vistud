@@ -6,6 +6,7 @@ use App\Engine\Engine;
 use App\Engine\Fake;
 use App\Engine\Settings;
 use App\Livewire\Workspaces\SessionCapture;
+use App\Livewire\Workspaces\StudySession;
 use App\Livewire\Workspaces\TutorChat;
 use App\Models\User;
 use App\Platform\Access\Principal;
@@ -93,5 +94,25 @@ class TutorChatScreenTest extends TestCase
 
         app(Sessions::class)->end($this->by, $this->session->id);
         $this->chat()->assertSee('Hi.')->assertSee('This session has ended')->assertDontSee('Write to your tutor');
+    }
+
+    public function test_ending_the_session_from_its_page_saves_the_chats_summary_for_the_next_one(): void
+    {
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'quick_model' => 'fake/quick', 'consent' => true]);
+        $this->engine->will(Fake::says('A left join keeps every left row.'));
+        $this->chat()->set('text', 'What is a left join?')->call('send');
+
+        $this->engine->will(Fake::says('{"summary": "Left joins, explained and understood.", "checkpoint": "Right joins next."}', 200, 'fake/quick'));
+        Livewire::test(StudySession::class, ['workspaceId' => $this->databases->id, 'sessionId' => $this->session->id])
+            ->call('confirmEnd')->assertSee('saved with the session')
+            ->call('save')
+            ->assertSee('summary of the chat is saved below')
+            ->assertSeeInOrder(['From the tutor', 'Left joins, explained and understood.', 'Right joins next.']);
+        $this->assertSame('Left joins, explained and understood.', app(Sessions::class)->find($this->by, $this->session->id)->summary);
+
+        // Opened again later, the ended session's page asks the engine nothing more.
+        $asked = count($this->engine->requests);
+        $this->chat()->assertDontSee('Write to your tutor');
+        $this->assertCount($asked, $this->engine->requests);
     }
 }

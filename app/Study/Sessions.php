@@ -40,6 +40,11 @@ final class Sessions
 
     public const MAX_LOG_MINUTES = 12 * 60;
 
+    /** The tutor's summary of a session and its checkpoint, in characters. */
+    public const SUMMARY_LIMIT = 2000;
+
+    public const CHECKPOINT_LIMIT = 1000;
+
     /** The Pomodoro presets: name, focus, short break, long break (minutes), and focus periods before a long break. */
     public const POMODORO_PRESETS = [
         'classic' => ['Classic', 25, 5, 15, 4],
@@ -339,13 +344,13 @@ final class Sessions
     /** The tutor's summary for the next session (the write-back), open or ended. */
     public function setSummary(Principal $by, string $id, string $summary): void
     {
-        $this->setText($by, $id, 'summary', $summary, 2000);
+        $this->setText($by, $id, 'summary', $summary, self::SUMMARY_LIMIT);
     }
 
     /** Where the session last stood (the tutor's latest checkpoint), open or ended. */
     public function setCheckpoint(Principal $by, string $id, string $checkpoint): void
     {
-        $this->setText($by, $id, 'checkpoint', $checkpoint, 1000);
+        $this->setText($by, $id, 'checkpoint', $checkpoint, self::CHECKPOINT_LIMIT);
     }
 
     /** @return list<string> fingerprints of the marks already saved from this session's chat */

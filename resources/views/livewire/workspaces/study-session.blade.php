@@ -259,6 +259,9 @@
                         <p class="text-sm text-fg-muted">{{ $session->usesPomodoro() ? 'Time already studied stays, and the current phase keeps its progress with the new lengths.' : 'Time already studied stays. The first focus period starts counting now.' }}</p>
                     @elseif ($mode === 'end')
                         <p>You studied {{ $studied }}.</p>
+                        @if ($chatted)
+                            <p class="text-sm text-fg-muted">The chat's summary and where it stopped are saved with the session, for the next one to start from.</p>
+                        @endif
                         @if ($topic)
                             <fieldset class="space-y-2">
                                 <legend class="field-label mb-1">How is {{ $topic->name }} now?</legend>

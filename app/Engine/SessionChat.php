@@ -24,13 +24,22 @@ use Illuminate\Support\Facades\DB;
  * every turn is kept with what it cost. A session's chat may not cost more than the student's limit, nor a
  * month's chats theirs. When a chat grows long, its oldest turns are folded into a short summary the engine
  * reads instead, so a long session stays sharp and cheap. Saving what the tutor marked goes through the
- * write-back, as a pasted chat does: nothing is remembered until the student ticks it.
+ * write-back, as a pasted chat does: nothing is remembered until the student ticks it. When the session ends, the
+ * chat is wrapped up once: the quick model writes the session's summary and checkpoint from it, so the next
+ * session's briefing starts from what happened without the student explaining again.
  */
 final class SessionChat
 {
     public const MAX_TEXT = 8_000;
 
     public const SUMMARY_CHARS = 1_500;
+
+    /** The wrap-up's summary and checkpoint, in characters; and the most of a chat it reads (the end of it). */
+    public const WRAP_SUMMARY_CHARS = 1_200;
+
+    public const WRAP_CHECKPOINT_CHARS = 400;
+
+    public const WRAP_INPUT_CHARS = 40_000;
 
     public function __construct(
         private Engine $engine,
@@ -185,6 +194,77 @@ final class SessionChat
     }
 
     /**
+     * Writes what the chat came to into the session's record (its summary and checkpoint, §4.3), once, when the
+     * session ends: the next session's briefing and the earlier-sessions look-up start from them, so the student
+     * never explains again what happened. The quick model writes them from the chat (the folded part's summary
+     * and the rest); a summary or checkpoint the student already ticked from the tutor's marks stays as it is.
+     * Nothing happens without a chat with an answer in it, or when the engine isn't set up; a failed try is
+     * left for the next.
+     *
+     * @return array{summary: ?string, checkpoint: ?string}|null what was written; null when nothing was
+     */
+    public function wrapUp(Principal $by, string $sessionId): ?array
+    {
+        $scope = Guard::learner($by);
+        $session = $this->sessions->find($by, $sessionId);
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first();
+        if ($thread === null || $thread->wrapped_at !== null) {
+            return null;
+        }
+        $rows = $this->rows($scope, $thread->id);
+        $answered = array_filter($rows, fn ($row) => $row->role === 'assistant' && trim((string) $row->content) !== '');
+        $asked = array_filter($rows, fn ($row) => $row->role === 'user');
+        if ($answered === [] || $asked === [] || ($session->summary !== null && $session->checkpoint !== null)) {
+            // Nothing to write from, or the student already kept the tutor's own summary and checkpoint.
+            $this->markWrapped($scope, $thread->id, 0);
+
+            return null;
+        }
+        $choices = $this->settings->get($by);
+        $key = $this->settings->key($by);
+        if (($key === null && ! $this->setup->keySet()) || $choices->quickOrTutor() === '' || $choices->consentedAt === null) {
+            return null;
+        }
+
+        $unfolded = array_values(array_filter($rows, fn ($row) => (int) $row->position > (int) $thread->folded_through));
+        $earlier = $thread->summary !== null && trim((string) $thread->summary) !== '' ? "What happened first (already summarised):\n".trim((string) $thread->summary)."\n\n---\n\n" : '';
+        $text = $earlier.$this->asText($unfolded);
+        if (mb_strlen($text) > self::WRAP_INPUT_CHARS) {
+            $text = "[The chat's start is cut; this is its end.]\n".mb_substr($text, -self::WRAP_INPUT_CHARS);
+        }
+        try {
+            $reply = $this->engine->reply(new Request(
+                $choices->quickOrTutor(),
+                'You write the record of one study session\'s chat between a student and their tutor, for the student\'s own study memory in ViStud. Answer with one JSON object and nothing else: {"summary": "...", "checkpoint": "..."}. summary: what was studied and explained, what the student got right or wrong, and what still confuses them, in plain prose of at most '.self::WRAP_SUMMARY_CHARS.' characters, no headings or lists. checkpoint: where the session stopped (like slide 7 of 18) and what comes next, in one or two sentences of at most '.self::WRAP_CHECKPOINT_CHARS.' characters. Write in the language the student wrote in. Only what is in the chat: never invent what wasn\'t said.',
+                [['role' => 'user', 'content' => $text]],
+                maxTokens: 900,
+                noTraining: $choices->noTraining,
+                key: $key,
+            ));
+        } catch (EngineFailed) {
+            return null;
+        }
+
+        [$summary, $checkpoint] = $this->parseWrap($reply->text);
+        $written = ['summary' => null, 'checkpoint' => null];
+        if ($session->summary === null && $summary !== '') {
+            $this->sessions->setSummary($by, $sessionId, $summary);
+            $written['summary'] = $summary;
+        }
+        if ($session->checkpoint === null && $checkpoint !== '') {
+            $this->sessions->setCheckpoint($by, $sessionId, $checkpoint);
+            $written['checkpoint'] = $checkpoint;
+        }
+        if ($written === ['summary' => null, 'checkpoint' => null]) {
+            // The model gave nothing usable; the next try may do better.
+            return null;
+        }
+        $this->markWrapped($scope, $thread->id, (int) ($reply->costMicros ?? 0));
+
+        return $written;
+    }
+
+    /**
      * What this session's chat and this month's chats have cost, against the student's limits (millionths of a dollar).
      *
      * @return array{session: int, month: int, session_cap: int, month_cap: int}
@@ -299,11 +379,7 @@ final class SessionChat
             return;
         }
         $folded = array_slice($rows, 0, $cut);
-        $transcript = implode("\n", array_map(fn ($row) => match ($row->role) {
-            'tool' => '[Looked up '.$row->tool_name.': '.mb_substr((string) $row->content, 0, 300).']',
-            'assistant' => 'Tutor: '.((string) $row->content !== '' ? $row->content : '(asked for a look-up)'),
-            default => 'Student: '.$row->content,
-        }, $folded));
+        $transcript = $this->asText($folded);
         $earlier = $thread->summary !== null && trim((string) $thread->summary) !== '' ? "What was already folded:\n".trim((string) $thread->summary)."\n\n---\n\n" : '';
 
         try {
@@ -326,5 +402,45 @@ final class SessionChat
             'summary' => $summary, 'folded_through' => (int) $folded[array_key_last($folded)]->position,
             'spent_micros' => DB::raw('spent_micros + '.(int) ($reply->costMicros ?? 0)), 'updated_at' => now(),
         ]);
+    }
+
+    private function markWrapped(LearnerScope $scope, string $threadId, int $costMicros): void
+    {
+        LearnerTables::query($scope, 'engine_threads')->where('id', $threadId)->update([
+            'wrapped_at' => now(), 'spent_micros' => DB::raw('spent_micros + '.$costMicros), 'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * The wrap-up's answer as a summary and a checkpoint, within the record's limits; an answer that isn't the
+     * JSON asked for is taken whole as the summary.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function parseWrap(string $text): array
+    {
+        $clean = trim((string) preg_replace('/^```[a-z]*\s*|\s*```$/i', '', trim($text)));
+        $json = json_decode($clean, true);
+        if (! is_array($json)) {
+            return [mb_substr($clean, 0, Sessions::SUMMARY_LIMIT), ''];
+        }
+        $summary = is_string($json['summary'] ?? null) ? trim($json['summary']) : '';
+        $checkpoint = is_string($json['checkpoint'] ?? null) ? trim($json['checkpoint']) : '';
+
+        return [mb_substr($summary, 0, Sessions::SUMMARY_LIMIT), mb_substr($checkpoint, 0, Sessions::CHECKPOINT_LIMIT)];
+    }
+
+    /**
+     * Messages as a plain transcript for the quick model: the student's and the tutor's words, a look-up as a line.
+     *
+     * @param  list<object>  $rows
+     */
+    private function asText(array $rows): string
+    {
+        return implode("\n", array_map(fn ($row) => match ($row->role) {
+            'tool' => '[Looked up '.$row->tool_name.': '.mb_substr((string) $row->content, 0, 300).']',
+            'assistant' => 'Tutor: '.((string) $row->content !== '' ? $row->content : '(asked for a look-up)'),
+            default => 'Student: '.$row->content,
+        }, $rows));
     }
 }

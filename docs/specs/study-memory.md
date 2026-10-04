@@ -384,6 +384,22 @@ write-back (§4.4): the tutor's marks in the chat are reviewed and ticked
 exactly like a pasted chat; nothing is remembered otherwise. Until the chat
 has a screen: `php artisan vistud:engine:ask {session} "…" --user=email`.
 
+**The wrap-up** (built, 2026-10-05; the owner's ask: the next session must
+start from what happened without the student explaining again). When a
+session ends, ViStud writes the chat's **summary and checkpoint** into the
+session's record itself (`SessionChat::wrapUp`; the quick model, once per
+chat, `engine_threads.wrapped_at`): the next session's briefing (§4.3) and
+the `earlier_sessions` look-up start from them. A summary or checkpoint the
+student already ticked from the tutor's marks stays. It runs when the student
+ends the session (its page's *End session*, or the top bar's ending of the
+open session to start another), and once more on the ended session's page if
+it hadn't happened (a session that ended by itself, or an engine that was
+down). The memory across a course stays the record, never the transcripts:
+every topic with its status and evidence, what is still confusing, the open
+questions and the key points go into every briefing; `earlier_sessions`
+takes a module or a topic and up to thirty sessions, for going over a whole
+module before an exam.
+
 **The tools** (`App\Engine\Toolbox`, one class each in `App\Engine\Tools`;
 the same tools will serve the MCP server): `course_overview`, `topics`,
 `questions`, `findings`, `assignments`, `assignment_plan`, `calendar`,
