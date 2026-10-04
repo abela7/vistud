@@ -132,6 +132,9 @@
                                     @endif
                                     <p class="question-card-meta">
                                         <span class="question-meta-item"><x-icon name="clock" class="size-3.5 shrink-0" />{{ Carbon::parse($q->askedAt)->diffForHumans() }}</span>
+                                        @if ($q->moduleId !== null && isset($moduleNames[$q->moduleId]))
+                                            <span class="question-meta-item"><x-icon name="layers" class="size-3.5 shrink-0" />{{ $moduleNames[$q->moduleId] }}</span>
+                                        @endif
                                         @if ($q->topicId !== null && isset($topicNames[$q->topicId]))
                                             <span class="question-meta-item">{{ $topicNames[$q->topicId] }}</span>
                                         @endif
@@ -170,6 +173,7 @@
                                         <a href="{{ $url }}" class="tile-link question-text">{{ $q->text }}</a>
                                         <span class="item-meta">{{ implode(' · ', array_filter([
                                             $q->statusLabel(),
+                                            $q->moduleId !== null ? ($moduleNames[$q->moduleId] ?? null) : null,
                                             $q->topicId !== null ? ($topicNames[$q->topicId] ?? null) : null,
                                             $q->askTeacher ? 'for the teacher' : null,
                                             Carbon::parse($q->askedAt)->diffForHumans(),

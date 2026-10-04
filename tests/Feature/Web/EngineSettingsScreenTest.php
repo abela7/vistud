@@ -43,10 +43,11 @@ class EngineSettingsScreenTest extends TestCase
         $workspace = app(Workspaces::class)->create($by, ['name' => 'Databases']);
         $this->actingAs($ada);
 
-        // The way in: the Overview's menu and the account menu.
-        $this->get(route('workspaces.show', $workspace->id))->assertOk()->assertSee(route('engine.settings'))->assertSeeInOrder(['Instructions for the AI', 'AI settings', 'Log time']);
-        $this->get('/')->assertOk()->assertSee(route('engine.settings'));
-        $this->get('/ai-engine')->assertOk()->assertSee('<title>AI settings', false)->assertSee('Not set up')->assertSee('openrouter.ai')->assertSee('Save and try')->assertDontSee(route('admin.engine'));
+        // The way in: the Home page's menu and the account menu (Settings), and the old address.
+        $this->get(route('workspaces.show', $workspace->id))->assertOk()->assertSee(route('settings', ['part' => 'ai']))->assertSeeInOrder(['Instructions for the AI', 'AI settings', 'Log time']);
+        $this->get('/')->assertOk()->assertSee(route('settings'));
+        $this->get('/ai-engine')->assertRedirect('/settings?part=ai')->assertStatus(301);
+        $this->get(route('settings', ['part' => 'ai']))->assertOk()->assertSee('<title>AI settings', false)->assertSee('Not set up')->assertSee('openrouter.ai')->assertSee('Save and try')->assertDontSee(route('admin.engine'));
 
         $page = Livewire::test(EngineSettings::class)->assertSet('sessionCap', '2.00')->assertSet('monthCap', '20.00')->assertSet('consent', false)
             ->set('key', 'nope')->call('saveKey')->assertHasErrors(['key'])
@@ -103,7 +104,7 @@ class EngineSettingsScreenTest extends TestCase
         app(Settings::class)->setKey($by, 'sk-or-v1-abcdefghijklmnopqrstuvwxyz');
 
         // The page's top is the template: Back, the title, one line of what the page is for.
-        $this->get('/ai-engine')->assertOk()->assertSee('All courses')->assertSee('Your key, your models and what they cost.')->assertSee('section-header-context', false);
+        $this->get(route('settings', ['part' => 'ai']))->assertOk()->assertSee('All courses')->assertSee('Your key, your models and what they cost.')->assertSee('section-header-context', false);
 
         $page = Livewire::test(EngineSettings::class)
             ->assertSee('Teaches in sessions.')->assertSee('Reads files, writes summaries and cards.')->assertSee('Quick edits and questions.')

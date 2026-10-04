@@ -83,7 +83,7 @@ class CourseSetupScreenTest extends TestCase
     public function test_without_an_ai_set_up_it_says_so_and_the_student_can_write_it_by_hand_or_skip(): void
     {
         $this->sheet(true)->assertSet('flow', true)
-            ->assertSee('Set up your AI first, then read the syllabus.')->assertSee(route('engine.settings'), false)
+            ->assertSee('Set up your AI first, then read the syllabus.')->assertSee(route('settings', ['part' => 'ai']), false)
             ->assertDontSee('Read it')->assertSee('Write it myself')
             ->call('write')->assertSee('How it is assessed')
             ->call('next')->assertSet('step', 'learn')->assertSee('Step 3 of 3');

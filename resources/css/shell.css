@@ -640,10 +640,30 @@
         color: var(--text);
     }
 
-    .tab-item[aria-current='page'] {
+    .tab-item[aria-current='page'],
+    .tab-item[data-current] {
         background-color: var(--accent-subtle);
         color: var(--accent-contrast);
         font-weight: 600;
+    }
+
+    /* Ask and More are buttons that look like the links beside them. */
+    button.tab-item {
+        justify-content: center;
+        border: 0;
+        background-color: transparent;
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+    /* More: the rest of the course's doors, in a sheet. */
+    .more-list {
+        display: grid;
+        gap: 0.125rem;
+    }
+
+    .more-list .menu-item {
+        min-height: 3rem;
     }
 
     /* ---------- Slide-in menu (tablet and phone) ---------- */

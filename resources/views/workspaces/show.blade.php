@@ -35,7 +35,7 @@
                     <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('course-setup-open', { step: 'learn' })"><x-icon name="lightbulb" class="size-4" />How you learn</button>
                     <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('instructions-open')"><x-icon name="message-square-text" class="size-4" />Instructions for the AI</button>
                     <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('study-start')"><x-icon name="timer" class="size-4" />Study with options</button>
-                    <a href="{{ route('engine.settings') }}" class="menu-item"><x-icon name="brain" class="size-4" />AI settings</a>
+                    <a href="{{ route('settings', ['part' => 'ai']) }}" class="menu-item"><x-icon name="brain" class="size-4" />AI settings</a>
                     <button type="button" class="menu-item" x-data x-on:click="Livewire.dispatch('study-log')"><x-icon name="history" class="size-4" />Log time</button>
                 </x-slot:menu>
                 <x-slot:action>
@@ -191,6 +191,9 @@
             <livewire:workspaces.course-setup :workspace-id="$workspace->id" :open-on-load="request()->boolean('setup')" />
         @elseif (in_array($section, ['modules', 'notes'], true))
             <livewire:workspaces.contents :workspace-id="$workspace->id" :view="$section" :key="$section" />
+        @elseif ($section === 'questions')
+            {{-- Every question of the course, stuck first; a module's own are on its Questions tab. --}}
+            <livewire:workspaces.question-board :workspace-id="$workspace->id" :page="true" />
         @elseif ($section === 'progress')
             <livewire:workspaces.progress :workspace-id="$workspace->id" />
             <livewire:workspaces.study-time :workspace-id="$workspace->id" :stats="true" />
@@ -203,7 +206,7 @@
         @endif
     </div>
 
-    @if (in_array($section, ['modules', 'notes', 'flashcards', 'progress'], true))
+    @if (in_array($section, ['modules', 'notes', 'flashcards', 'progress', 'questions'], true))
         <livewire:workspaces.ai-assist :workspace-id="$workspace->id" key="ai-assist" />
     @endif
 

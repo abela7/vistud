@@ -78,7 +78,7 @@
                 @elseif ($step === 'failed')
                     <div class="space-y-3 px-5 pt-2">
                         <p role="alert">{{ $error }}</p>
-                        <p class="text-sm text-fg-muted">If the AI is not set up yet, <a href="{{ route('engine.settings') }}" class="inline-link">open the AI settings</a>.</p>
+                        <p class="text-sm text-fg-muted">If the AI is not set up yet, <a href="{{ route('settings', ['part' => 'ai']) }}" class="inline-link">open the AI settings</a>.</p>
                     </div>
                     <div class="modal-actions">
                         <x-button x-on:click="$el.closest('dialog').close()">Close</x-button>

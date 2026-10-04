@@ -30,18 +30,23 @@ final class Workspaces
     ];
 
     /**
-     * A workspace's sections, in order: [key, label, icon]. The list is data
-     * so that later workspace types can add their own.
+     * A workspace's sections: [key, label, icon]. The list is data so that later workspace types can add their own. Six are
+     * doors of the course (NAV, in the order the sidebar shows them); the other two are pages reached from elsewhere: Notes &
+     * files from Modules, the course's Calendar from Home's Coming up (docs/specs/vistud-2-blueprint.md §3.4).
      */
     public const SECTIONS = [
-        ['overview', 'Overview', 'layout-grid'],
+        ['overview', 'Home', 'layout-grid'],
         ['modules', 'Modules', 'layers'],
-        ['notes', 'Notes & files', 'file-text'],
+        ['flashcards', 'Cards', 'gallery-vertical-end'],
+        ['questions', 'Questions', 'circle-help'],
         ['assignments', 'Assignments', 'clipboard-check'],
-        ['flashcards', 'Flashcards', 'gallery-vertical-end'],
-        ['calendar', 'Calendar', 'calendar'],
         ['progress', 'Progress', 'trending-up'],
+        ['notes', 'Notes & files', 'file-text'],
+        ['calendar', 'Calendar', 'calendar'],
     ];
+
+    /** The sections the sidebar lists. */
+    public const NAV = ['overview', 'modules', 'flashcards', 'questions', 'assignments', 'progress'];
 
     public const MAX_NAME = 80;
 

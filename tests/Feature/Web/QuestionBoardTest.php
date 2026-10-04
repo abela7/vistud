@@ -141,7 +141,7 @@ class QuestionBoardTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.modules.questions', [$this->databases->id, $theirs->id]))->assertNotFound();
     }
 
-    public function test_progress_holds_every_question_and_a_new_one_has_a_page(): void
+    public function test_the_questions_section_holds_every_question_and_a_new_one_has_a_page(): void
     {
         $by = $this->principal($this->ada);
         $joins = app(Topics::class)->create($by, $this->databases->id, 'Joins', $this->week1->id);
@@ -151,8 +151,9 @@ class QuestionBoardTest extends TestCase
         $this->board()->call('create', $joins->id)
             ->assertRedirect(route('workspaces.questions.create', [$this->databases->id, 'topic' => $joins->id]));
 
-        $this->actingAs($this->ada)->get(route('workspaces.show', [$this->databases->id, 'progress']))
-            ->assertSeeInOrder(['Questions', 'Why does a left join keep unmatched rows?']);
+        // The Questions section holds every question of the course, each saying its module.
+        $this->actingAs($this->ada)->get(route('workspaces.show', [$this->databases->id, 'questions']))
+            ->assertOk()->assertSee('<title>Questions', false)->assertSeeInOrder(['All questions', 'Why does a left join keep unmatched rows?']);
     }
 
     public function test_the_browser_cannot_reach_another_students_questions_or_change_the_board(): void

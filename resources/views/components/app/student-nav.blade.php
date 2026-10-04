@@ -1,4 +1,4 @@
-{{-- The student's sidebar outside a workspace: home, the journal, and every workspace. --}}
+{{-- The student's sidebar outside a workspace: the courses, the calendar of every course, Settings, and every course. --}}
 @props(['workspaces'])
 <ul class="nav-list">
     <li>
@@ -7,8 +7,13 @@
         </a>
     </li>
     <li>
-        <a href="{{ route('journal.index') }}" class="nav-item" title="Journal" @if (request()->routeIs('journal.*')) aria-current="page" @endif>
-            <x-icon name="notebook-text" /><span class="nav-label">Journal</span>
+        <a href="{{ route('calendar.index') }}" class="nav-item" title="The calendar of every course" @if (request()->routeIs('calendar.*')) aria-current="page" @endif>
+            <x-icon name="calendar-days" /><span class="nav-label">Calendar</span>
+        </a>
+    </li>
+    <li>
+        <a href="{{ route('settings') }}" class="nav-item" title="Settings" @if (request()->routeIs('settings', 'journal.*', 'engine.settings')) aria-current="page" @endif>
+            <x-icon name="settings" /><span class="nav-label">Settings</span>
         </a>
     </li>
 </ul>

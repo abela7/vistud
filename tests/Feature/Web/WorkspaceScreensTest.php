@@ -43,7 +43,7 @@ class WorkspaceScreensTest extends TestCase
         app(Workspaces::class)->archive($this->principal($this->ada), $old->id);
 
         $this->actingAs($this->ada)->get('/')
-            ->assertSeeInOrder(['All courses', 'Journal', 'Courses', 'Biology'])
+            ->assertSeeInOrder(['All courses', 'Calendar', 'Settings', 'Courses', 'Biology'])->assertDontSee('Journal')
             ->assertSee('ws-colour-green', false)
             ->assertSee('BIO101 · Autumn 2026')
             ->assertSee(route('workspaces.show', $biology->id), false)
@@ -61,7 +61,7 @@ class WorkspaceScreensTest extends TestCase
             ->assertSee('id="ws-menu-sidebar"', false)
             ->assertSee('id="ws-menu-drawer"', false)
             ->assertSeeInOrder(['Biology', 'Mathematics', 'All courses', 'New course'])
-            ->assertSeeInOrder(['Overview', 'Modules', 'Calendar', 'Progress'], false)
+            ->assertSeeInOrder(['Home', 'Modules', 'Cards', 'Questions', 'Assignments', 'Progress', 'Everywhere', 'Courses', 'Calendar', 'Settings'], false)
             ->assertSee('class="app-tabbar"', false)
             ->assertSee('BIO101');
 

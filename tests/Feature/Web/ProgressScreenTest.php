@@ -56,7 +56,8 @@ class ProgressScreenTest extends TestCase
             ->assertSeeInOrder(['Week 1: Relational model', '1/2', 'Keys', 'Not started', 'Joins', 'Understood', 'Week 2: Joins', '0/1', 'Views', 'No module', '0/1', 'Normalisation'])
             // The old flat page's words are gone.
             ->assertDontSee('Evidence:')->assertDontSee('findings')->assertDontSee('is coming next')
-            ->assertSeeInOrder(['Questions', 'Why does a left join keep unmatched rows?', 'Pending', 'Joins']);
+            // The questions are on their own page, not under the tree.
+            ->assertDontSee('Why does a left join keep unmatched rows?');
     }
 
     public function test_the_module_the_student_is_in_is_open_and_the_others_are_folded(): void
@@ -153,12 +154,12 @@ class ProgressScreenTest extends TestCase
             ->assertSee("topic-sheet-open', { topicId: '{$topic->id}' }", false);
     }
 
-    public function test_new_questions_open_the_questions_panel_about_a_topic(): void
+    public function test_a_new_question_has_a_page_of_its_own_about_a_topic_and_comes_back_here(): void
     {
         $joins = app(Topics::class)->create($this->principal($this->ada), $this->databases->id, 'Joins');
 
         $this->page()->assertSee('New question')
-            ->call('newQuestion', $joins->id)->assertDispatched('question-new', topicId: $joins->id);
+            ->call('newQuestion', $joins->id)->assertRedirect(route('workspaces.questions.create', [$this->databases->id, 'topic' => $joins->id, 'from' => route('workspaces.show', [$this->databases->id, 'progress'], false)]));
     }
 
     public function test_the_browser_cannot_change_the_workspace_or_the_dialogs_target(): void

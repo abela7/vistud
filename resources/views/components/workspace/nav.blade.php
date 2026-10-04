@@ -30,8 +30,8 @@
     </div>
     <ul class="nav-list">
         @foreach (\App\Study\Workspaces::SECTIONS as [$key, $label, $icon])
-            {{-- Notes & files is reached from Modules (All notes & files), not from here (docs/specs/vistud-2-blueprint.md §3.4). --}}
-            @continue($key === 'notes')
+            {{-- Six doors; Notes & files is reached from Modules and the course's Calendar from Home (docs/specs/vistud-2-blueprint.md §3.4). --}}
+            @continue(! in_array($key, \App\Study\Workspaces::NAV, true))
             <li>
                 <a href="{{ route('workspaces.show', $key === 'overview' ? $workspace->id : [$workspace->id, $key]) }}" class="nav-item" title="{{ $label }}" @if ($key === $section) aria-current="page" @endif>
                     <x-icon :name="$icon" /><span class="nav-label">{{ $label }}</span>
@@ -42,9 +42,9 @@
     <div>
         <p class="nav-section">Everywhere</p>
         <ul class="nav-list">
-            <li><a href="{{ route('home') }}" class="nav-item" title="All courses"><x-icon name="house" /><span class="nav-label">All courses</span></a></li>
-            <li><a href="{{ route('calendar.index') }}" class="nav-item" title="Calendar of every course"><x-icon name="calendar-days" /><span class="nav-label">All calendars</span></a></li>
-            <li><a href="{{ route('journal.index') }}" class="nav-item" title="Journal"><x-icon name="notebook-text" /><span class="nav-label">Journal</span></a></li>
+            <li><a href="{{ route('home') }}" class="nav-item" title="All courses"><x-icon name="house" /><span class="nav-label">Courses</span></a></li>
+            <li><a href="{{ route('calendar.index') }}" class="nav-item" title="The calendar of every course"><x-icon name="calendar-days" /><span class="nav-label">Calendar</span></a></li>
+            <li><a href="{{ route('settings') }}" class="nav-item" title="Settings"><x-icon name="settings" /><span class="nav-label">Settings</span></a></li>
         </ul>
     </div>
 </div>

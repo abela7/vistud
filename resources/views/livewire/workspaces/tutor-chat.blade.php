@@ -21,7 +21,7 @@
         <div class="chat-empty">
             <p class="font-medium">Set up your AI first</p>
             <p class="text-sm text-fg-muted">Your key, the model that tutors you, and your consent: one page, a few minutes.</p>
-            <a href="{{ route('engine.settings') }}" class="btn btn-primary"><x-icon name="brain" class="size-4" />AI settings</a>
+            <a href="{{ route('settings', ['part' => 'ai']) }}" class="btn btn-primary"><x-icon name="brain" class="size-4" />AI settings</a>
         </div>
     @else
         @if ($turns === [])

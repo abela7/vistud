@@ -37,7 +37,7 @@
                     <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
                 </button>
             @endif
-            <x-button icon="circle-help" x-data x-on:click="Livewire.dispatch('question-new')">New question</x-button>
+            <a href="{{ route('workspaces.questions.create', [$workspaceId, 'from' => route('workspaces.show', [$workspaceId, 'progress'], false)]) }}" class="btn btn-secondary"><x-icon name="circle-help" class="size-4" />New question</a>
             <x-button variant="primary" icon="plus" wire:click="newTopic">New topic</x-button>
         </div>
     </div>
@@ -149,8 +149,6 @@
             @endunless
         @endif
     </section>
-
-    <livewire:workspaces.question-board :workspace-id="$workspaceId" key="progress-questions" />
 
     <livewire:workspaces.topic-sheet :workspace-id="$workspaceId" key="progress-topic-sheet" />
 

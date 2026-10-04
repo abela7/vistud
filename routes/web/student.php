@@ -27,8 +27,14 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware('auth')->group(function () {
-    // The student's AI engine: their key, models, limits and consent (docs/specs/study-memory.md §6).
-    Route::view('/ai-engine', 'study.engine')->name('engine.settings');
+    // Settings, one page with four parts: the AI engine (the student's key, models, limits and consent: docs/specs/study-memory.md §6),
+    // Appearance, Security and Your data (docs/specs/vistud-2-blueprint.md §3.4). The old address of the first still works.
+    Route::get('/settings', function (Request $request) {
+        $part = in_array($request->query('part'), ['ai', 'appearance', 'security', 'data'], true) ? $request->query('part') : 'ai';
+
+        return view('settings.index', ['part' => $part, 'twoFactor' => $request->user()?->two_factor_confirmed_at !== null]);
+    })->name('settings');
+    Route::redirect('/ai-engine', '/settings?part=ai', 301)->name('engine.settings');
 
     // The student's journal, newest first.
     Route::get('/journal', function (Request $request, PrincipalFactory $principals, JournalReader $reader) {

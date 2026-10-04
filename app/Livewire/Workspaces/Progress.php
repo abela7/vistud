@@ -244,10 +244,14 @@ final class Progress extends Component
 
     // ---------- Questions ----------
 
-    /** Opens App\Livewire\Workspaces\QuestionBoard's panel for a new question, about the topic if one is given. */
+    /** A new question, about the topic if one is given, on its own page; it comes back here when saved. */
     public function newQuestion(?string $topicId = null): void
     {
-        $this->dispatch('question-new', topicId: $topicId);
+        $this->redirectRoute('workspaces.questions.create', array_filter([
+            'workspace' => $this->workspaceId,
+            'topic' => $topicId,
+            'from' => route('workspaces.show', [$this->workspaceId, 'progress'], false),
+        ]), navigate: true);
     }
 
     // ---------- The filter ----------

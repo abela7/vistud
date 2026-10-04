@@ -218,7 +218,7 @@ class FlashcardScreensTest extends TestCase
 
         // The module's page leads to its cards.
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->databases->id, $week2->id]))
-            ->assertOk()->assertSee('Flashcards')->assertSee(route('workspaces.show', [$this->databases->id, 'flashcards', 'module' => $week2->id]), false);
+            ->assertOk()->assertSee('Cards')->assertSee(route('workspaces.show', [$this->databases->id, 'flashcards', 'module' => $week2->id]), false);
     }
 
     public function test_review_pages_belong_to_their_student(): void

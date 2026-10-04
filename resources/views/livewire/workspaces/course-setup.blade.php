@@ -40,7 +40,7 @@
                         </div>
                     @else
                         @if ($notReady)
-                            <x-alert tone="warning">{{ $notReady }} <a href="{{ route('engine.settings') }}" class="text-link">AI settings</a></x-alert>
+                            <x-alert tone="warning">{{ $notReady }} <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-link">AI settings</a></x-alert>
                         @else
                             <div class="field">
                                 <label for="syllabus-file" class="field-label">Drop the syllabus</label>

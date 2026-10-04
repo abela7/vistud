@@ -32,7 +32,7 @@ class AppShellTest extends TestCase
             ->assertSee('<a href="'.route('home').'" class="nav-item" title="All courses"  aria-current="page"', false)
             ->assertSee('AL')
             ->assertSee('action="'.route('logout').'"', false)
-            ->assertSee('href="'.route('two-factor.setup').'" class="menu-item"', false)
+            ->assertSee('href="'.route('settings').'" class="menu-item"', false)
             ->assertDontSee('class="admin-marker"', false)
             ->assertDontSee('href="'.route('admin.overview').'"', false);
     }

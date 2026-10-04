@@ -107,9 +107,9 @@ class TwoFactorSetupScreenTest extends TestCase
             ->assertRedirect(route('two-factor.setup'));
     }
 
-    public function test_the_account_menu_links_to_the_setup(): void
+    public function test_settings_links_to_the_setup_from_its_security_part(): void
     {
-        $this->actingAs($this->student())->get('/')
-            ->assertSee('href="'.route('two-factor.setup').'" class="menu-item"', false);
+        $this->actingAs($this->student())->get(route('settings', ['part' => 'security']))
+            ->assertOk()->assertSee('Two-step sign-in')->assertSee('Off. Turn it on')->assertSee(route('two-factor.setup'), false);
     }
 }

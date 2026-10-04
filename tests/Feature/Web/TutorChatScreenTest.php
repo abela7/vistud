@@ -68,7 +68,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_the_chat_waits_for_the_set_up_then_offers_openings(): void
     {
-        $this->get(route('workspaces.sessions.show', [$this->databases->id, $this->session->id]))->assertOk()->assertSee('Your tutor')->assertSee('Set up your AI first')->assertSee(route('engine.settings'))->assertDontSee('Another AI');
+        $this->get(route('workspaces.sessions.show', [$this->databases->id, $this->session->id]))->assertOk()->assertSee('Your tutor')->assertSee('Set up your AI first')->assertSee(route('settings', ['part' => 'ai']))->assertDontSee('Another AI');
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $this->chat()->assertSee('Say hello, or ask about anything in this course.')->assertSee('Quiz me on what I should know by now.')->assertSee('fake/tutor · $0.00 of $2.00 this session')->assertDontSee('Keep what the tutor marked');
     }

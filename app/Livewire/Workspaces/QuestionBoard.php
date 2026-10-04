@@ -234,6 +234,8 @@ final class QuestionBoard extends Component
             // The page's own heading names the workspace and the module.
             'workspace' => $this->page ? $this->workspaces->find($by, $this->workspaceId) : null,
             'module' => $this->page && $this->moduleId !== null ? $this->modules->find($by, $this->moduleId) : null,
+            // Across the course, each question says which module it is in.
+            'moduleNames' => $this->moduleId === null && $this->sessionId === null ? collect($this->modules->list($by, $this->workspaceId))->pluck('title', 'id')->all() : [],
         ]);
     }
 
