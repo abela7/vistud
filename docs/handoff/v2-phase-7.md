@@ -19,7 +19,7 @@ Branch `claude/persistent-study-context-zsilo6`. The plan is [docs/specs/vistud-
 
 ## Tests run
 
-Full PHP suite and the whole browser suite on the final state (numbers in the commit that closes this phase and in the answer to Abel). Previews regenerated: `docs/design/previews/`.
+Full PHP suite: **858 passed**. The whole browser suite (every spec but the preview generator) on the final state: **420 passed, 6 skipped, 1 failed**; the one failure was a Markdown upload toast that was not on screen within 5 seconds on a busy machine, passes alone (twice), and now waits up to 15 seconds. Previews regenerated: `docs/design/previews/` (all 49 preview tests pass).
 
 ## What Abel tests (the whole of ViStud 2, plain steps)
 

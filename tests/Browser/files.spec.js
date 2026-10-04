@@ -142,7 +142,7 @@ test('a Markdown file is shown as it was meant to look, and opens as a note', as
         mimeType: 'text/markdown',
         buffer: Buffer.from('# Cells\n\nA **bold** claim: $E = mc^2$.\n\n| Part | Job |\n|---|---|\n| Nucleus | DNA |\n\n<script>alert(1)</script>\n'),
     });
-    await expect(page.getByRole('status').filter({ hasText: '1 file uploaded.' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: '1 file uploaded.' })).toBeVisible({ timeout: 15_000 });
     await page.keyboard.press('Escape');
     await expect(dialog(page)).toBeHidden();
 
