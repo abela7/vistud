@@ -37,14 +37,25 @@
                             <p id="flashcard-back-hint" class="field-hint">The answer, short: a sentence or two.</p>
                             @error('back') <p class="field-error">{{ $message }}</p> @enderror
                         </div>
-                        <div class="field">
-                            <label for="flashcard-topic" class="field-label">Topic</label>
-                            <select id="flashcard-topic" class="input" wire:model="topicId">
-                                <option value="">No topic</option>
-                                @foreach ($topics as $topic)
-                                    <option value="{{ $topic->id }}">{{ $topic->name }}</option>
-                                @endforeach
-                            </select>
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="field">
+                                <label for="flashcard-module" class="field-label">Module</label>
+                                <select id="flashcard-module" class="input" wire:model.live="moduleId">
+                                    <option value="">No module</option>
+                                    @foreach ($modules as $module)
+                                        <option value="{{ $module->id }}">{{ $module->title }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label for="flashcard-topic" class="field-label">Topic</label>
+                                <select id="flashcard-topic" class="input" wire:model.live="topicId">
+                                    <option value="">No topic</option>
+                                    @foreach ($topics as $topic)
+                                        <option value="{{ $topic->id }}">{{ $topic->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                         </div>
                         @if ($added > 0)
                             <p class="text-sm text-fg-muted" role="status">{{ $added === 1 ? '1 card added.' : $added.' cards added.' }} Write the next one, or close when you're done.</p>

@@ -38,6 +38,10 @@ final class CardMaker extends Component
 
     public string $topicId = '';
 
+    /** The module the deck showed when the dialog opened: cards with no topic go there. */
+    #[Locked]
+    public string $moduleId = '';
+
     public int $count = 10;
 
     public string $noteId = '';
@@ -69,10 +73,10 @@ final class CardMaker extends Component
     }
 
     #[On('card-maker-open')]
-    public function open(?string $topicId = null): void
+    public function open(?string $topicId = null, ?string $moduleId = null): void
     {
         $this->close();
-        [$this->step, $this->topicId] = ['prompt', $topicId ?? ''];
+        [$this->step, $this->topicId, $this->moduleId] = ['prompt', $topicId ?? '', $moduleId ?? ''];
         $this->reset('notice', 'problems');
         $this->dispatch('card-maker-dialog-open');
     }
@@ -113,7 +117,7 @@ final class CardMaker extends Component
 
             return;
         }
-        $result = $this->maker->save($this->principal(), $this->workspaceId, $this->cards);
+        $result = $this->maker->save($this->principal(), $this->workspaceId, $this->cards, $this->moduleId === '' ? null : $this->moduleId);
         $n = $result['saved'];
         $this->notice = $n === 0 ? 'No cards were added.' : ($n === 1 ? 'Added 1 card.' : "Added {$n} cards.").' They\'re due for their first review now.';
         $this->problems = array_map(fn ($failed) => Str::limit((string) ($this->cards[$failed[0]]['front'] ?? ''), 60).': '.$failed[1], $result['failed']);

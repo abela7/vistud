@@ -190,10 +190,10 @@ final class TutorChat extends Component
         ]);
     }
 
-    /** "3 flashcards, 1 key point": what a turn saved in the course. */
+    /** "3 flashcards, 1 key point, 2 new topics": what a turn saved in the course. */
     private static function savedWords(array $saved): ?string
     {
-        $words = ['flashcard' => ['flashcard', 'flashcards'], 'finding' => ['key point', 'key points'], 'question' => ['question', 'questions']];
+        $words = ['flashcard' => ['flashcard', 'flashcards'], 'finding' => ['key point', 'key points'], 'question' => ['question', 'questions'], 'topic' => ['new topic', 'new topics']];
         $parts = [];
         foreach ($words as $kind => [$one, $many]) {
             if (($saved[$kind] ?? 0) > 0) {
@@ -307,9 +307,14 @@ final class TutorChat extends Component
                 return;
             }
             if ($kind === 'saved') {
+                $effects = json_decode($value, true);
                 // Notes the tutor wrote in: an editor open on one is told to show the new version.
-                foreach (json_decode($value, true)['notes'] ?? [] as $note) {
+                foreach ($effects['notes'] ?? [] as $note) {
                     $changed[$note['id']] = ['id' => (string) $note['id'], 'version' => (int) $note['version']];
+                }
+                // A new topic for the session: the session page shows it.
+                if (isset($effects['topic'])) {
+                    $this->dispatch('session-changed');
                 }
 
                 return;

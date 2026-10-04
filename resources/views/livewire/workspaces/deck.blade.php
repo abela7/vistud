@@ -1,13 +1,18 @@
 {{--
     A workspace's Flashcards section (App\Livewire\Workspaces\Deck): what's
-    due, the cards by topic, and the ways to add them.
+    due, the cards by module, a module's cards by topic, and the ways to add
+    them.
 --}}
 @php
     use Carbon\CarbonImmutable;
 
     $topicNames = collect($topics)->pluck('name', 'id');
+    $moduleTitles = collect($modules)->pluck('title', 'id');
     $chosen = $topic !== '' && $topic !== 'none' ? $topic : null;
-    $review = fn (array $extra = []) => route('workspaces.flashcards.review', [$workspaceId, ...array_filter(['topic' => $topic ?: null] + $extra)]);
+    $chosenModule = $module !== '' && $module !== 'none' ? $module : null;
+    $place = $module === 'none' ? 'No module' : ($chosenModule ? $moduleTitles[$chosenModule] : null);
+    $where = implode(' · ', array_filter([$place, $chosen ? $topicNames[$chosen] : ($topic === 'none' ? 'No topic' : null)]));
+    $review = fn (array $extra = []) => route('workspaces.flashcards.review', [$workspaceId, ...array_filter(['module' => $module ?: null, 'topic' => $topic ?: null] + $extra)]);
     $plural = fn (int $n, string $one, string $many) => $n === 1 ? "1 {$one}" : "{$n} {$many}";
     $nextWords = null;
     if ($counts['next_on'] !== null) {
@@ -20,6 +25,7 @@
         $nextWords = 'Next: '.$plural($counts['next_count'], 'card', 'cards').' '.$when.'.';
     }
     $groups = [...array_map(fn ($t) => [$t->id, $t->name], $topics), ['', 'No topic']];
+    $newCard = \Illuminate\Support\Js::from(['topicId' => $chosen, 'moduleId' => $chosenModule]);
 @endphp
 <div class="space-y-6" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     <div role="status" aria-live="polite" class="empty:hidden">
@@ -51,7 +57,7 @@
                 </span>
                 <div class="min-w-0">
                     <h2 id="deck-due-heading" class="text-lg font-semibold">
-                        {{ $counts['due'] === 0 ? 'All caught up' : $plural($counts['due'], 'card', 'cards').' to review today' }}{{ $chosen ? ' in '.$topicNames[$chosen] : '' }}
+                        {{ $counts['due'] === 0 ? 'All caught up' : $plural($counts['due'], 'card', 'cards').' to review today' }}{{ $where !== '' ? ' in '.$where : '' }}
                     </h2>
                     <p class="text-sm text-fg-muted">
                         {{ implode(' ', array_filter([
@@ -71,79 +77,136 @@
         </section>
 
         <div class="flex flex-wrap items-end justify-between gap-3">
-            <div class="field min-w-0">
-                <label for="deck-topic" class="field-label">Show</label>
-                <select id="deck-topic" class="input deck-filter" wire:model.live="topic">
-                    <option value="">All topics ({{ $all['total'] }})</option>
-                    @foreach ($topics as $t)
-                        @if (isset($all['topics'][$t->id]))
-                            <option value="{{ $t->id }}">{{ $t->name }} ({{ $all['topics'][$t->id]['total'] }})</option>
+            <div class="flex min-w-0 flex-wrap gap-3">
+                <div class="field min-w-0">
+                    <label for="deck-module" class="field-label">Module</label>
+                    <select id="deck-module" class="input deck-filter" wire:model.live="module">
+                        <option value="">All modules ({{ $all['total'] }})</option>
+                        @foreach ($modules as $m)
+                            <option value="{{ $m->id }}">{{ $m->title }} ({{ $all['modules'][$m->id]['total'] ?? 0 }})</option>
+                        @endforeach
+                        @if (isset($all['modules']['']))
+                            <option value="none">No module ({{ $all['modules']['']['total'] }})</option>
                         @endif
-                    @endforeach
-                    @if (isset($all['topics']['']))
-                        <option value="none">No topic ({{ $all['topics']['']['total'] }})</option>
-                    @endif
-                </select>
+                    </select>
+                </div>
+                <div class="field min-w-0">
+                    <label for="deck-topic" class="field-label">Topic</label>
+                    <select id="deck-topic" class="input deck-filter" wire:model.live="topic">
+                        <option value="">All topics ({{ $here['total'] }})</option>
+                        @foreach ($topicChoices as $t)
+                            <option value="{{ $t->id }}">{{ $t->name }} ({{ $here['topics'][$t->id]['total'] ?? 0 }})</option>
+                        @endforeach
+                        @if (isset($here['topics']['']))
+                            <option value="none">No topic ({{ $here['topics']['']['total'] }})</option>
+                        @endif
+                    </select>
+                </div>
             </div>
             <div class="flex flex-wrap gap-2">
-                <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
-                    <x-icon name="list-checks" class="size-4" />
-                    <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
-                </button>
-                <x-button icon="plus" x-data x-on:click="Livewire.dispatch('flashcard-new', { topicId: {{ \Illuminate\Support\Js::from($chosen) }} })">New card</x-button>
-                <x-button icon="wand-sparkles" x-data x-on:click="Livewire.dispatch('card-maker-open', { topicId: {{ \Illuminate\Support\Js::from($chosen) }} })">Make cards with an AI</x-button>
+                @if ($showCards)
+                    <button type="button" class="btn btn-secondary" x-on:click="toggleMode()" :aria-pressed="isSelecting ? 'true' : 'false'">
+                        <x-icon name="list-checks" class="size-4" />
+                        <span x-text="isSelecting ? 'Done' : 'Select'">Select</span>
+                    </button>
+                @endif
+                <x-button icon="plus" x-data x-on:click="Livewire.dispatch('flashcard-new', {{ $newCard }})">New card</x-button>
+                <x-button icon="wand-sparkles" x-data x-on:click="Livewire.dispatch('card-maker-open', {{ $newCard }})">Make cards with an AI</x-button>
             </div>
         </div>
 
-        <x-selection-bar>
-            <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0" x-on:click="$wire.openBulkRemove(selectedKeys())">Remove</x-button>
-        </x-selection-bar>
-
-        @if ($cards === [])
-            <p class="rounded-xl border border-dashed border-border-strong px-6 py-8 text-center text-fg-muted">No cards {{ $chosen ? 'on '.$topicNames[$chosen] : 'without a topic' }} yet.</p>
-        @endif
-
-        @foreach ($groups as [$groupId, $groupName])
-            @if (isset($byTopic[$groupId]))
-                @php
-                    $groupDue = count(array_filter($byTopic[$groupId], fn ($card) => $card->due($today)));
-                @endphp
-                <section class="space-y-2" aria-labelledby="deck-group-{{ $groupId ?: 'none' }}" wire:key="deck-group-{{ $groupId ?: 'none' }}">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h3 id="deck-group-{{ $groupId ?: 'none' }}" class="font-semibold">
-                            {{ $groupName }} <span class="text-sm font-normal text-fg-muted">· {{ $plural(count($byTopic[$groupId]), 'card', 'cards') }}{{ $groupDue > 0 ? ' · '.$groupDue.' due' : '' }}</span>
-                        </h3>
-                        @if ($groupDue > 0 && $topic === '')
-                            <a href="{{ route('workspaces.flashcards.review', [$workspaceId, 'topic' => $groupId ?: 'none']) }}" class="item-link text-sm">Review {{ $groupName === 'No topic' ? 'these' : $groupName }}</a>
+        @if (! $showCards)
+            {{-- Every module, in course order, with its cards and what's due; one opens its cards. --}}
+            <ul class="module-card deck-modules divide-y divide-divider" role="list" aria-label="Cards by module">
+                @foreach ($modules as $i => $m)
+                    @php
+                        $mc = $all['modules'][$m->id] ?? ['total' => 0, 'due' => 0];
+                    @endphp
+                    <li class="deck-module" wire:key="deck-module-{{ $m->id }}">
+                        <span class="deck-module-number" aria-hidden="true">{{ $i + 1 }}</span>
+                        <div class="min-w-0 flex-1">
+                            @if ($mc['total'] > 0)
+                                <a href="{{ route('workspaces.show', [$workspaceId, 'flashcards', 'module' => $m->id]) }}" class="tile-link">{{ $m->title }}</a>
+                            @else
+                                <p class="font-semibold break-words">{{ $m->title }}</p>
+                            @endif
+                            <p class="text-sm text-fg-muted">{{ $mc['total'] === 0 ? 'No cards yet' : $plural($mc['total'], 'card', 'cards').($mc['due'] > 0 ? ' · '.$mc['due'].' due' : ' · all caught up') }}</p>
+                        </div>
+                        @if ($mc['due'] > 0)
+                            <a href="{{ route('workspaces.flashcards.review', [$workspaceId, 'module' => $m->id]) }}" class="btn btn-secondary btn-sm deck-module-action"><x-icon name="play" class="size-3.5" />Review</a>
                         @endif
-                    </div>
-                    <ul class="module-card divide-y divide-divider" role="list">
-                        @foreach ($byTopic[$groupId] as $card)
-                            <li class="card-row" wire:key="card-{{ $card->id }}"
-                                data-select-key="flashcard:{{ $card->id }}"
-                                :class="{ 'is-selected': isSelected('flashcard:{{ $card->id }}') }"
-                                x-on:click="handleRowClick($event, 'flashcard:{{ $card->id }}')">
-                                <x-selection-check key="flashcard:{{ $card->id }}" label="Select {{ $card->front }}" />
-                                <div class="min-w-0 flex-1 space-y-1">
-                                    <p class="font-medium break-words">{{ $card->front }}</p>
-                                    <p class="text-sm break-words text-fg-muted">{{ $card->back }}</p>
-                                    <p class="flex flex-wrap gap-2 pt-1 text-sm">
-                                        <span @class(['status-chip', 'due-now' => $card->due($today)])><x-icon :name="$card->due($today) ? 'circle-dot' : 'calendar-clock'" class="size-3.5" />{{ $card->dueWords($today) }}</span>
-                                        @if ($card->author === 'ai')
-                                            <span class="status-chip"><x-icon name="sparkles" class="size-3.5" />{{ $card->sessionId ? 'From a study session' : 'Made with an AI' }}</span>
-                                        @endif
-                                    </p>
-                                </div>
-                                @include('livewire.workspaces.partials.row-menu', ['id' => 'card-'.$card->id, 'label' => \Illuminate\Support\Str::limit($card->front, 60), 'items' => [
-                                    ['Edit', 'pencil', "editCard('{$card->id}')", false],
-                                    ['Delete', 'trash-2', "deleteCard('{$card->id}')", false],
-                                ]])
-                            </li>
-                        @endforeach
-                    </ul>
-                </section>
+                    </li>
+                @endforeach
+                @if (isset($all['modules']['']))
+                    @php
+                        $mc = $all['modules'][''];
+                    @endphp
+                    <li class="deck-module" wire:key="deck-module-none">
+                        <span class="deck-module-number" aria-hidden="true"><x-icon name="layers" class="size-4" /></span>
+                        <div class="min-w-0 flex-1">
+                            <a href="{{ route('workspaces.show', [$workspaceId, 'flashcards', 'module' => 'none']) }}" class="tile-link">No module</a>
+                            <p class="text-sm text-fg-muted">{{ $plural($mc['total'], 'card', 'cards').($mc['due'] > 0 ? ' · '.$mc['due'].' due' : ' · all caught up') }}</p>
+                        </div>
+                        @if ($mc['due'] > 0)
+                            <a href="{{ route('workspaces.flashcards.review', [$workspaceId, 'module' => 'none']) }}" class="btn btn-secondary btn-sm deck-module-action"><x-icon name="play" class="size-3.5" />Review</a>
+                        @endif
+                    </li>
+                @endif
+            </ul>
+        @else
+            <x-selection-bar>
+                <x-button variant="danger" size="sm" icon="trash-2" ::disabled="count === 0" x-on:click="$wire.openBulkRemove(selectedKeys())">Remove</x-button>
+            </x-selection-bar>
+
+            @if ($cards === [])
+                <p class="rounded-xl border border-dashed border-border-strong px-6 py-8 text-center text-fg-muted">No cards {{ $where !== '' ? 'in '.$where : 'here' }} yet.</p>
             @endif
-        @endforeach
+
+            @foreach ($groups as [$groupId, $groupName])
+                @if (isset($byTopic[$groupId]))
+                    @php
+                        $groupDue = count(array_filter($byTopic[$groupId], fn ($card) => $card->due($today)));
+                    @endphp
+                    <section class="space-y-2" aria-labelledby="deck-group-{{ $groupId ?: 'none' }}" wire:key="deck-group-{{ $groupId ?: 'none' }}">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h3 id="deck-group-{{ $groupId ?: 'none' }}" class="font-semibold">
+                                {{ $groupName }} <span class="text-sm font-normal text-fg-muted">· {{ $plural(count($byTopic[$groupId]), 'card', 'cards') }}{{ $groupDue > 0 ? ' · '.$groupDue.' due' : '' }}</span>
+                            </h3>
+                            @if ($groupDue > 0 && $topic === '')
+                                <a href="{{ $review(['topic' => $groupId ?: 'none']) }}" class="item-link text-sm">Review {{ $groupName === 'No topic' ? 'these' : $groupName }}</a>
+                            @endif
+                        </div>
+                        <ul class="module-card divide-y divide-divider" role="list">
+                            @foreach ($byTopic[$groupId] as $card)
+                                <li class="card-row" wire:key="card-{{ $card->id }}"
+                                    data-select-key="flashcard:{{ $card->id }}"
+                                    :class="{ 'is-selected': isSelected('flashcard:{{ $card->id }}') }"
+                                    x-on:click="handleRowClick($event, 'flashcard:{{ $card->id }}')">
+                                    <x-selection-check key="flashcard:{{ $card->id }}" label="Select {{ $card->front }}" />
+                                    <div class="min-w-0 flex-1 space-y-1">
+                                        <p class="font-medium break-words">{{ $card->front }}</p>
+                                        <p class="text-sm break-words text-fg-muted">{{ $card->back }}</p>
+                                        <p class="flex flex-wrap gap-2 pt-1 text-sm">
+                                            <span @class(['status-chip', 'due-now' => $card->due($today)])><x-icon :name="$card->due($today) ? 'circle-dot' : 'calendar-clock'" class="size-3.5" />{{ $card->dueWords($today) }}</span>
+                                            @if ($module === '' && $card->moduleId !== null && isset($moduleTitles[$card->moduleId]))
+                                                <span class="status-chip"><x-icon name="layers" class="size-3.5" />{{ $moduleTitles[$card->moduleId] }}</span>
+                                            @endif
+                                            @if ($card->author === 'ai')
+                                                <span class="status-chip"><x-icon name="sparkles" class="size-3.5" />{{ $card->sessionId ? 'From a study session' : 'Made with an AI' }}</span>
+                                            @endif
+                                        </p>
+                                    </div>
+                                    @include('livewire.workspaces.partials.row-menu', ['id' => 'card-'.$card->id, 'label' => \Illuminate\Support\Str::limit($card->front, 60), 'items' => [
+                                        ['Edit', 'pencil', "editCard('{$card->id}')", false],
+                                        ['Delete', 'trash-2', "deleteCard('{$card->id}')", false],
+                                    ]])
+                                </li>
+                            @endforeach
+                        </ul>
+                    </section>
+                @endif
+            @endforeach
+        @endif
     @endif
 
     <livewire:workspaces.flashcard-editor :workspace-id="$workspaceId" />

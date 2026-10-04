@@ -4,6 +4,7 @@ namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
 use App\Study\Capture;
+use App\Study\Modules;
 use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\WriteBack;
@@ -11,12 +12,17 @@ use App\Study\WriteBack;
 /**
  * What the save tools share (make_flashcards, save_key_points, add_questions): the items go straight into the
  * course through the write-back, as kept marks do, so the same limits, topics and evidence apply and the same
- * item saved twice in a session is saved once. A topic the course doesn't have becomes the session's topic, so
- * the tutor never fills the course with topics of its own naming; without a session topic, one is made.
+ * item saved twice in a session is saved once. An item goes to the topic it names when the course has it, else
+ * to the session's topic; the tutor never makes topics by saving (set_topic and add_topics do, when the student
+ * agrees). Without either, a flashcard or a question goes under the session's module with no topic, and a key
+ * point waits for a topic.
  */
 abstract class Saving implements Tool
 {
-    public function __construct(private WriteBack $writeBack, private Sessions $sessions, private Topics $topics) {}
+    /** The kinds that can be saved without a topic, under the session's module. */
+    private const LOOSE = ['flashcard', 'question'];
+
+    public function __construct(private WriteBack $writeBack, private Sessions $sessions, private Topics $topics, private Modules $modules) {}
 
     /**
      * @param  list<array{topic: mixed, fields: array<string, mixed>}>  $wanted
@@ -39,17 +45,41 @@ abstract class Saving implements Tool
 
         $items = [];
         $empty = 0;
+        $loose = in_array($kind, self::LOOSE, true);
+        // Topic names given that the course doesn't have, and key points with no topic to go to.
+        $unknown = [];
+        $without = 0;
         foreach (array_slice($wanted, 0, 10) as $one) {
-            $topic = is_string($one['topic'] ?? null) ? trim($one['topic']) : '';
-            $topic = $names[mb_strtolower($topic)] ?? ($fallback ?? ($topic !== '' ? $topic : null));
+            $named = is_string($one['topic'] ?? null) ? trim($one['topic']) : '';
+            if ($named !== '' && ! isset($names[mb_strtolower($named)])) {
+                $unknown[$named] = true;
+            }
+            $topic = $names[mb_strtolower($named)] ?? $fallback;
+            if ($topic === null && ! $loose) {
+                $without++;
+
+                continue;
+            }
             $item = Capture::from($kind, $topic, $one['fields']);
             $item === null ? $empty++ : $items[] = $item;
         }
+        $unknownWords = '"'.implode('", "', array_keys($unknown)).'"';
         if ($items === []) {
-            return "Nothing was saved: every {$words[0]} was empty.";
+            return $without > 0
+                ? ucfirst($words[1]).' need a topic, and this session has none yet'.($unknown !== [] ? " (the course has no topic called {$unknownWords})" : '').'. Agree one with the student and set it with set_topic (or add the course\'s topics with add_topics), then save again.'
+                : "Nothing was saved: every {$words[0]} was empty.";
         }
 
         $reviewed = $this->writeBack->reviewItems($by, $context->sessionId, $items);
+        $module = $session->moduleId !== null ? $this->modules->find($by, $session->moduleId)->title : null;
+        foreach ($reviewed as &$item) {
+            if ($item['topic'] === null) {
+                // No topic: under the session's module (the write-back keeps '' as none).
+                $item['topic_id'] = '';
+                $item['topic_name'] = $module !== null ? "{$module} (no topic)" : 'the course (no module or topic)';
+            }
+        }
+        unset($item);
         $already = count(array_filter($reviewed, fn ($item) => $item['saved']));
         $result = $this->writeBack->apply($by, $context->sessionId, $reviewed, note: false);
         $saved = (int) ($result['saved'][$kind] ?? 0);
@@ -60,6 +90,8 @@ abstract class Saving implements Tool
             $saved > 0 ? 'Saved '.$saved.' '.($saved === 1 ? $words[0] : $words[1]).($topics !== [] ? ' in '.implode(', ', $topics) : '').'.' : 'Nothing new was saved.',
             $already > 0 ? $already.' '.($already === 1 ? 'was' : 'were').' saved already in this session.' : null,
             $empty > 0 ? $empty.' '.($empty === 1 ? 'was' : 'were').' empty.' : null,
+            $without > 0 ? $without.' could not be saved: this session has no topic yet (set_topic or add_topics first).' : null,
+            $unknown !== [] && ($fallback !== null || $loose) ? "The course has no topic called {$unknownWords}, so ".($fallback !== null ? "the session's topic was used" : "they went under the session's module").'; add_topics adds it.' : null,
             $result['failed'] !== [] ? count($result['failed']).' could not be saved: '.implode('; ', array_unique(array_column($result['failed'], 1))).'.' : null,
             $saved > 0 ? 'Tell the student in a line what you saved.' : null,
         ]));
@@ -87,7 +119,7 @@ abstract class Saving implements Tool
     /** @return array<string, mixed> the schema of a list of items with these string fields and an optional topic */
     protected static function listOf(string $key, array $fields, string $what): array
     {
-        $properties = ['topic' => ['type' => 'string', 'description' => 'The course topic it belongs to, by its name. Left out: the session\'s topic.']];
+        $properties = ['topic' => ['type' => 'string', 'description' => 'The course topic it belongs to, by its exact name in the course. Left out: the session\'s topic.']];
         foreach ($fields as $field => $description) {
             $properties[$field] = ['type' => 'string', 'description' => $description];
         }

@@ -121,6 +121,37 @@ class SessionScreensTest extends TestCase
         $this->assertSame([], app(Notes::class)->list($by, $this->databases->id));
     }
 
+    public function test_the_student_chooses_the_sessions_topic_or_makes_one_in_its_module(): void
+    {
+        $by = $this->principal($this->ada);
+        $week1 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 1']);
+        $keys = app(Topics::class)->create($by, $this->databases->id, 'Keys', $week1->id);
+        $other = app(Topics::class)->create($by, $this->databases->id, 'Normal forms');
+        $session = app(Sessions::class)->start($by, $this->databases->id, null, $week1->id);
+
+        $page = $this->page($session->id)->assertSee('Choose a topic')
+            ->call('editTopic')->assertSet('mode', 'topic')->assertSee('What this session is about')
+            ->assertSeeInOrder(['Week 1', 'Keys', 'Other topics', 'Normal forms', 'A new topic'])
+            ->set('topicChoice', $keys->id)->call('save')->assertSet('mode', null)->assertDispatched('session-changed')
+            ->assertSee('Change topic');
+        $this->assertSame($keys->id, $this->current()->topicId);
+
+        // A new one goes in the session's module; a name the course has is that topic.
+        $page->call('editTopic')->assertSet('topicChoice', $keys->id)->set('topicChoice', 'new')->assertSee('Added to Week 1.')
+            ->call('save')->assertHasErrors('newTopic')
+            ->set('newTopic', 'Candidate keys')->call('save')->assertSet('mode', null);
+        $made = collect(app(Topics::class)->list($by, $this->databases->id))->firstWhere('name', 'Candidate keys');
+        $this->assertSame([$made->id, $week1->id], [$this->current()->topicId, $made->moduleId]);
+        $page->call('editTopic')->set('topicChoice', 'new')->set('newTopic', 'normal FORMS')->call('save');
+        $this->assertSame($other->id, $this->current()->topicId);
+        $page->call('editTopic')->set('topicChoice', '')->call('save')->assertSee('Choose a topic');
+        $this->assertNull($this->current()->topicId);
+        $this->assertCount(3, app(Topics::class)->list($by, $this->databases->id));
+
+        // A card from the session goes in its module.
+        $page->call('newFlashcard')->assertDispatched('flashcard-new', topicId: null, moduleId: $week1->id);
+    }
+
     public function test_the_page_says_when_the_clock_paused_itself_and_the_time_can_be_counted_back(): void
     {
         $session = app(Sessions::class)->start($this->principal($this->ada), $this->databases->id);

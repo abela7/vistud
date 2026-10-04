@@ -232,4 +232,17 @@ class TutorChatScreenTest extends TestCase
         $chat->assertSee(route('workspaces.notes.show', [$this->databases->id, $note->id, 'window' => 1]), false);
         $this->assertSame(1, count(app(Flashcards::class)->list($this->by, $this->databases->id)));
     }
+
+    public function test_a_topic_the_tutor_sets_shows_on_the_answer_and_the_session_page_is_told(): void
+    {
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+        $this->engine->will(
+            Fake::calls('set_topic', ['topic' => 'Outer joins'], 'call_1'),
+            Fake::says('We are on outer joins now.'),
+        );
+
+        $this->chat()->call('send', 'Let us do outer joins')
+            ->assertSee('Topic: Outer joins')->assertSee('Saved 1 new topic')->assertDispatched('session-changed');
+        $this->assertSame('Outer joins', app(Topics::class)->find($this->by, app(Sessions::class)->find($this->by, $this->session->id)->topicId)->name);
+    }
 }

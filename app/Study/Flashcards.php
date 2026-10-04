@@ -13,9 +13,11 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Flashcards (docs/specs/study-memory.md §4.5): a front and a back, pinned
- * to a topic, written by the student, made with an AI, or saved from a study
- * session. The student's own stream only.
+ * Flashcards (docs/specs/study-memory.md §4.5): a front and a back, in a
+ * module and often on a topic, written by the student, made with an AI, or
+ * saved from a study session. A card's module is its topic's when the topic has
+ * one, else the module chosen for it, else the one of the session it was made
+ * in. The student's own stream only.
  *
  * Reviewing follows a ladder of gaps: each "Got it" in a row waits longer
  * (1, 3, 7, 14, 30, 60, 120 days), "Partly" waits the same again, and "Not
@@ -40,13 +42,13 @@ final class Flashcards
 
     public function __construct(private Memory $memory, private Sessions $sessions, private JournalStore $journal) {}
 
-    /** @return list<FlashcardDetails> newest first; $topicId narrows to a topic, '' to cards with none */
-    public function list(Principal $by, string $workspaceId, ?string $topicId = null): array
+    /** @return list<FlashcardDetails> newest first; $topicId narrows to a topic, $moduleId to a module ('' to cards with none) */
+    public function list(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null): array
     {
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
 
-        return $this->query($scope, $workspaceId, $topicId)->orderByDesc('created_at')->orderByDesc('id')->get()
+        return $this->query($scope, $workspaceId, $topicId, $moduleId)->orderByDesc('created_at')->orderByDesc('id')->get()
             ->map(fn ($row) => self::details($row))->all();
     }
 
@@ -60,15 +62,15 @@ final class Flashcards
      * many are due today (new ones included), how many are new, when the
      * next are due after today and how many; and the same by topic.
      *
-     * @return array{total: int, due: int, new: int, next_on: ?string, next_count: int, topics: array<string, array{total: int, due: int}>}
+     * @return array{total: int, due: int, new: int, next_on: ?string, next_count: int, topics: array<string, array{total: int, due: int}>, modules: array<string, array{total: int, due: int}>}
      */
-    public function counts(Principal $by, string $workspaceId, ?string $topicId = null): array
+    public function counts(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null): array
     {
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
         $today = $this->today($by);
-        $counts = ['total' => 0, 'due' => 0, 'new' => 0, 'next_on' => null, 'next_count' => 0, 'topics' => []];
-        foreach ($this->query($scope, $workspaceId, $topicId)->get(['topic_id', 'due_on']) as $row) {
+        $counts = ['total' => 0, 'due' => 0, 'new' => 0, 'next_on' => null, 'next_count' => 0, 'topics' => [], 'modules' => []];
+        foreach ($this->query($scope, $workspaceId, $topicId, $moduleId)->get(['topic_id', 'module_id', 'due_on']) as $row) {
             $dueOn = $row->due_on === null ? null : substr((string) $row->due_on, 0, 10);
             $due = $dueOn === null || $dueOn <= $today;
             $topic = (string) $row->topic_id;
@@ -83,6 +85,9 @@ final class Flashcards
             }
             $counts['topics'][$topic]['total'] = ($counts['topics'][$topic]['total'] ?? 0) + 1;
             $counts['topics'][$topic]['due'] = ($counts['topics'][$topic]['due'] ?? 0) + (int) $due;
+            $module = (string) $row->module_id;
+            $counts['modules'][$module]['total'] = ($counts['modules'][$module]['total'] ?? 0) + 1;
+            $counts['modules'][$module]['due'] = ($counts['modules'][$module]['due'] ?? 0) + (int) $due;
         }
 
         return $counts;
@@ -95,12 +100,12 @@ final class Flashcards
      *
      * @return list<string> card ids
      */
-    public function queue(Principal $by, string $workspaceId, ?string $topicId = null, bool $early = false): array
+    public function queue(Principal $by, string $workspaceId, ?string $topicId = null, bool $early = false, ?string $moduleId = null): array
     {
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
         $today = $this->today($by);
-        $query = $this->query($scope, $workspaceId, $topicId);
+        $query = $this->query($scope, $workspaceId, $topicId, $moduleId);
         $early
             ? $query->where('due_on', '>', $today)->orderBy('due_on')
             : $query->where(fn ($q) => $q->whereNull('due_on')->orWhere('due_on', '<=', $today))->orderByRaw('due_on is null')->orderBy('due_on');
@@ -108,18 +113,19 @@ final class Flashcards
         return $query->orderBy('created_at')->orderBy('id')->limit(self::ROUND)->pluck('id')->map(fn ($id) => (string) $id)->all();
     }
 
-    public function add(Principal $by, string $workspaceId, ?string $topicId, mixed $front, mixed $back, string $author = 'student', ?string $sessionId = null): string
+    public function add(Principal $by, string $workspaceId, ?string $topicId, mixed $front, mixed $back, string $author = 'student', ?string $sessionId = null, ?string $moduleId = null): string
     {
         $scope = Guard::learner($by);
         [$front, $back] = self::validated($front, $back);
         $id = Ids::new();
         $author = in_array($author, ['student', 'ai'], true) ? $author : 'student';
 
-        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $front, $back, $author, $sessionId, $id) {
+        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $front, $back, $author, $sessionId, $id) {
             Input::workspace($scope, $workspaceId, lock: true);
             $this->topicIn($scope, $workspaceId, $topicId);
+            $moduleId = $this->moduleFor($scope, $workspaceId, $topicId, $moduleId, $sessionId);
             LearnerTables::insert($scope, 'flashcards', [
-                'id' => $id, 'workspace_id' => $workspaceId, 'topic_id' => $topicId, 'front' => $front, 'back' => $back,
+                'id' => $id, 'workspace_id' => $workspaceId, 'topic_id' => $topicId, 'module_id' => $moduleId, 'front' => $front, 'back' => $back,
                 'author' => $author, 'session_id' => $sessionId, 'created_at' => now(), 'updated_at' => now(),
             ]);
             $specs = [self::taskRecord($scope, $by, $id, $front, $back, 1, 'active')];
@@ -137,14 +143,16 @@ final class Flashcards
      * answers keep the words they answered); a new topic moves the claim of
      * what the card exercises. Its place on the ladder stays.
      */
-    public function update(Principal $by, string $id, ?string $topicId, mixed $front, mixed $back): void
+    public function update(Principal $by, string $id, ?string $topicId, mixed $front, mixed $back, ?string $moduleId = null): void
     {
         $scope = Guard::learner($by);
         [$front, $back] = self::validated($front, $back);
 
-        DB::transaction(function () use ($scope, $by, $id, $topicId, $front, $back) {
+        DB::transaction(function () use ($scope, $by, $id, $topicId, $moduleId, $front, $back) {
             $row = $this->row($scope, $id, lock: true);
             $this->topicIn($scope, $row->workspace_id, $topicId);
+            // Left out, the card keeps its module; '' takes it out of every module.
+            $moduleId = $this->moduleFor($scope, $row->workspace_id, $topicId, $moduleId ?? $row->module_id, null);
             $this->ensureTask($scope, $by, $row);
             $specs = [];
             $revision = (int) $row->revision;
@@ -164,7 +172,7 @@ final class Flashcards
                 $this->memory->append($scope, $specs, $row->workspace_id);
             }
             LearnerTables::query($scope, 'flashcards')->where('id', $id)->update([
-                'topic_id' => $topicId, 'front' => $front, 'back' => $back, 'revision' => $revision, 'updated_at' => now(),
+                'topic_id' => $topicId, 'module_id' => $moduleId, 'front' => $front, 'back' => $back, 'revision' => $revision, 'updated_at' => now(),
             ]);
         });
     }
@@ -270,7 +278,7 @@ final class Flashcards
         return 'card-'.$cardId;
     }
 
-    private function query(LearnerScope $scope, string $workspaceId, ?string $topicId = null)
+    private function query(LearnerScope $scope, string $workspaceId, ?string $topicId = null, ?string $moduleId = null)
     {
         $query = LearnerTables::query($scope, 'flashcards')->where('workspace_id', $workspaceId)->whereNull('retired_at');
         if ($topicId === '') {
@@ -278,8 +286,39 @@ final class Flashcards
         } elseif ($topicId !== null) {
             $query->where('topic_id', $topicId);
         }
+        if ($moduleId === '') {
+            $query->whereNull('module_id');
+        } elseif ($moduleId !== null) {
+            $query->where('module_id', $moduleId);
+        }
 
         return $query;
+    }
+
+    /**
+     * A card's module: its topic's when the topic has one, else the one chosen (checked to be the workspace's),
+     * else the module of the session it was made in.
+     */
+    private function moduleFor(LearnerScope $scope, string $workspaceId, ?string $topicId, ?string $moduleId, ?string $sessionId): ?string
+    {
+        if ($topicId !== null) {
+            $topicModule = LearnerTables::query($scope, 'topics')->where('id', $topicId)->value('module_id');
+            if ($topicModule !== null) {
+                return (string) $topicModule;
+            }
+        }
+        if ($moduleId !== null && $moduleId !== '') {
+            LearnerTables::query($scope, 'modules')->where('id', $moduleId)->where('workspace_id', $workspaceId)->exists() || throw new NotFound;
+
+            return $moduleId;
+        }
+        if ($sessionId !== null) {
+            $sessionModule = LearnerTables::query($scope, 'study_sessions')->where('id', $sessionId)->value('module_id');
+
+            return $sessionModule === null ? null : (string) $sessionModule;
+        }
+
+        return null;
     }
 
     private function row(LearnerScope $scope, string $id, bool $lock = false): object
@@ -349,6 +388,7 @@ final class Flashcards
             (string) $row->front, (string) $row->back, (string) $row->author, $row->session_id === null ? null : (string) $row->session_id,
             (int) $row->revision, (int) $row->step, $row->due_on === null ? null : substr((string) $row->due_on, 0, 10),
             (int) $row->reviews, (int) $row->lapses, $row->last_result === null ? null : (string) $row->last_result, (string) $row->created_at,
+            isset($row->module_id) ? (string) $row->module_id : null,
         );
     }
 }

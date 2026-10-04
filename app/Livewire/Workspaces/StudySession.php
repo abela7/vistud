@@ -45,7 +45,7 @@ final class StudySession extends Component
     #[Locked]
     public string $sessionId;
 
-    /** end, delete, pomodoro, teaching, briefing or material: the side panel that's open, or null. */
+    /** end, delete, pomodoro, teaching, briefing, material or topic: the side panel that's open, or null. */
     #[Locked]
     public ?string $mode = null;
 
@@ -54,6 +54,11 @@ final class StudySession extends Component
 
     /** The topic's status to record when the session ends; empty leaves it. */
     public string $topicStatus = '';
+
+    /** The session's topic, chosen in the topic panel: a topic's id, '' for none, or 'new' for $newTopic. */
+    public string $topicChoice = '';
+
+    public string $newTopic = '';
 
     private Sessions $sessions;
 
@@ -121,10 +126,19 @@ final class StudySession extends Component
         $this->dispatch('session-changed');
     }
 
-    /** Opens App\Livewire\Workspaces\FlashcardEditor for a card on the session's topic. */
+    /** Opens App\Livewire\Workspaces\FlashcardEditor for a card on the session's topic, in its module. */
     public function newFlashcard(): void
     {
-        $this->dispatch('flashcard-new', topicId: $this->sessions->find($this->principal(), $this->sessionId)->topicId);
+        $session = $this->sessions->find($this->principal(), $this->sessionId);
+        $this->dispatch('flashcard-new', topicId: $session->topicId, moduleId: $session->moduleId);
+    }
+
+    /** What the session is about: one of the course's topics, a new one in the session's module, or none. */
+    public function editTopic(): void
+    {
+        $topicId = $this->sessions->find($this->principal(), $this->sessionId)->topicId;
+        $this->open('topic');
+        $this->topicChoice = $topicId ?? '';
     }
 
     /** What the assistant would receive now: the tutoring prompt and the briefing. */
@@ -242,6 +256,31 @@ final class StudySession extends Component
             }
             $this->notice = $this->error === null ? 'The briefing now asks for this way of teaching.' : null;
         }
+        if ($this->mode === 'topic') {
+            $session = $this->sessions->find($by, $this->sessionId);
+            $topicId = null;
+            try {
+                $topicId = match ($this->topicChoice) {
+                    '' => null,
+                    'new' => $this->newTopicId($by, $session->moduleId),
+                    default => $this->topicChoice,
+                };
+                $this->sessions->setTopic($by, $this->sessionId, $topicId);
+            } catch (Unprocessable $e) {
+                $fields = $e->details['fields'] ?? [];
+                $this->addError('newTopic', $fields === [] ? $e->getMessage() : reset($fields)[0]);
+
+                return;
+            } catch (NotFound) {
+                $this->addError('topicChoice', 'That topic no longer exists. Choose another.');
+
+                return;
+            } catch (Conflict $e) {
+                $this->error = $e->getMessage();
+            }
+            $this->notice = $this->error === null ? ($topicId === null ? 'The session has no topic now.' : 'The topic is set. The tutor and what you save use it from now on.') : null;
+            $this->dispatch('session-changed');
+        }
         if ($this->mode === 'end') {
             $status = in_array($this->topicStatus, Topics::STATUSES, true) ? $this->topicStatus : null;
             $this->act(function () use ($by, $status) {
@@ -265,7 +304,7 @@ final class StudySession extends Component
 
     public function close(): void
     {
-        $this->reset('mode', 'topicStatus', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto', 'method', 'checkIns', 'quiz', 'pace');
+        $this->reset('mode', 'topicStatus', 'topicChoice', 'newTopic', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto', 'method', 'checkIns', 'quiz', 'pace');
         $this->resetErrorBag();
     }
 
@@ -304,6 +343,7 @@ final class StudySession extends Component
             'chatted' => $this->mode === 'end' && $this->chat->transcript($by, $this->sessionId) !== [],
             'topic' => $topic,
             'module' => $module,
+            'courseTopics' => $this->mode === 'topic' ? $this->topics->list($by, $this->workspaceId) : [],
             'groups' => $material['groups'],
             'alsoUsed' => $material['alsoUsed'],
             'materialCount' => $material['count'],
@@ -463,6 +503,15 @@ final class StudySession extends Component
             $this->error = $e->getMessage();
         }
         $this->dispatch('session-changed');
+    }
+
+    /** The course's topic with that name, or a new one in $moduleId. */
+    private function newTopicId(Principal $by, ?string $moduleId): string
+    {
+        $name = trim($this->newTopic);
+        $same = collect($this->topics->list($by, $this->workspaceId))->first(fn ($t) => mb_strtolower($t->name) === mb_strtolower($name));
+
+        return $same?->id ?? $this->topics->create($by, $this->workspaceId, $name, $moduleId)->id;
     }
 
     private function open(string $mode): void

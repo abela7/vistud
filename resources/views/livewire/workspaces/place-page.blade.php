@@ -40,6 +40,12 @@
                             <span class="tab-count">{{ $questions['open'] }}<span class="sr-only"> open{{ $questions['stuck'] > 0 ? ', '.$questions['stuck'].' stuck' : '' }}</span></span>
                         @endif
                     </a>
+                    <a href="{{ route('workspaces.show', [$workspaceId, 'flashcards', 'module' => $place->id]) }}" class="btn btn-secondary">
+                        <x-icon name="gallery-vertical-end" class="size-4" />Flashcards
+                        @if ($cards['total'] > 0)
+                            <span class="tab-count">{{ $cards['due'] > 0 ? $cards['due'] : $cards['total'] }}<span class="sr-only"> {{ $cards['due'] > 0 ? 'due' : Str::plural('card', $cards['total']) }}</span></span>
+                        @endif
+                    </a>
                     <a href="{{ route('workspaces.modules.sessions', [$workspaceId, $place->id]) }}" class="btn btn-secondary">
                         <x-icon name="history" class="size-4" />Study sessions
                         @if ($sessionsCount > 0)

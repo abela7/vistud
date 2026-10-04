@@ -86,6 +86,8 @@ final class Topics
         $row = $this->row($scope, $id);
         $moduleId = $this->moduleIn($scope, $row->workspace_id, $moduleId);
         LearnerTables::query($scope, 'topics')->where('id', $id)->update(['module_id' => $moduleId, 'updated_at' => now()]);
+        // Its cards go with it.
+        LearnerTables::query($scope, 'flashcards')->where('topic_id', $id)->update(['module_id' => $moduleId, 'updated_at' => now()]);
     }
 
     /** Moves the topic to $position (0 is first) among its workspace's topics. */

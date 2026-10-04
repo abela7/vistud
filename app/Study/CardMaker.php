@@ -120,11 +120,11 @@ final class CardMaker
     }
 
     /**
-     * Saves the ticked cards as made with an AI.
+     * Saves the ticked cards as made with an AI; a card with no topic goes in $moduleId.
      *
      * @return array{saved: int, failed: list<array{0: int, 1: string}>}
      */
-    public function save(Principal $by, string $workspaceId, array $cards): array
+    public function save(Principal $by, string $workspaceId, array $cards, ?string $moduleId = null): array
     {
         $saved = 0;
         $failed = [];
@@ -134,13 +134,13 @@ final class CardMaker
             }
             $topicId = is_string($card['topic_id'] ?? null) && $card['topic_id'] !== '' ? $card['topic_id'] : null;
             try {
-                $this->flashcards->add($by, $workspaceId, $topicId, $card['front'] ?? '', $card['back'] ?? '', 'ai');
+                $this->flashcards->add($by, $workspaceId, $topicId, $card['front'] ?? '', $card['back'] ?? '', 'ai', moduleId: $moduleId);
                 $saved++;
             } catch (Unprocessable $e) {
                 $fields = $e->details['fields'] ?? [];
                 $failed[] = [$index, $fields === [] ? $e->getMessage() : reset($fields)[0]];
             } catch (NotFound) {
-                $failed[] = [$index, 'Its topic no longer exists.'];
+                $failed[] = [$index, 'Its topic or module no longer exists.'];
             }
         }
 

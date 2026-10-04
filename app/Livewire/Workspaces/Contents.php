@@ -12,6 +12,7 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\FileDetails;
 use App\Study\Files;
+use App\Study\Flashcards;
 use App\Study\FolderDetails;
 use App\Study\Folders;
 use App\Study\Instructions;
@@ -113,11 +114,14 @@ final class Contents extends Component
 
     private Sessions $sessions;
 
+    private Flashcards $flashcards;
+
     private PrincipalFactory $principals;
 
-    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, Questions $questions, PrincipalFactory $principals): void
+    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, Questions $questions, Flashcards $flashcards, PrincipalFactory $principals): void
     {
         $this->topics = $topics;
+        $this->flashcards = $flashcards;
         $this->questions = $questions;
         $this->sessions = $sessions;
         $this->links = $links;
@@ -787,6 +791,8 @@ final class Contents extends Component
                 'place' => $module, 'placeName' => $module->title, 'key' => "module:{$module->id}", 'trail' => $trail,
                 'topicNames' => $topicNames, 'questions' => $questions,
                 'sessionsCount' => count($this->sessions->forModule($by, $this->workspaceId, $module->id)),
+                // The module's flashcards are in the deck, shown by module: how many, and how many are due.
+                'cards' => $this->flashcards->counts($by, $this->workspaceId, null, $module->id),
             ];
         }
 
@@ -800,7 +806,7 @@ final class Contents extends Component
             ? [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])], [$module->title, route('workspaces.modules.show', [$this->workspaceId, $module->id])]]
             : [[__('Notes & files'), route('workspaces.show', [$this->workspaceId, 'notes'])]]));
 
-        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'topicNames' => [], 'questions' => null, 'sessionsCount' => 0];
+        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'topicNames' => [], 'questions' => null, 'sessionsCount' => 0, 'cards' => null];
     }
 
     /** @return array<string, array{done: int, total: int}> module id => its topics understood (or mastered), of all */

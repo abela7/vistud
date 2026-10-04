@@ -9,6 +9,7 @@ use App\Livewire\Workspaces\FlashcardReview;
 use App\Livewire\Workspaces\Progress;
 use App\Models\User;
 use App\Study\Flashcards;
+use App\Study\Modules;
 use App\Study\TopicDetails;
 use App\Study\Topics;
 use App\Study\WorkspaceDetails;
@@ -157,6 +158,55 @@ class FlashcardScreensTest extends TestCase
         $all = $this->livewire(FlashcardReview::class)->assertSee('Card 1 of 1')->assertSee('What is a primary key?');
         $this->assertThrows(fn () => $all->set('queue', [$left]), CannotUpdateLockedPropertyException::class);
         $all->call('answer', 'nonsense')->assertSee('Card 1 of 1');
+    }
+
+    public function test_the_deck_is_organised_by_module_and_each_module_is_reviewed_on_its_own(): void
+    {
+        $by = $this->principal($this->ada);
+        $week1 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 1: Relational model']);
+        $week2 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 2: SQL joins']);
+        app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 3: Normal forms']);
+        app(Topics::class)->move($by, $this->joins->id, $week2->id);
+        $this->card($this->joins->id, 'What does a LEFT JOIN keep?', 'Every left row.');
+        app(Flashcards::class)->add($by, $this->databases->id, null, 'What is a relation?', 'A table.', moduleId: $week1->id);
+        $this->card(null, 'What is SQL?', 'A language for databases.');
+
+        // All modules: each with its cards and what's due, not every card.
+        $this->actingAs($this->ada)->get(route('workspaces.show', [$this->databases->id, 'flashcards']))
+            ->assertOk()->assertSee('3 cards to review today')
+            ->assertSeeInOrder(['Week 1: Relational model', '1 card · 1 due', 'Week 2: SQL joins', '1 card · 1 due', 'Week 3: Normal forms', 'No cards yet', 'No module'])
+            ->assertDontSee('What does a LEFT JOIN keep?')
+            ->assertSee(route('workspaces.flashcards.review', [$this->databases->id, 'module' => $week1->id]), false)
+            ->assertSee(route('workspaces.show', [$this->databases->id, 'flashcards', 'module' => $week2->id]), false);
+
+        // One module: its cards by topic; a topic of another module is let go.
+        $this->livewire(Deck::class)->set('module', $week2->id)
+            ->assertSee('1 card to review today in Week 2: SQL joins')->assertSee('What does a LEFT JOIN keep?')->assertDontSee('What is a relation?')
+            ->set('topic', $this->joins->id)->assertSee('in Week 2: SQL joins · Joins')
+            ->set('module', $week1->id)->assertSet('topic', '')->assertSee('What is a relation?')->assertDontSee('What does a LEFT JOIN keep?')
+            ->set('module', 'none')->assertSee('What is SQL?')->assertDontSee('What is a relation?')
+            ->set('module', 'not-a-module')->assertSet('module', '')->assertDontSee('What is SQL?');
+
+        // The editor puts a card in a module; a topic takes it to the topic's.
+        $editor = $this->livewire(FlashcardEditor::class)->call('create', null, $week1->id)->assertSet('moduleId', $week1->id)
+            ->assertSee('Week 2: SQL joins')
+            ->set('topicId', $this->joins->id)->assertSet('moduleId', $week2->id)
+            ->set('moduleId', $week1->id)->assertSet('topicId', '')
+            ->set('front', 'What is a tuple?')->set('back', 'A row.')->call('save')->assertDispatched('flashcards-changed');
+        $tuple = collect(app(Flashcards::class)->list($by, $this->databases->id))->firstWhere('front', 'What is a tuple?');
+        $this->assertSame([null, $week1->id], [$tuple->topicId, $tuple->moduleId]);
+        $editor->call('edit', $tuple->id)->assertSet('moduleId', $week1->id)->set('moduleId', '')->call('save');
+        $this->assertNull(app(Flashcards::class)->find($by, $tuple->id)->moduleId);
+
+        // A module's review holds only its cards, and leads back to it.
+        $this->actingAs($this->ada)->get(route('workspaces.flashcards.review', [$this->databases->id, 'module' => $week1->id]))
+            ->assertOk()->assertSee('Week 1: Relational model')->assertSee('What is a relation?')->assertSee('Card 1 of 1');
+        $this->actingAs($this->ada)->get(route('workspaces.flashcards.review', [$this->databases->id, 'module' => 'not-a-module']))
+            ->assertOk()->assertSee('of 4');
+
+        // The module's page leads to its cards.
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->databases->id, $week2->id]))
+            ->assertOk()->assertSee('Flashcards')->assertSee(route('workspaces.show', [$this->databases->id, 'flashcards', 'module' => $week2->id]), false);
     }
 
     public function test_review_pages_belong_to_their_student(): void

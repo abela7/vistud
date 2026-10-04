@@ -324,6 +324,21 @@ final class Sessions
         $this->change($by, $id, ['running', 'paused', 'break'], fn () => ['tutoring' => json_encode($choices)]);
     }
 
+    /**
+     * What the open session is about: a topic of its workspace, or none. The session keeps its module; one without
+     * a module takes the topic's. A new revision of its journal record says so.
+     */
+    public function setTopic(Principal $by, string $id, ?string $topicId): SessionDetails
+    {
+        $this->change($by, $id, ['running', 'paused', 'break'], function (LearnerScope $scope, object $row) use ($topicId) {
+            [$topicId, $topicModule] = $this->place($scope, (string) $row->workspace_id, $topicId, null);
+
+            return ['topic_id' => $topicId, 'module_id' => $row->module_id ?? $topicModule];
+        }, journal: true);
+
+        return $this->find($by, $id);
+    }
+
     /** Puts a note or file of the workspace (`note:{id}`, `file:{id}`) in the session's material, or takes it out. */
     public function toggleMaterial(Principal $by, string $id, string $item): void
     {

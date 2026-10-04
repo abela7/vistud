@@ -194,6 +194,7 @@ final class SessionChat
         // What the tools did in the course (saved, notes written in) belongs to the answer after them.
         $pendingSaved = [];
         $pendingNotes = [];
+        $pendingTopic = null;
         foreach ($this->rows($scope, $thread->id) as $row) {
             if ($row->role === 'tool') {
                 $effects = isset($row->effects) && is_string($row->effects) ? (json_decode($row->effects, true) ?: []) : [];
@@ -203,6 +204,7 @@ final class SessionChat
                 foreach (is_array($effects['notes'] ?? null) ? $effects['notes'] : [] as $note) {
                     $pendingNotes[(string) $note['id']] = ['id' => (string) $note['id'], 'title' => (string) $note['title']];
                 }
+                $pendingTopic = is_string($effects['topic'] ?? null) ? $effects['topic'] : $pendingTopic;
 
                 continue;
             }
@@ -220,17 +222,18 @@ final class SessionChat
                 'tools' => $row->role === 'assistant' ? [...$pendingTools, ...$tools] : [],
                 'saved' => $row->role === 'assistant' ? $pendingSaved : [],
                 'notes' => $row->role === 'assistant' ? array_values($pendingNotes) : [],
+                'topic' => $row->role === 'assistant' ? $pendingTopic : null,
                 'cost_micros' => (int) $row->cost_micros + ($row->role === 'assistant' ? $pendingCost : 0),
                 'folded' => (int) $row->position <= (int) $thread->folded_through,
                 'at' => (string) $row->created_at,
             ];
             if ($row->role === 'assistant') {
-                [$pendingTools, $pendingCost, $pendingSaved, $pendingNotes] = [[], 0, [], []];
+                [$pendingTools, $pendingCost, $pendingSaved, $pendingNotes, $pendingTopic] = [[], 0, [], [], null];
             }
         }
         if ($pendingTools !== []) {
             // A turn that ended in look-ups without an answer (the engine failed after them).
-            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'saved' => $pendingSaved, 'notes' => array_values($pendingNotes), 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
+            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'saved' => $pendingSaved, 'notes' => array_values($pendingNotes), 'topic' => $pendingTopic, 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
         }
 
         return $turns;

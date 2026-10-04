@@ -7,6 +7,7 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Study\FlashcardDetails;
 use App\Study\Flashcards;
+use App\Study\Modules;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
@@ -29,6 +30,10 @@ final class FlashcardReview extends Component
     #[Locked]
     public ?string $topicId = null;
 
+    /** A module's id, '' for cards in none, or null for all. */
+    #[Locked]
+    public ?string $moduleId = null;
+
     #[Locked]
     public bool $early = false;
 
@@ -50,19 +55,22 @@ final class FlashcardReview extends Component
 
     private Topics $topics;
 
+    private Modules $modules;
+
     private PrincipalFactory $principals;
 
-    public function boot(Flashcards $flashcards, Topics $topics, PrincipalFactory $principals): void
+    public function boot(Flashcards $flashcards, Topics $topics, Modules $modules, PrincipalFactory $principals): void
     {
         $this->flashcards = $flashcards;
         $this->topics = $topics;
+        $this->modules = $modules;
         $this->principals = $principals;
     }
 
-    public function mount(string $workspaceId, ?string $topicId = null, bool $early = false): void
+    public function mount(string $workspaceId, ?string $topicId = null, bool $early = false, ?string $moduleId = null): void
     {
-        [$this->workspaceId, $this->topicId, $this->early] = [$workspaceId, $topicId, $early];
-        $this->queue = $this->flashcards->queue($this->principal(), $workspaceId, $topicId, $early);
+        [$this->workspaceId, $this->topicId, $this->early, $this->moduleId] = [$workspaceId, $topicId, $early, $moduleId];
+        $this->queue = $this->flashcards->queue($this->principal(), $workspaceId, $topicId, $early, $moduleId);
     }
 
     /** How the current card went: correct, partial or incorrect. */
@@ -91,7 +99,7 @@ final class FlashcardReview extends Component
     public function again(bool $early = false): void
     {
         $this->early = $early;
-        $this->queue = $this->flashcards->queue($this->principal(), $this->workspaceId, $this->topicId, $early);
+        $this->queue = $this->flashcards->queue($this->principal(), $this->workspaceId, $this->topicId, $early, $this->moduleId);
         [$this->position, $this->firsts] = [0, []];
         $this->rounds++;
     }
@@ -132,10 +140,11 @@ final class FlashcardReview extends Component
             'retry' => $retry,
             'hints' => $card === null ? [] : $this->hints($card, $retry),
             'cardTopic' => $card?->topicId !== null ? $topicName : null,
+            'roundModule' => $this->moduleId === null ? null : ($this->moduleId === '' ? 'No module' : (collect($this->modules->list($by, $this->workspaceId))->firstWhere('id', $this->moduleId)?->title)),
             'roundTopic' => $this->topicId === null ? null : ($this->topicId === '' ? 'cards without a topic' : $topicName),
             'total' => count($this->queue),
             'tally' => array_count_values($this->firsts) + ['correct' => 0, 'partial' => 0, 'incorrect' => 0],
-            'counts' => $card === null ? $this->flashcards->counts($by, $this->workspaceId, $this->topicId) : null,
+            'counts' => $card === null ? $this->flashcards->counts($by, $this->workspaceId, $this->topicId, $this->moduleId) : null,
             'today' => $this->flashcards->today($by),
         ]);
     }

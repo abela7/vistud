@@ -25,6 +25,8 @@ final readonly class FlashcardDetails
         public int $lapses,
         public ?string $lastResult,
         public string $createdAt,
+        /** The module the card belongs to: its topic's, or the one it was made in; null for the course as a whole. */
+        public ?string $moduleId = null,
     ) {}
 
     public function isNew(): bool

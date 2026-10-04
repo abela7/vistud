@@ -12,6 +12,7 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The end-of-session write-back (docs/specs/study-memory.md §4.4): what the
@@ -131,9 +132,9 @@ final class WriteBack
                 $topicId = in_array($item['kind'], ['summary', 'checkpoint'], true) ? null : $this->topicFor($by, $session, $item, $topics, $moduleId);
                 $topicName = $topicId !== null ? $topics[$topicId]->name : null;
                 match ($item['kind']) {
+                    'flashcard' => $this->flashcards->add($by, $session->workspaceId, $topicId, $item['front'] ?? '', $item['back'] ?? '', 'ai', $session->id, $topicId === null ? $moduleId : null),
                     'finding' => $this->findings->add($by, $topicId, ['text' => (string) ($item['text'] ?? '')], 'ai'),
-                    'question' => $this->questions->ask($by, $session->workspaceId, (string) ($item['text'] ?? ''), $topicId, $topics[$topicId]->moduleId ?? $moduleId, $session->id),
-                    'flashcard' => $this->flashcards->add($by, $session->workspaceId, $topicId, $item['front'] ?? '', $item['back'] ?? '', 'ai', $session->id),
+                    'question' => $this->questions->ask($by, $session->workspaceId, (string) ($item['text'] ?? ''), $topicId, $topicId !== null ? ($topics[$topicId]->moduleId ?? $moduleId) : $moduleId, $session->id),
                     'attempt' => $this->attempt($scope, $by, $session, $topicId, $item, $at, $quiz),
                     'status' => $this->topics->report($by, $topicId, (string) ($item['proposed'] ?? '')),
                     'summary' => $this->sessions->setSummary($by, $session->id, (string) ($item['text'] ?? '')),
@@ -144,8 +145,10 @@ final class WriteBack
                 $failed[] = [$index, $fields === [] ? $e->getMessage() : reset($fields)[0]];
 
                 continue;
-            } catch (NotFound|Conflict) {
-                $failed[] = [$index, 'Its topic or session no longer exists.'];
+            } catch (NotFound|Conflict $e) {
+                // Ids and codes only: what went wrong, for the next look at the log.
+                Log::warning('A saved item could not be kept.', ['kind' => $item['kind'], 'session' => $session->id, 'topic' => $item['topic_id'] ?? null, 'error' => $e->errorCode]);
+                $failed[] = [$index, $e instanceof Conflict ? $e->getMessage() : 'Its topic, module or session no longer exists.'];
 
                 continue;
             }
@@ -165,10 +168,16 @@ final class WriteBack
         return ['saved' => $saved, 'failed' => $failed];
     }
 
-    /** The topic an item goes to: the one chosen, or a new one made with the given name (once per name). */
-    private function topicFor(Principal $by, SessionDetails $session, array $item, array &$topics, ?string $moduleId): string
+    /**
+     * The topic an item goes to: the one chosen, a new one made with the given name (once per name), or, for a
+     * flashcard or a question chosen with none (`topic_id` ''), no topic.
+     */
+    private function topicFor(Principal $by, SessionDetails $session, array $item, array &$topics, ?string $moduleId): ?string
     {
         $chosen = (string) ($item['topic_id'] ?? '');
+        if ($chosen === '' && in_array($item['kind'], ['flashcard', 'question'], true)) {
+            return null;
+        }
         if ($chosen !== 'new') {
             return isset($topics[$chosen]) ? $chosen : throw new NotFound;
         }

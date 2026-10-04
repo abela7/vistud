@@ -3,6 +3,7 @@
 namespace App\Engine;
 
 use App\Engine\Tools\AddQuestionsTool;
+use App\Engine\Tools\AddTopicsTool;
 use App\Engine\Tools\AssignmentPlanTool;
 use App\Engine\Tools\AssignmentsTool;
 use App\Engine\Tools\CalendarTool;
@@ -18,6 +19,7 @@ use App\Engine\Tools\ReadFileTool;
 use App\Engine\Tools\ReadNoteTool;
 use App\Engine\Tools\SaveKeyPointsTool;
 use App\Engine\Tools\SearchNotesTool;
+use App\Engine\Tools\SetTopicTool;
 use App\Engine\Tools\Tool;
 use App\Engine\Tools\TopicsTool;
 use App\Engine\Tools\WriteNoteTool;
@@ -51,6 +53,8 @@ final class Toolbox
         SearchNotesTool::class,
         FilesTool::class,
         EarlierSessionsTool::class,
+        SetTopicTool::class,
+        AddTopicsTool::class,
         MakeFlashcardsTool::class,
         SaveKeyPointsTool::class,
         AddQuestionsTool::class,
@@ -74,7 +78,7 @@ final class Toolbox
 
     /** What each tool that changes the course does, as the chat says it while it works ("Saving flashcards…"). */
     public const DOING = [
-        'make_flashcards' => 'Saving flashcards', 'save_key_points' => 'Saving key points', 'add_questions' => 'Adding questions', 'write_note' => 'Writing in your note',
+        'set_topic' => 'Setting the topic', 'add_topics' => 'Adding topics', 'make_flashcards' => 'Saving flashcards', 'save_key_points' => 'Saving key points', 'add_questions' => 'Adding questions', 'write_note' => 'Writing in your note',
     ];
 
     public static function words(string $tool): string

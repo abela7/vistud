@@ -122,6 +122,7 @@ final class Modules
             }
             // Its topics and tasks stay in the course, outside every module; its instructions go.
             LearnerTables::query($scope, 'topics')->where('module_id', $id)->update(['module_id' => null]);
+            LearnerTables::query($scope, 'flashcards')->where('module_id', $id)->update(['module_id' => null]);
             LearnerTables::query($scope, 'activities')->where('module_id', $id)->update(['module_id' => null]);
             LearnerTables::query($scope, 'instructions')->where('scope', "module:{$id}")->delete();
             LearnerTables::query($scope, 'modules')->where('id', $id)->delete();

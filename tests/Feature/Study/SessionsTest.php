@@ -9,6 +9,7 @@ use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
+use App\Study\Modules;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\Topics;
@@ -89,6 +90,25 @@ class SessionsTest extends TestCase
 
         $this->sessions->end($this->by, $session->id);
         $this->assertSame('running', $this->sessions->start($this->by, $maths->id)->state);
+    }
+
+    public function test_the_topic_of_an_open_session_can_change_and_it_keeps_its_module(): void
+    {
+        $topics = app(Topics::class);
+        $week1 = app(Modules::class)->create($this->by, $this->databases->id, ['title' => 'Week 1'])->id;
+        $week2 = app(Modules::class)->create($this->by, $this->databases->id, ['title' => 'Week 2'])->id;
+        $joins = $topics->create($this->by, $this->databases->id, 'Joins', $week2)->id;
+        $keys = $topics->create($this->by, $this->databases->id, 'Keys', $week1)->id;
+
+        // A session without a module takes its first topic's.
+        $session = $this->sessions->start($this->by, $this->databases->id);
+        $this->assertSame([$joins, $week2], [($s = $this->sessions->setTopic($this->by, $session->id, $joins))->topicId, $s->moduleId]);
+        $this->assertSame([$keys, $week2], [($s = $this->sessions->setTopic($this->by, $session->id, $keys))->topicId, $s->moduleId]);
+        $this->assertNull($this->sessions->setTopic($this->by, $session->id, null)->topicId);
+        $this->assertThrows(fn () => $this->sessions->setTopic($this->by, $session->id, Ids::new()), NotFound::class);
+
+        $this->sessions->end($this->by, $session->id);
+        $this->assertThrows(fn () => $this->sessions->setTopic($this->by, $session->id, $joins), Conflict::class);
     }
 
     public function test_the_clock_pauses_itself_when_the_student_is_away_and_they_can_count_it_back(): void

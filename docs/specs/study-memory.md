@@ -268,13 +268,23 @@ is listed; the rest is saved.
 ### 4.5 Flashcards (built)
 
 A workspace's **Flashcards** section (*Cards* in the phone tab bar) shows
-what's due today with **Review now**, and every card by topic, each with
-when it's next due and who made it; a filter narrows it to a topic. Cards
+what's due today with **Review now**, and the cards **by module**
+(2026-10-05, the owner's ask: "they should be under each module"): every
+module in course order with how many cards it has, how many are due and a
+**Review** of its own, and *No module* for the rest. Choosing a module
+(its row, the *Module* filter, or the module page's **Flashcards** button,
+which shows how many are due) shows its cards by topic, each with when
+it's next due and who made it; the *Topic* filter narrows to a topic. When
+the cards are all in one module (or in none), they show straight away. A card's
+module is its topic's when the topic has one, else the one chosen for it,
+else the module of the session it was made in; a topic that moves takes
+its cards along, and a deleted module leaves its cards in none. Cards
 come three ways:
 
 - **By hand**: *New card* (also a topic's menu in Progress and the
-  session's menu) opens one dialog for the front, the back and the topic,
-  with *Save and add another* for writing several in a row.
+  session's menu) opens one dialog for the front, the back, the module and
+  the topic (a topic in a module takes the card there), with *Save and add
+  another* for writing several in a row.
 - **With any AI**: *Make cards with an AI* builds a prompt
   (`resources/prompts/flashcards.md`, filled by `App\Study\CardMaker`)
   from the topic (or all topics, for the AI to choose among), how many
@@ -288,9 +298,10 @@ come three ways:
   have are recognised and left unticked, and each keeps an editable front,
   back and topic.
 - **From a study session**: the tutor's `<flashcard>` marks, saved with
-  the write-back (§4.4).
+  the write-back (§4.4), or saved by the tutor in ViStud's chat (§6); a
+  card with no topic goes in the session's module.
 
-**Reviewing** (`/workspaces/{w}/flashcards/review`, optionally one topic)
+**Reviewing** (`/workspaces/{w}/flashcards/review`, optionally one module and one topic)
 takes up to 20 cards a round: those due, the longest waiting first, then
 new ones. A card shows its front; *Show the answer* (or Space, or a tap on
 the card) turns it over, showing the question again above the answer. The
@@ -422,7 +433,7 @@ the same tools will serve the MCP server): `course_overview`, `topics`,
 `notes`, `read_note` (up to 8,000 characters), `search_notes`, `files`
 (names, types and sizes), `read_file` (below; `pages: "all"` gives an outline, each
 page's first line) and `earlier_sessions`; and the tools that act in the course
-(below): `make_flashcards`, `save_key_points`, `add_questions` and `write_note`. Each
+(below): `set_topic`, `add_topics`, `make_flashcards`, `save_key_points`, `add_questions` and `write_note`. Each
 runs through the services the pages use, so another student's things are
 "not found" exactly as on a page; an answer is capped at 12,000 characters;
 the student's name and email never go in.
@@ -434,9 +445,11 @@ tutor saves flashcards, key points and open questions straight into the
 course when the student asks or agrees (`make_flashcards`, `save_key_points`,
 `add_questions`, up to ten at a time). They go through the write-back
 (`WriteBack::reviewItems` and `apply`), so the same limits, evidence and
-topics apply, and the same item twice in a session is saved once; a topic the
-course doesn't have becomes the session's, so the tutor never fills the course
-with topics of its own naming. `write_note` adds Markdown (converted by
+topics apply, and the same item twice in a session is saved once. An item goes
+to the topic it names when the course has it, else to the session's topic;
+saving never makes a topic. Without either, flashcards and questions go under
+the session's module with no topic, and key points wait: the tutor is told to
+agree a topic with the student first. `write_note` adds Markdown (converted by
 `App\Study\MarkdownDoc`: headings, lists, checklists, tables, code,
 diagrams' code, formulas) at the end of a note as its next version
 (`Notes::append`, kind `tutor`): the session's own study note ("Study notes ·
@@ -447,6 +460,19 @@ the new version, unless the student is typing in it (then it warns, as for any
 change made elsewhere). Each answer says what was saved and links the notes
 written in, opening beside the chat. A topic's status and an answer's result
 stay marks the student keeps: they are the student's to decide.
+
+**Topics** (built, 2026-10-05; the owner's ask: "let AI set my topic if
+needed, but I should be able to do it manually"). `set_topic` sets what the
+open session is about (`Sessions::setTopic`, a new revision of its journal
+record): a topic the course has, matched by name whatever the case, or a new
+one made in the session's module. `add_topics` adds up to 15 topics, each in
+the module named or the session's, leaving the names the course has already;
+it is for a file's chapters or headings, once the student agrees to the list.
+The briefing tells the tutor to propose a topic when the session has none and
+set it once the student agrees. The answer shows the topic set ("Topic: Outer
+joins") and the session page shows it at once. The student does the same on
+the session page: **Choose a topic** (or *Change topic*) offers the module's
+topics first, the others, none, or a new one made in the session's module.
 
 **Material in the chat** (built, 2026-10-05). The tutor reads the student's
 files with `read_file`, a few pages at a time (at most five, about 11,000

@@ -85,9 +85,12 @@
                             {{-- A finished reply never changes; ignored by updates, so its drawn diagrams and formulas stay. --}}
                             <div class="chat-bubble chat-markdown" wire:ignore>{!! $turn['html'] !!}</div>
                         @endif
-                        @if ($turn['savedWords'] || $turn['notes'] !== [])
-                            {{-- What the tutor did in the course this turn: saved, and the notes it wrote in (open beside the chat). --}}
+                        @if ($turn['savedWords'] || $turn['notes'] !== [] || ($turn['topic'] ?? null) !== null)
+                            {{-- What the tutor did in the course this turn: the session's topic, saved, and the notes it wrote in (open beside the chat). --}}
                             <ul class="chat-files chat-did" role="list" aria-label="Done in your course">
+                                @if (($turn['topic'] ?? null) !== null)
+                                    <li><span class="chat-file"><x-icon name="tag" class="size-4" /><span class="truncate">Topic: {{ $turn['topic'] }}</span></span></li>
+                                @endif
                                 @if ($turn['savedWords'])
                                     <li><span class="chat-file"><x-icon name="circle-check" class="size-4" /><span class="truncate">Saved {{ $turn['savedWords'] }}</span></span></li>
                                 @endif

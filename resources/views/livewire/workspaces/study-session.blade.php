@@ -51,6 +51,9 @@
                 @if ($topic && in_array($topic->status, Topics::STATUSES, true))
                     <span class="status-chip status-{{ $topic->status }}"><x-icon :name="$statusIcons[$topic->status]" class="size-3.5" />{{ Str::ucfirst($topic->status) }}</span>
                 @endif
+                @if ($open)
+                    <button type="button" class="btn btn-ghost btn-sm" wire:click="editTopic"><x-icon name="tag" class="size-3.5" />{{ $topic ? 'Change topic' : 'Choose a topic' }}</button>
+                @endif
             </div>
             <p class="text-fg-muted">
                 {{ implode(' · ', array_filter([
@@ -190,7 +193,7 @@
         @if ($mode)
             <form wire:submit="save" novalidate @class(['modal-panel', 'modal-panel-wide' => $mode === 'briefing']) wire:key="session-dialog-{{ $mode }}" @if ($mode === 'briefing') x-data="{ copied: false }" @endif>
                 <div class="modal-head">
-                    <h2 id="session-dialog-title" class="min-w-0 flex-1 text-lg font-semibold" tabindex="-1" autofocus>{{ ['end' => 'End this session?', 'delete' => 'Delete this session?', 'pomodoro' => 'Session clock', 'teaching' => 'How the AI teaches', 'briefing' => 'Study with an AI', 'material' => 'Notes & files'][$mode] }}</h2>
+                    <h2 id="session-dialog-title" class="min-w-0 flex-1 text-lg font-semibold" tabindex="-1" autofocus>{{ ['end' => 'End this session?', 'delete' => 'Delete this session?', 'pomodoro' => 'Session clock', 'teaching' => 'How the AI teaches', 'briefing' => 'Study with an AI', 'material' => 'Notes & files', 'topic' => 'What this session is about'][$mode] }}</h2>
                     <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
                         <x-icon name="x" />
                     </button>
@@ -251,6 +254,42 @@
                                 <p class="text-fg-muted" x-show="! @js($every).some((n) => has(n))" x-cloak>Nothing matches.</p>
                             @endif
                         </div>
+                    @elseif ($mode === 'topic')
+                        @php
+                            $here = $module ? array_values(array_filter($courseTopics, fn ($t) => $t->moduleId === $module->id)) : [];
+                            $elsewhere = array_values(array_filter($courseTopics, fn ($t) => ! $module || $t->moduleId !== $module->id));
+                        @endphp
+                        <p class="text-sm text-fg-muted">The tutor teaches from it, and the flashcards, questions and key points you save go to it. The tutor can set it too, when you agree.</p>
+                        <div class="field">
+                            <label for="session-topic" class="field-label">Topic</label>
+                            <select id="session-topic" class="input" wire:model.live="topicChoice" @error('topicChoice') aria-invalid="true" @enderror>
+                                <option value="">No topic</option>
+                                @if ($here !== [])
+                                    <optgroup label="{{ $module->title }}">
+                                        @foreach ($here as $t)
+                                            <option value="{{ $t->id }}">{{ $t->name }}</option>
+                                        @endforeach
+                                    </optgroup>
+                                @endif
+                                @if ($elsewhere !== [])
+                                    <optgroup label="{{ $here !== [] ? 'Other topics' : 'Topics' }}">
+                                        @foreach ($elsewhere as $t)
+                                            <option value="{{ $t->id }}">{{ $t->name }}</option>
+                                        @endforeach
+                                    </optgroup>
+                                @endif
+                                <option value="new">A new topic…</option>
+                            </select>
+                            @error('topicChoice') <p class="field-error">{{ $message }}</p> @enderror
+                        </div>
+                        @if ($topicChoice === 'new')
+                            <div class="field">
+                                <label for="session-new-topic" class="field-label">Name</label>
+                                <input id="session-new-topic" type="text" class="input" wire:model="newTopic" maxlength="{{ Topics::MAX_NAME }}" autofocus aria-describedby="session-new-topic-hint" @error('newTopic') aria-invalid="true" @enderror>
+                                <p id="session-new-topic-hint" class="field-hint">{{ $module ? 'Added to '.$module->title.'.' : 'Added to the course.' }} Short, like a chapter heading.</p>
+                                @error('newTopic') <p class="field-error">{{ $message }}</p> @enderror
+                            </div>
+                        @endif
                     @elseif ($mode === 'teaching')
                         @include('livewire.workspaces.partials.teaching-fields')
                         <p class="text-sm text-fg-muted">The briefing asks for this from now on. An AI you already briefed needs the new briefing, or to be told.</p>
@@ -298,7 +337,7 @@
                         <x-button variant="primary" x-on:click="$el.closest('dialog').close()">Done</x-button>
                     @else
                         <x-button x-on:click="$el.closest('dialog').close()">{{ $mode === 'end' ? 'Keep studying' : 'Cancel' }}</x-button>
-                        <x-button type="submit" :variant="$mode === 'delete' ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ ['end' => 'End session', 'delete' => 'Delete', 'pomodoro' => 'Save', 'teaching' => 'Save'][$mode] }}</x-button>
+                        <x-button type="submit" :variant="$mode === 'delete' ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">{{ ['end' => 'End session', 'delete' => 'Delete', 'pomodoro' => 'Save', 'teaching' => 'Save', 'topic' => 'Save'][$mode] }}</x-button>
                     @endif
                 </div>
             </form>

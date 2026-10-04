@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { foreignColours, makeStudentWithCards, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
+import { foreignColours, makeStudentWithCards, makeStudentWithModuleCards, openStudentHome, THEMES, useSentinelTheme, useTheme } from './support.js';
 
 /* Flashcards: the deck, writing cards, making them with an AI, and reviewing (docs/specs/study-memory.md §4.5). */
 
@@ -89,7 +89,7 @@ test('cards are written one after another, and a round is reviewed with the keyb
 test('cards are made with an AI: copy the prompt, paste the reply, keep the new ones', async ({ page }) => {
     await page.setViewportSize(desktop);
     await openDeck(page);
-    await page.getByLabel('Show', { exact: true }).selectOption({ label: 'Joins (3)' });
+    await page.getByLabel('Topic', { exact: true }).selectOption({ label: 'Joins (3)' });
     await expect(page.getByRole('heading', { name: '3 cards to review today in Joins' })).toBeVisible();
     await page.getByRole('button', { name: 'Make cards with an AI' }).click();
     const maker = page.locator('#card-maker-dialog');
@@ -195,3 +195,34 @@ test('the phone tab bar fits the six sections at 320 px', async ({ page }) => {
     expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
+
+for (const [name, size] of Object.entries({ desktop, phone })) {
+    test(`the deck shows the cards by module, and a module opens its cards and its own review: ${name}`, async ({ page }) => {
+        await page.setViewportSize(size);
+        const student = makeStudentWithModuleCards();
+        await openStudentHome(page, student.email);
+        await page.goto(`/workspaces/${student.workspace}/flashcards`);
+        await page.getByRole('heading', { level: 1, name: 'Flashcards' }).waitFor();
+        await page.waitForLoadState('load');
+
+        const modules = page.getByRole('list', { name: 'Cards by module' });
+        await expect(modules.locator('.deck-module')).toHaveCount(3);
+        await expect(modules.locator('.deck-module').nth(0)).toContainText('Week 1: Relational model');
+        await expect(modules.locator('.deck-module').nth(0)).toContainText('5 cards · 4 due');
+        await expect(modules.locator('.deck-module').nth(2)).toContainText('No module');
+        await expect(page.locator('.card-row')).toHaveCount(0);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        expect(await analyse(page)).toEqual([]);
+        await page.screenshot({ path: `test-results/deck-by-module-${size.width}.png`, fullPage: true });
+
+        // A module's row opens its cards; its Review button starts a round of its own.
+        await modules.getByRole('link', { name: 'Week 2: SQL queries' }).click();
+        await expect(page.locator('.card-row')).toHaveCount(1);
+        await expect(page.getByRole('heading', { name: '1 card to review today in Week 2: SQL queries' })).toBeVisible();
+        await expect(page.getByLabel('Module')).toHaveValue(student.week2);
+        await page.goto(`/workspaces/${student.workspace}/flashcards`);
+        await page.getByRole('list', { name: 'Cards by module' }).locator('.deck-module').nth(1).getByRole('link', { name: 'Review' }).click();
+        await expect(page.getByText('Card 1 of 1')).toBeVisible();
+        await expect(page.getByRole('region', { name: 'Question' })).toContainText('What does a correlated subquery refer to?');
+    });
+}

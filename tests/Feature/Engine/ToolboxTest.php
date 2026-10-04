@@ -253,6 +253,63 @@ class ToolboxTest extends TestCase
         $this->assertStringContainsString('needs a study session', app(Toolbox::class)->run($this->by, new Context($this->databases->id, null, null, 'UTC'), 'make_flashcards', ['cards' => [['front' => 'a', 'back' => 'b']]]));
     }
 
+    public function test_without_a_topic_cards_and_questions_go_under_the_sessions_module_and_key_points_wait(): void
+    {
+        $sessions = app(Sessions::class);
+        $sessions->setTopic($this->by, $this->context->sessionId, null);
+        $week2 = $this->context->moduleId;
+        $topicsBefore = count(app(Topics::class)->list($this->by, $this->databases->id));
+
+        $this->assertStringStartsWith('Saved 1 flashcard in Week 2: SQL joins (no topic).', $this->look('make_flashcards', ['cards' => [['front' => 'What is a self join?', 'back' => 'A table joined to itself.']]]));
+        $said = $this->look('make_flashcards', ['cards' => [['front' => 'What is 1NF?', 'back' => 'Atomic values.', 'topic' => 'Normal forms']]]);
+        $this->assertStringContainsString('The course has no topic called "Normal forms", so they went under the session\'s module; add_topics adds it.', $said);
+        $cards = collect(app(Flashcards::class)->list($this->by, $this->databases->id))->keyBy('front');
+        $this->assertSame([null, $week2], [$cards['What is a self join?']->topicId, $cards['What is a self join?']->moduleId]);
+        $this->assertSame([null, $week2], [$cards['What is 1NF?']->topicId, $cards['What is 1NF?']->moduleId]);
+
+        $this->assertStringStartsWith('Saved 1 question in Week 2: SQL joins (no topic).', $this->look('add_questions', ['questions' => [['text' => 'When is a self join useful?']]]));
+        $asked = collect(app(Questions::class)->list($this->by, $this->databases->id))->firstWhere('text', 'When is a self join useful?');
+        $this->assertSame([null, $week2], [$asked->topicId, $asked->moduleId]);
+
+        // Key points need a topic: none is made for them.
+        $this->assertStringStartsWith('Key points need a topic, and this session has none yet.', $this->look('save_key_points', ['points' => [['text' => 'A self join needs two aliases.']]]));
+        $this->assertCount($topicsBefore, app(Topics::class)->list($this->by, $this->databases->id));
+        $this->assertSame(['saved' => ['flashcard' => 2, 'question' => 1]], $this->context->effects->take());
+    }
+
+    public function test_the_tutor_sets_the_sessions_topic_and_adds_topics_to_the_course(): void
+    {
+        $sessions = app(Sessions::class);
+        $topics = app(Topics::class);
+        $sessions->setTopic($this->by, $this->context->sessionId, null);
+
+        // A new topic goes in the session's module.
+        $this->assertSame('The session\'s topic is now "Outer joins", new in the course in Week 2: SQL joins. Tell the student in a line.', $this->look('set_topic', ['topic' => 'Outer joins']));
+        $outer = collect($topics->list($this->by, $this->databases->id))->firstWhere('name', 'Outer joins');
+        $this->assertSame([$outer->id, $this->context->moduleId], [$sessions->find($this->by, $this->context->sessionId)->topicId, $outer->moduleId]);
+        $this->assertSame(['saved' => ['topic' => 1], 'topic' => 'Outer joins'], $this->context->effects->take());
+        $this->assertStringContainsString('already', $this->look('set_topic', ['topic' => 'outer joins']));
+
+        // One the course has is used, whatever the case.
+        $this->assertSame('The session\'s topic is now "Joins". Tell the student in a line.', $this->look('set_topic', ['topic' => 'joins']));
+        $this->assertSame($this->joins, $sessions->find($this->by, $this->context->sessionId)->topicId);
+        $this->assertStringStartsWith('Saved 1 key point in Joins.', $this->look('save_key_points', ['points' => [['text' => 'An outer join keeps unmatched rows.']]]));
+        $this->context->effects->take();
+
+        $said = $this->look('add_topics', ['topics' => [
+            ['name' => 'Self joins'], ['name' => 'JOINS'], ['name' => 'Candidate keys', 'module' => 'Week 1'], ['name' => 'Views', 'module' => 'Week 9'],
+        ]]);
+        $this->assertStringStartsWith('Added 2 topics: Self joins, Candidate keys. Already in the course: JOINS. Not added: Views: There is no module called "Week 9" in this course.', $said);
+        $byName = collect($topics->list($this->by, $this->databases->id))->keyBy('name');
+        $this->assertSame([$this->context->moduleId, $this->week1], [$byName['Self joins']->moduleId, $byName['Candidate keys']->moduleId]);
+        $this->assertSame(['saved' => ['topic' => 2]], $this->context->effects->take());
+        $this->assertStringStartsWith('No topics were added. Already in the course: Self joins.', $this->look('add_topics', ['topics' => [['name' => 'Self joins']]]));
+
+        // An ended session keeps its topic.
+        $sessions->end($this->by, $this->context->sessionId);
+        $this->assertStringContainsString('has ended', $this->look('set_topic', ['topic' => 'Self joins']));
+    }
+
     public function test_the_tutor_writes_in_the_sessions_study_note_a_named_one_or_a_new_one(): void
     {
         $first = $this->look('write_note', ['text' => "## Joins\n\n- A **left** join keeps every left row.\n- Energy: \$E = mc^2\$"]);

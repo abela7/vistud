@@ -11,7 +11,10 @@
         'partial' => ['Partly', '2'],
         'correct' => ['Got it', '3'],
     ];
-    $back = route('workspaces.show', [$workspaceId, 'flashcards']).($topicId !== null ? '?topic='.($topicId === '' ? 'none' : $topicId) : '');
+    $back = route('workspaces.show', [$workspaceId, 'flashcards', ...array_filter([
+        'module' => $moduleId === null ? null : ($moduleId === '' ? 'none' : $moduleId),
+        'topic' => $topicId === null ? null : ($topicId === '' ? 'none' : $topicId),
+    ])]);
     $plural = fn (int $n, string $one, string $many) => $n === 1 ? "1 {$one}" : "{$n} {$many}";
     $done = $total > 0 ? min($position, $total) : 0;
     $nextWords = null;
@@ -30,6 +33,9 @@
         <nav aria-label="Path" class="crumbs">
             <ol role="list">
                 <li><a href="{{ $back }}">Flashcards</a></li>
+                @if ($roundModule)
+                    <li>{{ $roundModule }}</li>
+                @endif
                 @if ($roundTopic)
                     <li>{{ $roundTopic }}</li>
                 @endif

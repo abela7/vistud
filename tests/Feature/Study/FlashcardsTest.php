@@ -10,6 +10,7 @@ use App\Platform\Errors\Unprocessable;
 use App\Study\CardMaker;
 use App\Study\Findings;
 use App\Study\Flashcards;
+use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Sessions;
 use App\Study\TopicDetails;
@@ -104,13 +105,51 @@ class FlashcardsTest extends TestCase
         $this->assertSame(['tomorrow', '3 days', '2 weeks', '1 month', '4 months'], array_map(fn ($d) => Flashcards::gapWords($d), [1, 3, 14, 30, 120]));
     }
 
+    public function test_a_card_is_in_its_topics_module_else_the_one_chosen_else_its_sessions_and_the_deck_shows_them_by_module(): void
+    {
+        $modules = app(Modules::class);
+        $week1 = $modules->create($this->by, $this->databases->id, ['title' => 'Week 1'])->id;
+        $week2 = $modules->create($this->by, $this->databases->id, ['title' => 'Week 2'])->id;
+        app(Topics::class)->move($this->by, $this->joins->id, $week2);
+        $session = app(Sessions::class)->start($this->by, $this->databases->id, null, $week1);
+
+        $onJoins = $this->cards->add($this->by, $this->databases->id, $this->joins->id, 'What does a LEFT JOIN keep?', 'Every left row.', moduleId: $week1);
+        $chosen = $this->cards->add($this->by, $this->databases->id, null, 'What is a relation?', 'A table.', moduleId: $week1);
+        $fromSession = $this->cards->add($this->by, $this->databases->id, null, 'What is a tuple?', 'A row.', 'ai', $session->id);
+        $loose = $this->cards->add($this->by, $this->databases->id, null, 'What is SQL?', 'A query language.');
+        $module = fn (string $id) => $this->cards->find($this->by, $id)->moduleId;
+        $this->assertSame([$week2, $week1, $week1, null], [$module($onJoins), $module($chosen), $module($fromSession), $module($loose)]);
+        $this->assertThrows(fn () => $this->cards->add($this->by, $this->databases->id, null, 'a', 'b', moduleId: Str::uuid()->toString()), NotFound::class);
+
+        // By module: the cards, the counts and the reviews.
+        $this->assertEqualsCanonicalizing([$chosen, $fromSession], array_column($this->cards->list($this->by, $this->databases->id, null, $week1), 'id'));
+        $this->assertSame([$loose], array_column($this->cards->list($this->by, $this->databases->id, null, ''), 'id'));
+        $this->assertEquals([$week1 => ['total' => 2, 'due' => 2], $week2 => ['total' => 1, 'due' => 1], '' => ['total' => 1, 'due' => 1]], $this->cards->counts($this->by, $this->databases->id)['modules']);
+        $this->assertSame(1, $this->cards->counts($this->by, $this->databases->id, null, $week2)['total']);
+        $this->assertSame([$onJoins], $this->cards->queue($this->by, $this->databases->id, null, false, $week2));
+
+        // Changing the words keeps the module; '' takes the card out of every module; a topic's module wins.
+        $this->cards->update($this->by, $chosen, null, 'What is a relation?', 'A table of rows.');
+        $this->assertSame($week1, $module($chosen));
+        $this->cards->update($this->by, $chosen, null, 'What is a relation?', 'A table of rows.', '');
+        $this->assertNull($module($chosen));
+        $this->cards->update($this->by, $chosen, $this->joins->id, 'What is a relation?', 'A table of rows.', $week1);
+        $this->assertSame($week2, $module($chosen));
+
+        // A topic that moves takes its cards along; a module that goes leaves them in none.
+        app(Topics::class)->move($this->by, $this->joins->id, $week1);
+        $this->assertSame([$week1, $week1], [$module($onJoins), $module($chosen)]);
+        $modules->delete($this->by, $week1);
+        $this->assertSame([null, null, null], [$module($onJoins), $module($chosen), $module($fromSession)]);
+    }
+
     public function test_answers_move_cards_on_the_ladder_by_the_students_day_and_become_self_judged_attempts(): void
     {
         $left = $this->cards->add($this->by, $this->databases->id, $this->joins->id, 'What does a LEFT JOIN keep?', 'Every left row.');
         $inner = $this->cards->add($this->by, $this->databases->id, $this->joins->id, 'What does an INNER JOIN keep?', 'Matching rows only.');
         $this->assertSame('2026-10-06', $this->cards->today($this->by));
         $this->assertSame([$left, $inner], $this->cards->queue($this->by, $this->databases->id));
-        $this->assertSame(['total' => 2, 'due' => 2, 'new' => 2, 'next_on' => null, 'next_count' => 0], array_diff_key($this->cards->counts($this->by, $this->databases->id), ['topics' => 1]));
+        $this->assertSame(['total' => 2, 'due' => 2, 'new' => 2, 'next_on' => null, 'next_count' => 0], array_diff_key($this->cards->counts($this->by, $this->databases->id), ['topics' => 1, 'modules' => 1]));
 
         $card = $this->cards->answer($this->by, $left, 'correct');
         $this->assertSame(['2026-10-07', 1, 1, 0, 'correct'], [$card->dueOn, $card->step, $card->reviews, $card->lapses, $card->lastResult]);
@@ -244,7 +283,7 @@ class FlashcardsTest extends TestCase
         $cards[1]['back'] = 'A column whose value names each row.';
         $cards[2]['topic_id'] = 'not-a-topic';
         $result = $maker->save($this->by, $this->databases->id, $cards);
-        $this->assertSame(['saved' => 1, 'failed' => [[2, 'Its topic no longer exists.']]], $result);
+        $this->assertSame(['saved' => 1, 'failed' => [[2, 'Its topic or module no longer exists.']]], $result);
         $saved = $this->cards->list($this->by, $this->databases->id, $this->keys->id)[0];
         $this->assertSame(['A column whose value names each row.', 'ai', null], [$saved->back, $saved->author, $saved->sessionId]);
     }

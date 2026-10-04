@@ -247,3 +247,19 @@ test('the top-bar timer hides to a pulsing dot, and stays hidden until shown aga
     await expect(pill(page)).toBeVisible();
     await expect(pill(page).getByRole('button', { name: 'Pause the session' })).toBeVisible();
 });
+
+test('the session topic is changed on the page, to one of the module or a new one', async ({ page }) => {
+    await page.setViewportSize(desktop);
+    await openSession(page);
+    await page.getByRole('button', { name: 'Change topic' }).click();
+    const panel = page.locator('#session-dialog');
+    await expect(panel.getByRole('heading', { name: 'What this session is about' })).toBeVisible();
+    await panel.getByLabel('Topic', { exact: true }).selectOption('new');
+    await panel.getByLabel('Name').fill('Outer joins');
+    expect(await analyse(page)).toEqual([]);
+    await page.screenshot({ path: 'test-results/session-topic-panel.png' });
+    await panel.getByRole('button', { name: 'Save' }).click();
+    await expect(panel).not.toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Outer joins' })).toBeVisible();
+    await page.screenshot({ path: 'test-results/session-topic-set.png' });
+});

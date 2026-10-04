@@ -331,6 +331,22 @@ export function makeStudentWithCards() {
     return { ...student, ...JSON.parse(out) };
 }
 
+/** makeStudentWithCards, with a second module holding one card on a topic of its own, and one card in no module. */
+export function makeStudentWithModuleCards() {
+    const student = makeStudentWithCards();
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `$w = '${student.workspace}'; $c = app(\\App\\Study\\Flashcards::class);`,
+        `$m = app(\\App\\Study\\Modules::class)->create($p, $w, ['title' => 'Week 2: SQL queries']);`,
+        `$t = app(\\App\\Study\\Topics::class)->create($p, $w, 'Subqueries', $m->id);`,
+        `$c->add($p, $w, $t->id, 'What does a correlated subquery refer to?', 'A column of the outer query.');`,
+        `$c->add($p, $w, null, 'What does SQL stand for?', 'Structured Query Language.');`,
+        `echo json_encode(['week2' => $m->id]);`,
+    ].join(' ');
+    const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
+    return { ...student, ...JSON.parse(out) };
+}
+
 /** A student with no second factor, so login finishes on the home page. */
 export function makeStudentAccount() {
     return makeAccount(false);
