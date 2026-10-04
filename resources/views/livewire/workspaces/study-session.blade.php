@@ -19,7 +19,7 @@
     $title = $topic?->name ?? $module?->title ?? 'Study session';
     $uid = $this->getId();
     $tiles = array_values(array_filter([
-        $open ? ['ai', 'Study with an AI', 'sparkles', 'purple', 'Copy the briefing into any AI', ['wire:click' => 'showBriefing']] : null,
+        $open ? ['ai', 'Another AI', 'clipboard-copy', 'purple', 'Copy the briefing into any AI', ['wire:click' => 'showBriefing']] : null,
         ['chat', 'Save from the chat', 'clipboard-paste', 'green', 'Keep what the AI taught you', ['x-on:click' => "Livewire.dispatch('capture-open')"]],
         ['question', 'Ask a question', 'circle-help', 'blue', $openQuestions > 0 ? $openQuestions.' '.Str::plural('question', $openQuestions).' open' : 'Something you don\'t get', ['x-on:click' => "Livewire.dispatch('question-new')"]],
         ['card', 'New flashcard', 'gallery-vertical-end', 'orange', 'To review later', ['wire:click' => 'newFlashcard']],
@@ -136,6 +136,8 @@
             @endforeach
         </ul>
     </section>
+
+    <livewire:workspaces.tutor-chat :workspace-id="$workspaceId" :session-id="$session->id" :key="'chat-'.$session->id" />
 
     <livewire:workspaces.question-board :workspace-id="$workspaceId" :module-id="$module?->id" :session-id="$session->id" :folded="true" :key="'questions-'.$session->id" />
 

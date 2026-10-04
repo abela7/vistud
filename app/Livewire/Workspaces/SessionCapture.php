@@ -66,11 +66,16 @@ final class SessionCapture extends Component
         [$this->workspaceId, $this->sessionId] = [$workspaceId, $sessionId];
     }
 
+    /** Opens to paste; given the text (the built-in chat's replies), straight to the review of its marks. */
     #[On('capture-open')]
-    public function open(): void
+    public function open(?string $text = null): void
     {
         $this->close();
         $this->step = 'paste';
+        if (is_string($text) && trim($text) !== '') {
+            $this->text = $text;
+            $this->read();
+        }
         $this->dispatch('capture-dialog-open');
     }
 

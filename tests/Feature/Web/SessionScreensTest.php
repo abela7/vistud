@@ -55,7 +55,7 @@ class SessionScreensTest extends TestCase
             ->assertOk()
             ->assertSee('<title>Study session · Databases', false)
             ->assertSeeInOrder(['Joins', 'Started Mon 5 Oct, 09:00', 'Studying', '0:00:00', 'Pause', 'Take a break', 'End session'])
-            ->assertSeeInOrder(['Study with an AI', 'Save from the chat', 'Ask a question', 'New flashcard', 'Write a note', 'Notes &amp; files'], false)
+            ->assertSeeInOrder(['Another AI', 'Save from the chat', 'Ask a question', 'New flashcard', 'Write a note', 'Notes &amp; files'], false)
             ->assertDontSee('What happened')
             ->assertSee('data-session-heartbeat', false);
 

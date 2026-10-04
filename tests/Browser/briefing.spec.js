@@ -23,7 +23,7 @@ async function openSession(page) {
 }
 
 async function openBriefing(page) {
-    await page.getByRole('button', { name: 'Study with an AI', exact: true }).click();
+    await page.getByRole('button', { name: 'Another AI', exact: true }).click();
     await dialog(page).getByRole('heading', { name: 'Study with an AI' }).waitFor();
 }
 

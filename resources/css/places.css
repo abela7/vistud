@@ -2681,3 +2681,245 @@
         }
     }
 }
+
+@layer components {
+    /*
+    | The built-in chat on a study session's page (docs/specs/study-memory.md §6): a box with a head, the turns
+    | (the student's on the right in the accent's tint, the tutor's on the left), a line under each answer with
+    | what it looked up and cost, and the writing line at the bottom. The log scrolls inside the box, so the page
+    | keeps its shape however long the chat gets.
+    */
+    .chat {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+    }
+
+    .chat-head {
+        gap: 0.5rem 0.625rem;
+    }
+
+    .chat-head .item-icon {
+        width: 2rem;
+        height: 2rem;
+    }
+
+    .chat-head .item-icon svg {
+        width: 1.125rem;
+        height: 1.125rem;
+    }
+
+    .chat-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1.75rem 1rem;
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-lg);
+        text-align: center;
+    }
+
+    .chat-chips {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .chat-chip {
+        padding: 0.375rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 9999px;
+        background-color: var(--surface);
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition:
+            border-color 0.15s ease,
+            background-color 0.15s ease;
+    }
+
+    .chat-chip:hover {
+        border-color: var(--accent);
+        background-color: var(--hover);
+    }
+
+    .chat-chip:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .chat-log {
+        display: flex;
+        flex-direction: column;
+        gap: 0.875rem;
+        max-height: 65vh;
+        min-height: 12rem;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 0.25rem 0.25rem 0.5rem;
+    }
+
+    .chat-turn {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+        max-width: 88%;
+    }
+
+    .chat-turn.is-me {
+        align-self: flex-end;
+        align-items: flex-end;
+        max-width: 80%;
+    }
+
+    .chat-bubble {
+        min-width: 0;
+        padding: 0.625rem 0.875rem;
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+    }
+
+    .chat-turn.is-me .chat-bubble {
+        background-color: var(--accent-subtle);
+        color: var(--text);
+        border-bottom-right-radius: 0.25rem;
+    }
+
+    .chat-turn.is-tutor .chat-bubble {
+        border-bottom-left-radius: 0.25rem;
+        white-space: normal;
+    }
+
+    .chat-meta {
+        padding: 0 0.25rem;
+        color: var(--text-subtle);
+        font-size: 0.75rem;
+    }
+
+    /* The tutor's Markdown, kept quiet: small headings, tight lists, code that scrolls, and the marks as quotes. */
+    .chat-markdown > * + * {
+        margin-top: 0.5rem;
+    }
+
+    .chat-markdown :is(h1, h2, h3, h4) {
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .chat-markdown :is(ul, ol) {
+        padding-left: 1.25rem;
+    }
+
+    .chat-markdown ul {
+        list-style: disc;
+    }
+
+    .chat-markdown ol {
+        list-style: decimal;
+    }
+
+    .chat-markdown li + li {
+        margin-top: 0.125rem;
+    }
+
+    .chat-markdown pre {
+        padding: 0.625rem 0.75rem;
+        border-radius: var(--radius-md);
+        background-color: var(--surface);
+        overflow-x: auto;
+        font-size: 0.875rem;
+    }
+
+    .chat-markdown code {
+        font-size: 0.875em;
+    }
+
+    .chat-markdown table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+    }
+
+    .chat-markdown :is(th, td) {
+        padding: 0.25rem 0.5rem;
+        border: 1px solid var(--border);
+        text-align: left;
+    }
+
+    .chat-markdown blockquote {
+        padding: 0.5rem 0.75rem;
+        border-left: 3px solid var(--accent);
+        border-radius: 0 var(--radius-md) var(--radius-md) 0;
+        background-color: var(--surface);
+        font-size: 0.9375rem;
+    }
+
+    .chat-markdown blockquote > * + * {
+        margin-top: 0.25rem;
+    }
+
+    .chat-markdown a {
+        color: var(--accent-contrast);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    .chat-compose {
+        display: flex;
+        align-items: flex-end;
+        gap: 0.5rem;
+        padding: 0.375rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface);
+        transition:
+            border-color 0.15s ease,
+            box-shadow 0.15s ease;
+    }
+
+    .chat-compose:focus-within {
+        border-color: var(--focus-ring);
+        box-shadow: 0 0 0 2px var(--accent-subtle);
+    }
+
+    .chat-box {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-height: 12rem;
+        padding: 0.5rem 0.625rem;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        line-height: 1.5;
+        resize: none;
+    }
+
+    .chat-box:focus {
+        outline: none;
+    }
+
+    .chat-box::placeholder {
+        color: var(--text-subtle);
+    }
+
+    .chat-send {
+        flex: none;
+        width: 2.5rem;
+        height: 2.5rem;
+        padding: 0;
+        border-radius: 9999px;
+    }
+
+    .chat-thinking {
+        padding-left: 0.5rem;
+    }
+}

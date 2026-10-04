@@ -398,9 +398,26 @@ message: not set up, the key refused, out of credit, the model unknown, busy,
 down, unreachable; never the key. `php artisan vistud:doctor` checks the key
 and that the service answers; the AI engine page's *Try it* does the same.
 
-**Still to come:** the chat on the session page (streaming, pictures and
-files in it, *Think harder* for one question on a stronger model, the cost
-shown as it goes); files read by the tutor (PDFs and pictures directly, the
-Office PDF for the rest); voice by the browser's own dictation; the golden
-replay (`docs/specs/golden-replay-sql-joins.md`) run against a model before
-it is trusted; the MCP server on the same tools.
+**The chat on the session page** (built, 2026-10-05; `Livewire\Workspaces\TutorChat`):
+a box under the session's tiles, *Your tutor*, with the model and what the
+chat has cost against the session's limit in its head. Empty, it offers
+three openings ("Where did we stop last time…", "Explain this topic…",
+"Quiz me…"); then the turns, the student's on the right, the tutor's on the
+left as Markdown with its marks shown as labelled quotes (*Key point ·
+Joins*, *Flashcard*, *Your answer*, *Status*, *Where we are*, *Summary*;
+`App\Engine\ChatMarks`) and, under each answer, what it looked up and
+cost. A line to write in (Enter sends, Shift+Enter a new line; "Thinking…"
+while the answer is made, which arrives whole). **Keep what the tutor
+marked** opens the write-back's review straight on the chat's replies, so
+nothing is kept until the student ticks it. The engine's refusals (no key,
+the limit reached, the service down) show under the box in plain words.
+Before the set-up is done the box points to the AI engine page; after the
+session ends the chat stays to read. The old tile is now *Another AI*
+(the briefing to copy elsewhere).
+
+**Still to come:** streaming (the answer as it is written), pictures and
+files in the chat, *Think harder* for one question on a stronger model;
+files read by the tutor (PDFs and pictures directly, the Office PDF for the
+rest); voice by the browser's own dictation; the golden replay
+(`docs/specs/golden-replay-sql-joins.md`) run against a model before it is
+trusted; the MCP server on the same tools.

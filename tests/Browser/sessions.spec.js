@@ -68,7 +68,7 @@ test('the session page is an open space: a slim clock, what to do as tiles, and 
     await page.setViewportSize(desktop);
     const student = await openSession(page);
     const tiles = page.getByRole('region', { name: 'What to do' });
-    for (const name of ['Study with an AI', 'Save from the chat', 'Ask a question', 'New flashcard', 'Write a note', 'Notes & files']) {
+    for (const name of ['Another AI', 'Save from the chat', 'Ask a question', 'New flashcard', 'Write a note', 'Notes & files']) {
         await expect(tiles.getByRole('button', { name, exact: true })).toBeVisible();
     }
     await expect(page.getByRole('region', { name: 'What happened' })).toHaveCount(0);

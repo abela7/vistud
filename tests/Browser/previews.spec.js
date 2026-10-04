@@ -793,7 +793,7 @@ test('briefing: the dialog, how the AI teaches, and the start options', async ({
         for (const theme of ['vistud-light', 'vistud-dark']) {
             await page.setViewportSize(viewport);
             await useTheme(page, theme);
-            await page.getByRole('button', { name: 'Study with an AI', exact: true }).click();
+            await page.getByRole('button', { name: 'Another AI', exact: true }).click();
             await page.locator('#session-dialog').getByRole('heading', { name: 'Study with an AI' }).waitFor();
             await page.screenshot({ path: out(`briefing-${size}-${theme}`) });
             await page.keyboard.press('Escape');

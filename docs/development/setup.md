@@ -85,7 +85,7 @@ The chat in a study session calls a language model through [OpenRouter](https://
 
 **Set it up on a screen, as a student:** account menu → *AI engine* (or a workspace's Overview → ⋯ → *AI engine*). Paste a key from openrouter.ai (its *Keys* page) and press *Save and try*; the page says whether the service answers. The key is kept encrypted with the app key and shown again only by its last four characters; the chats go on that student's own account at the service. An admin can also set up one key for everyone in the admin area's *AI engine* page; a student without their own key uses it. A server set up by hand can put a shared key in `.env` as `VISTUD_ENGINE_KEY` instead.
 
-Never paste the key into a chat with an AI agent, a ticket or a commit. `php artisan vistud:doctor` says whether a key is set and whether the service answers; `php artisan vistud:engine:models --find=mini` lists the models with their prices; `php artisan vistud:engine:ask {session-id} "Hi" --user=you@example.com` says something in an open session's chat from the shell. Tests never call the service: they run on `App\Engine\Fake`.
+Never paste the key into a chat with an AI agent, a ticket or a commit. `php artisan vistud:doctor` says whether a key is set and whether the service answers; `php artisan vistud:engine:models --find=mini` lists the models with their prices; `php artisan vistud:engine:ask {session-id} "Hi" --user=you@example.com` says something in an open session's chat from the shell (the session's page has the chat itself). Tests never call the service: they run on `App\Engine\Fake`.
 
 ## Themes and front-end assets
 
