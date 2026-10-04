@@ -60,7 +60,7 @@ class SessionChatTest extends TestCase
         app(Notes::class)->save($this->by, $note->id, ['base_version' => 1, 'save_id' => 'engine-save-1', 'client_id' => 'engine-tab-1', 'title' => 'Lecture 3: joins', 'doc' => ['type' => 'doc', 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'A left join keeps every left row.']]]]]]);
         $this->session = app(Sessions::class)->start($this->by, $this->databases->id, $joins, $week2);
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
-        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'quick_model' => 'fake/quick', 'fallback_model' => 'fake/plain', 'consent' => true]);
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'fallback_model' => 'fake/plain', 'consent' => true]);
     }
 
     private function chat(): SessionChat

@@ -87,7 +87,7 @@
             <span class="item-icon" aria-hidden="true"><x-icon name="settings" class="size-5" /></span>
             <div class="panel-head-text">
                 <h2 id="engine-defaults-heading" class="panel-title">Step 2 · The models everyone starts with</h2>
-                <p class="panel-hint">Each student can change these for themselves (Overview → ⋯ → AI engine). Leave a model empty to make them choose.</p>
+                <p class="panel-hint">Students can change these for themselves. Leave a model empty to make them choose.</p>
             </div>
         </div>
         <form wire:submit="saveDefaults" novalidate class="space-y-4">
@@ -99,9 +99,10 @@
             @if ($status['key_set'] && $models === [])
                 <p class="text-sm text-fg-muted">The service's list of models couldn't be loaded, so type a model's id as the service names it.</p>
             @endif
-            <div class="grid gap-4 sm:grid-cols-2">
-                <x-field name="tutorModel" label="Tutor model" wire:model="tutorModel" list="engine-default-models" autocomplete="off" placeholder="openai/gpt-4.1-mini" hint="Teaches in study sessions. A cheap, capable one is a good start." />
-                <x-field name="quickModel" label="Quick model (optional)" wire:model="quickModel" list="engine-default-models" autocomplete="off" placeholder="google/gemini-2.5-flash" hint="For small jobs. The tutor model when empty." />
+            <div class="grid gap-4 sm:grid-cols-3">
+                <x-field name="tutorModel" label="Tutor model" wire:model="tutorModel" list="engine-default-models" autocomplete="off" placeholder="openai/gpt-4.1-mini" hint="Teaches in sessions." />
+                <x-field name="readerModel" label="Reader model (optional)" wire:model="readerModel" list="engine-default-models" autocomplete="off" placeholder="google/gemini-2.5-flash" hint="Reads files, writes summaries. Tutor's when empty." />
+                <x-field name="helperModel" label="Helper model (optional)" wire:model="helperModel" list="engine-default-models" autocomplete="off" placeholder="google/gemini-2.5-flash-lite" hint="Quick edits and questions. Reader's when empty." />
             </div>
             <details class="text-sm">
                 <summary class="cursor-pointer text-fg-muted">Another service than OpenRouter</summary>

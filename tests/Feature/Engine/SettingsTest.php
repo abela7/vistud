@@ -4,6 +4,7 @@ namespace Tests\Feature\Engine;
 
 use App\Engine\Engine;
 use App\Engine\Fake;
+use App\Engine\Role;
 use App\Engine\Settings;
 use App\Platform\Errors\Unprocessable;
 use Illuminate\Support\Facades\DB;
@@ -18,20 +19,20 @@ class SettingsTest extends TestCase
 
     public function test_the_defaults_come_from_the_owner_until_the_student_chooses_and_a_choice_is_kept(): void
     {
-        config(['vistud.engine.tutor_model' => 'anthropic/claude-sonnet-4.5', 'vistud.engine.quick_model' => '']);
+        config(['vistud.engine.tutor_model' => 'anthropic/claude-sonnet-4.5', 'vistud.engine.reader_model' => '', 'vistud.engine.helper_model' => '']);
         $by = $this->principal($this->student());
         $settings = app(Settings::class);
 
         $choices = $settings->get($by);
-        $this->assertSame(['anthropic/claude-sonnet-4.5', '', '', Settings::DEFAULT_SESSION_CAP, Settings::DEFAULT_MONTH_CAP, true, null], [$choices->tutorModel, $choices->quickModel, $choices->fallbackModel, $choices->sessionCapMicros, $choices->monthCapMicros, $choices->noTraining, $choices->consentedAt]);
+        $this->assertSame(['anthropic/claude-sonnet-4.5', '', '', Settings::DEFAULT_SESSION_CAP, Settings::DEFAULT_MONTH_CAP, true, null], [$choices->tutorModel, $choices->readerModel, $choices->fallbackModel, $choices->sessionCapMicros, $choices->monthCapMicros, $choices->noTraining, $choices->consentedAt]);
         $this->assertFalse($choices->ready());
-        $this->assertSame('anthropic/claude-sonnet-4.5', $choices->quickOrTutor());
+        $this->assertSame('anthropic/claude-sonnet-4.5', $choices->modelFor(Role::Reader));
 
-        $choices = $settings->set($by, ['tutor_model' => ' openai/gpt-4.1-mini ', 'quick_model' => 'google/gemini-2.5-flash', 'fallback_model' => '', 'session_cap' => '$1.50', 'month_cap' => '', 'no_training' => '1', 'consent' => true]);
-        $this->assertSame(['openai/gpt-4.1-mini', 'google/gemini-2.5-flash', '', 1_500_000, Settings::DEFAULT_MONTH_CAP, true], [$choices->tutorModel, $choices->quickModel, $choices->fallbackModel, $choices->sessionCapMicros, $choices->monthCapMicros, $choices->noTraining]);
+        $choices = $settings->set($by, ['tutor_model' => ' openai/gpt-4.1-mini ', 'reader_model' => 'google/gemini-2.5-flash', 'fallback_model' => '', 'session_cap' => '$1.50', 'month_cap' => '', 'no_training' => '1', 'consent' => true]);
+        $this->assertSame(['openai/gpt-4.1-mini', 'google/gemini-2.5-flash', '', 1_500_000, Settings::DEFAULT_MONTH_CAP, true], [$choices->tutorModel, $choices->readerModel, $choices->fallbackModel, $choices->sessionCapMicros, $choices->monthCapMicros, $choices->noTraining]);
         $this->assertNotNull($choices->consentedAt);
         $this->assertTrue($choices->ready());
-        $this->assertSame('google/gemini-2.5-flash', $choices->quickOrTutor());
+        $this->assertSame('google/gemini-2.5-flash', $choices->modelFor(Role::Reader));
 
         // Changing the models keeps the consent; taking the consent back removes it.
         $consentedAt = $choices->consentedAt;

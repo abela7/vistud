@@ -28,7 +28,9 @@ final class EngineSetup extends Component
 
     public string $tutorModel = '';
 
-    public string $quickModel = '';
+    public string $readerModel = '';
+
+    public string $helperModel = '';
 
     #[Locked]
     public bool $confirmingRemoval = false;
@@ -52,7 +54,7 @@ final class EngineSetup extends Component
     public function mount(): void
     {
         $status = $this->setup->status($this->principal());
-        [$this->url, $this->tutorModel, $this->quickModel] = [$status['url'], $status['tutor_model'], $status['quick_model']];
+        [$this->url, $this->tutorModel, $this->readerModel, $this->helperModel] = [$status['url'], $status['tutor_model'], $status['reader_model'], $status['helper_model']];
     }
 
     /** Keeps the key and tries it at once, so the admin sees it work (or why it doesn't). */
@@ -108,10 +110,10 @@ final class EngineSetup extends Component
     {
         $this->resetErrorBag();
         try {
-            $this->setup->setDefaults($this->principal(), ['url' => $this->url, 'tutor_model' => $this->tutorModel, 'quick_model' => $this->quickModel]);
+            $this->setup->setDefaults($this->principal(), ['url' => $this->url, 'tutor_model' => $this->tutorModel, 'reader_model' => $this->readerModel, 'helper_model' => $this->helperModel]);
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
-                $this->addError(['url' => 'url', 'tutor_model' => 'tutorModel', 'quick_model' => 'quickModel'][$field] ?? $field, $messages[0]);
+                $this->addError(['url' => 'url', 'tutor_model' => 'tutorModel', 'reader_model' => 'readerModel', 'helper_model' => 'helperModel'][$field] ?? $field, $messages[0]);
             }
 
             return;
@@ -121,7 +123,7 @@ final class EngineSetup extends Component
             return;
         }
         $status = $this->setup->status($this->principal());
-        [$this->url, $this->tutorModel, $this->quickModel] = [$status['url'], $status['tutor_model'], $status['quick_model']];
+        [$this->url, $this->tutorModel, $this->readerModel, $this->helperModel] = [$status['url'], $status['tutor_model'], $status['reader_model'], $status['helper_model']];
         $this->notify('The defaults are saved.');
     }
 

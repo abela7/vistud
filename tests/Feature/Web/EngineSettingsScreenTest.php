@@ -50,10 +50,10 @@ class EngineSettingsScreenTest extends TestCase
 
         $page->set('tutorModel', 'bad id!')->call('save')->assertHasErrors(['tutorModel']);
         $page->set('tutorModel', 'fake/plain')->assertSee('no look-ups: this model can\'t call tools')
-            ->set('tutorModel', 'fake/tutor')->set('quickModel', 'fake/quick')->set('sessionCap', '1.5')->set('consent', true)
+            ->set('tutorModel', 'fake/tutor')->set('readerModel', 'fake/quick')->set('sessionCap', '1.5')->set('consent', true)
             ->call('save')->assertHasNoErrors()->assertSee('Your AI engine settings are saved.');
         $choices = app(Settings::class)->get($by);
-        $this->assertSame(['fake/tutor', 'fake/quick', 1_500_000, true, true], [$choices->tutorModel, $choices->quickModel, $choices->sessionCapMicros, $choices->ready(), $choices->ownKey()]);
+        $this->assertSame(['fake/tutor', 'fake/quick', 1_500_000, true, true], [$choices->tutorModel, $choices->readerModel, $choices->sessionCapMicros, $choices->ready(), $choices->ownKey()]);
 
         $page->call('askRemove')->assertSee('Remove your key?')->call('removeKey')->assertSee('Your key is removed.')->assertSee('Not set up');
         $this->assertNull(app(Settings::class)->key($by));

@@ -291,7 +291,7 @@ final class SessionChat
         }
         $choices = $this->settings->get($by);
         $key = $this->settings->key($by);
-        if (($key === null && ! $this->setup->keySet()) || $choices->quickOrTutor() === '' || $choices->consentedAt === null) {
+        if (($key === null && ! $this->setup->keySet()) || $choices->modelFor(Role::Reader) === '' || $choices->consentedAt === null) {
             return null;
         }
 
@@ -303,7 +303,7 @@ final class SessionChat
         }
         try {
             $reply = $this->engine->reply(new Request(
-                $choices->quickOrTutor(),
+                $choices->modelFor(Role::Reader),
                 'You write the record of one study session\'s chat between a student and their tutor, for the student\'s own study memory in ViStud. Answer with one JSON object and nothing else: {"summary": "...", "checkpoint": "..."}. summary: what was studied and explained, what the student got right or wrong, and what still confuses them, in plain prose of at most '.self::WRAP_SUMMARY_CHARS.' characters, no headings or lists. checkpoint: where the session stopped (like slide 7 of 18) and what comes next, in one or two sentences of at most '.self::WRAP_CHECKPOINT_CHARS.' characters. Write in the language the student wrote in. Only what is in the chat: never invent what wasn\'t said.',
                 [['role' => 'user', 'content' => $text]],
                 maxTokens: 900,
@@ -367,17 +367,7 @@ final class SessionChat
         if (! $session->isOpen()) {
             throw new Unprocessable('session_ended', 'This session has ended. Start a new one to keep chatting.');
         }
-        $choices = $this->settings->get($by);
-        $key = $this->settings->key($by);
-        if ($key === null && ! $this->setup->keySet()) {
-            throw new Unprocessable('engine_key', 'Add your OpenRouter key in your AI engine settings first.');
-        }
-        if ($choices->tutorModel === '') {
-            throw new Unprocessable('engine_model', 'Choose a model in your AI engine settings first.');
-        }
-        if ($choices->consentedAt === null) {
-            throw new Unprocessable('engine_consent', 'Agree to the chat in your AI engine settings first.');
-        }
+        [$choices, $key] = $this->settings->ready($by, Role::Tutor);
 
         return [$session, $choices, $key];
     }
@@ -549,7 +539,7 @@ final class SessionChat
 
         try {
             $reply = $this->engine->reply(new Request(
-                $choices->quickOrTutor(),
+                $choices->modelFor(Role::Reader),
                 'You summarise one study session\'s chat between a student and their tutor, so the tutor can go on with it later. Keep what was explained and how far the student got, what they got right or wrong, what still confuses them, and where the chat stands. Plain text, at most '.self::SUMMARY_CHARS.' characters, no headings.',
                 [['role' => 'user', 'content' => $earlier.$transcript]],
                 maxTokens: 800,

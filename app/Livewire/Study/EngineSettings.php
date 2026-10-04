@@ -29,7 +29,9 @@ final class EngineSettings extends Component
 
     public string $tutorModel = '';
 
-    public string $quickModel = '';
+    public string $readerModel = '';
+
+    public string $helperModel = '';
 
     public string $fallbackModel = '';
 
@@ -42,6 +44,12 @@ final class EngineSettings extends Component
     public string $language = '';
 
     public bool $askTopics = false;
+
+    public bool $autoReadFiles = true;
+
+    public bool $tutorMarksTopics = true;
+
+    public bool $copyPasteAi = false;
 
     public bool $consent = false;
 
@@ -120,12 +128,13 @@ final class EngineSettings extends Component
         $this->resetErrorBag();
         try {
             $this->settings->set($this->principal(), [
-                'tutor_model' => $this->tutorModel, 'quick_model' => $this->quickModel, 'fallback_model' => $this->fallbackModel,
+                'tutor_model' => $this->tutorModel, 'reader_model' => $this->readerModel, 'helper_model' => $this->helperModel, 'fallback_model' => $this->fallbackModel,
                 'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language, 'ask_topics' => $this->askTopics,
+                'auto_read_files' => $this->autoReadFiles, 'tutor_marks_topics' => $this->tutorMarksTopics, 'copy_paste_ai' => $this->copyPasteAi,
             ]);
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
-                $this->addError(['tutor_model' => 'tutorModel', 'quick_model' => 'quickModel', 'fallback_model' => 'fallbackModel', 'session_cap' => 'sessionCap', 'month_cap' => 'monthCap'][$field] ?? $field, $messages[0]);
+                $this->addError(['tutor_model' => 'tutorModel', 'reader_model' => 'readerModel', 'helper_model' => 'helperModel', 'fallback_model' => 'fallbackModel', 'session_cap' => 'sessionCap', 'month_cap' => 'monthCap'][$field] ?? $field, $messages[0]);
             }
 
             return;
@@ -153,7 +162,8 @@ final class EngineSettings extends Component
             'models' => $models,
             'setupUrl' => $by->hasRole(Role::Admin) ? route('admin.engine') : null,
             'tutorWords' => $words($this->tutorModel),
-            'quickWords' => $words($this->quickModel),
+            'readerWords' => $words($this->readerModel),
+            'helperWords' => $words($this->helperModel),
             'fallbackWords' => $words($this->fallbackModel),
         ])->title('AI engine');
     }
@@ -162,13 +172,17 @@ final class EngineSettings extends Component
     {
         $choices = $this->settings->get($this->principal());
         $this->tutorModel = $choices->tutorModel;
-        $this->quickModel = $choices->quickModel;
+        $this->readerModel = $choices->readerModel;
+        $this->helperModel = $choices->helperModel;
         $this->fallbackModel = $choices->fallbackModel;
         $this->sessionCap = number_format($choices->sessionCapMicros / 1_000_000, 2, '.', '');
         $this->monthCap = number_format($choices->monthCapMicros / 1_000_000, 2, '.', '');
         $this->noTraining = $choices->noTraining;
         $this->language = $choices->language ?? '';
         $this->askTopics = $choices->askTopics;
+        $this->autoReadFiles = $choices->autoReadFiles;
+        $this->tutorMarksTopics = $choices->tutorMarksTopics;
+        $this->copyPasteAi = $choices->copyPasteAi;
         $this->consent = $choices->consentedAt !== null;
     }
 

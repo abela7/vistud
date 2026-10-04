@@ -27,7 +27,9 @@ final class Setup
 
     public const TUTOR = 'engine.tutor_model';
 
-    public const QUICK = 'engine.quick_model';
+    public const READER = 'engine.reader_model';
+
+    public const HELPER = 'engine.helper_model';
 
     private const MODEL_ID = '#^[a-z0-9][a-z0-9._:/-]{0,118}$#i';
 
@@ -66,19 +68,20 @@ final class Setup
         return is_string($value) && $value !== '' ? $value : (string) config('vistud.engine.url');
     }
 
-    /** @return array{tutor: string, quick: string} the models a student starts with */
+    /** @return array{tutor: string, reader: string, helper: string} the models a student starts with, by role */
     public function defaultModels(): array
     {
         return [
             'tutor' => (string) ($this->rows()[self::TUTOR]->value ?? config('vistud.engine.tutor_model', '')),
-            'quick' => (string) ($this->rows()[self::QUICK]->value ?? config('vistud.engine.quick_model', '')),
+            'reader' => (string) ($this->rows()[self::READER]->value ?? config('vistud.engine.reader_model', '')),
+            'helper' => (string) ($this->rows()[self::HELPER]->value ?? config('vistud.engine.helper_model', '')),
         ];
     }
 
     // ---------- The admin's page ----------
 
     /**
-     * @return array{key_set: bool, key_hint: ?string, key_from_env: bool, key_unreadable: bool, key_updated_at: ?string, url: string, tutor_model: string, quick_model: string}
+     * @return array{key_set: bool, key_hint: ?string, key_from_env: bool, key_unreadable: bool, key_updated_at: ?string, url: string, tutor_model: string, reader_model: string, helper_model: string}
      */
     public function status(Principal $by): array
     {
@@ -96,7 +99,8 @@ final class Setup
             'key_updated_at' => $stored ? (string) $row->updated_at : null,
             'url' => $this->url(),
             'tutor_model' => $defaults['tutor'],
-            'quick_model' => $defaults['quick'],
+            'reader_model' => $defaults['reader'],
+            'helper_model' => $defaults['helper'],
         ];
     }
 
@@ -120,7 +124,7 @@ final class Setup
         Cache::forget('vistud.engine.models');
     }
 
-    /** @param array<string, mixed> $input url, tutor_model, quick_model (empty for the built-in defaults) */
+    /** @param array<string, mixed> $input url, tutor_model, reader_model, helper_model (empty for the built-in defaults) */
     public function setDefaults(Principal $by, array $input): void
     {
         Guard::protectedAdmin($by);
@@ -130,7 +134,7 @@ final class Setup
             $errors['url'] = 'Enter the service\'s address, like https://openrouter.ai/api/v1.';
         }
         $models = [];
-        foreach (['tutor_model', 'quick_model'] as $field) {
+        foreach (['tutor_model', 'reader_model', 'helper_model'] as $field) {
             $value = is_string($input[$field] ?? null) ? trim($input[$field]) : '';
             if ($value !== '' && preg_match(self::MODEL_ID, $value) !== 1) {
                 $errors[$field] = 'Enter the model\'s id as the service names it, like "openai/gpt-4.1-mini".';
@@ -140,7 +144,8 @@ final class Setup
         Input::refuse($errors);
         $this->put(self::URL, rtrim($url, '/') ?: null, false, $by);
         $this->put(self::TUTOR, $models['tutor_model'] ?: null, false, $by);
-        $this->put(self::QUICK, $models['quick_model'] ?: null, false, $by);
+        $this->put(self::READER, $models['reader_model'] ?: null, false, $by);
+        $this->put(self::HELPER, $models['helper_model'] ?: null, false, $by);
         $this->audit->record($by, AuditAction::ENGINE_DEFAULTS_CHANGED, 'engine', 'defaults');
         Cache::forget('vistud.engine.models');
     }

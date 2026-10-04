@@ -107,7 +107,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_ending_the_session_from_its_page_saves_the_chats_summary_for_the_next_one(): void
     {
-        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'quick_model' => 'fake/quick', 'consent' => true]);
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $this->engine->will(Fake::says('A left join keeps every left row.'));
         $this->chat()->set('text', 'What is a left join?')->call('send');
 

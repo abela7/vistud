@@ -60,8 +60,10 @@ return [
         'app_name' => env('APP_NAME', 'ViStud'),
         'app_url' => env('APP_URL', 'http://localhost'),
         // The models a student starts with, until they choose their own (an id as the service names it).
+        // One per role (App\Engine\Role). The old VISTUD_ENGINE_QUICK_MODEL still sets the reader's.
         'tutor_model' => env('VISTUD_ENGINE_TUTOR_MODEL', ''),
-        'quick_model' => env('VISTUD_ENGINE_QUICK_MODEL', ''),
+        'reader_model' => env('VISTUD_ENGINE_READER_MODEL', env('VISTUD_ENGINE_QUICK_MODEL', '')),
+        'helper_model' => env('VISTUD_ENGINE_HELPER_MODEL', ''),
         // Seconds to wait for a reply; how long the list of models is kept; the most look-ups in one turn;
         // the size of a chat (characters) past which its oldest turns are folded into a summary, and how
         // many messages stay whole when that happens.

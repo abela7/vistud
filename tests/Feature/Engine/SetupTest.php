@@ -72,9 +72,9 @@ class SetupTest extends TestCase
     {
         $admin = $this->principal($this->admin());
         $setup = app(Setup::class);
-        $setup->setDefaults($admin, ['url' => 'https://other.test/v1/', 'tutor_model' => 'openai/gpt-4.1-mini', 'quick_model' => '']);
+        $setup->setDefaults($admin, ['url' => 'https://other.test/v1/', 'tutor_model' => 'openai/gpt-4.1-mini', 'reader_model' => '', 'helper_model' => '']);
         $this->assertSame('https://other.test/v1', app(Setup::class)->url());
-        $this->assertSame(['tutor' => 'openai/gpt-4.1-mini', 'quick' => ''], app(Setup::class)->defaultModels());
+        $this->assertSame(['tutor' => 'openai/gpt-4.1-mini', 'reader' => '', 'helper' => ''], app(Setup::class)->defaultModels());
         $this->assertSame('openai/gpt-4.1-mini', app(Settings::class)->get($this->principal($this->student()))->tutorModel);
         $this->assertCount(1, $this->auditRows(AuditAction::ENGINE_DEFAULTS_CHANGED));
 

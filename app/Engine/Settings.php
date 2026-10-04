@@ -6,6 +6,7 @@ use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
+use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
 use App\Study\Input;
 use Illuminate\Contracts\Encryption\DecryptException;
@@ -13,10 +14,12 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 
 /**
- * Each student's engine settings (docs/specs/study-memory.md §6): which model tutors them, which does small
- * jobs, which to try when the first fails, how much a session and a month may cost, whether their words may be
- * used for training (no, unless they say so), and their consent to the chat sending their study material to
- * the service. The owner's defaults (config) apply until they choose. The key is the owner's and lives in .env.
+ * Each student's engine settings (docs/specs/study-memory.md §6, docs/specs/vistud-2-blueprint.md §3.6): which
+ * model plays each role (the tutor that teaches, the reader that reads files, the helper that does quick jobs),
+ * which to try when the tutor's fails, how much a session and a month may cost, whether their words may be used
+ * for training (no, unless they say so), the toggles they trust the AI with, and their consent to the chat
+ * sending their study material to the service. The owner's defaults (config) apply until they choose. The key is
+ * the owner's and lives in .env.
  */
 final class Settings
 {
@@ -38,7 +41,8 @@ final class Settings
 
         return new Choices(
             tutorModel: (string) ($row->tutor_model ?? $defaults['tutor']),
-            quickModel: (string) ($row->quick_model ?? $defaults['quick']),
+            readerModel: (string) ($row->reader_model ?? $defaults['reader']),
+            helperModel: (string) ($row->helper_model ?? $defaults['helper']),
             fallbackModel: (string) ($row->fallback_model ?? ''),
             sessionCapMicros: (int) ($row->session_cap_micros ?? self::DEFAULT_SESSION_CAP),
             monthCapMicros: (int) ($row->month_cap_micros ?? self::DEFAULT_MONTH_CAP),
@@ -48,6 +52,9 @@ final class Settings
             keyUpdatedAt: $key === null || $row?->key_updated_at === null ? null : (string) $row->key_updated_at,
             language: isset($row->language) && $row->language !== '' ? (string) $row->language : null,
             askTopics: (bool) ($row->ask_topics ?? false),
+            autoReadFiles: (bool) ($row->auto_read_files ?? true),
+            tutorMarksTopics: (bool) ($row->tutor_marks_topics ?? true),
+            copyPasteAi: (bool) ($row->copy_paste_ai ?? false),
         );
     }
 
@@ -55,6 +62,32 @@ final class Settings
     public function key(Principal $by): ?string
     {
         return self::decrypt(LearnerTables::query(Guard::learner($by), 'engine_settings')->first());
+    }
+
+    /**
+     * The student's choices, their key and the model for $role, once a call may be made: a key (their own, or the
+     * one set up for everyone), a model for the role and the student's consent.
+     *
+     * @return array{0: Choices, 1: ?string, 2: string}
+     *
+     * @throws Unprocessable
+     */
+    public function ready(Principal $by, Role $role): array
+    {
+        $choices = $this->get($by);
+        $key = $this->key($by);
+        if ($key === null && ! $this->setup->keySet()) {
+            throw new Unprocessable('engine_key', 'Add your OpenRouter key in your AI engine settings first.');
+        }
+        $model = $choices->modelFor($role);
+        if ($model === '') {
+            throw new Unprocessable('engine_model', 'Choose a model in your AI engine settings first.');
+        }
+        if ($choices->consentedAt === null) {
+            throw new Unprocessable('engine_consent', 'Agree to the chat in your AI engine settings first.');
+        }
+
+        return [$choices, $key, $model];
     }
 
     /** Whether this student's chats can reach the service at all: their own key, or the one set up for everyone. */
@@ -108,15 +141,17 @@ final class Settings
     }
 
     /**
-     * @param  array<string, mixed>  $input  tutor_model, quick_model, fallback_model (ids or empty), session_cap and month_cap
-     *                                       (dollars, "2.50"), no_training and consent (booleans)
+     * @param  array<string, mixed>  $input  tutor_model, reader_model, helper_model, fallback_model (ids or empty), session_cap
+     *                                       and month_cap (dollars, "2.50"), no_training and consent (booleans); language,
+     *                                       ask_topics, auto_read_files, tutor_marks_topics and copy_paste_ai are kept as
+     *                                       they are when left out
      */
     public function set(Principal $by, array $input): Choices
     {
         $scope = Guard::learner($by);
         $errors = [];
         $models = [];
-        foreach (['tutor_model', 'quick_model', 'fallback_model'] as $key) {
+        foreach (['tutor_model', 'reader_model', 'helper_model', 'fallback_model'] as $key) {
             $value = is_string($input[$key] ?? null) ? trim($input[$key]) : '';
             if ($value !== '' && preg_match(self::MODEL_ID, $value) !== 1) {
                 $errors[$key] = 'Enter the model\'s id as the service names it, like "openai/gpt-4.1-mini".';
@@ -148,13 +183,17 @@ final class Settings
         $consent = filter_var($input['consent'] ?? ($existing?->consented_at !== null), FILTER_VALIDATE_BOOL);
         $values = [
             'tutor_model' => $models['tutor_model'],
-            'quick_model' => $models['quick_model'],
+            'reader_model' => $models['reader_model'],
+            'helper_model' => $models['helper_model'],
             'fallback_model' => $models['fallback_model'],
             'session_cap_micros' => $caps['session_cap'],
             'month_cap_micros' => $caps['month_cap'],
             'no_training' => filter_var($input['no_training'] ?? true, FILTER_VALIDATE_BOOL),
             'language' => $language === '' ? null : $language,
             'ask_topics' => filter_var($input['ask_topics'] ?? ($existing?->ask_topics ?? false), FILTER_VALIDATE_BOOL),
+            'auto_read_files' => filter_var($input['auto_read_files'] ?? ($existing?->auto_read_files ?? true), FILTER_VALIDATE_BOOL),
+            'tutor_marks_topics' => filter_var($input['tutor_marks_topics'] ?? ($existing?->tutor_marks_topics ?? true), FILTER_VALIDATE_BOOL),
+            'copy_paste_ai' => filter_var($input['copy_paste_ai'] ?? ($existing?->copy_paste_ai ?? false), FILTER_VALIDATE_BOOL),
             'consented_at' => $consent ? ($existing?->consented_at ?? now()) : null,
             'updated_at' => now(),
         ];

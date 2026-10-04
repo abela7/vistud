@@ -45,8 +45,8 @@ class EngineSetupScreenTest extends TestCase
             ->assertSet('key', '')->assertSee('The key is saved and works.')->assertSee('It works: the service offers 3 models.')->assertSee('Key ending …wxyz')->assertSee('Replace the key');
         $this->assertTrue(app(Setup::class)->keySet());
 
-        $page->set('tutorModel', 'fake/tutor')->set('quickModel', 'fake/quick')->call('saveDefaults')->assertHasNoErrors()->assertSee('The defaults are saved.');
-        $this->assertSame(['tutor' => 'fake/tutor', 'quick' => 'fake/quick'], app(Setup::class)->defaultModels());
+        $page->set('tutorModel', 'fake/tutor')->set('readerModel', 'fake/quick')->set('helperModel', 'fake/plain')->call('saveDefaults')->assertHasNoErrors()->assertSee('The defaults are saved.');
+        $this->assertSame(['tutor' => 'fake/tutor', 'reader' => 'fake/quick', 'helper' => 'fake/plain'], app(Setup::class)->defaultModels());
         $page->set('url', 'nonsense')->call('saveDefaults')->assertHasErrors(['url']);
 
         $page->call('askRemove')->assertSee('Remove the key?')->call('removeKey')->assertSee('The key is removed')->assertSee('Not set up');

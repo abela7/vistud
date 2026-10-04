@@ -94,9 +94,10 @@
             </datalist>
             <x-field name="tutorModel" label="Tutor model" wire:model.live.debounce.500ms="tutorModel" list="engine-models" autocomplete="off" placeholder="openai/gpt-4.1-mini" :hint="$tutorWords ?? 'The one that teaches in study sessions.'" />
             <div class="grid gap-4 sm:grid-cols-2">
-                <x-field name="quickModel" label="Quick model (optional)" wire:model.live.debounce.500ms="quickModel" list="engine-models" autocomplete="off" placeholder="google/gemini-2.5-flash" :hint="$quickWords ?? 'For small jobs, like folding a long chat. The tutor model when empty.'" />
-                <x-field name="fallbackModel" label="If the tutor model fails (optional)" wire:model.live.debounce.500ms="fallbackModel" list="engine-models" autocomplete="off" placeholder="anthropic/claude-haiku-4.5" :hint="$fallbackWords ?? 'Tried when the first is down or busy.'" />
+                <x-field name="readerModel" label="Reader model (optional)" wire:model.live.debounce.500ms="readerModel" list="engine-models" autocomplete="off" placeholder="google/gemini-2.5-flash" :hint="$readerWords ?? 'Reads files, writes summaries. The tutor\'s when empty.'" />
+                <x-field name="helperModel" label="Helper model (optional)" wire:model.live.debounce.500ms="helperModel" list="engine-models" autocomplete="off" placeholder="google/gemini-2.5-flash-lite" :hint="$helperWords ?? 'Quick edits and questions. The reader\'s when empty.'" />
             </div>
+            <x-field name="fallbackModel" label="If the tutor model fails (optional)" wire:model.live.debounce.500ms="fallbackModel" list="engine-models" autocomplete="off" placeholder="anthropic/claude-haiku-4.5" :hint="$fallbackWords ?? 'Tried when the first is down or busy.'" />
         </section>
 
         <section class="question-panel space-y-4" aria-labelledby="engine-language-heading">
