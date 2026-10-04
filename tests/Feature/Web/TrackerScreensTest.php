@@ -41,6 +41,8 @@ class TrackerScreensTest extends TestCase
 
     public function test_the_overview_is_short_what_to_pick_up_and_whats_coming(): void
     {
+        // Late in the evening a deadline "tomorrow" is under 24 hours away and rightly comes first; the morning keeps it a day off.
+        $this->travelTo(now()->setTime(9, 0));
         $by = $this->principal($this->ada);
         $keys = app(Topics::class)->create($by, $this->databases->id, 'Primary and foreign keys');
         app(Topics::class)->report($by, $keys->id, 'confused');

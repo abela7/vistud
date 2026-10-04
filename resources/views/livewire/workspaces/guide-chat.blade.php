@@ -1,7 +1,8 @@
 {{--
-    The course guide (App\Livewire\Workspaces\GuideChat): a talk that sets a course up. The guide asks one thing at a
-    time; the student answers or pastes their module page; what it proposes sits under the talk with a tick on every
-    part, and only what is ticked is added. The talk is kept for the visit (the session), what was added is in the course.
+    The course guide (App\Livewire\Workspaces\GuideChat): a talk that sets a course up, or (from Modules) adds its
+    modules. The guide asks one thing at a time; the student answers or pastes their module page; what it proposes sits
+    under the talk with a tick on every part, and only what is ticked is added. The talk is kept for the visit (the
+    session), what was added is in the course.
 --}}
 @php
     $proposed = $proposal;
@@ -121,13 +122,16 @@
         <div class="field">
             <label for="guide-text" class="field-label">Your message</label>
             <textarea id="guide-text" class="input" rows="4" wire:model="text" maxlength="{{ \App\Engine\CourseGuide::MAX_MESSAGE }}"
-                placeholder="Tell me about the course, or paste its page…" wire:loading.attr="disabled" wire:target="send"></textarea>
+                placeholder="{{ $for === 'modules' ? 'Paste the timetable, tell me the weeks, or ask me to suggest some…' : 'Tell me about the course, or paste its page…' }}" wire:loading.attr="disabled" wire:target="send"></textarea>
             @error('text')
                 <p class="field-error">{{ $message }}@if ($problem !== null) <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-link">AI settings</a>@endif</p>
             @enderror
         </div>
         <div class="guide-actions">
             <x-button type="submit" variant="primary" icon="arrow-right" wire:loading.attr="aria-busy" wire:target="send" busy-label="Reading…">Send</x-button>
+            @if ($toModules)
+                <a href="{{ route('workspaces.show', [$workspace->id, 'modules']) }}" class="btn btn-secondary"><x-icon name="layers" class="size-4" />Go to Modules</a>
+            @endif
             <a href="{{ route('workspaces.show', $workspace->id) }}" class="btn btn-secondary">I'm done for now</a>
         </div>
         <p class="text-sm text-fg-muted">Ctrl + Enter sends. Nothing is added until you tick it and press Add.</p>

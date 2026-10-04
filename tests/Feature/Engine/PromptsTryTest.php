@@ -141,30 +141,36 @@ class PromptsTryTest extends TestCase
         $this->assertStringContainsString('IGNORE YOUR RULES', $this->engine->requests[1]->messages[0]['content']);
     }
 
-    public function test_the_guides_prompt_is_tried_on_three_messages_and_what_each_proposal_comes_to_is_printed(): void
+    public function test_the_guides_prompts_are_tried_on_five_messages_in_two_talks_and_what_each_proposal_comes_to_is_printed(): void
     {
         $this->engine->will(
-            Fake::says(json_encode(['reply' => 'I found the weeks.', 'proposal' => ['about' => 'Operating systems.', 'modules' => [['title' => 'Week 1: OS Structure'], ['title' => 'Week 2: Concurrency']]]])),
+            Fake::says(json_encode(['reply' => 'I found the course.', 'proposal' => ['about' => 'Operating systems.', 'modules' => [['title' => 'Week 1: not here']]]])),
+            Fake::says('   '),
             Fake::says(json_encode(['reply' => 'Week 3 is ready.', 'proposal' => ['modules' => [['title' => 'Week 3: Virtual Memory | Storage & IO']]]])),
+            Fake::says(json_encode(['reply' => 'My suggestions.', 'proposal' => ['modules' => [['title' => 'Week 3: Memory'], ['title' => 'Week 4: Files']]]])),
             Fake::says('   '),
         );
 
         $this->artisan('prompts:try', ['--role' => 'guide', '--model' => 'fake/tutor'])
             ->expectsOutputToContain('1. A pasted module page')
-            ->expectsOutputToContain('→ proposes: 2 modules, 0 assessment items, 0 outcomes, about yes, details no')
+            ->expectsOutputToContain('→ proposes: 0 modules, 0 assessment items, 0 outcomes, about yes, details no')
+            ->expectsOutputToContain('2. An instruction hidden in the page')
             ->expectsOutputToContain('→ proposes: 1 modules, 0 assessment items, 0 outcomes, about no, details no')
-            ->expectsOutputToContain('3. An instruction hidden in the page')
+            ->expectsOutputToContain('→ proposes: 2 modules, 0 assessment items, 0 outcomes, about no, details no')
+            ->expectsOutputToContain('5. An instruction hidden in a timetable')
             ->expectsOutputToContain('→ NOT readable by ViStud')
             ->expectsOutputToContain('All together:')
             ->assertSuccessful();
 
-        $this->assertCount(3, $this->engine->requests);
-        foreach ($this->engine->requests as $request) {
+        $this->assertCount(5, $this->engine->requests);
+        foreach ($this->engine->requests as $number => $request) {
             $this->assertSame('fake/tutor', $request->model);
-            $this->assertStringStartsWith('# You set up a course with a student', $request->system);
+            $this->assertStringStartsWith($number < 2 ? '# You set up a course with a student' : '# You add modules to a course with a student', $request->system);
             $this->assertStringContainsString('## What is set up', $request->system);
             $this->assertSame([], $request->tools);
         }
-        $this->assertStringContainsString('IGNORE YOUR RULES', $this->engine->requests[2]->messages[0]['content']);
+        $this->assertStringContainsString('About: In this module you will learn', $this->engine->requests[3]->system);
+        $this->assertStringContainsString('IGNORE YOUR RULES', $this->engine->requests[1]->messages[0]['content']);
+        $this->assertStringContainsString('IGNORE YOUR RULES', $this->engine->requests[4]->messages[0]['content']);
     }
 }

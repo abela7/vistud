@@ -9,25 +9,35 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
+use App\Study\CourseProfileDetails;
 use App\Study\CourseProfiles;
 use App\Study\Input;
 use App\Study\Modules;
+use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
 
 /**
- * The course guide (docs/specs/vistud-2-blueprint.md, Phase 8): a talk that sets one course up. The student says what the
- * course is, or pastes its page from their university; the tutor's model asks what is missing, one thing at a time, and
- * proposes what to add: the course's details, what it is about, what it should teach, how it is assessed, the textbook and
- * the modules wanted now (they can be added one week at a time, later, with the same guide). Nothing is written by the
- * talk: the proposal is shown with ticks, and `apply()` writes only what the student ticked, never twice (a module that
- * is already there is skipped). The talk is not stored here: the screen keeps it. Each turn is one recorded run under
- * the tutor, so the month's limit counts it.
+ * The course guide (docs/specs/vistud-2-blueprint.md, Phase 8): two talks with the tutor's model, one for each job.
+ *
+ * - **Setting the course up** (`$for` empty): the student says what the course is, or pastes its page from their
+ *   university; the guide asks what is missing, one thing at a time, and proposes the course's details, what it is about,
+ *   what it should teach, how it is assessed and the textbook. It never proposes modules: they are the Modules page's job.
+ * - **Adding modules** (`$for` = `modules`): the guide has read what the course is about, teaches and is assessed on, asks
+ *   which weeks or chapters to add now (a timetable pasted, the weeks told, or some suggested from the About text), and
+ *   proposes only modules. They can be added a few at a time, whenever.
+ *
+ * Nothing is written by a talk: the proposal is shown with ticks, and `apply()` writes only what the student ticked, never
+ * twice (a module that is already there is skipped). The talk is not stored here: the screen keeps it. Each turn is one
+ * recorded run under the tutor, so the month's limit counts it.
  */
 final class CourseGuide
 {
+    /** The rules for setting a course up, and for adding its modules. */
     public const PROMPT = 'resources/prompts/setup-guide.md';
+
+    public const PROMPT_MODULES = 'resources/prompts/module-guide.md';
 
     /** The most one message can hold: a pasted module page fits. */
     public const MAX_MESSAGE = 12_000;
@@ -39,23 +49,24 @@ final class CourseGuide
 
     public function __construct(private Runner $runner, private Workspaces $workspaces, private CourseProfiles $profiles, private Modules $modules, private Activities $activities) {}
 
-    /** The guide's rules, without the file's opening comment (for people). */
-    public static function rules(): string
+    /** The guide's rules for one of its jobs (`modules`, or the course's setup when empty), without the file's opening comment (for people). */
+    public static function rules(string $for = ''): string
     {
-        return trim((string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', (string) file_get_contents(base_path(self::PROMPT))));
+        return trim((string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', (string) file_get_contents(base_path($for === 'modules' ? self::PROMPT_MODULES : self::PROMPT))));
     }
 
     /**
      * One turn: the student's message in, the guide's reply and what it proposes out.
      *
      * @param  list<array{role: string, content: string}>  $history  what was said before, oldest first
+     * @param  string  $for  `modules` for the talk that adds modules, empty for the one that sets the course up
      * @return array{reply: string, proposal: ?array}
      *
      * @throws Unprocessable an empty or too long message; over the month's limit; not set up
      * @throws NotFound another student's course
      * @throws EngineFailed the service can't answer, or answered with nothing
      */
-    public function turn(Principal $by, string $workspaceId, array $history, string $message): array
+    public function turn(Principal $by, string $workspaceId, array $history, string $message, string $for = ''): array
     {
         $message = trim(str_replace("\r\n", "\n", $message));
         Input::refuse(match (true) {
@@ -64,24 +75,25 @@ final class CourseGuide
             default => [],
         });
         $this->workspaces->find($by, $workspaceId);
-        $system = self::rules()."\n\n## Today\n".CarbonImmutable::now()->toDateString()."\n\n## What is set up\n".$this->state($by, $workspaceId);
+        $system = self::rules($for)."\n\n## Today\n".CarbonImmutable::now()->toDateString()."\n\n## What is set up\n".$this->state($by, $workspaceId, $for);
         $messages = self::remembered($history);
         $messages[] = ['role' => 'user', 'content' => $message];
 
-        $answer = $this->runner->run($by, Role::Tutor, 'setup_guide', $workspaceId, 'workspace', $workspaceId, fn (Run $run) => $run->ask($system, $messages, self::MAX_TOKENS)->text);
+        $answer = $this->runner->run($by, Role::Tutor, $for === 'modules' ? 'module_guide' : 'setup_guide', $workspaceId, 'workspace', $workspaceId, fn (Run $run) => $run->ask($system, $messages, self::MAX_TOKENS)->text);
 
-        return self::parse($answer);
+        return self::parse($answer, $for);
     }
 
     /**
-     * What the answer says: the reply, and the proposal cleaned to what the app knows. An answer that isn't the shape
-     * asked for isn't lost: what it said becomes the reply.
+     * What the answer says: the reply, and the proposal cleaned to what the app knows and to the talk's own job (setting
+     * the course up never proposes modules; adding modules proposes nothing else). An answer that isn't the shape asked
+     * for isn't lost: what it said becomes the reply.
      *
      * @return array{reply: string, proposal: ?array}
      *
      * @throws EngineFailed an answer with nothing in it
      */
-    public static function parse(string $answer): array
+    public static function parse(string $answer, string $for = ''): array
     {
         $start = strpos($answer, '{');
         $end = strrpos($answer, '}');
@@ -96,7 +108,7 @@ final class CourseGuide
         }
 
         $reply = is_string($data['reply'] ?? null) ? mb_substr(trim($data['reply']), 0, 800) : '';
-        $proposal = self::proposal($data['proposal'] ?? null);
+        $proposal = self::proposal($data['proposal'] ?? null, $for);
         if ($reply === '' && $proposal === null) {
             throw new EngineFailed('engine_empty', 'The AI had nothing to say. Try again.');
         }
@@ -199,12 +211,19 @@ final class CourseGuide
         return $done;
     }
 
-    /** What is set up in the course, in a few lines, so the guide asks only for what is missing. */
-    public function state(Principal $by, string $workspaceId): string
+    /**
+     * What is set up in the course, in a few lines, so the guide asks only for what is missing. Setting the course up
+     * leaves the modules out (they are not its job); adding modules reads the course: what it is about, what it should
+     * teach, how it is assessed, and the modules there already.
+     */
+    public function state(Principal $by, string $workspaceId, string $for = ''): string
     {
         $workspace = $this->workspaces->find($by, $workspaceId);
         $profile = $this->profiles->get($by, $workspaceId);
-        $modules = $this->modules->list($by, $workspaceId);
+
+        if ($for === 'modules') {
+            return $this->moduleState($by, $workspaceId, $workspace, $profile);
+        }
 
         $lines = ['Course: '.$workspace->name];
         $facts = array_filter([
@@ -225,6 +244,29 @@ final class CourseGuide
             }
         }
         $lines[] = 'Textbook: '.($profile->textbook !== '' ? $profile->textbook : 'none yet');
+
+        return implode("\n", $lines);
+    }
+
+    /** What the module guide reads: the course as written so far, and the modules already in it. */
+    private function moduleState(Principal $by, string $workspaceId, WorkspaceDetails $workspace, CourseProfileDetails $profile): string
+    {
+        $modules = $this->modules->list($by, $workspaceId);
+        $lines = ['Course: '.$workspace->name];
+        $dates = array_filter([$workspace->startsOn !== null ? "starts {$workspace->startsOn}" : null, $workspace->endsOn !== null ? "ends {$workspace->endsOn}" : null]);
+        if ($dates !== []) {
+            $lines[] = 'Dates: '.implode(', ', $dates);
+        }
+        $lines[] = 'About: '.($profile->about !== '' ? mb_substr($profile->about, 0, 1500) : 'not written yet');
+        if ($profile->outcomes !== []) {
+            $lines[] = 'What it should teach:';
+            foreach (array_slice($profile->outcomes, 0, CourseProfiles::MAX_OUTCOMES) as $outcome) {
+                $lines[] = '- '.$outcome;
+            }
+        }
+        if ($profile->assessment !== []) {
+            $lines[] = 'Assessment: '.implode('; ', array_map(fn (array $row) => $row['name'].($row['due_on'] !== null ? " (due {$row['due_on']})" : ''), array_slice($profile->assessment, 0, 12)));
+        }
         $lines[] = 'Modules: '.($modules === [] ? 'none yet' : implode('; ', array_map(fn ($module) => $module->title, array_slice($modules, 0, 60))));
 
         return implode("\n", $lines);
@@ -256,12 +298,18 @@ final class CourseGuide
      *
      * @return ?array{course: array, about: string, outcomes: list<string>, assessment: list<array>, textbook: string, modules: list<array>}
      */
-    private static function proposal(mixed $raw): ?array
+    private static function proposal(mixed $raw, string $for): ?array
     {
         if (! is_array($raw) || array_is_list($raw)) {
             return null;
         }
         $proposal = ProfileCourse::clean($raw) + ['course' => self::course($raw['course'] ?? null)];
+        // Each talk has one job; whatever the model offers beyond it is dropped here, not left to the prompt alone.
+        if ($for === 'modules') {
+            $proposal = ['course' => [], 'about' => '', 'outcomes' => [], 'assessment' => [], 'textbook' => '', 'modules' => $proposal['modules']];
+        } else {
+            $proposal['modules'] = [];
+        }
         $holds = $proposal['about'] !== '' || $proposal['outcomes'] !== [] || $proposal['assessment'] !== [] || $proposal['textbook'] !== '' || $proposal['modules'] !== [] || $proposal['course'] !== [];
 
         return $holds ? $proposal : null;

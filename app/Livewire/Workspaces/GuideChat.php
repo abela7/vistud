@@ -10,7 +10,6 @@ use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\AppError;
 use App\Study\CourseProfiles;
-use App\Study\Modules;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
@@ -18,10 +17,12 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
- * The course guide's page (docs/specs/vistud-2-blueprint.md, Phase 8): a talk with the tutor that sets a course up. It asks
- * one thing at a time, takes a pasted module page, and proposes what to add; the proposal sits under the talk with a tick
- * on every part, and only what is ticked is written (App\Engine\CourseGuide). The student can add the modules a week at a
- * time by coming back; what is already there is never added twice. The talk is kept in the session (leaving and coming back
+ * The course guide's page (docs/specs/vistud-2-blueprint.md, Phase 8): a talk with the tutor. It has two jobs, each its own
+ * talk: setting the course up (what it is about, what it should teach, how it is assessed, the textbook) and adding its
+ * modules, from the Modules page, with the guide having read what the course is about. It asks one thing at a time, takes
+ * a pasted page, and proposes what to add; the proposal sits under the talk with a tick on every part, and only what is
+ * ticked is written (App\Engine\CourseGuide). The modules can be added a few at a time by coming back; what is already
+ * there is never added twice. The talk is kept in the session (leaving and coming back
  * finds it), not in the database: what matters has been added to the course by then. A thin adapter: the course's id and
  * the talk are locked, and CourseGuide checks everything.
  */
@@ -69,13 +70,11 @@ final class GuideChat extends Component
 
     private CourseProfiles $profiles;
 
-    private Modules $modules;
-
     private PrincipalFactory $principals;
 
-    public function boot(CourseGuide $guide, Settings $settings, Workspaces $workspaces, CourseProfiles $profiles, Modules $modules, PrincipalFactory $principals): void
+    public function boot(CourseGuide $guide, Settings $settings, Workspaces $workspaces, CourseProfiles $profiles, PrincipalFactory $principals): void
     {
-        [$this->guide, $this->settings, $this->workspaces, $this->profiles, $this->modules, $this->principals] = [$guide, $settings, $workspaces, $profiles, $modules, $principals];
+        [$this->guide, $this->settings, $this->workspaces, $this->profiles, $this->principals] = [$guide, $settings, $workspaces, $profiles, $principals];
     }
 
     public function mount(string $workspaceId, string $for = ''): void
@@ -110,7 +109,7 @@ final class GuideChat extends Component
         }
 
         try {
-            $answer = $this->guide->turn($this->principal(), $this->workspaceId, $this->history(), $words);
+            $answer = $this->guide->turn($this->principal(), $this->workspaceId, $this->history(), $words, $this->for);
         } catch (AppError $e) {
             $this->problem($e);
 
@@ -189,7 +188,11 @@ final class GuideChat extends Component
 
     public function render(): View
     {
-        return view('livewire.workspaces.guide-chat', ['workspace' => $this->workspaces->find($this->principal(), $this->workspaceId)]);
+        return view('livewire.workspaces.guide-chat', [
+            'workspace' => $this->workspaces->find($this->principal(), $this->workspaceId),
+            // Once the course has its About text, the weeks are the next step: a way there sits beside "I'm done for now".
+            'toModules' => $this->for === '' && $this->profiles->get($this->principal(), $this->workspaceId)->about !== '',
+        ]);
     }
 
     // ---------- Inside ----------
@@ -197,25 +200,34 @@ final class GuideChat extends Component
     /** What the guide says first, without asking the model. */
     private function opening(): string
     {
-        $name = $this->workspaces->find($this->principal(), $this->workspaceId)->name;
-        $has = $this->modules->list($this->principal(), $this->workspaceId) !== [];
+        $by = $this->principal();
+        $name = $this->workspaces->find($by, $this->workspaceId)->name;
+        $about = $this->profiles->get($by, $this->workspaceId)->about !== '';
 
-        return $this->for === 'modules' || $has
-            ? "Which weeks or chapters of {$name} do you want to add now? Tell me, or paste the timetable. You can add the rest later."
-            : "Let's set up {$name}. Tell me what it is about in your own words, or paste its page from your university (the About text and the timetable). I'll ask for what is missing, and add only what you tick.";
+        if ($this->for === 'modules') {
+            return $about
+                ? "I have read what {$name} is about. Which weeks or chapters do you want to add now? Paste the timetable, tell me the weeks, or ask me to suggest some. The rest can come later."
+                : "Which weeks or chapters of {$name} do you want to add now? Paste the timetable or tell me the weeks. The rest can come later.";
+        }
+
+        return $about
+            ? $this->next()
+            : "Let's set up {$name}. Tell me what it is about in your own words, or paste its page from your university (the About text is enough). I'll ask for what is missing, and add only what you tick.";
     }
 
-    /** What to ask after something was added: the first thing still missing. */
+    /** What to say after something was added: the first thing still missing. */
     private function next(): string
     {
-        $by = $this->principal();
-        $profile = $this->profiles->get($by, $this->workspaceId);
+        if ($this->for === 'modules') {
+            return 'Tell me the next weeks whenever you like. They can wait until you need them.';
+        }
+
+        $profile = $this->profiles->get($this->principal(), $this->workspaceId);
 
         return match (true) {
             $profile->about === '' => 'What is the course about? A few words will do.',
             $profile->assessment === [] => 'How is it assessed, and when are the deadlines?',
-            $this->modules->list($by, $this->workspaceId) === [] => 'Which weeks or chapters do you want to add first? One is enough; the rest can come later.',
-            default => 'That is set up. Add the next weeks whenever you like: tell me here, or use "Add with the AI" on Modules.',
+            default => 'The course is set up. Next are its modules: open Modules, and the AI there reads this and helps you add the weeks.',
         };
     }
 

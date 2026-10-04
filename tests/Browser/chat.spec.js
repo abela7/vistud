@@ -570,10 +570,12 @@ for (const theme of THEMES) {
 }
 
 /*
- * The course guide (docs/specs/vistud-2-blueprint.md, Phase 8): the New course page, and the talk with the tutor that sets a
- * course up. They are here because this file owns the fake service.
+ * The course guide (docs/specs/vistud-2-blueprint.md, Phase 8): the New course page, the talk with the tutor that sets the
+ * course up (the course only), and the talk that adds its modules, from Modules. They are here because this file owns the
+ * fake service.
  */
 const timetable = 'About the Module: operating systems and their technologies. Week 1: OS Structure | Processes & Threads. Week 2: Concurrency & Scheduling | Memory Management. Week 3: Virtual Memory | Storage & IO.';
+const weeks = 'Add Week 1: OS Structure | Processes & Threads, Week 2: Concurrency & Scheduling | Memory Management and Week 3: Virtual Memory | Storage & IO.';
 const guideProposal = (page) => page.getByRole('region', { name: 'I would add' });
 
 async function startGuide(page, viewport) {
@@ -585,7 +587,7 @@ async function startGuide(page, viewport) {
     await page.waitForLoadState('load');
 }
 
-test('guide: a course is made on its own page, the guide proposes the weeks, and only the ticked ones are added', async ({ page }) => {
+test('guide: a course is made on its own page and set up by the guide, and the weeks are added from Modules, a few at a time', async ({ page }) => {
     await ai(page, { email: makeStudentAccount() }, '/');
     await page.locator('main').getByRole('link', { name: 'New course' }).first().click();
     await page.getByRole('heading', { level: 1, name: 'New course' }).waitFor();
@@ -601,28 +603,46 @@ test('guide: a course is made on its own page, the guide proposes the weeks, and
     await page.getByLabel('Your message').fill(timetable);
     await page.getByRole('button', { name: 'Send' }).click();
     await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
-    await expect(log).toContainText('I found three weeks.');
+    await expect(log).toContainText('I found what the course is about.');
+
+    // Setting a course up is the course only: what it is about and how it is assessed, never its weeks.
+    await expect(guideProposal(page).getByRole('checkbox', { name: /What the course is about/ })).toBeChecked();
+    await expect(guideProposal(page).getByRole('checkbox', { name: /Coursework 1/ })).toBeChecked();
+    await expect(guideProposal(page).getByRole('checkbox', { name: /Week/ })).toHaveCount(0);
+    await guideProposal(page).getByRole('button', { name: /^Add what is ticked \(2\)/ }).click();
+    await expect(log).toContainText('Added: the About text and 1 assessment.');
+    await expect(log).toContainText('The course is set up.');
+    await expect(guideProposal(page)).toHaveCount(0);
+
+    // The weeks come next, on Modules, where the guide has read what the course is about.
+    const id = page.url().match(/courses\/([^/]+)\/guide/)[1];
+    await page.getByRole('link', { name: 'Go to Modules' }).first().click();
+    await page.getByRole('heading', { level: 1, name: 'Modules' }).waitFor();
+    await expect(page.locator('main').getByText('No modules yet')).toBeVisible();
+    await page.locator('main').getByRole('link', { name: 'Add with the AI', exact: true }).click();
+    await page.getByRole('heading', { level: 1, name: 'Add modules' }).waitFor();
+    await expect(page.getByRole('log', { name: 'Talk with the guide' })).toContainText('I have read what Operating Systems is about');
+    await page.getByLabel('Your message').fill(weeks);
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
     await expect(guideProposal(page).getByRole('checkbox', { name: /Week 3/ })).toBeChecked();
 
     // Week 3 is for later: untick it, and add the rest.
     await guideProposal(page).getByRole('checkbox', { name: /Week 3/ }).uncheck();
-    await guideProposal(page).getByRole('button', { name: /^Add what is ticked \(3\)/ }).click();
-    await expect(log).toContainText('Added: 2 modules and the About text.');
-    await expect(guideProposal(page)).toHaveCount(0);
-
-    // The modules are in the course; the guide can add more later, from Modules.
-    const id = page.url().match(/courses\/([^/]+)\/guide/)[1];
+    await guideProposal(page).getByRole('button', { name: /^Add what is ticked \(2\)/ }).click();
+    await expect(page.getByRole('log', { name: 'Talk with the guide' })).toContainText('Added: 2 modules.');
     await page.goto(`/courses/${id}/modules`);
     await expect(page.locator('main').getByRole('link', { name: /Week 1: OS Structure/ })).toBeVisible();
     await expect(page.locator('main').getByRole('link', { name: /Week 3/ })).toHaveCount(0);
-    await page.locator('main').getByRole('link', { name: 'Add with the AI' }).click();
+
+    // Next week: week 3 comes in, and the weeks that are there are not added twice.
+    await page.locator('main').getByRole('link', { name: 'Add with the AI', exact: true }).click();
     await page.getByRole('heading', { level: 1, name: 'Add modules' }).waitFor();
-    await expect(page.getByRole('log', { name: 'Talk with the guide' })).toContainText('Which weeks or chapters of Operating Systems');
-    await page.getByLabel('Your message').fill('Add week 3: Virtual Memory | Storage & IO. Week 1: OS Structure | Processes & Threads again.');
+    await page.getByLabel('Your message').fill(weeks);
     await page.getByRole('button', { name: 'Send' }).click();
     await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
-    await guideProposal(page).getByRole('checkbox', { name: /Week 1/ }).check();
     await guideProposal(page).getByRole('button', { name: /^Add what is ticked/ }).click();
+    await expect(page.getByRole('log', { name: 'Talk with the guide' })).toContainText('Added: 1 module.');
     await page.goto(`/courses/${id}/modules`);
     await expect(page.locator('main').getByRole('link', { name: /Week 3: Virtual Memory/ })).toBeVisible();
     await expect(page.locator('main').getByRole('link', { name: /Week 1: OS Structure/ })).toHaveCount(1);
@@ -682,6 +702,16 @@ for (const theme of THEMES) {
         await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
         await useTheme(page, theme);
         expect(await analyseSheet(page), 'guide').toEqual([]);
+
+        // The talk that adds modules, with its proposal.
+        const id = page.url().match(/courses\/([^/]+)\/guide/)[1];
+        await page.goto(`/courses/${id}/guide?for=modules`);
+        await page.getByRole('heading', { level: 1, name: 'Add modules' }).waitFor();
+        await page.getByLabel('Your message').fill(weeks);
+        await page.getByRole('button', { name: 'Send' }).click();
+        await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
+        await useTheme(page, theme);
+        expect(await analyseSheet(page), 'module guide').toEqual([]);
     });
 }
 

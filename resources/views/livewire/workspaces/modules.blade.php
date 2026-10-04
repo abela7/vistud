@@ -67,8 +67,11 @@
         <div class="empty-place">
             <span class="item-icon" aria-hidden="true"><x-icon name="layers" class="size-5" /></span>
             <p class="font-medium">No modules yet</p>
-            <p class="text-sm text-fg-muted">A module is a part of the course, like “Week 1” or “Chapter 3”: its notes, files and topics live in it.</p>
-            <x-button icon="plus" wire:click="newModule">Add your first module</x-button>
+            <p class="text-sm text-fg-muted">A module is a part of the course, like “Week 1” or “Chapter 3”: its notes, files and topics live in it. The AI reads what your course is about and helps you add them, a few weeks at a time.</p>
+            <div class="flex flex-wrap items-center justify-center gap-2">
+                <a href="{{ route('workspaces.guide', [$workspaceId, 'for' => 'modules']) }}" class="btn btn-primary"><x-icon name="sparkles" class="size-4" />Add the weeks with the AI</a>
+                <x-button icon="plus" wire:click="newModule">Add one myself</x-button>
+            </div>
         </div>
     @else
         <ol class="module-grid" :class="{ 'is-list-view': layout === 'list' }" wire:sort="sortModules" role="list" aria-label="Modules">
