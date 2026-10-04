@@ -23,8 +23,8 @@ async function openDeck(page, { copyPaste = false } = {}) {
         turnOnCopyPaste(student.email);
     }
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/flashcards`);
-    await page.getByRole('heading', { level: 1, name: 'Flashcards' }).waitFor();
+    await page.goto(`/courses/${student.workspace}/flashcards`);
+    await page.getByRole('heading', { level: 1, name: 'Cards', exact: true }).waitFor();
     await page.waitForLoadState('load');
     return student;
 }
@@ -32,7 +32,7 @@ async function openDeck(page, { copyPaste = false } = {}) {
 async function openReview(page) {
     const student = makeStudentWithCards();
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/flashcards/review`);
+    await page.goto(`/courses/${student.workspace}/flashcards/review`);
     await page.getByText('Card 1 of 4').waitFor();
     await page.waitForLoadState('load');
     return student;
@@ -130,7 +130,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await page.locator('#ai-sheet').getByLabel('How many').waitFor();
         states['make cards from'] = await foreignColours(page);
 
-        await page.goto(`/workspaces/${student.workspace}/flashcards/review`);
+        await page.goto(`/courses/${student.workspace}/flashcards/review`);
         await page.getByText('Card 1 of 4').waitFor();
         await useSentinelTheme(page);
         states.front = await foreignColours(page);
@@ -157,7 +157,7 @@ for (const theme of THEMES) {
         await page.locator('#ai-sheet').getByLabel('How many').waitFor();
         expect(await analyse(page), 'make cards from').toEqual([]);
 
-        await page.goto(`/workspaces/${student.workspace}/flashcards/review`);
+        await page.goto(`/courses/${student.workspace}/flashcards/review`);
         await page.getByText('Card 1 of 4').waitFor();
         await useTheme(page, theme);
         expect(await analyse(page), 'front').toEqual([]);
@@ -180,7 +180,7 @@ test('flashcards never scroll sideways at 320 px, even with 200% text', async ({
     const fits = async () => expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
     await fits();
 
-    await page.goto(`/workspaces/${student.workspace}/flashcards/review`);
+    await page.goto(`/courses/${student.workspace}/flashcards/review`);
     await page.getByText('Card 1 of 4').waitFor();
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
     await fits();
@@ -189,10 +189,10 @@ test('flashcards never scroll sideways at 320 px, even with 200% text', async ({
     await fits();
 });
 
-test('the phone tab bar fits the six sections at 320 px', async ({ page }) => {
+test('the phone tab bar fits its five tabs at 320 px', async ({ page }) => {
     const student = await openDeck(page);
     await page.setViewportSize({ width: 320, height: 700 });
-    await page.goto(`/workspaces/${student.workspace}/flashcards`);
+    await page.goto(`/courses/${student.workspace}/flashcards`);
     const bar = page.locator('.app-tabbar');
     await expect(bar.getByRole('link', { name: 'Cards' })).toHaveAttribute('aria-current', 'page');
     expect(await bar.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
@@ -204,8 +204,8 @@ for (const [name, size] of Object.entries({ desktop, phone })) {
         await page.setViewportSize(size);
         const student = makeStudentWithModuleCards();
         await openStudentHome(page, student.email);
-        await page.goto(`/workspaces/${student.workspace}/flashcards`);
-        await page.getByRole('heading', { level: 1, name: 'Flashcards' }).waitFor();
+        await page.goto(`/courses/${student.workspace}/flashcards`);
+        await page.getByRole('heading', { level: 1, name: 'Cards', exact: true }).waitFor();
         await page.waitForLoadState('load');
 
         const modules = page.getByRole('list', { name: 'Cards by module' });
@@ -223,7 +223,7 @@ for (const [name, size] of Object.entries({ desktop, phone })) {
         await expect(page.locator('.card-row')).toHaveCount(1);
         await expect(page.getByRole('heading', { name: '1 card to review today in Week 2: SQL queries' })).toBeVisible();
         await expect(page.getByLabel('Module')).toHaveValue(student.week2);
-        await page.goto(`/workspaces/${student.workspace}/flashcards`);
+        await page.goto(`/courses/${student.workspace}/flashcards`);
         await page.getByRole('list', { name: 'Cards by module' }).locator('.deck-module').nth(1).getByRole('link', { name: 'Review' }).click();
         await expect(page.getByText('Card 1 of 1')).toBeVisible();
         await expect(page.getByRole('region', { name: 'Question' })).toContainText('What does a correlated subquery refer to?');
@@ -235,7 +235,7 @@ for (const [name, size] of Object.entries({ desktop, phone })) {
         await page.setViewportSize(size);
         const student = makeStudentWithModuleCards();
         await openStudentHome(page, student.email);
-        await page.goto(`/workspaces/${student.workspace}/modules/${student.week2}`);
+        await page.goto(`/courses/${student.workspace}/modules/${student.week2}`);
         const topics = page.getByRole('region', { name: /Topics/ });
         await expect(topics).toContainText('Subqueries');
         await expect(topics).toContainText('1 card, 1 due');

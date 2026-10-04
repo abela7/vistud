@@ -51,7 +51,7 @@ test('a student creates their first workspace, opens it, and creates a second fr
     await expect(form(page).getByLabel('Course code (optional)')).toHaveValue('BIO101');
     await page.keyboard.press('Escape');
     const sidebar = page.locator('.app-sidebar');
-    await expect(sidebar.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
+    await expect(sidebar.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
 
     await sidebar.getByRole('link', { name: 'Modules' }).click();
     await expect(heading(page, 'Modules')).toBeVisible();
@@ -125,9 +125,13 @@ test('phone: the sections sit in a bottom tab bar, and the menu holds the switch
 
     const tabs = page.locator('.app-tabbar');
     await expect(tabs).toBeVisible();
-    await expect(tabs.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
-    await tabs.getByRole('link', { name: 'Progress' }).click();
+    await expect(tabs.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
+    // Home, Modules and Cards are tabs; the rest (Progress here) is in More, with Ask beside it.
+    await expect(tabs.getByRole('button', { name: 'Ask', exact: true })).toBeVisible();
+    await tabs.getByRole('button', { name: 'More', exact: true }).click();
+    await page.locator('#more-sheet').getByRole('link', { name: 'Progress' }).click();
     await expect(heading(page, 'Progress')).toBeVisible();
+    await expect(tabs.getByRole('button', { name: 'More', exact: true })).toHaveAttribute('data-current', '');
 
     await page.getByRole('button', { name: 'Open menu' }).click();
     await expect(page.locator('#app-drawer .ws-switcher')).toBeVisible();

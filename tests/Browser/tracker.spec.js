@@ -15,7 +15,7 @@ test.describe.configure({ timeout: 60_000 });
 async function open(page, section = '') {
     const student = makeStudentWithTopics();
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}${section ? `/${section}` : ''}`);
+    await page.goto(`/courses/${student.workspace}${section ? `/${section}` : ''}`);
     await page.getByRole('heading', { level: 1 }).waitFor();
     await page.waitForLoadState('load');
     return student;

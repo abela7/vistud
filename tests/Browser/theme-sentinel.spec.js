@@ -260,7 +260,7 @@ for (const [name, viewport] of Object.entries(viewports)) {
             // Below 1280 px the nav lives in the slide-in menu.
             const openMenu = page.getByRole('button', { name: 'Open menu' });
             if (await openMenu.isVisible()) await openMenu.click();
-            await page.getByRole('link', { name: 'Overview', exact: true }).focus();
+            await page.getByRole('link', { name: 'Home', exact: true }).focus();
             states['nav focus'] = await foreignColours(page);
 
             for (const [state, colours] of Object.entries(states)) {

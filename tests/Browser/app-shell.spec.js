@@ -58,8 +58,8 @@ for (const [name, viewport] of Object.entries({ tablet, phone })) {
         await expect(drawer(page)).toBeHidden();
 
         await menuButton(page).click();
-        await drawer(page).getByRole('link', { name: 'Journal' }).click();
-        await page.waitForURL('**/journal');
+        await drawer(page).getByRole('link', { name: 'Settings' }).click();
+        await page.waitForURL('**/settings');
     });
 }
 

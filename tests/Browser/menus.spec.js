@@ -66,10 +66,10 @@ async function everyMenu(page, where, { atTheFoot = false } = {}) {
 }
 
 function pages(s) {
-    const w = `/workspaces/${s.workspace}`;
+    const w = `/courses/${s.workspace}`;
     return [
         ['Home', '/'],
-        ['Overview', w],
+        ['Home', w],
         ['Modules', `${w}/modules`],
         ['A module', `${w}/modules/${s.module}`],
         ['A folder', `${w}/folders/${s.folder}`],
@@ -117,7 +117,7 @@ test('the workspace switcher opens whole inside the slide-in menu', async ({ pag
     await page.setViewportSize({ width: 1024, height: 768 });
     const student = makeStudentWithEverything();
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/modules`);
+    await page.goto(`/courses/${student.workspace}/modules`);
     await page.getByRole('button', { name: 'Open menu' }).click();
     const drawer = page.locator('#app-drawer');
     await expect(drawer).toBeVisible();
@@ -129,7 +129,7 @@ test('the pinned notes\' list opens whole, above the tab bar and inside the wind
     await page.setViewportSize({ width: 390, height: 844 });
     const student = makeStudentWithEverything();
     await openStudentHome(page, student.email);
-    const w = `/workspaces/${student.workspace}`;
+    const w = `/courses/${student.workspace}`;
     for (const id of [student.note, student.topNote]) {
         await page.goto(`${w}/notes/${id}`);
         await page.locator('[data-note-editor][data-ready]').waitFor();
@@ -169,7 +169,7 @@ for (const [name, viewport] of Object.entries({ 'a laptop': { width: 1440, heigh
         await page.setViewportSize(viewport);
         const student = makeStudentWithEverything();
         await openStudentHome(page, student.email);
-        await page.goto(`/workspaces/${student.workspace}/notes/${student.topNote}`);
+        await page.goto(`/courses/${student.workspace}/notes/${student.topNote}`);
         await page.locator('[data-note-editor][data-ready]').waitFor();
         await page.locator('.note-prose').click();
         await page.keyboard.press('Control+Shift+i');

@@ -19,8 +19,8 @@ async function openSettings(page) {
     await page.getByLabel('Password', { exact: true }).fill('password-for-tests');
     await page.getByRole('button', { name: 'Log in' }).click();
     await page.getByRole('heading', { name: 'My courses' }).waitFor();
-    await page.goto('/ai-engine');
-    await page.getByRole('heading', { name: 'AI settings', level: 1 }).waitFor();
+    await page.goto('/settings?part=ai');
+    await page.getByRole('heading', { name: 'Settings', level: 1 }).waitFor();
 }
 
 for (const [name, viewport] of Object.entries({ desktop, phone })) {

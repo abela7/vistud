@@ -16,12 +16,12 @@ for (const [device, size] of [['desktop', { width: 1440, height: 900 }], ['phone
         await page.goto(note.empty);
         await page.locator('[data-note-editor][data-ready]').waitFor();
 
-        // A note in the Labs folder goes back to the folder, then up through its module, Modules and the Overview to Home.
+        // A note in the Labs folder goes back to the folder, then up through its module, Modules and the course's Home to All courses.
         const steps = [
             ['Labs', /\/folders\//],
             [null, /\/modules\/[^/]+$/],
             ['Modules', /\/modules$/],
-            ['Overview', new RegExp(`/workspaces/${note.workspace}$`)],
+            ['Home', new RegExp(`/courses/${note.workspace}$`)],
             ['All courses', /\/$/],
         ];
         for (const [name, url] of steps) {
@@ -62,7 +62,7 @@ for (const theme of THEMES) {
     test(`the Back link: colours from tokens and axe finds nothing: ${theme}`, async ({ page }) => {
         const note = makeStudentWithNote();
         await openStudentHome(page, note.email);
-        await page.goto(`/workspaces/${note.workspace}/modules`);
+        await page.goto(`/courses/${note.workspace}/modules`);
         await useTheme(page, theme);
         await back(page).hover();
         const results = await new AxeBuilder({ page }).include('.back-link').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();

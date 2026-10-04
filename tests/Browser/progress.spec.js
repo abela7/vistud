@@ -19,7 +19,7 @@ test.describe.configure({ timeout: 60_000 });
 async function openProgress(page, query = '') {
     const student = makeStudentWithProgressTree();
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/progress${query}`);
+    await page.goto(`/courses/${student.workspace}/progress${query}`);
     await page.getByRole('heading', { level: 1, name: 'Progress' }).waitFor();
     await page.waitForLoadState('load');
     return student;
@@ -77,7 +77,7 @@ test('Progress is a tree: the ring, the filters, and the module the student is i
 test('the course home says the same, and its Next line sends the student to the topic that needs a look', async ({ page }) => {
     await page.setViewportSize(desktop);
     const student = await openProgress(page);
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
     await expect(page.getByRole('progressbar', { name: 'Topics understood', exact: true })).toHaveAttribute('aria-valuenow', '40');
     await expect(page.locator('.progress-facts')).toContainText('2 of 5 topics');

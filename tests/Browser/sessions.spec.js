@@ -17,7 +17,7 @@ test.describe.configure({ timeout: 60_000 });
 async function openSession(page) {
     const student = makeStudentWithSession();
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     return student;
@@ -27,7 +27,7 @@ test('a session is started from the Overview, and its clock runs, pauses, breaks
     await page.setViewportSize(desktop);
     const student = makeStudentWithTopics();
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
     await page.waitForLoadState('load');
     await expect(pill(page)).toHaveCount(0);
@@ -97,7 +97,7 @@ test('the session page is the conversation, with a rail of topics and material, 
     await expect(rail.getByRole('button', { name: /^Joins/ })).not.toHaveAttribute('aria-current', 'true');
     await expect(page.getByRole('status').filter({ hasText: 'Now on Primary and foreign keys.' })).toBeVisible();
 
-    await page.goto(`/workspaces/${student.workspace}/progress`);
+    await page.goto(`/courses/${student.workspace}/progress`);
     await expect(pill(page)).toBeVisible();
     await pill(page).getByRole('button', { name: 'Pause the session' }).click();
     await expect(pill(page).getByRole('button', { name: 'Resume the session' })).toBeVisible();
@@ -110,7 +110,7 @@ test('another tab follows a pause straight away', async ({ page, context }) => {
     await page.setViewportSize(desktop);
     const student = await openSession(page);
     const other = await context.newPage();
-    await other.goto(`/workspaces/${student.workspace}`);
+    await other.goto(`/courses/${student.workspace}`);
     await other.waitForLoadState('load');
     await expect(pill(other).getByRole('button', { name: 'Pause the session' })).toBeVisible();
 
@@ -121,7 +121,7 @@ test('another tab follows a pause straight away', async ({ page, context }) => {
 async function openPomodoro(page, secondsLeft) {
     const student = makeStudentWithPomodoro(secondsLeft);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     return student;
@@ -149,7 +149,7 @@ test('a Pomodoro session is started from the Overview, and the sound can be turn
     await page.setViewportSize(desktop);
     const student = makeStudentWithTopics();
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await page.waitForLoadState('load');
     await page.getByRole('button', { name: /^More for / }).click();
     await page.getByRole('button', { name: 'Study with options' }).click();
@@ -195,7 +195,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await page.getByRole('button', { name: 'End', exact: true }).click();
         await page.locator('#session-dialog').getByRole('heading').waitFor();
         states['end dialog'] = await foreignColours(page);
-        await page.goto(`/workspaces/${student.workspace}`);
+        await page.goto(`/courses/${student.workspace}`);
         await useSentinelTheme(page);
         states['overview with study time'] = await foreignColours(page);
         for (const [state, colours] of Object.entries(states)) {
@@ -213,7 +213,7 @@ for (const theme of THEMES) {
         await page.getByRole('button', { name: 'End', exact: true }).click();
         await page.locator('#session-dialog').getByRole('heading').waitFor();
         expect(await analyse(page)).toEqual([]);
-        await page.goto(`/workspaces/${student.workspace}`);
+        await page.goto(`/courses/${student.workspace}`);
         await useTheme(page, theme);
         expect(await analyse(page)).toEqual([]);
     });
@@ -229,7 +229,7 @@ test('a session page never scrolls sideways at 320 px, even with 200% text', asy
 test('starting while a session is open says so, and it can be ended first', async ({ page }) => {
     await page.setViewportSize(desktop);
     const student = await openSession(page);
-    await page.goto(`/workspaces/${student.workspace}/modules`);
+    await page.goto(`/courses/${student.workspace}/modules`);
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
     await page.waitForLoadState('load');
@@ -252,7 +252,7 @@ test('the top-bar timer hides to a pulsing dot, and stays hidden until shown aga
     await expect(pill(page)).toBeHidden();
     const dot = page.getByRole('button', { name: 'Show the study timer' });
     await expect(dot).toBeVisible();
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await expect(dot).toBeVisible();
     await expect(pill(page)).toBeHidden();
     await dot.click();

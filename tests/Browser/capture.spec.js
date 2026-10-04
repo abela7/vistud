@@ -27,7 +27,7 @@ async function openSession(page) {
     const student = makeStudentWithSession();
     turnOnCopyPaste(student.email);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     return student;
@@ -62,13 +62,15 @@ test('the tutor\'s marks are pasted, reviewed and saved where they belong', asyn
     await dialog(page).getByRole('button', { name: 'Save 1' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Saved 1 question.' })).toBeVisible();
 
-    await page.goto(`/workspaces/${student.workspace}/progress`);
+    await page.goto(`/courses/${student.workspace}/progress`);
     const joins = page.locator('.topic-row').filter({ has: page.getByRole('button', { name: 'Joins', exact: true }) });
     // The answer is evidence: the rules no longer say "not practised yet".
     await expect(joins).not.toContainText('not practised yet');
     // The key points are kept on the topic's sheet: the two it had, and the one saved from the chat.
     await joins.getByRole('button', { name: 'Joins', exact: true }).click();
     await expect(page.locator('#topic-sheet').getByRole('region', { name: 'Key points' }).getByRole('listitem')).toHaveCount(3);
+    // The question is on the Questions page (they are no longer under the tree).
+    await page.goto(`/courses/${student.workspace}/questions`);
     await expect(page.getByRole('list', { name: 'Questions' })).toContainText('Why are unmatched columns NULL rather than empty?');
 });
 

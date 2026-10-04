@@ -479,7 +479,7 @@ test('notes: the editor, Notes & files, and notes in a module', async ({ page })
     await page.screenshot({ path: out('note-desktop-vistud-light-conflict') });
     await page.unroute('**/api/v1/notes/*');
 
-    await page.goto(`/workspaces/${note.workspace}/notes`);
+    await page.goto(`/courses/${note.workspace}/notes`);
     await newHere(page, 'Folder');
     await page.locator('#structure-dialog').getByLabel('Name').fill('Exam revision');
     await page.locator('#structure-dialog').getByRole('button', { name: 'Add folder' }).click();
@@ -492,7 +492,7 @@ test('notes: the editor, Notes & files, and notes in a module', async ({ page })
     }
 
     await page.setViewportSize(sizes.desktop);
-    await page.goto(`/workspaces/${note.workspace}/modules`);
+    await page.goto(`/courses/${note.workspace}/modules`);
     await page.getByRole('heading', { level: 1, name: 'Modules' }).waitFor();
     await page.locator('main').getByRole('link', { name: 'Week 2: Cell division' }).click();
     await page.getByRole('heading', { level: 1, name: 'Week 2: Cell division' }).waitFor();
@@ -558,7 +558,7 @@ test('progress: the tree with its ring and filters, what needs attention, the to
     const student = makeStudentWithProgressTree();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/progress`);
+    await page.goto(`/courses/${student.workspace}/progress`);
     await page.getByRole('heading', { level: 1, name: 'Progress' }).waitFor();
     await page.waitForLoadState('load');
     await page.getByRole('button', { name: /^Week 2/ }).click();
@@ -587,7 +587,7 @@ test('overview: the rhythm, what to continue, coming up, and its dialogs', async
     const student = makeStudentWithSession();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
     await page.waitForLoadState('load');
     for (const [size, viewport] of Object.entries(sizes)) {
@@ -621,7 +621,7 @@ test('session: the conversation with its rail, the end screen, and starting one'
     const student = makeStudentWithSession();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     for (const [size, viewport] of Object.entries(sizes)) {
@@ -642,7 +642,7 @@ test('session: the conversation with its rail, the end screen, and starting one'
     await page.evaluate(() => document.activeElement?.blur());
     await page.screenshot({ path: out('session-desktop-vistud-light-ended') });
 
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await page.getByRole('button', { name: /^More for / }).click();
     await page.getByRole('button', { name: 'Study with options' }).click();
     await page.locator('#study-dialog').getByLabel('Topic (optional)').selectOption({ label: 'Normalisation' });
@@ -653,7 +653,7 @@ test('questions: the module\'s Questions tab and the side panel', async ({ page 
     const student = makeStudentWithSession();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/modules`);
+    await page.goto(`/courses/${student.workspace}/modules`);
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
     await page.waitForLoadState('load');
@@ -683,7 +683,7 @@ test('toast: a passing notice on a desktop and a phone', async ({ page }) => {
     const student = makeStudentWithSession();
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
     await page.waitForLoadState('load');
     for (const [size, viewport] of Object.entries(sizes)) {
@@ -706,7 +706,7 @@ test('pomodoro: the countdown ring, a break, and the clock choice', async ({ pag
     const student = makeStudentWithPomodoro(118);
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     for (const [size, viewport] of Object.entries(sizes)) {
@@ -735,7 +735,7 @@ test('briefing: the dialog, how the AI teaches, and the start options', async ({
     turnOnCopyPaste(student.email);
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     await useTheme(page, 'vistud-light');
@@ -770,14 +770,14 @@ test('briefing: the dialog, how the AI teaches, and the start options', async ({
     await page.screenshot({ path: out('briefing-teaching-desktop-vistud-light') });
     await page.keyboard.press('Escape');
 
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await page.waitForLoadState('load');
     await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
     await page.locator('.session-pill').getByRole('link').click();
     await page.getByRole('button', { name: 'End', exact: true }).click();
     await page.locator('#session-dialog').getByRole('button', { name: 'End session' }).click();
     await page.locator('#session-dialog').getByRole('heading', { name: 'Session ended' }).waitFor();
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await page.getByRole('button', { name: /^More for / }).click();
     await page.getByRole('button', { name: 'Study with options' }).click();
     await page.locator('#study-dialog').getByRole('button', { name: 'Change' }).click();
@@ -799,7 +799,7 @@ test('save from the chat: paste, review, and the session afterwards', async ({ p
     turnOnCopyPaste(student.email);
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     await useTheme(page, 'vistud-light');
@@ -829,8 +829,8 @@ test('flashcards: the deck, writing a card, the ✦ menu, making cards from…, 
     turnOnCopyPaste(student.email);
     await page.setViewportSize(sizes.desktop);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/flashcards`);
-    await page.getByRole('heading', { level: 1, name: 'Flashcards' }).waitFor();
+    await page.goto(`/courses/${student.workspace}/flashcards`);
+    await page.getByRole('heading', { level: 1, name: 'Cards', exact: true }).waitFor();
     await page.waitForLoadState('load');
     for (const [size, viewport] of Object.entries(sizes)) {
         for (const theme of ['vistud-light', 'vistud-dark']) {
@@ -878,7 +878,7 @@ test('flashcards: the deck, writing a card, the ✦ menu, making cards from…, 
     await page.locator('#card-maker-dialog').getByText('2 cards found.').waitFor();
     await page.screenshot({ path: out('flashcards-desktop-vistud-light-ai-review') });
 
-    await page.goto(`/workspaces/${student.workspace}/flashcards/review`);
+    await page.goto(`/courses/${student.workspace}/flashcards/review`);
     await page.getByText('Card 1 of 4').waitFor();
     for (const [size, viewport] of Object.entries(sizes)) {
         for (const theme of ['vistud-light', 'vistud-dark']) {

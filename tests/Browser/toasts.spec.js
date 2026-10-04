@@ -10,7 +10,7 @@ test.describe.configure({ timeout: 60_000 });
 async function openOverview(page) {
     const student = makeStudentWithSession();
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await page.getByRole('heading', { level: 1, name: 'Databases' }).waitFor();
     await page.waitForLoadState('load');
 }

@@ -20,7 +20,7 @@ async function openSession(page) {
     const student = makeStudentWithSession();
     turnOnCopyPaste(student.email);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     return student;
@@ -68,7 +68,7 @@ test('how the AI teaches is chosen at the start and changed during the session',
     const student = makeStudentWithTopics();
     turnOnCopyPaste(student.email);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}`);
+    await page.goto(`/courses/${student.workspace}`);
     await page.waitForLoadState('load');
     await page.getByRole('button', { name: /^More for / }).click();
     await page.getByRole('button', { name: 'Study with options' }).click();

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { fileURLToPath } from 'node:url';
-import { makeStudentWithModules, openStudentHome } from './support.js';
+import { makeStudentWithModules, openSection, openStudentHome } from './support.js';
 
 /* Assignments: a name, a deadline and its files (the owner's review, 2026-10-02). */
 
@@ -50,12 +50,11 @@ async function preMade(page) {
 }
 
 /** Biology's Assignments section, reached the way a student would. */
-async function openAssignments(page, onPhone) {
-    await openStudentHome(page, makeStudentWithModules());
+async function openAssignments(page, onPhone, projectTools = false) {
+    await openStudentHome(page, makeStudentWithModules({ projectTools }));
     await page.locator('main').getByRole('link', { name: 'Biology' }).click();
     await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
-    const nav = onPhone ? page.locator('.app-tabbar') : page.locator('.app-sidebar');
-    await nav.getByRole('link', { name: onPhone ? 'Tasks' : 'Assignments' }).click();
+    await openSection(page, 'Assignments');
     await page.getByRole('heading', { level: 1, name: 'Assignments' }).waitFor();
 }
 
@@ -376,7 +375,7 @@ for (const [name, device] of Object.entries(devices)) {
 
         test(`a group project is planned, shared out and watched (${name})`, async ({ page }) => {
             const onPhone = name === 'phone';
-            await openAssignments(page, onPhone);
+            await openAssignments(page, onPhone, true);
             await newProject(page, 'Group project: library app');
 
             // A project has its own pre-made plans, first in the list, when they are asked for.
@@ -454,9 +453,38 @@ for (const [name, device] of Object.entries(devices)) {
     });
 }
 
-test('axe finds no violations on a project plan with its editor, milestones and team', async ({ page }) => {
+test('project tools: a course shows none of them until it says so, and the switch is in its dialog', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openAssignments(page, false);
+    await newProject(page, 'Project: tools');
+    await preMade(page);
+    await page.getByRole('button', { name: /^Project/ }).first().click();
+    await page.getByRole('heading', { level: 3, name: 'Initiate' }).waitFor();
+    // Off: the plan is sections and tasks, with marking criteria on offer; no milestones, team or how it is going.
+    await expect(page.getByRole('button', { name: /^Team/ })).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 3, name: /Milestones/ })).toHaveCount(0);
+    await expect(page.locator('.plan-progress')).not.toContainText(/On track|At risk|Off track/);
+    await expect(page.getByRole('button', { name: /Marking criteria/ })).toBeVisible();
+
+    // The switch is in the course's dialog.
+    await openSection(page, 'Home');
+    await page.getByRole('button', { name: 'More for Biology' }).click();
+    await page.getByRole('button', { name: 'Edit course' }).click();
+    const dialog = page.locator('#workspace-form');
+    await dialog.getByLabel('Project tools for assignments').check();
+    await dialog.getByRole('button', { name: 'Save changes' }).click();
+    await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
+
+    await openSection(page, 'Assignments');
+    await page.getByRole('link', { name: /Project: tools/ }).first().click();
+    await expect(page.getByRole('heading', { level: 3, name: /Milestones/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Team/ })).toBeVisible();
+    await expect(page.locator('.plan-progress')).toContainText(/On track|At risk|Off track/);
+});
+
+test('axe finds no violations on a project plan with its editor, milestones and team', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openAssignments(page, false, true);
     await newProject(page, 'Project: axe');
     await preMade(page);
     await page.getByRole('button', { name: /^Project/ }).first().click();
@@ -486,7 +514,7 @@ test('axe finds no violations on a project plan with its editor, milestones and 
 
 test('a project plan never scrolls sideways at 320 px, even with 200% text and the editor open', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
-    await openAssignments(page, true);
+    await openAssignments(page, true, true);
     await newProject(page, 'A project with a rather long name that goes on and on');
     await preMade(page);
     await page.getByRole('button', { name: /Group project/ }).first().click();

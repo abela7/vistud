@@ -26,16 +26,20 @@ test('a student opens Journal, reads an attempt, and goes back', async ({ page }
     await page.setViewportSize(desktop);
     await openStudentHome(page, makeStudentWithJournal());
 
-    await page.locator('.app-sidebar').getByRole('link', { name: 'Journal' }).click();
+    // The journal is part of Settings → Your data, not a door of its own.
+    await page.locator('.app-sidebar').getByRole('link', { name: 'Settings' }).click();
+    await page.waitForURL('**/settings');
+    await page.getByRole('link', { name: 'Your data' }).click();
+    await page.getByRole('link', { name: 'Open the journal' }).click();
     await page.getByRole('heading', { name: 'Journal', exact: true }).waitFor();
     await expect(page.locator('main').getByRole('listitem')).toHaveCount(5);
     await expect(page.locator('main').getByRole('listitem').first()).toContainText(/Attempt\s*Correct/);
 
     await openCorrectAttempt(page);
     await expect(page.getByText('LEFT JOIN orders')).toBeVisible();
-    await expect(page.locator('.app-sidebar').getByRole('link', { name: 'Journal' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.locator('.app-sidebar').getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
 
-    await page.getByRole('link', { name: 'Journal', exact: true }).first().click();
+    await page.getByRole('link', { name: 'Back to Journal' }).click();
     await page.waitForURL('**/journal');
 });
 

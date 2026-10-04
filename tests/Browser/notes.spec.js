@@ -434,20 +434,20 @@ test('a draft of a note deleted elsewhere is removed before it could be sent', a
     // Another tab deletes the note for good.
     const other = await context.newPage();
     await other.setViewportSize(desktop);
-    await other.goto(`/workspaces/${note.workspace}/modules`);
+    await other.goto(`/courses/${note.workspace}/modules`);
     await other.locator('main').getByRole('link', { name: 'Week 2: Cell division' }).click();
     await openTab(other, 'Notes');
     await other.getByRole('button', { name: 'Actions for Mitosis vs meiosis' }).click();
     await other.getByRole('button', { name: 'Move to trash' }).click();
     // Leaving before the trash is saved would cancel it.
     await expect(other.getByRole('status').filter({ hasText: 'is in the trash.' })).toBeVisible();
-    await other.goto(`/workspaces/${note.workspace}/notes`);
+    await other.goto(`/courses/${note.workspace}/notes`);
     await other.getByRole('button', { name: 'Trash (1)' }).click();
     await other.getByRole('button', { name: 'Delete for good: Mitosis vs meiosis' }).click();
     await other.getByRole('dialog').getByRole('button', { name: 'Delete for good' }).click();
     await expect(other.getByRole('status').filter({ hasText: 'is deleted.' })).toBeVisible();
 
-    await page.goto(`/workspaces/${note.workspace}/notes`);
+    await page.goto(`/courses/${note.workspace}/notes`);
     await expect(page.locator('[data-toasts]')).toContainText('deleted on another device were removed from this one');
     const left = await page.evaluate(async (account) => {
         const db = await new Promise((resolve) => { const r = indexedDB.open(`vistud-drafts-${account}`); r.onsuccess = () => resolve(r.result); });
@@ -547,7 +547,7 @@ test('a note never scrolls sideways at 320 px, even with 200% text', async ({ pa
 async function openNotesAndFiles(page) {
     const note = makeStudentWithNote();
     await openStudentHome(page, note.email);
-    await page.goto(`/workspaces/${note.workspace}/notes`);
+    await page.goto(`/courses/${note.workspace}/notes`);
     await page.getByRole('heading', { level: 1, name: 'Notes & files' }).waitFor();
     await page.waitForLoadState('load');
     return note;
@@ -587,7 +587,7 @@ test('a new note is kept only once something is written in it', async ({ page })
     await page.locator('[data-note-editor][data-ready]').waitFor();
     expect(page.url()).toMatch(/\/notes\/new$/);
     await expect(status(page)).toHaveText('Not saved yet');
-    await page.goto(`/workspaces/${note.workspace}/notes`);
+    await page.goto(`/courses/${note.workspace}/notes`);
     await expect(loose.getByRole('listitem')).toHaveCount(before);
 
     // The first words make it, and the address becomes the note's.
@@ -603,7 +603,7 @@ test('a new note is kept only once something is written in it', async ({ page })
     await page.reload();
     await page.locator('[data-note-editor][data-ready]').waitFor();
     await expect(page.locator('.note-prose')).toHaveText('Revise osmosis before Friday. And diffusion.');
-    await page.goto(`/workspaces/${note.workspace}/notes`);
+    await page.goto(`/courses/${note.workspace}/notes`);
     await expect(loose.getByRole('listitem')).toHaveCount(before + 1);
 });
 

@@ -30,7 +30,7 @@ async function twoPins(page) {
     await openStudentHome(page, note.email);
     await pinFromPage(page, note.url);
     await pinFromPage(page, note.empty);
-    await page.goto(`/workspaces/${note.workspace}`);
+    await page.goto(`/courses/${note.workspace}`);
     await expect(dock(page).getByRole('button', { name: /Pinned notes/ })).toBeVisible();
     return note;
 }
@@ -52,7 +52,7 @@ test('a pinned note is a button in the corner of every page, and opens in a wind
     await expect(dock(page)).toHaveCount(0);
 
     // Any other page has it, at the bottom right.
-    await page.goto(`/workspaces/${note.workspace}`);
+    await page.goto(`/courses/${note.workspace}`);
     const pill = dock(page).getByRole('link', { name: /Pinned note: Mitosis vs meiosis/ });
     await expect(pill).toBeVisible();
     const box = await pill.boundingBox();
@@ -81,7 +81,7 @@ test('a pinned note is a button in the corner of every page, and opens in a wind
     await openNotePage(page, note.url);
     await page.getByRole('button', { name: 'Unpin', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Pin', exact: true })).toBeVisible();
-    await page.goto(`/workspaces/${note.workspace}`);
+    await page.goto(`/courses/${note.workspace}`);
     await expect(dock(page)).toHaveCount(0);
 });
 
@@ -116,7 +116,7 @@ test('a note is pinned from its row in a list, and unpinned there too', async ({
 test('a row\'s menu follows a pin taken out of the corner, and the corner survives Back after selecting', async ({ page }) => {
     await page.setViewportSize(desktop);
     const note = await twoPins(page);
-    await page.goto(`/workspaces/${note.workspace}/modules`);
+    await page.goto(`/courses/${note.workspace}/modules`);
     await page.getByRole('link', { name: /Week 2: Cell division/ }).click();
     await page.waitForURL(/\/modules\/[^/]+$/);
 
@@ -136,8 +136,8 @@ test('a row\'s menu follows a pin taken out of the corner, and the corner surviv
     await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Select' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-selecting', '');
-    await page.getByRole('link', { name: 'Overview', exact: true }).first().click();
-    await page.waitForURL(new RegExp(`/workspaces/${note.workspace}$`));
+    await page.getByRole('link', { name: 'Home', exact: true }).first().click();
+    await page.waitForURL(new RegExp(`/courses/${note.workspace}$`));
     await expect(page.locator('html')).not.toHaveAttribute('data-selecting', '');
     await page.goBack();
     await page.waitForURL(/\/modules\/[^/]+$/);
@@ -201,7 +201,7 @@ test('at most eight notes can be pinned; the next one says so', async ({ page })
     await expect(page.getByRole('button', { name: 'Pin', exact: true })).toBeVisible();
 
     // The list shows all eight, scrolling inside the window if it must.
-    await page.goto(`/workspaces/${note.workspace}`);
+    await page.goto(`/courses/${note.workspace}`);
     await dock(page).getByRole('button', { name: /Pinned notes/ }).click();
     await expect(page.locator('#pin-menu').getByRole('link')).toHaveCount(8);
     expect(within(await page.locator('#pin-menu').boundingBox(), desktop.width, desktop.height)).toBe(true);
@@ -348,7 +348,7 @@ test('in dark mode, opening a pinned note window inherits the dark canvas immedi
         document.documentElement.dataset.theme = document.documentElement.dataset.themeDark;
     });
 
-    await page.goto(`/workspaces/${note.workspace}`);
+    await page.goto(`/courses/${note.workspace}`);
     const pill = dock(page).getByRole('link', { name: /Pinned note: Mitosis vs meiosis/ });
     await expect(pill).toBeVisible();
 

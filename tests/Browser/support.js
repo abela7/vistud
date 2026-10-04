@@ -107,6 +107,24 @@ function makeAccount(twoFactor, admin = false, name = null) {
     return email;
 }
 
+/**
+ * Goes to one of a course's doors the way a student would: the sidebar on a computer; on a phone (under 768 px) the tab bar for Home,
+ * Modules and Cards, and the More sheet for the rest (Questions, Assignments, Progress, Notes & files, Calendar).
+ */
+export async function openSection(page, name) {
+    if (page.viewportSize().width >= 768) {
+        await page.locator('.app-sidebar').getByRole('link', { name, exact: true }).click();
+        return;
+    }
+    const tabs = page.locator('.app-tabbar');
+    if (['Home', 'Modules', 'Cards'].includes(name)) {
+        await tabs.getByRole('link', { name, exact: true }).click();
+        return;
+    }
+    await tabs.getByRole('button', { name: 'More', exact: true }).click();
+    await page.locator('#more-sheet').getByRole('link', { name, exact: true }).click();
+}
+
 /** Opens one of a module page's tabs ('Topics', 'Files', 'Notes', 'Questions' or 'Sessions') and waits for it to have arrived. */
 export async function openTab(page, name) {
     const tab = page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: new RegExp(`^${name}`) });
@@ -206,11 +224,11 @@ export function makeStudentWithWorkspaces(workspaces) {
 }
 
 /** A student with a Biology workspace holding two modules and some folders, made through the real services. */
-export function makeStudentWithModules() {
+export function makeStudentWithModules({ projectTools = false } = {}) {
     const email = makeAccount(false);
     const code = [
         `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
-        `$w = app(\\App\\Study\\Workspaces::class)->create($p, ['name' => 'Biology', 'colour' => 'green', 'icon' => 'microscope']);`,
+        `$w = app(\\App\\Study\\Workspaces::class)->create($p, ['name' => 'Biology', 'colour' => 'green', 'icon' => 'microscope', 'project_tools' => ${projectTools ? 'true' : 'false'}]);`,
         `$m = app(\\App\\Study\\Modules::class); $f = app(\\App\\Study\\Folders::class);`,
         `$cells = $m->create($p, $w->id, ['title' => 'Week 1: Cells', 'starts_on' => '2026-09-08', 'ends_on' => '2026-09-14']);`,
         `$m->create($p, $w->id, ['title' => 'Week 2: Cell division']);`,
@@ -250,7 +268,7 @@ function noteFor(email) {
         `$notes = app(\\App\\Study\\Notes::class); $n = $notes->create($p, 'module', $mods[1]->id, 'Mitosis vs meiosis');`,
         `$notes->save($p, $n->id, ['base_version' => 1, 'save_id' => 'seed-0001', 'client_id' => 'seed-0001', 'title' => 'Mitosis vs meiosis', 'doc' => ${doc}]);`,
         `$e = $notes->create($p, 'folder', $labs->id);`,
-        `echo json_encode(['url' => "/workspaces/{$w->id}/notes/{$n->id}", 'empty' => "/workspaces/{$w->id}/notes/{$e->id}", 'workspace' => $w->id]);`,
+        `echo json_encode(['url' => "/courses/{$w->id}/notes/{$n->id}", 'empty' => "/courses/{$w->id}/notes/{$e->id}", 'workspace' => $w->id]);`,
     ].join(' ');
     return JSON.parse(execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop());
 }

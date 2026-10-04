@@ -45,7 +45,7 @@ test('the answer streams in as it is written, then stays as a turn', async ({ pa
         `app(\\App\\Engine\\Settings::class)->set($p, ['tutor_model' => 'fake/tutor', 'consent' => true]);`,
     ].join(' '));
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { name: 'Your tutor' }).waitFor();
     await page.waitForLoadState('load');
 
@@ -106,7 +106,7 @@ test('notes and pictures go with a message: picked, uploaded or pasted', async (
         `app(\\App\\Engine\\Settings::class)->set($p, ['tutor_model' => 'fake/tutor', 'consent' => true]);`,
     ].join(' '));
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { name: 'Your tutor' }).waitFor();
     await page.waitForLoadState('load');
     const chat = page.locator('.chat');
@@ -173,7 +173,7 @@ test('a diagram and a formula in a reply are drawn, with the diagram as text und
         `app(\\App\\Engine\\Settings::class)->set($p, ['tutor_model' => 'fake/tutor', 'consent' => true]);`,
     ].join(' '));
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { name: 'Your tutor' }).waitFor();
     await page.waitForLoadState('load');
     const chat = page.locator('.chat');
@@ -225,7 +225,7 @@ test('the tutor saves cards and writes in a note that updates while it is open',
         `app(\\App\\Engine\\Settings::class)->set($p, ['tutor_model' => 'fake/tutor', 'consent' => true]);`,
     ].join(' '));
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { name: 'Your tutor' }).waitFor();
     await page.waitForLoadState('load');
     const chat = page.locator('.chat');
@@ -269,7 +269,7 @@ async function openReadySession(page, size = { width: 1440, height: 900 }) {
     ].join(' '));
     await page.setViewportSize(size);
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { name: 'Your tutor' }).waitFor({ state: 'attached' });
     await page.waitForLoadState('load');
 
@@ -317,7 +317,7 @@ test('the tutor marks a topic as its own, with a tap to undo it, and the end scr
     ].join(' '));
     await page.setViewportSize({ width: 1440, height: 900 });
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Self joins' }).waitFor();
     await page.waitForLoadState('load');
     const chat = page.locator('.chat');
@@ -390,13 +390,15 @@ const ai = async (page, student, path, viewport = { width: 1440, height: 900 }) 
     await page.waitForLoadState('load');
 };
 const sheet = (page) => page.locator('#ai-sheet');
+/* Ask: a button in the top bar, and on a phone the tab bar's (the top bar's is hidden under 768 px). */
+const askButton = (page) => page.locator('.app-topbar, .app-tabbar').getByRole('button', { name: 'Ask', exact: true });
 const analyseSheet = async (page) => (await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
     .violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' ')}`);
 const cardRow = (page, front) => page.locator('.card-row').filter({ hasText: front });
 
 test('helper: a card\'s ✦ shows it before and after, and Keep changes the card', async ({ page }) => {
     const student = makeStudentWithCards();
-    await ai(page, student, `/workspaces/${student.workspace}/flashcards`);
+    await ai(page, student, `/courses/${student.workspace}/flashcards`);
     const row = cardRow(page, 'What does a LEFT JOIN keep?');
     await row.getByRole('button', { name: /^AI help with/ }).click();
     await row.getByRole('button', { name: 'Improve', exact: true }).click();
@@ -414,7 +416,7 @@ test('helper: a card\'s ✦ shows it before and after, and Keep changes the card
 
 test('helper: discarding leaves the card, and two more like this are added as the AI\'s', async ({ page }) => {
     const student = makeStudentWithCards();
-    await ai(page, student, `/workspaces/${student.workspace}/flashcards`);
+    await ai(page, student, `/courses/${student.workspace}/flashcards`);
     const row = cardRow(page, 'What does an INNER JOIN keep?');
     await row.getByRole('button', { name: /^AI help with/ }).click();
     await row.getByRole('button', { name: 'Shorter', exact: true }).click();
@@ -433,7 +435,7 @@ test('helper: discarding leaves the card, and two more like this are added as th
 
 test('helper: Make cards from… asks what from, shows the cards ticked, and adds only the ones kept', async ({ page }) => {
     const student = makeStudentWithCards();
-    await ai(page, student, `/workspaces/${student.workspace}/flashcards`);
+    await ai(page, student, `/courses/${student.workspace}/flashcards`);
     await page.getByRole('button', { name: 'Make cards from…' }).click();
     await expect(sheet(page).getByRole('heading', { name: 'Make cards from…' })).toBeVisible();
     await sheet(page).getByRole('button', { name: 'Make cards' }).click();
@@ -453,7 +455,7 @@ test('helper: Make cards from… asks what from, shows the cards ticked, and add
 
 test('helper: a question is clarified on its page, and Keep puts the clearer words in the box', async ({ page }) => {
     const student = makeStudentWithTopics();
-    await ai(page, student, `/workspaces/${student.workspace}/progress`);
+    await ai(page, student, `/courses/${student.workspace}/progress`);
     await page.getByRole('link', { name: 'Why does a left join keep the unmatched rows?' }).first().click();
     await page.getByRole('heading', { level: 1, name: 'Question' }).waitFor();
     await page.waitForLoadState('load');
@@ -507,8 +509,8 @@ test('helper: a selection of a note is shortened, and only Keep puts it in the n
 
 test('helper: Ask answers a quick question about the course on a phone, and the way to the tutor is one line away', async ({ page }) => {
     const student = makeStudentWithTopics();
-    await ai(page, student, `/workspaces/${student.workspace}`, { width: 390, height: 844 });
-    await page.locator('.app-topbar').getByRole('button', { name: 'Ask', exact: true }).click();
+    await ai(page, student, `/courses/${student.workspace}`, { width: 390, height: 844 });
+    await askButton(page).click();
     const ask = page.locator('#ask-sheet');
     await expect(ask.getByRole('heading', { name: 'Ask' })).toBeVisible();
     await expect(ask.getByLabel('Your question', { exact: true })).toBeFocused();
@@ -525,7 +527,7 @@ test('helper: Ask answers a quick question about the course on a phone, and the 
 for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } })) {
     test(`helper: every colour of the sheets comes from a token: ${name}`, async ({ page }) => {
         const student = makeStudentWithCards();
-        await ai(page, student, `/workspaces/${student.workspace}/flashcards`, viewport);
+        await ai(page, student, `/courses/${student.workspace}/flashcards`, viewport);
         await useSentinelTheme(page);
         const row = cardRow(page, 'What does a LEFT JOIN keep?');
         await row.getByRole('button', { name: /^AI help with/ }).click();
@@ -534,7 +536,7 @@ for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 
         await sheet(page).getByRole('heading', { name: 'After' }).waitFor({ timeout: 15_000 });
         states['before and after'] = await foreignColours(page);
         await sheet(page).getByRole('button', { name: 'Discard' }).click();
-        await page.locator('.app-topbar').getByRole('button', { name: 'Ask', exact: true }).click();
+        await askButton(page).click();
         await page.locator('#ask-sheet').getByLabel('Your question', { exact: true }).fill('Hello?');
         await page.locator('#ask-sheet').getByLabel('Your question', { exact: true }).press('Enter');
         await expect(page.locator('#ask-sheet').getByRole('log')).toContainText('You found Deadlocks hard', { timeout: 15_000 });
@@ -548,7 +550,7 @@ for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 
 for (const theme of THEMES) {
     test(`helper: axe finds no violations in the ✦ menu, its sheet and Ask: ${theme}`, async ({ page }) => {
         const student = makeStudentWithCards();
-        await ai(page, student, `/workspaces/${student.workspace}/flashcards`);
+        await ai(page, student, `/courses/${student.workspace}/flashcards`);
         await useTheme(page, theme);
         const row = cardRow(page, 'What does a LEFT JOIN keep?');
         await row.getByRole('button', { name: /^AI help with/ }).click();
@@ -561,7 +563,7 @@ for (const theme of THEMES) {
         await sheet(page).getByLabel('How many').waitFor();
         expect(await analyseSheet(page), 'choose').toEqual([]);
         await page.keyboard.press('Escape');
-        await page.locator('.app-topbar').getByRole('button', { name: 'Ask', exact: true }).click();
+        await askButton(page).click();
         await page.locator('#ask-sheet').getByLabel('Your question', { exact: true }).waitFor();
         expect(await analyseSheet(page), 'ask').toEqual([]);
     });

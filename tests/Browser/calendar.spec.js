@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { execFileSync } from 'node:child_process';
-import { makeStudentWithModules, openStudentHome } from './support.js';
+import { makeStudentWithModules, openSection, openStudentHome } from './support.js';
 
 /* The calendar: a month of days with what is on each, the day picked, the agenda, filters (the owner's review, 2026-10-03). */
 
@@ -19,8 +19,7 @@ async function openCalendar(page, onPhone, title = 'Coursework 1: cell report') 
     await openStudentHome(page, makeStudentWithModules());
     await page.locator('main').getByRole('link', { name: 'Biology' }).click();
     await page.getByRole('heading', { level: 1, name: 'Biology' }).waitFor();
-    const nav = onPhone ? page.locator('.app-tabbar') : page.locator('.app-sidebar');
-    await nav.getByRole('link', { name: onPhone ? 'Tasks' : 'Assignments' }).click();
+    await openSection(page, 'Assignments');
     await page.getByRole('heading', { level: 1, name: 'Assignments' }).waitFor();
     await page.locator('main').getByRole('link', { name: 'New assignment' }).first().click();
     await page.getByLabel('Name').fill(title);
@@ -29,9 +28,9 @@ async function openCalendar(page, onPhone, title = 'Coursework 1: cell report') 
     await page.getByLabel('Time (optional)').fill('14:30');
     await page.getByRole('button', { name: 'Create' }).click();
     await page.getByRole('heading', { level: 1, name: title }).waitFor();
-    // The Overview's Coming up has a link to it; on a computer the sidebar has it too.
+    // The course Home's Coming up has a link to it; on a computer the sidebar has it too.
     if (onPhone) {
-        await page.locator('.app-tabbar').getByRole('link', { name: 'Overview' }).click();
+        await page.locator('.app-tabbar').getByRole('link', { name: 'Home' }).click();
         await page.locator('main').getByRole('link', { name: 'Calendar', exact: true }).click();
     } else {
         await page.locator('.app-sidebar').getByRole('link', { name: 'Calendar', exact: true }).click();
@@ -108,7 +107,7 @@ for (const [name, device] of Object.entries(devices)) {
 test('the calendar of every workspace says whose each thing is', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openCalendar(page, false);
-    await page.locator('.app-sidebar').getByRole('link', { name: 'All calendars' }).click();
+    await page.locator('.app-sidebar').getByRole('link', { name: 'Calendar', exact: true }).click();
     await page.getByRole('heading', { level: 1, name: 'Calendar' }).waitFor();
     await page.getByRole('button', { name: 'Agenda', exact: true }).click();
     const row = page.locator('.cal-entry').filter({ hasText: 'Coursework 1: cell report' });

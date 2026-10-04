@@ -17,7 +17,7 @@ test.describe.configure({ timeout: 60_000 });
 async function openSession(page) {
     const student = makeStudentWithSession();
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/sessions/${student.session}`);
+    await page.goto(`/courses/${student.workspace}/sessions/${student.session}`);
     await page.getByRole('heading', { level: 1, name: 'Joins' }).waitFor();
     await page.waitForLoadState('load');
     return student;
@@ -27,7 +27,7 @@ async function openSession(page) {
 async function openQuestions(page) {
     const student = makeStudentWithSession();
     await openStudentHome(page, student.email);
-    await page.goto(`/workspaces/${student.workspace}/modules`);
+    await page.goto(`/courses/${student.workspace}/modules`);
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
     await page.waitForLoadState('load');
@@ -59,7 +59,7 @@ test('a question is kept from a session, is on the module\'s Questions tab, and 
     // The session no longer carries a board: the questions are on the module's Questions tab (a session's + menu keeps one there).
     const session = await openSession(page);
     await expect(page.getByRole('list', { name: 'Questions' })).toHaveCount(0);
-    await page.goto(`/workspaces/${session.workspace}/modules`);
+    await page.goto(`/courses/${session.workspace}/modules`);
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
     await page.waitForLoadState('load');
@@ -152,7 +152,7 @@ test('questions never scroll sideways at 320 px, even with 200% text', async ({ 
 test("a module page's New adds a question, on the module's questions page", async ({ page }) => {
     await page.setViewportSize(desktop);
     const student = await openSession(page);
-    await page.goto(`/workspaces/${student.workspace}/modules`);
+    await page.goto(`/courses/${student.workspace}/modules`);
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
     await page.getByRole('heading', { level: 1, name: 'Week 1: Relational model' }).waitFor();
     await page.waitForLoadState('load');
@@ -169,7 +169,7 @@ test("a module page's New adds a question, on the module's questions page", asyn
 test('the questions page fills the width: cards in rows, no narrow column', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const student = await withQuestions(page);
-    await page.goto(`/workspaces/${student.workspace}/modules`);
+    await page.goto(`/courses/${student.workspace}/modules`);
     await page.locator('main').getByRole('link', { name: 'Week 1: Relational model' }).click();
     await page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: /^Questions/ }).click();
     await page.getByRole('list', { name: 'Questions' }).waitFor();

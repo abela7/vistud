@@ -2538,7 +2538,8 @@
         color: var(--text-muted);
         font-size: 0.8125rem;
         font-weight: 600;
-        white-space: nowrap;
+        /* On one line, unless it is wider than its row (very large text on a small phone): then it wraps there. */
+        max-width: 100%;
     }
 
     .status-count {

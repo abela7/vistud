@@ -428,7 +428,8 @@
         font-size: 0.75rem;
         font-weight: 600;
         line-height: 1.25rem;
-        white-space: nowrap;
+        /* A short badge stays on one line; one wider than its row wraps there. */
+        max-width: 100%;
     }
 
     .badge-neutral {
@@ -477,26 +478,29 @@
     /* ---------- Dialogs ---------- */
 
     /*
-    | A native modal <dialog> (focus trap, Esc, focus return). Every dialog is
-    | a panel that slides in from the right (the owner's review, 2026-09-27):
-    | the page stays in view beside it, the form scrolls inside it, and its
-    | buttons stay at the bottom. Full width on phones.
+    | A native modal <dialog> (focus trap, Esc, focus return). Under 640 px every dialog is a bottom sheet
+    | (docs/specs/vistud-2-blueprint.md §3.10): it rises from the foot of the screen, takes the room its content needs up
+    | to nearly the whole height, scrolls inside, and keeps its buttons at its foot. From 640 px it is a panel that
+    | slides in from the right (the owner's review, 2026-09-27): the page stays in view beside it, the form scrolls
+    | inside it, and its buttons stay at the bottom. The markup is the same for both.
     */
     .modal {
         position: fixed;
-        inset: 0 0 0 auto;
+        inset: auto 0 0 0;
         width: 100vw;
         max-width: none;
-        height: 100dvh;
-        max-height: none;
+        height: auto;
+        max-height: calc(100dvh - 1.5rem);
         margin: 0;
         padding: 0;
         overflow-y: auto;
+        overscroll-behavior: contain;
         border: 0;
+        border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
         background-color: var(--surface-raised);
         color: var(--text);
         box-shadow: var(--elevation-lg);
-        translate: 100% 0;
+        translate: 0 100%;
         transition:
             translate 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
             overlay 220ms allow-discrete,
@@ -509,7 +513,7 @@
 
     @starting-style {
         .modal[open] {
-            translate: 100% 0;
+            translate: 0 100%;
         }
     }
 
@@ -535,7 +539,6 @@
     .modal-panel {
         display: flex;
         flex-direction: column;
-        min-height: 100%;
     }
 
     /*
@@ -799,9 +802,27 @@
 
     @media (min-width: 640px) {
         .modal {
+            inset: 0 0 0 auto;
             width: min(30rem, calc(100vw - 2rem));
+            height: 100dvh;
+            max-height: none;
             border-left: 1px solid var(--border);
             border-radius: var(--radius-2xl) 0 0 var(--radius-2xl);
+            translate: 100% 0;
+        }
+
+        .modal[open] {
+            translate: 0 0;
+        }
+
+        @starting-style {
+            .modal[open] {
+                translate: 100% 0;
+            }
+        }
+
+        .modal-panel {
+            min-height: 100%;
         }
 
         .modal-actions > .btn {

@@ -26,7 +26,7 @@ test('links move between pages without reloading, and each page works as if open
     const errors = watchErrors(page);
     const note = makeStudentWithNote();
     await openStudentHome(page, note.email);
-    await page.goto(`/workspaces/${note.workspace}`);
+    await page.goto(`/courses/${note.workspace}`);
     await mark(page);
 
     await sidebar(page).getByRole('link', { name: 'Modules', exact: true }).click();
@@ -62,7 +62,7 @@ test('the chosen theme and a collapsed sidebar stay as they are from page to pag
         localStorage.setItem('vistud.appearance', 'dark');
         localStorage.setItem('vistud.sidebar', 'collapsed');
     });
-    await page.goto(`/workspaces/${note.workspace}`);
+    await page.goto(`/courses/${note.workspace}`);
     const root = page.locator('html');
     await expect(root).toHaveAttribute('data-appearance', 'dark');
     const dark = await root.getAttribute('data-theme');
@@ -143,7 +143,7 @@ test('a page that takes a moment shows a thin loading line, gone once it is in',
     await page.setViewportSize({ width: 1440, height: 900 });
     const note = makeStudentWithNote();
     await openStudentHome(page, note.email);
-    await page.goto(`/workspaces/${note.workspace}`);
+    await page.goto(`/courses/${note.workspace}`);
     await page.route('**/modules', async (route) => {
         await new Promise((done) => setTimeout(done, 1200));
         await route.continue();
