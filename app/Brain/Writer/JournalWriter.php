@@ -9,6 +9,9 @@ use App\Brain\Journal\JournalEntry;
 use App\Brain\Journal\Kind;
 use App\Brain\Journal\Ref;
 use App\Brain\Journal\ReviewPolicy;
+use App\Brain\Projection\ProjectionOptions;
+use App\Brain\Projection\Replay;
+use App\Brain\Projection\Rules;
 use App\Brain\Store\JournalStore;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Errors\Conflict;
@@ -29,6 +32,10 @@ use Illuminate\Support\Facades\DB;
  *   to another learner's entry gets exactly the same answer as one that
  *   doesn't exist.
  * - Refuses reviews that ADR 0002 §6 forbids.
+ * - Refuses to make an incomplete split effective (ADR 0002 §5, as
+ *   clarified in the WP4 review): a `splits_into` claim written as
+ *   accepted, or a review accepting one, must assign every piece of the
+ *   entity's evidence to a defined part.
  * - `received_at` is always the server's time.
  *
  * Callers are trusted server code: adapters set the actor from the
@@ -86,6 +93,7 @@ final class JournalWriter
 
                 $entry = EntryFactory::make($spec, $scope->learnerId, ++$position, $receivedAt);
                 $this->assertReviewAllowed($scope, $entry, $batch);
+                $this->assertSplitComplete($scope, $entry, $batch);
 
                 [$indexRefs, $introduced] = self::indexRefs($spec, $refs);
                 $this->store->insert($scope, $entry, $spec['content'] ?? [], $fingerprint, $indexRefs);
@@ -244,6 +252,42 @@ final class JournalWriter
         $violation = ReviewPolicy::violation($entry, $target, $judged);
         if ($violation !== null) {
             throw new Unprocessable('review_not_allowed', $violation['message'], array_filter(['use' => $violation['use']]));
+        }
+    }
+
+    /**
+     * When this entry would make a split effective, checks it with the same
+     * rule the projection applies (Replay::splitProblems), over the whole
+     * journal including this entry.
+     *
+     * @param  array<string, JournalEntry>  $batch
+     */
+    private function assertSplitComplete(LearnerScope $scope, JournalEntry $entry, array $batch): void
+    {
+        $splitId = null;
+        if ($entry->claimType() === 'splits_into' && ($entry->body['review']['state'] ?? null) === 'accepted') {
+            $splitId = $entry->id;
+        } elseif ($entry->claimType() === 'reviews' && ($entry->body['value']['decision'] ?? null) === 'accept') {
+            $targetId = Ref::id($entry->body['targets'][0]);
+            $target = $batch[$targetId] ?? $this->store->entry($scope, $targetId);
+            if ($target?->claimType() === 'splits_into') {
+                $splitId = $targetId;
+            }
+        }
+        if ($splitId === null) {
+            return;
+        }
+
+        // Entries appended earlier in this batch are already stored in this transaction.
+        $replay = new Replay([...$this->store->entries($scope), $entry], new ProjectionOptions(new DateTimeImmutable('@'.now()->getTimestamp())), new Rules);
+        foreach ($replay->invalidSplits as $invalid) {
+            if ($invalid['claim'] === $splitId) {
+                throw new Unprocessable('split_incomplete', 'The split does not assign all of the entity\'s evidence to its defined parts.', [
+                    'claim' => $splitId,
+                    'problems' => $invalid['problems'],
+                    'unassigned' => $invalid['unassigned'],
+                ]);
+            }
         }
     }
 

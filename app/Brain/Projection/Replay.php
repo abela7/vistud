@@ -75,6 +75,26 @@ final class Replay
     /** @var array<string, array<string, string>> type => [id => survivor id] */
     private array $sameAs = [];
 
+    /** @var array<string, array<string, true>> type => [survivor id => true] for entities others were merged into */
+    public array $mergedInto = [];
+
+    /** @var array<string, array<string, true>> record type => [record id => true] */
+    private array $recordEntities = [];
+
+    /** @var array<string, int> claim id => position from which it has been accepted */
+    private array $effectiveSince = [];
+
+    /**
+     * Splits that could not validly apply, so the previous interpretation
+     * stays in force (ADR 0002 §5, splits_into).
+     *
+     * @var list<array{claim: string, entity: string, problems: list<string>, unassigned: list<string>}>
+     */
+    public array $invalidSplits = [];
+
+    /** @var list<array{0: string, 1: string, 2: string, 3: string}> exposure id, target type, target id, claim id */
+    private array $addressLinks = [];
+
     /** @var array<string, array<string, array<string, string>>> type => [id => [ref => new id]] */
     private array $splitAssignments = [];
 
@@ -108,6 +128,8 @@ final class Replay
         $this->resolveClaims();
         $this->indexIdentity();
         $this->indexRelations();
+        $this->applySplits();
+        $this->indexAddresses();
         $this->indexObservations();
     }
 
@@ -124,6 +146,35 @@ final class Replay
         while (isset($this->sameAs[$type][$id]) && ! isset($seen[$id])) {
             $seen[$id] = true;
             $id = $this->sameAs[$type][$id];
+        }
+
+        return $id;
+    }
+
+    /**
+     * The entity a piece of evidence counts towards: merges are followed,
+     * and when the entity was split, the evidence goes to the entity its
+     * assignment names (ADR 0002 §5, splits_into). Evidence is identified by
+     * references, most specific first, for example the verdict claim and
+     * then the attempt it judges. Unassigned evidence stays with the entity.
+     *
+     * @param  list<string>  $evidence
+     */
+    public function entity(string $type, string $id, array $evidence): string
+    {
+        $id = $this->redirect($type, $id);
+        for ($depth = 0; $depth < 8 && isset($this->splitAssignments[$type][$id]); $depth++) {
+            $to = null;
+            foreach ($evidence as $ref) {
+                if (isset($this->splitAssignments[$type][$id][$ref])) {
+                    $to = $this->splitAssignments[$type][$id][$ref];
+                    break;
+                }
+            }
+            if ($to === null) {
+                break;
+            }
+            $id = $this->redirect($type, $to);
         }
 
         return $id;
@@ -155,10 +206,11 @@ final class Replay
         return $this->ancestorCache[$topic] = array_keys($found);
     }
 
-    /** @return list<string> topics whose parent (through part_of) is $topic */
-    public function children(string $topic): array
+    /** @return list<string> topics that are part of $topic, directly or through sub-topics */
+    public function descendants(string $topic): array
     {
-        return array_keys(array_filter($this->parents, fn (array $parents) => isset($parents[$topic])));
+        return array_keys(array_filter($this->parents, fn (array $parents, string $child) => $child !== $topic
+            && in_array($topic, $this->ancestors($child), true), ARRAY_FILTER_USE_BOTH));
     }
 
     public function teaches(array $exposure, string $topic): bool
@@ -227,6 +279,9 @@ final class Replay
                 continue;
             }
             $this->status[$id] = $entry->body['review']['state'];
+            if ($this->status[$id] === 'accepted') {
+                $this->effectiveSince[$id] = $entry->position;
+            }
             if ($entry->claimType() === 'reviews' && $this->status[$id] === 'accepted') {
                 $reviews[] = $entry;
             }
@@ -250,6 +305,11 @@ final class Replay
 
             if ($decision === 'accept' || $decision === 'reject') {
                 $this->status[Ref::id($target)] = $decision === 'accept' ? 'accepted' : 'rejected';
+                if ($decision === 'accept') {
+                    $this->effectiveSince[Ref::id($target)] = $review->position;
+                } else {
+                    unset($this->effectiveSince[Ref::id($target)]);
+                }
             } elseif ($decision === 'dispute' && ! $this->options->ignoreDisputes) {
                 $this->disputes[] = [
                     'id' => $review->id,
@@ -302,18 +362,14 @@ final class Replay
         }
 
         foreach ($this->effective('same_as') as $claim) {
-            [$type, $a] = Ref::parse($claim->body['targets'][0]);
-            $b = Ref::id($claim->body['value']['survivor'] ?? $claim->body['targets'][1]);
-            if ($a !== $b) {
-                $this->sameAs[$type][$a] = $b;
-            }
-        }
-
-        foreach ($this->effective('splits_into') as $claim) {
-            [$type, $a] = Ref::parse($claim->body['targets'][0]);
-            $this->splitParents[$type][$a] = true;
-            foreach ($claim->body['value']['assignments'] ?? [] as $assignment) {
-                $this->splitAssignments[$type][$a][$assignment['ref']] = Ref::id($assignment['to']);
+            [$type, $first] = Ref::parse($claim->body['targets'][0]);
+            $second = Ref::id($claim->body['targets'][1]);
+            // ADR 0002 §5: the survivor keeps its identity; the other one's evidence counts as the survivor's.
+            $survivor = Ref::id($claim->body['value']['survivor'] ?? $claim->body['targets'][1]);
+            $merged = $survivor === $first ? $second : $first;
+            if ($merged !== $survivor) {
+                $this->sameAs[$type][$merged] = $survivor;
+                $this->mergedInto[$type][$survivor] = true;
             }
         }
 
@@ -321,6 +377,13 @@ final class Replay
             $type = $claim->body['value']['entity_type'];
             $id = Ref::id($claim->body['targets'][0]);
             $this->definitions[$type][$id] = ['value' => $claim->body['value'], 'claim' => $claim->id];
+        }
+
+        // Tasks and other records introduce entities too (ADR 0002 §4).
+        foreach ($this->entries as $entry) {
+            if ($entry->kind === Kind::Record && ! isset($this->retracted[$entry->id])) {
+                $this->recordEntities[$this->bodies[$entry->id]['record_type']][$this->bodies[$entry->id]['record_id']] = true;
+            }
         }
     }
 
@@ -356,7 +419,7 @@ final class Replay
                     $this->stemsFrom[$this->redirect('question', $fromId)][] = Ref::make($toType, $to);
                     break;
                 case 'addresses':
-                    $this->addresses[$fromId][] = Ref::make($toType, $to);
+                    $this->addressLinks[] = [$fromId, $toType, $toId, $claim->id];
                     break;
             }
         }
@@ -367,6 +430,195 @@ final class Replay
 
         foreach ($this->effective('judges') as $claim) {
             $this->judges[Ref::id($claim->body['targets'][0])][] = $claim;
+        }
+    }
+
+    /**
+     * ADR 0002 §5, splits_into, as clarified in the WP4 review: a split
+     * applies only if it is complete when it takes effect. Splits are taken
+     * in the order they became effective, so a later split sees the evidence
+     * an earlier one assigned. A split that cannot validly apply is recorded
+     * in $invalidSplits and changes nothing.
+     */
+    private function applySplits(): void
+    {
+        $claims = $this->effective('splits_into');
+        usort($claims, fn (JournalEntry $a, JournalEntry $b) => [$this->effectiveSince[$a->id], $a->position] <=> [$this->effectiveSince[$b->id], $b->position]);
+
+        foreach ($claims as $claim) {
+            $problems = $this->splitProblems($claim);
+            if ($problems['problems'] !== []) {
+                $this->invalidSplits[] = ['claim' => $claim->id] + $problems;
+
+                continue;
+            }
+            [$type, $id] = Ref::parse($claim->body['targets'][0]);
+            $id = $this->redirect($type, $id);
+            $this->splitParents[$type][$id] = true;
+            foreach ($claim->body['value']['assignments'] as $assignment) {
+                $this->splitAssignments[$type][$id][$assignment['ref']] = Ref::id($assignment['to']);
+            }
+        }
+    }
+
+    /**
+     * Why a split cannot apply. Problems:
+     * - `no_parts`: `into` is empty;
+     * - `part_not_defined`: a part is not an effective definition of the same type, or is the split entity itself;
+     * - `assignment_outside_parts`: an assignment names an entity that is not one of the parts;
+     * - `assignment_not_evidence`: an assignment names something that is not the split entity's evidence;
+     * - `unassigned_evidence`: a piece of the entity's evidence, recorded before the split took effect, has no assignment.
+     *
+     * @return array{entity: string, problems: list<string>, unassigned: list<string>}
+     */
+    public function splitProblems(JournalEntry $claim): array
+    {
+        [$type, $id] = Ref::parse($claim->body['targets'][0]);
+        $id = $this->redirect($type, $id);
+        $value = $claim->body['value'];
+        $problems = [];
+
+        $parts = [];
+        foreach ($value['into'] ?? [] as $ref) {
+            [$partType, $partId] = Ref::parse($ref);
+            $partId = $this->redirect($partType, $partId);
+            $known = isset($this->definitions[$type][$partId]) || isset($this->recordEntities[$type][$partId]);
+            if ($partType !== $type || $partId === $id || ! $known) {
+                $problems[] = 'part_not_defined';
+            }
+            $parts[] = $partId;
+        }
+        if ($parts === []) {
+            $problems[] = 'no_parts';
+        }
+
+        $assigned = [];
+        foreach ($value['assignments'] ?? [] as $assignment) {
+            if (! in_array($this->redirect($type, Ref::id($assignment['to'])), $parts, true)) {
+                $problems[] = 'assignment_outside_parts';
+            }
+            $assigned[$assignment['ref']] = true;
+        }
+
+        $evidence = $this->evidenceOf($type, $id, $this->effectiveSince[$claim->id] ?? $claim->position);
+        $unassigned = [];
+        $covered = [];
+        foreach ($evidence as $refs) {
+            $hits = array_filter($refs, fn (string $ref) => isset($assigned[$ref]));
+            if ($hits === []) {
+                $unassigned[] = end($refs);
+            }
+            foreach ($refs as $ref) {
+                $covered[$ref] = true;
+            }
+        }
+        if ($unassigned !== []) {
+            $problems[] = 'unassigned_evidence';
+        }
+        if (array_diff_key($assigned, $covered) !== []) {
+            $problems[] = 'assignment_not_evidence';
+        }
+
+        $problems = array_values(array_unique($problems));
+        sort($problems);
+        $unassigned = array_values(array_unique($unassigned));
+        sort($unassigned);
+
+        return ['entity' => Ref::make($type, $id), 'problems' => $problems, 'unassigned' => $unassigned];
+    }
+
+    /**
+     * The evidence of an entity recorded before a position, as it stands
+     * with the merges and splits already in force. Each piece is identified
+     * by its references, most specific first: a verdict or match claim, then
+     * the event it is about. An assignment to any of them covers the piece.
+     *
+     * @return list<list<string>>
+     */
+    private function evidenceOf(string $type, string $id, int $before): array
+    {
+        $items = [];
+        $is = fn (string $refType, string $refId, array $evidence) => $refType === $type && $this->entity($type, $refId, $evidence) === $id;
+
+        foreach ($this->entries as $entry) {
+            if ($entry->position >= $before) {
+                continue;
+            }
+            $event = 'event:'.$entry->id;
+
+            if ($entry->kind->isObservation()) {
+                if (isset($this->retracted[$entry->id])) {
+                    continue;
+                }
+                if ($entry->kind === Kind::Attempt) {
+                    $task = $this->entity('task', $this->bodies[$entry->id]['task'], [$event]);
+                    $onTopic = array_filter($this->exercises[$task] ?? [], fn ($t) => $is('topic', $t, [$event]));
+                    if (($type === 'task' && $task === $id) || $onTopic !== []) {
+                        $items[] = [$event];
+                    }
+                }
+                if ($entry->kind === Kind::Exposure || $entry->kind === Kind::SelfReport) {
+                    foreach ($entry->linkTargets('about') as $ref) {
+                        [$refType, $refId] = Ref::parse($ref);
+                        if ($is($refType, $refId, [$event])) {
+                            $items[] = [$event];
+                            break;
+                        }
+                    }
+                }
+
+                continue;
+            }
+
+            if (! $this->isEffective($entry->id)) {
+                continue;
+            }
+            $claim = 'claim:'.$entry->id;
+            $value = $entry->body['value'] ?? [];
+            // A mention reference ("mention:<event>/<n>") is about its event.
+            $about = 'event:'.explode('/', Ref::id($entry->body['targets'][0]))[0];
+            $refs = [$claim, $about];
+
+            if ($entry->claimType() === 'judges') {
+                $named = [];
+                foreach ($value['topics'] ?? [] as $t) {
+                    $named[] = $t['topic'];
+                }
+                foreach ($value['misconceptions'] ?? [] as $m) {
+                    $named[] = $m['misconception'];
+                }
+                foreach ($value['demonstrates'] ?? [] as $q) {
+                    $named[] = $q;
+                }
+                foreach ($value['answer'] ?? [] as $a) {
+                    $named[] = $a['question'];
+                }
+                foreach ($value['effect'] ?? [] as $e) {
+                    $named[] = $e['target'];
+                }
+                foreach ($named as $ref) {
+                    [$refType, $refId] = Ref::parse($ref);
+                    if ($is($refType, $refId, $refs)) {
+                        $items[] = $refs;
+                        break;
+                    }
+                }
+            } elseif ($entry->claimType() === 'refers_to' || ($entry->claimType() === 'relates' && ($value['relation'] ?? null) === 'addresses')) {
+                $target = $entry->claimType() === 'refers_to' ? $value['entity'] : $entry->body['targets'][1];
+                [$refType, $refId] = Ref::parse($target);
+                if ($is($refType, $refId, $refs)) {
+                    $items[] = $refs;
+                }
+            }
+        }
+
+        return $items;
+    }
+
+    private function indexAddresses(): void
+    {
+        foreach ($this->addressLinks as [$exposure, $type, $id, $claim]) {
+            $this->addresses[$exposure][] = Ref::make($type, $this->entity($type, $id, ['claim:'.$claim, 'event:'.$exposure]));
         }
     }
 
@@ -403,13 +655,14 @@ final class Replay
         $effects = [];
         foreach ($this->judges[$entry->id] ?? [] as $claim) {
             $rank = Authority::ofMethod($claim->body['method']['kind']);
+            $evidence = ['claim:'.$claim->id, 'event:'.$entry->id];
             foreach ($claim->body['value']['answer'] ?? [] as $answer) {
-                $question = $this->redirect('question', Ref::id($answer['question']));
+                $question = $this->entity('question', Ref::id($answer['question']), $evidence);
                 $answers[$question][] = ['value' => $answer['adequacy'], 'rank' => $rank, 'position' => $claim->position];
             }
             foreach ($claim->body['value']['effect'] ?? [] as $effect) {
                 [$type, $id] = Ref::parse($effect['target']);
-                $effects[Ref::make($type, $this->redirect($type, $id))][] = ['value' => $effect['effect'], 'rank' => $rank, 'position' => $claim->position];
+                $effects[Ref::make($type, $this->entity($type, $id, $evidence))][] = ['value' => $effect['effect'], 'rank' => $rank, 'position' => $claim->position];
             }
         }
 
@@ -449,8 +702,7 @@ final class Replay
             if ($type !== 'question') {
                 continue;
             }
-            $id = $this->splitAssignments['question'][$id][Ref::make('event', $entry->id)] ?? $id;
-            $questions[] = $this->redirect('question', $id);
+            $questions[] = $this->entity('question', $id, ['claim:'.$claim->id, 'event:'.$entry->id]);
         }
 
         return [
@@ -468,7 +720,7 @@ final class Replay
         foreach ($entry->linkTargets('about') as $ref) {
             [$refType, $id] = Ref::parse($ref);
             if ($refType === $type) {
-                $ids[] = $this->redirect($type, $id);
+                $ids[] = $this->entity($type, $id, ['event:'.$entry->id]);
             }
         }
 
@@ -478,8 +730,12 @@ final class Replay
     private function attemptFact(JournalEntry $entry): array
     {
         $body = $this->bodies[$entry->id];
-        $task = $this->redirect('task', $body['task']);
-        $taskTopics = $this->exercises[$task] ?? [];
+        $evidence = ['event:'.$entry->id];
+        $task = $this->entity('task', $body['task'], $evidence);
+        $taskTopics = array_values(array_unique(array_map(
+            fn (string $topic) => $this->entity('topic', $topic, $evidence),
+            $this->exercises[$task] ?? [],
+        )));
 
         $verdicts = [];
         $claimFacets = [];
@@ -497,7 +753,7 @@ final class Replay
                 'derived' => $claim->body['derived_from'] ?? [],
                 'supersedes' => array_map(fn ($ref) => Ref::id($ref), $claim->body['supersedes'] ?? []),
             ];
-            foreach ($this->expandFacets($claim->body['value']) as [$group, $key, $value]) {
+            foreach ($this->expandFacets($claim->body['value'], ['claim:'.$claim->id, 'event:'.$entry->id]) as [$group, $key, $value]) {
                 $verdicts[$key][] = ['value' => $value] + $base;
                 $claimFacets[$claim->id][$group][] = $key;
             }
@@ -505,13 +761,25 @@ final class Replay
 
         $covering = $this->disputesFor($entry->id, $claimFacets);
 
-        $resolve = function (string $key) use ($verdicts, $covering) {
+        // ADR 0002 §6: a lower-authority verdict that disagrees is kept and
+        // shown as overridden.
+        $overridden = [];
+        $resolve = function (string $key) use ($verdicts, $covering, &$overridden) {
             $candidates = $verdicts[$key] ?? [];
             if ($this->options->humanJudgedOnly && ($key === 'overall' || str_starts_with($key, 'topic:'))) {
                 $candidates = array_values(array_filter($candidates, fn ($v) => Authority::isHuman($v['rank'])));
             }
 
-            return self::resolveFacet($candidates, $covering[$key] ?? []);
+            $effective = self::resolveFacet($candidates, $covering[$key] ?? []);
+            if (is_array($effective)) {
+                foreach ($candidates as $candidate) {
+                    if ($candidate['claim'] !== null && $candidate['value'] !== $effective['value'] && $candidate['rank'] < $effective['rank']) {
+                        $overridden[$candidate['claim']] = true;
+                    }
+                }
+            }
+
+            return $effective;
         };
 
         $overall = $resolve('overall');
@@ -585,19 +853,20 @@ final class Replay
             'demo' => $demonstrates,
             'cause' => is_array($cause) ? $cause['value'] : null,
             'checker_suspect' => $interpreterDisagrees,
+            'overridden' => self::sortedKeys($overridden),
             'repeat' => 'none',
         ];
     }
 
     /** @return list<array{0: string, 1: string, 2: mixed}> group, facet key, value */
-    private function expandFacets(array $value): array
+    private function expandFacets(array $value, array $evidence): array
     {
         $facets = [];
         if (isset($value['overall'])) {
             $facets[] = ['overall', 'overall', $value['overall']];
         }
         foreach ($value['topics'] ?? [] as $topic) {
-            $facets[] = ['topics', 'topic:'.$this->redirect('topic', Ref::id($topic['topic'])), $topic['outcome']];
+            $facets[] = ['topics', 'topic:'.$this->entity('topic', Ref::id($topic['topic']), $evidence), $topic['outcome']];
         }
         if (isset($value['support'])) {
             $facets[] = ['support', 'support', $value['support']];
@@ -606,10 +875,10 @@ final class Replay
             $facets[] = ['own_words', 'own_words', (bool) $value['own_words']];
         }
         foreach ($value['misconceptions'] ?? [] as $misconception) {
-            $facets[] = ['misconceptions', 'misc:'.$this->redirect('misconception', Ref::id($misconception['misconception'])), (bool) $misconception['present']];
+            $facets[] = ['misconceptions', 'misc:'.$this->entity('misconception', Ref::id($misconception['misconception']), $evidence), (bool) $misconception['present']];
         }
         foreach ($value['demonstrates'] ?? [] as $question) {
-            $facets[] = ['demonstrates', 'demo:'.$this->redirect('question', Ref::id($question)), true];
+            $facets[] = ['demonstrates', 'demo:'.$this->entity('question', Ref::id($question), $evidence), true];
         }
         if (isset($value['cause'])) {
             $facets[] = ['cause', 'cause', $value['cause']];
@@ -663,17 +932,26 @@ final class Replay
                 && in_array('claim:'.$dispute['id'], $v['derived'], true)
                 && $v['rank'] >= $threshold));
 
-            return $adjudications === [] ? self::DISPUTED : self::best($adjudications);
+            return $adjudications === [] ? self::DISPUTED : self::precedence($adjudications);
         }
 
-        if ($candidates === []) {
-            return null;
-        }
+        return $candidates === [] ? null : self::precedence($candidates);
+    }
 
-        $superseded = array_merge(...array_map(fn ($v) => $v['supersedes'] ?? [], $candidates));
-        $live = array_values(array_filter($candidates, fn ($v) => ! in_array($v['claim'] ?? null, $superseded, true)));
+    /**
+     * ADR 0002 §6 step 3: the highest authority wins. Among verdicts of equal
+     * authority, one that explicitly supersedes another wins; failing that,
+     * the latest position. A lower-authority verdict can never supersede a
+     * higher one.
+     */
+    private static function precedence(array $candidates): array
+    {
+        $top = max(array_column($candidates, 'rank'));
+        $tier = array_values(array_filter($candidates, fn ($v) => $v['rank'] === $top));
+        $superseded = array_merge(...array_map(fn ($v) => $v['supersedes'] ?? [], $tier));
+        $live = array_values(array_filter($tier, fn ($v) => ! in_array($v['claim'] ?? null, $superseded, true)));
 
-        return self::best($live === [] ? $candidates : $live);
+        return self::best($live === [] ? $tier : $live);
     }
 
     /** Highest authority, then the latest position. */
@@ -684,8 +962,23 @@ final class Replay
         return $candidates[0];
     }
 
-    /** @return list<string> the task topics that have no sub-topic among the task's topics */
+    /**
+     * The task topics that have no sub-topic among the task's topics. If
+     * part_of relations form a cycle, every topic in it has a sub-topic;
+     * then the failure falls on all the task's topics rather than on none,
+     * so a bad relation can never hide a failure.
+     *
+     * @return list<string>
+     */
     private function mostSpecific(array $topics): array
+    {
+        $specific = $this->leaves($topics);
+
+        return $specific === [] ? $topics : $specific;
+    }
+
+    /** @return list<string> */
+    private function leaves(array $topics): array
     {
         return array_values(array_filter($topics, function (string $topic) use ($topics) {
             foreach ($topics as $other) {
@@ -733,6 +1026,15 @@ final class Replay
         }
 
         return false;
+    }
+
+    /** @return list<string> */
+    private static function sortedKeys(array $set): array
+    {
+        $keys = array_map('strval', array_keys($set));
+        sort($keys);
+
+        return $keys;
     }
 
     public static function compare(array $a, array $b): int
