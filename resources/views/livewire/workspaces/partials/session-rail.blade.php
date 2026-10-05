@@ -1,5 +1,5 @@
 {{--
-    The session's rail (App\Livewire\Workspaces\StudySession): the module's topics (tap one to make the session about it),
+    The session's rail (App\Livewire\Workspaces\StudySession): the module's topics, or the folder's in a folder's session (tap one to make the session about it),
     the material (open it; Use gives it to the tutor), and what this session saved. Drawn twice, beside the chat and in a
     sheet on a phone, so $suffix keeps their ids apart.
 --}}
@@ -9,7 +9,7 @@
     $items = array_slice([...array_merge([], ...array_column($groups, 'items')), ...$alsoUsed], 0, 6);
 @endphp
 <section class="rail-section" aria-labelledby="rail-topics-{{ $suffix }}">
-    <h2 id="rail-topics-{{ $suffix }}" class="rail-title">{{ $module ? 'Topics in '.$module->title : 'Topic' }}</h2>
+    <h2 id="rail-topics-{{ $suffix }}" class="rail-title">{{ $placeName ? 'Topics in '.$placeName : 'Topic' }}</h2>
     @if ($railTopics !== [])
         <ul class="rail-list" role="list">
             @foreach ($railTopics as $t)
@@ -29,6 +29,8 @@
                 </li>
             @endforeach
         </ul>
+    @elseif ($folder)
+        <p class="rail-empty">No topics in this folder yet. The tutor adds them as you go, or you can on the folder's page.</p>
     @elseif ($module)
         <p class="rail-empty">No topics in this module yet. The tutor adds them as you go, or you can on the module's page.</p>
     @else
@@ -44,7 +46,7 @@
 <section class="rail-section" aria-labelledby="rail-material-{{ $suffix }}">
     <h2 id="rail-material-{{ $suffix }}" class="rail-title">Material</h2>
     @if ($items === [])
-        <p class="rail-empty">{{ $module ? 'Nothing in '.$module->title.' yet.' : 'No notes or files yet.' }}</p>
+        <p class="rail-empty">{{ $placeName ? 'Nothing in '.$placeName.' yet.' : 'No notes or files yet.' }}</p>
     @else
         <ul class="rail-list" role="list">
             @foreach ($items as $item)

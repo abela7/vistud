@@ -75,6 +75,11 @@
             @foreach ($ordered as $group)
                 @php
                     $shown = array_values(array_filter($group->topics, fn ($topic) => \App\Livewire\Workspaces\Progress::shows($filter, $topic)));
+                    // Under their folders: the module's own topics first, then each folder's, in the module's order.
+                    $folderOf = fn ($topic) => $topFolders[$topic->topic->folderId ?? ''] ?? null;
+                    $place = array_flip(array_map(fn ($topic) => $topic->topic->id, $shown));
+                    usort($shown, fn ($a, $b) => [$folderOf($a)['order'] ?? -1, $place[$a->topic->id]] <=> [$folderOf($b)['order'] ?? -1, $place[$b->topic->id]]);
+                    $lastFolder = false;
                     $isCurrent = $group->id() !== '' && $group->id() === $roll->currentId;
                     $open = $filter !== 'all' || $isCurrent || ($roll->currentId === null && $loop->first);
                 @endphp
@@ -112,7 +117,14 @@
                                 $t = $topic->topic;
                                 $siblings = $group->topics;
                                 $at = array_search($topic, $siblings, true);
+                                $inFolder = $folderOf($topic);
                             @endphp
+                            @if ($inFolder !== null && $inFolder['id'] !== $lastFolder)
+                                <li class="tree-folder" wire:key="tree-folder-{{ $inFolder['id'] }}-{{ $filter }}">
+                                    <x-icon name="folder" class="size-4 shrink-0" /><a href="{{ route('workspaces.folders.show', [$workspaceId, $inFolder['id']]) }}" class="tile-link">{{ $inFolder['name'] }}</a>
+                                </li>
+                            @endif
+                            @php $lastFolder = $inFolder['id'] ?? null; @endphp
                             <li wire:key="topic-{{ $t->id }}" class="topic-row"
                                 data-select-key="topic:{{ $t->id }}"
                                 :class="{ 'is-selected': isSelected('topic:{{ $t->id }}') }"

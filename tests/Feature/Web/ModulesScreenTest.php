@@ -162,17 +162,22 @@ class ModulesScreenTest extends TestCase
 
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
             ->assertOk()->assertSee('<title>Cells · Biology', false)
-            // The page template, then the tabs; Topics is the one open.
-            ->assertSeeInOrder(['Modules', 'Cells', 'Study this', 'Topics', 'Files', 'Notes', 'Questions', 'Sessions', 'Mitosis'])
-            ->assertDontSee('Labs');
+            // The page template, then the tabs; Topics is the one open, the module's own first, then each folder with its Study.
+            ->assertSeeInOrder(['Modules', 'Cells', 'Study this', 'Topics', 'Files', 'Notes', 'Questions', 'Sessions', 'In the module', 'Mitosis', 'Labs', 'No topics yet', 'Study Labs'])
+            ->assertDontSee('Week 2');
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id, 'tab' => 'files']))
             ->assertOk()->assertSeeInOrder(['Upload files', 'New folder', 'Add a link', 'Labs', '2 items'])
             ->assertSee(route('workspaces.folders.show', [$this->biology->id, $labs->id]), false);
 
+        // A folder in a module is a place to study: the module above it, Study this, and its own tabs.
         $this->actingAs($this->ada)->get(route('workspaces.folders.show', [$this->biology->id, $labs->id]))
             ->assertOk()->assertSee('<title>Labs · Biology', false)
-            ->assertSeeInOrder(['Modules', 'Cells', 'Labs', 'Week 2', 'Empty', 'Lab 1', 'Note · '])
+            ->assertSeeInOrder(['Modules', 'Cells', 'Labs', 'Study this', 'Whole folder', 'Topics', 'Files', 'Notes', 'Questions', 'Cards', 'No topics yet'])
             ->assertSee(route('workspaces.modules.show', [$this->biology->id, $cells->id]), false);
+        $this->actingAs($this->ada)->get(route('workspaces.folders.show', [$this->biology->id, $labs->id, 'tab' => 'files']))
+            ->assertOk()->assertSeeInOrder(['Upload files', 'New folder', 'Week 2', 'Empty'])->assertDontSee('Note · ');
+        $this->actingAs($this->ada)->get(route('workspaces.folders.show', [$this->biology->id, $labs->id, 'tab' => 'notes']))
+            ->assertOk()->assertSeeInOrder(['New note', 'Lab 1', 'Note · ']);
 
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->biology->id, 'modules']))
             ->assertSeeInOrder(['Cells', '1 note', '2 folders', 'Topics understood', '0/1']);

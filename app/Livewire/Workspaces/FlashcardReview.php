@@ -7,6 +7,7 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Study\FlashcardDetails;
 use App\Study\Flashcards;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
@@ -34,6 +35,10 @@ final class FlashcardReview extends Component
     #[Locked]
     public ?string $moduleId = null;
 
+    /** A folder's id: only its cards, and those of the folders inside it (docs/specs/vistud-2-blueprint.md, Phase 9). */
+    #[Locked]
+    public ?string $folderId = null;
+
     #[Locked]
     public bool $early = false;
 
@@ -57,20 +62,23 @@ final class FlashcardReview extends Component
 
     private Modules $modules;
 
+    private Folders $folders;
+
     private PrincipalFactory $principals;
 
-    public function boot(Flashcards $flashcards, Topics $topics, Modules $modules, PrincipalFactory $principals): void
+    public function boot(Flashcards $flashcards, Topics $topics, Modules $modules, Folders $folders, PrincipalFactory $principals): void
     {
         $this->flashcards = $flashcards;
         $this->topics = $topics;
         $this->modules = $modules;
+        $this->folders = $folders;
         $this->principals = $principals;
     }
 
-    public function mount(string $workspaceId, ?string $topicId = null, bool $early = false, ?string $moduleId = null): void
+    public function mount(string $workspaceId, ?string $topicId = null, bool $early = false, ?string $moduleId = null, ?string $folderId = null): void
     {
-        [$this->workspaceId, $this->topicId, $this->early, $this->moduleId] = [$workspaceId, $topicId, $early, $moduleId];
-        $this->queue = $this->flashcards->queue($this->principal(), $workspaceId, $topicId, $early, $moduleId);
+        [$this->workspaceId, $this->topicId, $this->early, $this->moduleId, $this->folderId] = [$workspaceId, $topicId, $early, $moduleId, $folderId];
+        $this->queue = $this->flashcards->queue($this->principal(), $workspaceId, $topicId, $early, $moduleId, $this->inside());
     }
 
     /** How the current card went: correct, partial or incorrect. */
@@ -99,7 +107,7 @@ final class FlashcardReview extends Component
     public function again(bool $early = false): void
     {
         $this->early = $early;
-        $this->queue = $this->flashcards->queue($this->principal(), $this->workspaceId, $this->topicId, $early, $this->moduleId);
+        $this->queue = $this->flashcards->queue($this->principal(), $this->workspaceId, $this->topicId, $early, $this->moduleId, $this->inside());
         [$this->position, $this->firsts] = [0, []];
         $this->rounds++;
     }
@@ -140,11 +148,11 @@ final class FlashcardReview extends Component
             'retry' => $retry,
             'hints' => $card === null ? [] : $this->hints($card, $retry),
             'cardTopic' => $card?->topicId !== null ? $topicName : null,
-            'roundModule' => $this->moduleId === null ? null : ($this->moduleId === '' ? 'No module' : (collect($this->modules->list($by, $this->workspaceId))->firstWhere('id', $this->moduleId)?->title)),
+            'roundModule' => $this->folderId !== null ? $this->folderName() : ($this->moduleId === null ? null : ($this->moduleId === '' ? 'No module' : (collect($this->modules->list($by, $this->workspaceId))->firstWhere('id', $this->moduleId)?->title))),
             'roundTopic' => $this->topicId === null ? null : ($this->topicId === '' ? 'cards without a topic' : $topicName),
             'total' => count($this->queue),
             'tally' => array_count_values($this->firsts) + ['correct' => 0, 'partial' => 0, 'incorrect' => 0],
-            'counts' => $card === null ? $this->flashcards->counts($by, $this->workspaceId, $this->topicId, $this->moduleId) : null,
+            'counts' => $card === null ? $this->flashcards->counts($by, $this->workspaceId, $this->topicId, $this->moduleId, $this->inside()) : null,
             'today' => $this->flashcards->today($by),
         ]);
     }
@@ -161,6 +169,28 @@ final class FlashcardReview extends Component
         }
 
         return $hints;
+    }
+
+    /** @return ?list<string> the round's folder and those inside it, or null for no folder (or one that is gone: none of its cards) */
+    private function inside(): ?array
+    {
+        if ($this->folderId === null) {
+            return null;
+        }
+        try {
+            return $this->folders->within($this->principal(), $this->folderId);
+        } catch (NotFound) {
+            return [];
+        }
+    }
+
+    private function folderName(): ?string
+    {
+        try {
+            return $this->folders->find($this->principal(), (string) $this->folderId)->name;
+        } catch (NotFound) {
+            return null;
+        }
     }
 
     private function principal(): Principal

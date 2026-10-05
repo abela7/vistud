@@ -11,8 +11,8 @@
     $chosen = $topic !== '' && $topic !== 'none' ? $topic : null;
     $chosenModule = $module !== '' && $module !== 'none' ? $module : null;
     $place = $module === 'none' ? 'No module' : ($chosenModule ? $moduleTitles[$chosenModule] : null);
-    $where = implode(' · ', array_filter([$place, $chosen ? $topicNames[$chosen] : ($topic === 'none' ? 'No topic' : null)]));
-    $review = fn (array $extra = []) => route('workspaces.flashcards.review', [$workspaceId, ...array_filter(['module' => $module ?: null, 'topic' => $topic ?: null] + $extra)]);
+    $where = implode(' · ', array_filter([$folderName ?? $place, $chosen ? $topicNames[$chosen] : ($topic === 'none' ? 'No topic' : null)]));
+    $review = fn (array $extra = []) => route('workspaces.flashcards.review', [$workspaceId, ...array_filter(['module' => $module ?: null, 'topic' => $topic ?: null, 'folder' => $folder ?: null] + $extra)]);
     $plural = fn (int $n, string $one, string $many) => $n === 1 ? "1 {$one}" : "{$n} {$many}";
     $nextWords = null;
     if ($counts['next_on'] !== null) {
@@ -81,6 +81,14 @@
                 @endif
             </div>
         </section>
+
+        @if ($folderName !== null)
+            {{-- One folder's cards (from its page): the module's other cards are a tap away. --}}
+            <p class="deck-folder">
+                <x-icon name="folder" class="size-4 shrink-0" /><span class="min-w-0">Only the cards in {{ $folderName }}</span>
+                <button type="button" class="text-link" wire:click="$set('folder', '')">Show the whole module</button>
+            </p>
+        @endif
 
         <div class="flex flex-wrap items-end justify-between gap-3">
             <div class="flex min-w-0 flex-wrap gap-3">

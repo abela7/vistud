@@ -9,6 +9,7 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Rollups;
 use App\Study\Sessions;
@@ -59,14 +60,17 @@ final class Progress extends Component
 
     private Modules $modules;
 
+    private Folders $folders;
+
     private Sessions $sessions;
 
     private Rollups $rollups;
 
     private PrincipalFactory $principals;
 
-    public function boot(Topics $topics, Modules $modules, Sessions $sessions, Rollups $rollups, PrincipalFactory $principals): void
+    public function boot(Topics $topics, Modules $modules, Sessions $sessions, Rollups $rollups, Folders $folders, PrincipalFactory $principals): void
     {
+        $this->folders = $folders;
         $this->sessions = $sessions;
         $this->rollups = $rollups;
         $this->topics = $topics;
@@ -306,9 +310,23 @@ final class Progress extends Component
             $names[$topic->id()] = $topic->topic->name;
         }
 
+        // A module's topics under its folders (docs/specs/vistud-2-blueprint.md, Phase 9): for each folder, the one at
+        // the top of its branch, and where that comes in the module.
+        $tree = $this->folders->tree($by, $this->workspaceId);
+        $byId = collect($tree)->keyBy('id');
+        $topFolders = [];
+        foreach ($tree as $index => $folder) {
+            $top = $folder;
+            while ($top->parentId !== null && isset($byId[$top->parentId])) {
+                $top = $byId[$top->parentId];
+            }
+            $topFolders[$folder->id] = ['id' => $top->id, 'name' => $top->name, 'order' => array_search($top, $tree, true)];
+        }
+
         return view('livewire.workspaces.progress', [
             'roll' => $roll,
             'filter' => $filter,
+            'topFolders' => $topFolders,
             'modules' => $this->modules->list($by, $this->workspaceId),
             'counts' => ['all' => $roll->total(), 'attention' => count($roll->attention), 'not_started' => $roll->notStarted(), 'mastered' => $roll->mastered()],
             'target' => $this->targetId === null ? null : ($names[$this->targetId] ?? null),

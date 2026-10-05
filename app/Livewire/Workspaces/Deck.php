@@ -9,6 +9,7 @@ use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Study\Flashcards;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
@@ -41,18 +42,25 @@ final class Deck extends Component
     #[Url(as: 'topic', except: '')]
     public string $topic = '';
 
+    /** A folder's id: only its cards and those of the folders inside it (docs/specs/vistud-2-blueprint.md, Phase 9), or ''. */
+    #[Url(as: 'folder', except: '')]
+    public string $folder = '';
+
     private Flashcards $flashcards;
 
     private Topics $topics;
 
     private Modules $modules;
 
+    private Folders $folders;
+
     private Settings $settings;
 
     private PrincipalFactory $principals;
 
-    public function boot(Flashcards $flashcards, Topics $topics, Modules $modules, Settings $settings, PrincipalFactory $principals): void
+    public function boot(Flashcards $flashcards, Topics $topics, Modules $modules, Folders $folders, Settings $settings, PrincipalFactory $principals): void
     {
+        $this->folders = $folders;
         $this->settings = $settings;
         $this->flashcards = $flashcards;
         $this->topics = $topics;
@@ -60,10 +68,11 @@ final class Deck extends Component
         $this->principals = $principals;
     }
 
-    /** Another module: a topic of another module no longer fits. */
+    /** Another module: a topic (or folder) of another module no longer fits. */
     public function updatedModule(): void
     {
         $this->topic = '';
+        $this->folder = '';
     }
 
     public function mount(string $workspaceId): void
@@ -132,6 +141,14 @@ final class Deck extends Component
     {
         $by = $this->principal();
         $modules = $this->modules->list($by, $this->workspaceId);
+        // A folder's cards: its module is the one shown, and the cards are only the folder's.
+        $folder = $this->folder === '' ? null : collect($this->folders->tree($by, $this->workspaceId))->firstWhere('id', $this->folder);
+        if ($folder === null || $folder->moduleId === null) {
+            [$this->folder, $folder] = ['', null];
+        } else {
+            $this->module = $folder->moduleId;
+        }
+        $inside = $folder === null ? null : $this->folders->within($by, $folder->id);
         if ($this->module !== '' && $this->module !== 'none' && ! collect($modules)->contains('id', $this->module)) {
             $this->module = '';
         }
@@ -152,13 +169,13 @@ final class Deck extends Component
         $all = $this->flashcards->counts($by, $this->workspaceId);
         // All modules and no topic chosen: the modules, not every card (unless the cards are all in one, or in none).
         $showCards = $moduleFilter !== null || $topicFilter !== null || count($all['modules']) <= 1;
-        $cards = $showCards ? $this->flashcards->list($by, $this->workspaceId, $topicFilter, $moduleFilter) : [];
+        $cards = $showCards ? $this->flashcards->list($by, $this->workspaceId, $topicFilter, $moduleFilter, $inside) : [];
         $byTopic = [];
         foreach ($cards as $card) {
             $byTopic[$card->topicId ?? ''][] = $card;
         }
 
-        $here = $moduleFilter === null ? $all : $this->flashcards->counts($by, $this->workspaceId, null, $moduleFilter);
+        $here = $moduleFilter === null ? $all : $this->flashcards->counts($by, $this->workspaceId, null, $moduleFilter, $inside);
 
         return view('livewire.workspaces.deck', [
             'modules' => $modules,
@@ -170,7 +187,8 @@ final class Deck extends Component
             'byTopic' => $byTopic,
             'all' => $all,
             'here' => $here,
-            'counts' => $this->flashcards->counts($by, $this->workspaceId, $topicFilter, $moduleFilter),
+            'counts' => $this->flashcards->counts($by, $this->workspaceId, $topicFilter, $moduleFilter, $inside),
+            'folderName' => $folder?->name,
             'today' => $this->flashcards->today($by),
             // The old way, with another AI by copy-paste, only for those who turned it on.
             'copyPaste' => $this->settings->get($by)->copyPasteAi,

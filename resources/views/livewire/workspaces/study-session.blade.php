@@ -15,13 +15,19 @@
     $statusWords = ['not_started' => 'Not started', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Still confusing', 'mastered' => 'Mastered'];
     $stateIcons = ['running' => 'timer', 'paused' => 'pause', 'break' => 'coffee', 'ended' => 'square'];
     $studied = SessionDetails::duration($session->studySeconds).($session->breakSeconds > 0 ? ', with '.SessionDetails::duration($session->breakSeconds).' of breaks' : '');
-    // The header's second word is the mode: the topic, the whole module, a quiz, a test, or free.
+    // The header's second word is the mode: the topic, the whole module (or the folder it is in), a quiz, a test, or free.
     $heading = match ($session->mode) {
-        'module' => 'Whole module'.($topic ? ' · '.$topic->name : ''),
-        'quiz' => 'Quiz'.($topic ? ' · '.$topic->name : ($module ? ' · '.$module->title : '')),
-        'test' => 'Test'.($module ? ' · '.$module->title : ''),
+        'module' => ($folder ? $folder->name : 'Whole module').($topic ? ' · '.$topic->name : ''),
+        'quiz' => 'Quiz'.($topic ? ' · '.$topic->name : ($placeName ? ' · '.$placeName : '')),
+        'test' => 'Test'.($placeName ? ' · '.$placeName : ''),
         'free' => 'Free study',
-        default => $topic?->name ?? $module?->title ?? 'Study session',
+        default => $topic?->name ?? $placeName ?? 'Study session',
+    };
+    // Back goes to where the session is: its folder, its module, or the course.
+    $backHref = match (true) {
+        $folder !== null => route('workspaces.folders.show', [$workspaceId, $folder->id]),
+        $module !== null => route('workspaces.modules.show', [$workspaceId, $module->id]),
+        default => route('workspaces.show', $workspaceId),
     };
     $context = implode(' · ', array_filter([
         ($session->manual ? 'Logged for ' : 'Started ').$started->format('D j M, H:i'),
@@ -29,7 +35,7 @@
     ]));
 @endphp
 <div class="session-page">
-    <x-page :title="$heading" :back-href="$module ? route('workspaces.modules.show', [$workspaceId, $module->id]) : route('workspaces.show', $workspaceId)" :back-to="$module?->title ?? 'Course'" :eyebrow="$module?->title" :context="$context">
+    <x-page :title="$heading" :back-href="$backHref" :back-to="$placeName ?? 'Course'" :eyebrow="$folder ? $module->title.' › '.$folder->name : $module?->title" :context="$context">
         <x-slot:menu>
             @if ($open)
                 <button type="button" class="menu-item" wire:click="editTeaching"><x-icon name="message-square-text" class="size-4" />How the AI teaches</button>
@@ -134,7 +140,7 @@
         x-on:click="$event.target === $el && $el.close()">
         <div class="modal-panel">
             <div class="modal-head">
-                <h2 id="session-rail-title" class="min-w-0 flex-1 text-lg font-semibold">{{ $module?->title ?? 'This session' }}</h2>
+                <h2 id="session-rail-title" class="min-w-0 flex-1 text-lg font-semibold">{{ $placeName ?? 'This session' }}</h2>
                 <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()"><x-icon name="x" /></button>
             </div>
             <div class="rail-body px-5 pb-5">
@@ -176,8 +182,8 @@
                             @if ($every !== [])
                                 <div class="search-field">
                                     <x-icon name="search" class="size-4" />
-                                    <label for="material-search" class="sr-only">Search {{ $module ? 'the notes and files in '.$module->title : 'notes and files' }}</label>
-                                    <input id="material-search" type="search" class="input" placeholder="Search {{ $module ? $module->title : 'notes and files' }}" x-model="q" autocomplete="off">
+                                    <label for="material-search" class="sr-only">Search {{ $placeName ? 'the notes and files in '.$placeName : 'notes and files' }}</label>
+                                    <input id="material-search" type="search" class="input" placeholder="Search {{ $placeName ?? 'notes and files' }}" x-model="q" autocomplete="off">
                                 </div>
                                 @if ($open)
                                     <p class="text-sm text-fg-muted">What you use, the tutor reads, and it goes in the prompt for another AI.</p>
@@ -185,7 +191,7 @@
                             @else
                                 <div class="empty-place">
                                     <span class="item-icon" aria-hidden="true"><x-icon name="folder-open" class="size-5" /></span>
-                                    <p class="font-medium">{{ $module ? 'Nothing in '.$module->title.' yet' : 'No notes or files yet' }}</p>
+                                    <p class="font-medium">{{ $placeName ? 'Nothing in '.$placeName.' yet' : 'No notes or files yet' }}</p>
                                 </div>
                             @endif
                             @if ($alsoUsed !== [])
@@ -203,7 +209,7 @@
                                     @if ($group['title'] !== null)
                                         <h3 class="material-group-title"><x-icon name="folder" class="size-4" />{{ $group['title'] }}</h3>
                                     @endif
-                                    <ul class="item-list" role="list" aria-label="{{ $group['title'] ?? 'In '.$module?->title }}">
+                                    <ul class="item-list" role="list" aria-label="{{ $group['title'] ?? 'In '.$placeName }}">
                                         @foreach ($group['items'] as $item)
                                             @include('livewire.workspaces.partials.material-row')
                                         @endforeach
@@ -216,8 +222,9 @@
                         </div>
                     @elseif ($mode === 'topic')
                         @php
-                            $here = $module ? array_values(array_filter($courseTopics, fn ($t) => $t->moduleId === $module->id)) : [];
-                            $elsewhere = array_values(array_filter($courseTopics, fn ($t) => ! $module || $t->moduleId !== $module->id));
+                            $isHere = fn ($t) => $inside !== null ? $t->in($inside) : ($module && $t->moduleId === $module->id);
+                            $here = array_values(array_filter($courseTopics, $isHere));
+                            $elsewhere = array_values(array_filter($courseTopics, fn ($t) => ! $isHere($t)));
                         @endphp
                         <p class="text-sm text-fg-muted">The tutor teaches from it, and the flashcards, questions and key points you save go to it. The tutor can set it too, when you agree.</p>
                         <div class="field">
@@ -225,7 +232,7 @@
                             <select id="session-topic" class="input" wire:model.live="topicChoice" @error('topicChoice') aria-invalid="true" @enderror>
                                 <option value="">No topic</option>
                                 @if ($here !== [])
-                                    <optgroup label="{{ $module->title }}">
+                                    <optgroup label="{{ $placeName }}">
                                         @foreach ($here as $t)
                                             <option value="{{ $t->id }}">{{ $t->name }}</option>
                                         @endforeach
@@ -246,7 +253,7 @@
                             <div class="field">
                                 <label for="session-new-topic" class="field-label">Name</label>
                                 <input id="session-new-topic" type="text" class="input" wire:model="newTopic" maxlength="{{ Topics::MAX_NAME }}" autofocus aria-describedby="session-new-topic-hint" @error('newTopic') aria-invalid="true" @enderror>
-                                <p id="session-new-topic-hint" class="field-hint">{{ $module ? 'Added to '.$module->title.'.' : 'Added to the course.' }} Short, like a chapter heading.</p>
+                                <p id="session-new-topic-hint" class="field-hint">{{ $placeName ? 'Added to '.$placeName.'.' : 'Added to the course.' }} Short, like a chapter heading.</p>
                                 @error('newTopic') <p class="field-error">{{ $message }}</p> @enderror
                             </div>
                         @endif
@@ -338,7 +345,7 @@
                     @elseif ($mode === 'material')
                         <x-button variant="primary" x-on:click="$el.closest('dialog').close()">Done</x-button>
                     @elseif ($mode === 'done')
-                        <a href="{{ $module ? route('workspaces.modules.show', [$workspaceId, $module->id]) : route('workspaces.show', $workspaceId) }}" class="btn btn-primary" wire:navigate>Done</a>
+                        <a href="{{ $backHref }}" class="btn btn-primary" wire:navigate>Done</a>
                     @else
                         <x-button x-on:click="$el.closest('dialog').close()">{{ $mode === 'end' ? 'Keep studying' : 'Cancel' }}</x-button>
                         <x-button type="submit" :variant="$mode === 'delete' ? 'danger' : 'primary'" wire:loading.attr="aria-busy" wire:target="save" busy-label="{{ $mode === 'end' ? 'Ending…' : 'Saving…' }}">{{ ['end' => 'End session', 'delete' => 'Delete', 'pomodoro' => 'Save', 'teaching' => 'Save', 'topic' => 'Save', 'question' => 'Keep question', 'tell' => 'Save'][$mode] }}</x-button>

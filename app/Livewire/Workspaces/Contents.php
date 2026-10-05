@@ -27,6 +27,7 @@ use App\Study\Notes;
 use App\Study\Questions;
 use App\Study\Rollups;
 use App\Study\Sessions;
+use App\Study\TopicDetails;
 use App\Study\Topics;
 use App\Study\TopicSuggestions;
 use App\Study\Workspaces;
@@ -63,9 +64,15 @@ final class Contents extends Component
     #[Locked]
     public ?string $placeId = null;
 
-    /** A module's tab: topics, files or notes (docs/specs/vistud-2-blueprint.md §3.5.3). */
+    /**
+     * A module's tab: topics, files or notes (docs/specs/vistud-2-blueprint.md §3.5.3); a folder's (Phase 9): those, and
+     * its questions and cards.
+     */
     #[Url(as: 'tab', except: 'topics')]
     public string $tab = 'topics';
+
+    /** A module's tabs, and a folder's. */
+    private const TABS = ['module' => ['topics', 'files', 'notes'], 'folder' => ['topics', 'files', 'notes', 'questions', 'cards']];
 
     /** The Topics tab is going through the topics the reader found, to pick among them. */
     #[Locked]
@@ -101,8 +108,11 @@ final class Contents extends Component
 
     public string $name = '';
 
-    /** A topic to add to the module, from the Topics list on its page. */
+    /** A topic to add to the module (or folder), from the Topics list on its page. */
     public string $topicName = '';
+
+    /** A question to add to a folder, from its Questions tab. */
+    public string $questionText = '';
 
     public string $url = '';
 
@@ -171,7 +181,7 @@ final class Contents extends Component
     {
         $this->workspaceId = $workspaceId;
         $this->view = in_array($view, ['notes', 'module', 'folder'], true) ? $view : 'modules';
-        $this->tab = in_array($this->tab, ['topics', 'files', 'notes'], true) ? $this->tab : 'topics';
+        $this->tab = in_array($this->tab, self::TABS[$this->view] ?? ['topics'], true) ? $this->tab : 'topics';
         if (in_array($this->view, ['module', 'folder'], true)) {
             $place = $this->view === 'module' ? $this->modules->find($this->principal(), (string) $placeId) : $this->folders->find($this->principal(), (string) $placeId);
             $place->workspaceId === $workspaceId || throw new NotFound;
@@ -182,17 +192,29 @@ final class Contents extends Component
     /** A tab the page doesn't have is the first. */
     public function updatedTab(): void
     {
-        $this->tab = in_array($this->tab, ['topics', 'files', 'notes'], true) ? $this->tab : 'topics';
-    }
-
-    /** Study this ▾ → Whole module: a session in this module with no dialog (App\Livewire\Workspaces\StudyTime). */
-    public function studyModule(): void
-    {
-        $this->dispatch('study-next', moduleId: $this->placeModuleId());
+        $this->tab = in_array($this->tab, self::TABS[$this->view] ?? ['topics'], true) ? $this->tab : 'topics';
     }
 
     /**
-     * Study this ▾ → Quiz me or Test me: a session on the module's next topic (a test: on the whole module) whose
+     * Study this ▾ → Whole module (or, on a folder's page, Whole folder: docs/specs/vistud-2-blueprint.md, Phase 9): a
+     * session there with no dialog (App\Livewire\Workspaces\StudyTime).
+     */
+    public function studyModule(): void
+    {
+        $this->dispatch('study-next', moduleId: $this->placeModuleId(), folderId: $this->placeFolderId());
+    }
+
+    /** A module's page: studies one of its folders (its Topics tab has one Study for each). */
+    public function studyFolder(string $folderId): void
+    {
+        if ($this->view !== 'module') {
+            return;
+        }
+        $this->dispatch('study-next', moduleId: $this->placeId, folderId: $folderId);
+    }
+
+    /**
+     * Study this ▾ → Quiz me or Test me: a session on the place's next topic (a test: on the whole of it) whose
      * message box already holds the ask. Until the session page has modes of its own, the student sends it.
      */
     public function studyAsk(string $kind): void
@@ -200,30 +222,31 @@ final class Contents extends Component
         if (! in_array($kind, ['quiz', 'test'], true)) {
             return;
         }
-        $this->dispatch('study-next', moduleId: $this->placeModuleId(), topicId: $kind === 'quiz' ? $this->nextTopicId() : null, ask: $kind);
+        $this->dispatch('study-next', moduleId: $this->placeModuleId(), topicId: $kind === 'quiz' ? $this->nextTopicId() : null, ask: $kind, folderId: $this->placeFolderId());
     }
 
-    /** Study this ▾ → Pick a topic: the sheet of the module's topics. */
+    /** Study this ▾ → Pick a topic: the sheet of the place's topics. */
     public function pickTopic(): void
     {
         $this->dispatch('topic-picker-open');
     }
 
-    /** Studies one of the module's topics, with no dialog. */
+    /** Studies one of the place's topics, with no dialog (on a folder's page, in the folder). */
     public function studyTopic(string $topicId): void
     {
-        $this->dispatch('study-next', moduleId: $this->placeModuleId(), topicId: $topicId);
+        $this->dispatch('study-next', moduleId: $this->placeModuleId(), topicId: $topicId, folderId: $this->placeFolderId());
     }
 
     // ---------- What the reader found ----------
 
-    /** Adds every topic the reader found in the module's files. */
+    /** Adds every topic the reader found in the module's files (a folder's: in its files). */
     public function addSuggested(): void
     {
-        if ($this->view !== 'module' || $this->placeId === null) {
+        $moduleId = $this->placeModuleId();
+        if ($moduleId === null) {
             return;
         }
-        $added = $this->suggestions->addAll($this->principal(), $this->placeId);
+        $added = $this->suggestions->addAll($this->principal(), $moduleId, $this->placeFolders());
         $this->picking = false;
         $this->notify($added === 1 ? '1 topic added.' : "{$added} topics added.");
     }
@@ -245,8 +268,8 @@ final class Contents extends Component
 
     public function dismissSuggested(): void
     {
-        if ($this->view === 'module' && $this->placeId !== null) {
-            $this->suggestions->dismissAll($this->principal(), $this->placeId);
+        if (($moduleId = $this->placeModuleId()) !== null) {
+            $this->suggestions->dismissAll($this->principal(), $moduleId, $this->placeFolders());
         }
         $this->picking = false;
     }
@@ -261,11 +284,11 @@ final class Contents extends Component
         }
     }
 
-    /** Adds a topic to the module (a name the course has already is left as it is). */
+    /** Adds a topic to the module, or to the folder (a name the course has already is left as it is). */
     public function addTopic(): void
     {
         $this->resetErrorBag('topicName');
-        if ($this->view !== 'module' || $this->placeId === null) {
+        if (! in_array($this->view, ['module', 'folder'], true) || $this->placeId === null || $this->placeModuleId() === null) {
             return;
         }
         $by = $this->principal();
@@ -276,7 +299,7 @@ final class Contents extends Component
             return;
         }
         try {
-            $topic = $this->topics->create($by, $this->workspaceId, $name, $this->placeId);
+            $topic = $this->topics->create($by, $this->workspaceId, $name, $this->placeModuleId(), $this->placeFolderId());
         } catch (Unprocessable $e) {
             $fields = $e->details['fields'] ?? [];
             $this->addError('topicName', $fields === [] ? $e->getMessage() : reset($fields)[0]);
@@ -285,6 +308,25 @@ final class Contents extends Component
         }
         $this->topicName = '';
         $this->notify("“{$topic->name}” is added.");
+    }
+
+    /** A folder's Questions tab: a question of the folder, in the student's words. */
+    public function askQuestion(): void
+    {
+        $this->resetErrorBag('questionText');
+        if ($this->view !== 'folder' || $this->placeFolderId() === null) {
+            return;
+        }
+        try {
+            $this->questions->ask($this->principal(), $this->workspaceId, $this->questionText, folderId: $this->placeId);
+        } catch (Unprocessable $e) {
+            $fields = $e->details['fields'] ?? [];
+            $this->addError('questionText', $fields === [] ? $e->getMessage() : reset($fields)[0]);
+
+            return;
+        }
+        $this->questionText = '';
+        $this->notify('Question added.');
     }
 
     // ---------- Opening the dialog ----------
@@ -883,11 +925,13 @@ final class Contents extends Component
 
     // ---------- Helpers ----------
 
-    /** The module's first topic the student doesn't understand yet, or none. */
+    /** The place's first topic the student doesn't understand yet, or none. */
     private function nextTopicId(): ?string
     {
+        $inside = $this->placeFolders();
         foreach ($this->topics->list($this->principal(), $this->workspaceId) as $topic) {
-            if ($topic->moduleId === $this->placeId && ! in_array($topic->shown(), ['understood', 'mastered'], true)) {
+            $here = $inside !== null ? $topic->in($inside) : $topic->moduleId === $this->placeId;
+            if ($here && ! in_array($topic->shown(), ['understood', 'mastered'], true)) {
                 return $topic->id;
             }
         }
@@ -903,6 +947,18 @@ final class Contents extends Component
             'folder' => $this->folders->find($this->principal(), (string) $this->placeId)->moduleId,
             default => null,
         };
+    }
+
+    /** On a folder's page in a module (a place to study, docs/specs/vistud-2-blueprint.md, Phase 9): the folder; else null. */
+    private function placeFolderId(): ?string
+    {
+        return $this->view === 'folder' && $this->placeModuleId() !== null ? $this->placeId : null;
+    }
+
+    /** @return ?list<string> on a folder's page in a module, it and the folders inside it; else null */
+    private function placeFolders(): ?array
+    {
+        return ($folderId = $this->placeFolderId()) === null ? null : $this->folders->within($this->principal(), $folderId);
     }
 
     /** Where to go when this page's own module or folder is deleted. */
@@ -921,17 +977,17 @@ final class Contents extends Component
     }
 
     /**
-     * A module or folder page: the place, the path to it (each [label, url]),
-     * its key, and for a module its study sessions.
+     * A module or folder page: the place, the path to it (each [label, url]), its key, and what is studied there
+     * (docs/specs/vistud-2-blueprint.md §3.5.3 and Phase 9): its topics (a module's grouped by its folders), the topics
+     * the reader found, its questions and cards, how many sessions. A folder outside every module is organisation only.
      */
     private function placeData(Principal $by, array $modules, array $folders): array
     {
         $byId = collect($folders)->keyBy('id');
+        $topics = $this->topics->list($by, $this->workspaceId);
         if ($this->view === 'module') {
             $module = collect($modules)->firstWhere('id', $this->placeId) ?? throw new NotFound;
             $trail = [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])]];
-
-            $topicNames = collect($this->topics->list($by, $this->workspaceId))->pluck('name', 'id')->all();
 
             // The module's questions have their own page; here, how many are open and stuck.
             $asked = $this->questions->list($by, $this->workspaceId, $module->id);
@@ -939,17 +995,20 @@ final class Contents extends Component
                 'open' => count(array_filter($asked, fn ($q) => $q->status !== 'answered')),
                 'stuck' => count(array_filter($asked, fn ($q) => $q->status === 'stuck')),
             ];
+            $placeTopics = array_values(array_filter($topics, fn ($t) => $t->moduleId === $module->id));
 
             return [
                 'place' => $module, 'placeName' => $module->title, 'key' => "module:{$module->id}", 'trail' => $trail,
-                'topicNames' => $topicNames, 'questions' => $questions,
+                'topicNames' => collect($topics)->pluck('name', 'id')->all(), 'questions' => $questions,
                 'sessionsCount' => count($this->sessions->forModule($by, $this->workspaceId, $module->id)),
                 // The module's flashcards are in the deck, shown by module: how many, and how many are due.
                 'cards' => $cards = $this->flashcards->counts($by, $this->workspaceId, null, $module->id),
-                // Its topics, in order, each with its status and its cards.
-                'moduleTopics' => array_values(array_filter($this->topics->list($by, $this->workspaceId), fn ($t) => $t->moduleId === $module->id)),
+                // Its topics, in order, each with its status and its cards; on the Topics tab, under the folders they are in.
+                'placeTopics' => $placeTopics,
+                'topicGroups' => self::byFolder($placeTopics, $module->id, $folders),
                 'topicCards' => $cards['topics'],
                 'suggestions' => $this->suggestions->list($by, $module->id),
+                'studyPlace' => true, 'placeModule' => $module, 'inside' => null, 'asked' => [], 'cardList' => [],
             ];
         }
 
@@ -960,10 +1019,78 @@ final class Contents extends Component
         }
         $module = $folder->moduleId !== null ? collect($modules)->firstWhere('id', $folder->moduleId) : null;
         array_unshift($trail, ...($module !== null
-            ? [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])], [$module->title, route('workspaces.modules.show', [$this->workspaceId, $module->id, 'tab' => 'files'])]]
+            ? [[__('Modules'), route('workspaces.show', [$this->workspaceId, 'modules'])], [$module->title, route('workspaces.modules.show', [$this->workspaceId, $module->id])]]
             : [[__('Notes & files'), route('workspaces.show', [$this->workspaceId, 'notes'])]]));
 
-        return ['place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'topicNames' => [], 'questions' => null, 'sessionsCount' => 0, 'cards' => null, 'moduleTopics' => [], 'topicCards' => [], 'suggestions' => []];
+        $base = [
+            'place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'topicNames' => [],
+            'questions' => null, 'sessionsCount' => 0, 'cards' => null, 'placeTopics' => [], 'topicGroups' => [], 'topicCards' => [], 'suggestions' => [],
+            'studyPlace' => false, 'placeModule' => $module, 'inside' => null, 'asked' => [], 'cardList' => [],
+        ];
+        if ($module === null) {
+            return $base;
+        }
+
+        // A folder in a module is a place to study (Phase 9): what is in it, and in the folders inside it.
+        $inside = $this->folders->within($by, $folder->id);
+        $asked = $this->questions->list($by, $this->workspaceId, folderIds: $inside);
+        $cards = $this->flashcards->counts($by, $this->workspaceId, null, null, $inside);
+
+        return [
+            ...$base,
+            'studyPlace' => true,
+            'inside' => $inside,
+            'topicNames' => collect($topics)->pluck('name', 'id')->all(),
+            'questions' => [
+                'open' => count(array_filter($asked, fn ($q) => $q->status !== 'answered')),
+                'stuck' => count(array_filter($asked, fn ($q) => $q->status === 'stuck')),
+            ],
+            'asked' => $asked,
+            'sessionsCount' => count($this->sessions->forFolder($by, $this->workspaceId, $inside)),
+            'cards' => $cards,
+            'cardList' => $this->tab === 'cards' ? $this->flashcards->list($by, $this->workspaceId, folderIds: $inside) : [],
+            'placeTopics' => array_values(array_filter($topics, fn ($t) => $t->in($inside))),
+            'topicCards' => $cards['topics'],
+            'suggestions' => $this->suggestions->list($by, $module->id, $inside),
+        ];
+    }
+
+    /**
+     * A module's topics, under the folders they are in: first those in no folder (the module's own), then each of its
+     * folders at the top of a branch, in order, with the topics in it and in the folders inside it. Every such folder is
+     * there, with or without topics, so each can be studied from the module's page.
+     *
+     * @param  list<TopicDetails>  $topics  the module's
+     * @param  list<FolderDetails>  $folders  the course's, in tree order
+     * @return list<array{folder: ?FolderDetails, topics: list<TopicDetails>}>
+     */
+    private static function byFolder(array $topics, string $moduleId, array $folders): array
+    {
+        $byId = [];
+        foreach ($folders as $folder) {
+            $byId[$folder->id] = $folder;
+        }
+        $top = function (?string $id) use ($byId): ?string {
+            while ($id !== null && isset($byId[$id]) && $byId[$id]->parentId !== null) {
+                $id = $byId[$id]->parentId;
+            }
+
+            return $id !== null && isset($byId[$id]) ? $id : null;
+        };
+        $groups = ['' => ['folder' => null, 'topics' => []]];
+        foreach ($folders as $folder) {
+            if ($folder->moduleId === $moduleId && $folder->parentId === null) {
+                $groups[$folder->id] = ['folder' => $folder, 'topics' => []];
+            }
+        }
+        foreach ($topics as $topic) {
+            $groups[$top($topic->folderId) ?? '']['topics'][] = $topic;
+        }
+        if ($groups['']['topics'] === []) {
+            unset($groups['']);
+        }
+
+        return array_values($groups);
     }
 
     /** @return array<string, array{done: int, total: int}> module id => its topics understood (or mastered), of all */

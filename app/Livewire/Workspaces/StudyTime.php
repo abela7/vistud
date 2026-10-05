@@ -56,6 +56,9 @@ final class StudyTime extends Component
 
     public string $moduleId = '';
 
+    /** A folder of the module to study in (docs/specs/vistud-2-blueprint.md, Phase 9), or ''. */
+    public string $folderId = '';
+
     public string $date = '';
 
     public string $time = '';
@@ -92,12 +95,12 @@ final class StudyTime extends Component
         [$this->workspaceId, $this->stats] = [$workspaceId, $stats];
     }
 
-    /** What to study: from the Overview, or a module's page (in that module). */
+    /** What to study: from the Overview, or a module's or folder's page (in that module, and folder). */
     #[On('study-start')]
-    public function newSession(?string $moduleId = null, ?string $topicId = null): void
+    public function newSession(?string $moduleId = null, ?string $topicId = null, ?string $folderId = null): void
     {
         $this->open('start');
-        [$this->moduleId, $this->topicId] = [$moduleId ?? '', $topicId ?? ''];
+        [$this->moduleId, $this->topicId, $this->folderId] = [$moduleId ?? '', $topicId ?? '', $folderId ?? ''];
         $open = $this->sessions->current($this->principal());
         if ($open !== null) {
             [$this->mode, $this->busyId] = ['busy', $open->id];
@@ -116,19 +119,19 @@ final class StudyTime extends Component
      * another session open, the usual panel says so; if the session can't be started, the dialog opens.
      */
     #[On('study-next')]
-    public function studyNext(?string $moduleId = null, ?string $topicId = null, ?string $ask = null): void
+    public function studyNext(?string $moduleId = null, ?string $topicId = null, ?string $ask = null, ?string $folderId = null): void
     {
         $by = $this->principal();
         if ($this->sessions->current($by) !== null) {
-            $this->newSession($moduleId, $topicId);
+            $this->newSession($moduleId, $topicId, $folderId);
 
             return;
         }
         $last = $this->sessions->lastChoices($by, $this->workspaceId);
         try {
-            $session = $this->sessions->start($by, $this->workspaceId, $topicId ?: null, $moduleId ?: null, $last['pomodoro'], $last['tutoring'], in_array($ask, ['quiz', 'test'], true) ? $ask : null);
+            $session = $this->sessions->start($by, $this->workspaceId, $topicId ?: null, $moduleId ?: null, $last['pomodoro'], $last['tutoring'], in_array($ask, ['quiz', 'test'], true) ? $ask : null, $folderId ?: null);
         } catch (Unprocessable|Conflict|NotFound) {
-            $this->newSession($moduleId, $topicId);
+            $this->newSession($moduleId, $topicId, $folderId);
 
             return;
         }
@@ -152,7 +155,13 @@ final class StudyTime extends Component
             // It ended meanwhile.
         }
         $this->dispatch('session-changed');
-        $this->newSession($this->moduleId ?: null, $this->topicId ?: null);
+        $this->newSession($this->moduleId ?: null, $this->topicId ?: null, $this->folderId ?: null);
+    }
+
+    /** Another module chosen in the dialog: the folder was the other module's. */
+    public function updatedModuleId(): void
+    {
+        $this->folderId = '';
     }
 
     #[On('study-log')]
@@ -173,7 +182,7 @@ final class StudyTime extends Component
 
         try {
             if ($this->mode === 'start') {
-                $session = $this->sessions->start($by, $this->workspaceId, $this->topicId ?: null, $this->moduleId ?: null, $this->pomodoroInput(), $this->teachingInput());
+                $session = $this->sessions->start($by, $this->workspaceId, $this->topicId ?: null, $this->moduleId ?: null, $this->pomodoroInput(), $this->teachingInput(), folderId: $this->folderId ?: null);
                 $this->dispatch('session-changed');
                 $this->redirectRoute('workspaces.sessions.show', [$this->workspaceId, $session->id], navigate: true);
 
@@ -193,7 +202,7 @@ final class StudyTime extends Component
         } catch (Conflict $e) {
             if ($e->errorCode === 'session_open') {
                 // Started elsewhere meanwhile, in another tab.
-                $this->newSession($this->moduleId ?: null, $this->topicId ?: null);
+                $this->newSession($this->moduleId ?: null, $this->topicId ?: null, $this->folderId ?: null);
 
                 return;
             }

@@ -14,6 +14,7 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Briefings;
 use App\Study\Files;
+use App\Study\FolderDetails;
 use App\Study\Folders;
 use App\Study\Instructions;
 use App\Study\ModuleDetails;
@@ -323,7 +324,7 @@ final class StudySession extends Component
             try {
                 $topicId = match ($this->topicChoice) {
                     '' => null,
-                    'new' => $this->newTopicId($by, $session->moduleId),
+                    'new' => $this->newTopicId($by, $session->moduleId, $session->folderId),
                     default => $this->topicChoice,
                 };
                 $this->sessions->setTopic($by, $this->sessionId, $topicId);
@@ -437,7 +438,10 @@ final class StudySession extends Component
                 // Deleted since.
             }
         }
-        $material = $this->material($by, $session, $module);
+        // A session in a folder (docs/specs/vistud-2-blueprint.md, Phase 9) is about the folder: its topics and material.
+        $folder = $this->folderOf($by, $session, $module);
+        $inside = $folder === null ? null : $this->folders->within($by, $folder->id);
+        $material = $this->material($by, $session, $module, $folder, $inside);
         $activity = $this->chat->activity($by, $this->sessionId);
         $choices = $this->settings->get($by);
         $courseTopics = $this->topics->list($by, $this->workspaceId);
@@ -447,8 +451,16 @@ final class StudySession extends Component
             'chatted' => in_array($this->mode, ['end', 'done'], true) && $this->chat->transcript($by, $this->sessionId) !== [],
             'topic' => $topic,
             'module' => $module,
+            'folder' => $folder,
+            'inside' => $inside,
+            // Where the session is, in a word: its folder, else its module.
+            'placeName' => $folder?->name ?? $module?->title,
             'courseTopics' => $this->mode === 'topic' ? $courseTopics : [],
-            'railTopics' => $module === null ? [] : array_values(array_filter($courseTopics, fn ($t) => $t->moduleId === $module->id)),
+            'railTopics' => match (true) {
+                $inside !== null => array_values(array_filter($courseTopics, fn ($t) => $t->in($inside))),
+                $module !== null => array_values(array_filter($courseTopics, fn ($t) => $t->moduleId === $module->id)),
+                default => [],
+            },
             'activity' => $activity,
             'touched' => in_array($this->mode, ['end', 'done'], true) ? $this->touched($by, $session, $activity, $courseTopics) : [],
             'copyPaste' => $choices->copyPasteAi,
@@ -495,14 +507,16 @@ final class StudySession extends Component
     /**
      * The notes and files for the panel, by place: in a module, only that
      * module's (its top level, then its folders in order, each with its
-     * path), never another module's (the owner's review, 2026-09-27). With
-     * no module, every module's and the top level's, each apart. Anything
-     * used in the briefing from elsewhere (chosen before) is listed apart,
-     * so it can be taken out.
+     * path), never another module's (the owner's review, 2026-09-27); in a
+     * folder (Phase 9), only that folder's and its folders'. With no module,
+     * every module's and the top level's, each apart. Anything used in the
+     * briefing from elsewhere (chosen before) is listed apart, so it can be
+     * taken out.
      *
+     * @param  ?list<string>  $inside  the session's folder and those inside it
      * @return array{groups: list<array{key: string, title: ?string, depth: int, items: list<array>}>, alsoUsed: list<array>, count: int, used: int}
      */
-    private function material(Principal $by, SessionDetails $session, ?ModuleDetails $module): array
+    private function material(Principal $by, SessionDetails $session, ?ModuleDetails $module, ?FolderDetails $folder = null, ?array $inside = null): array
     {
         $fileColours = ['pdf' => 'red', 'document' => 'blue', 'slides' => 'orange', 'spreadsheet' => 'green', 'text' => 'pink', 'image' => 'purple'];
         $byPlace = [];
@@ -529,7 +543,17 @@ final class StudySession extends Component
             return $list;
         };
         $order = [];
-        if ($module !== null) {
+        if ($folder !== null && $inside !== null) {
+            // The folder itself, then the folders inside it, each with its path from the folder.
+            $order = [["folder:{$folder->id}", null, 0]];
+            $paths = [$folder->id => ''];
+            foreach ($folders as $each) {
+                if ($each->id !== $folder->id && in_array($each->id, $inside, true)) {
+                    $paths[$each->id] = ltrim(($paths[$each->parentId] ?? '').' › '.$each->name, ' ›');
+                    $order[] = ["folder:{$each->id}", $paths[$each->id], $each->depth - $folder->depth];
+                }
+            }
+        } elseif ($module !== null) {
             $order = $places($module->id, null);
         } else {
             foreach ($this->modules->list($by, $this->workspaceId) as $each) {
@@ -589,13 +613,34 @@ final class StudySession extends Component
         $this->dispatch('session-changed');
     }
 
-    /** The course's topic with that name, or a new one in $moduleId. */
-    private function newTopicId(Principal $by, ?string $moduleId): string
+    /** The course's topic with that name, or a new one in $moduleId (and the session's folder, while it is there). */
+    private function newTopicId(Principal $by, ?string $moduleId, ?string $folderId = null): string
     {
         $name = trim($this->newTopic);
         $same = collect($this->topics->list($by, $this->workspaceId))->first(fn ($t) => mb_strtolower($t->name) === mb_strtolower($name));
+        if ($same !== null) {
+            return $same->id;
+        }
+        try {
+            return $this->topics->create($by, $this->workspaceId, $name, $moduleId, $folderId)->id;
+        } catch (NotFound) {
+            return $this->topics->create($by, $this->workspaceId, $name, $moduleId)->id;
+        }
+    }
 
-        return $same?->id ?? $this->topics->create($by, $this->workspaceId, $name, $moduleId)->id;
+    /** The folder the session studies in, while it is there and in the session's module. */
+    private function folderOf(Principal $by, SessionDetails $session, ?ModuleDetails $module): ?FolderDetails
+    {
+        if ($session->folderId === null || $module === null) {
+            return null;
+        }
+        try {
+            $folder = $this->folders->find($by, $session->folderId);
+        } catch (NotFound) {
+            return null;
+        }
+
+        return $folder->moduleId === $module->id ? $folder : null;
     }
 
     private function open(string $mode): void
