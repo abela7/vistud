@@ -7,8 +7,10 @@ use App\Engine\Fake;
 use App\Livewire\Workspaces\Contents;
 use App\Livewire\Workspaces\Deck;
 use App\Livewire\Workspaces\FlashcardReview;
+use App\Livewire\Workspaces\Progress;
 use App\Livewire\Workspaces\StudySession;
 use App\Livewire\Workspaces\StudyTime;
+use App\Livewire\Workspaces\TopicSheet;
 use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Study\Files;
@@ -196,6 +198,52 @@ class FolderStudyScreenTest extends TestCase
         Livewire::test(StudySession::class, ['workspaceId' => $this->workspace, 'sessionId' => $session->id])
             ->call('editTopic')->set('topicChoice', 'new')->set('newTopic', 'Interrupts')->call('save');
         $this->assertSame($this->first, collect(app(Topics::class)->list($this->by, $this->workspace))->firstWhere('name', 'Interrupts')->folderId);
+    }
+
+    public function test_a_topic_made_before_the_folders_is_put_in_one_from_its_sheet(): void
+    {
+        $topic = app(Topics::class)->create($this->by, $this->workspace, 'The kernel', $this->week1)->id;
+        $card = app(Flashcards::class)->add($this->by, $this->workspace, $topic, 'What does a kernel do?', 'Runs the hardware.');
+        $labs = app(Folders::class)->create($this->by, 'folder', $this->first, 'Labs')->id;
+        $loose = app(Folders::class)->create($this->by, 'workspace', $this->workspace, 'Old handouts')->id;
+        $this->as();
+
+        // The sheet offers the module itself and each of its folders, by name and inside one another; not a loose folder.
+        $sheet = Livewire::test(TopicSheet::class, ['workspaceId' => $this->workspace])->dispatch('topic-sheet-open', topicId: $topic)
+            ->assertSet('place', "module:{$this->week1}")
+            ->assertSeeHtml('<optgroup label="Week 1: OS Structure | Processes &amp; Threads">')
+            ->assertSeeInOrder(['Module or folder', 'No module', 'In the module', 'Lecture 1 + Lab 1', 'Labs', 'Lecture 2 + Lab 2'])
+            ->assertSee('Lecture 1 + Lab 1 › Labs')
+            ->assertDontSee('Old handouts');
+
+        $sheet->set('place', "folder:{$this->first}")->call('move')->assertHasNoErrors()->assertDispatched('topics-changed');
+        $kernel = app(Topics::class)->find($this->by, $topic);
+        $this->assertSame([$this->week1, $this->first], [$kernel->moduleId, $kernel->folderId]);
+        $this->assertSame($this->first, app(Flashcards::class)->find($this->by, $card)->folderId);
+
+        // Opened again it says where it is; back to the module itself, out of the folder.
+        $sheet->dispatch('topic-sheet-open', topicId: $topic)->assertSet('place', "folder:{$this->first}")
+            ->set('place', "module:{$this->week1}")->call('move');
+        $this->assertNull(app(Topics::class)->find($this->by, $topic)->folderId);
+
+        // A folder outside every module is not a place for a topic, and neither is one that is gone.
+        $sheet->dispatch('topic-sheet-open', topicId: $topic)->set('place', "folder:{$loose}")->call('move')->assertHasErrors('place');
+        $sheet->set('place', 'folder:01a0aaaa-0000-7000-8000-000000000000')->call('move')->assertHasErrors('place');
+        $sheet->set('place', "topic:{$topic}")->call('move')->assertHasErrors('place');
+        $this->assertSame([$this->week1, null], [app(Topics::class)->find($this->by, $topic)->moduleId, app(Topics::class)->find($this->by, $topic)->folderId]);
+    }
+
+    public function test_moving_a_topic_on_progress_keeps_its_folder_in_the_same_module(): void
+    {
+        $kernel = app(Topics::class)->create($this->by, $this->workspace, 'The kernel', folderId: $this->first)->id;
+        $week2 = app(Modules::class)->create($this->by, $this->workspace, ['title' => 'Week 2: Concurrency'])->id;
+        $this->as();
+
+        $page = Livewire::test(Progress::class, ['workspaceId' => $this->workspace]);
+        $page->call('moveTopic', $kernel)->call('save');
+        $this->assertSame($this->first, app(Topics::class)->find($this->by, $kernel)->folderId);
+        $page->call('moveTopic', $kernel)->set('moduleId', $week2)->call('save');
+        $this->assertSame([$week2, null], [app(Topics::class)->find($this->by, $kernel)->moduleId, app(Topics::class)->find($this->by, $kernel)->folderId]);
     }
 
     public function test_progress_shows_a_modules_topics_under_their_folders(): void

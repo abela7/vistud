@@ -8,6 +8,8 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Findings;
 use App\Study\Flashcards;
+use App\Study\FolderDetails;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Questions;
 use App\Study\Sessions;
@@ -20,9 +22,9 @@ use Livewire\Component;
 /**
  * One topic on a sheet (docs/specs/vistud-2-blueprint.md §3.5.3): how the student says they stand on it (covered, understood,
  * still confusing), its cards, open questions and key points, and the sessions on it; and to rename it, move it to another
- * module, study it or remove it. Opened by the `topic-sheet-open` event from a topic's row (the module page and Progress); it
- * says when the tutor set the status, and keeps the key points (add, remove). A thin adapter over App\Study\Topics and the
- * services that know the rest; the topic's id is locked.
+ * module or into one of a module's folders (Phase 9), study it or remove it. Opened by the `topic-sheet-open` event from a
+ * topic's row (the module page and Progress); it says when the tutor set the status, and keeps the key points (add, remove).
+ * A thin adapter over App\Study\Topics and the services that know the rest; the topic's id is locked.
  */
 final class TopicSheet extends Component
 {
@@ -34,7 +36,8 @@ final class TopicSheet extends Component
 
     public string $name = '';
 
-    public string $moduleId = '';
+    /** Where it belongs: '' (no module), "module:{id}", or "folder:{id}" for a folder in a module. */
+    public string $place = '';
 
     /** A key point being written. */
     public string $point = '';
@@ -50,6 +53,8 @@ final class TopicSheet extends Component
 
     private Modules $modules;
 
+    private Folders $folders;
+
     private Flashcards $flashcards;
 
     private Questions $questions;
@@ -60,10 +65,11 @@ final class TopicSheet extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(Topics $topics, Modules $modules, Flashcards $flashcards, Questions $questions, Findings $findings, Sessions $sessions, PrincipalFactory $principals): void
+    public function boot(Topics $topics, Modules $modules, Folders $folders, Flashcards $flashcards, Questions $questions, Findings $findings, Sessions $sessions, PrincipalFactory $principals): void
     {
         $this->topics = $topics;
         $this->modules = $modules;
+        $this->folders = $folders;
         $this->flashcards = $flashcards;
         $this->questions = $questions;
         $this->findings = $findings;
@@ -83,7 +89,11 @@ final class TopicSheet extends Component
         $topic->workspaceId === $this->workspaceId || throw new NotFound;
         $this->topicId = $topic->id;
         $this->name = $topic->name;
-        $this->moduleId = (string) $topic->moduleId;
+        $this->place = match (true) {
+            $topic->folderId !== null => "folder:{$topic->folderId}",
+            $topic->moduleId !== null => "module:{$topic->moduleId}",
+            default => '',
+        };
         $this->point = '';
         $this->confirmingRemove = false;
         $this->notice = null;
@@ -123,10 +133,16 @@ final class TopicSheet extends Component
     public function move(): void
     {
         $this->resetErrorBag();
+        $by = $this->principal();
+        [$type, $id] = array_pad(explode(':', $this->place, 2), 2, '');
         try {
-            $this->topics->move($this->principal(), (string) $this->topicId, $this->moduleId === '' ? null : $this->moduleId);
+            // Only a folder in a module is a place to study; a folder outside every module keeps files and notes.
+            if (($this->place !== '' && ! in_array($type, ['module', 'folder'], true)) || ($type === 'folder' && $this->folders->find($by, $id)->moduleId === null)) {
+                throw new NotFound;
+            }
+            $this->topics->move($by, (string) $this->topicId, $type === 'module' ? $id : null, $type === 'folder' ? $id : null);
         } catch (NotFound|Unprocessable) {
-            $this->addError('moduleId', 'That module no longer exists. Choose another.');
+            $this->addError('place', 'That module or folder no longer exists. Choose another.');
 
             return;
         }
@@ -194,13 +210,14 @@ final class TopicSheet extends Component
     public function render(): View
     {
         $by = $this->principal();
-        $data = ['topic' => null, 'modules' => [], 'cards' => ['total' => 0, 'due' => 0], 'open' => [], 'points' => [], 'sessionCount' => 0];
+        $data = ['topic' => null, 'modules' => [], 'folders' => [], 'cards' => ['total' => 0, 'due' => 0], 'open' => [], 'points' => [], 'sessionCount' => 0];
         if ($this->topicId !== null) {
             try {
                 $topic = $this->topics->find($by, $this->topicId);
                 $data = [
                     'topic' => $topic,
                     'modules' => $this->modules->list($by, $this->workspaceId),
+                    'folders' => self::byModule($this->folders->tree($by, $this->workspaceId)),
                     'cards' => $this->flashcards->counts($by, $this->workspaceId, $topic->id),
                     'open' => array_values(array_filter($this->questions->list($by, $this->workspaceId), fn ($q) => $q->topicId === $topic->id && $q->status !== 'answered')),
                     'points' => $this->findings->byTopic($by, $this->workspaceId)[$topic->id] ?? [],
@@ -212,6 +229,33 @@ final class TopicSheet extends Component
         }
 
         return view('livewire.workspaces.topic-sheet', $data);
+    }
+
+    /**
+     * Each module's folders, in order, named with the folders above them ("Lecture 1 + Lab 1 › Labs").
+     *
+     * @param  list<FolderDetails>  $tree
+     * @return array<string, list<array{id: string, name: string}>>
+     */
+    private static function byModule(array $tree): array
+    {
+        $byId = [];
+        foreach ($tree as $folder) {
+            $byId[$folder->id] = $folder;
+        }
+        $grouped = [];
+        foreach ($tree as $folder) {
+            if ($folder->moduleId === null) {
+                continue;
+            }
+            $names = [$folder->name];
+            for ($parent = $folder->parentId; $parent !== null && isset($byId[$parent]); $parent = $byId[$parent]->parentId) {
+                array_unshift($names, $byId[$parent]->name);
+            }
+            $grouped[$folder->moduleId][] = ['id' => $folder->id, 'name' => implode(' › ', $names)];
+        }
+
+        return $grouped;
     }
 
     private function principal(): Principal

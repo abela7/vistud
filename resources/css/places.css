@@ -3480,6 +3480,23 @@
         overflow-wrap: anywhere;
     }
 
+    /* The folder's name opens it; only the name, so the Study beside it stays its own button. */
+    .topic-group-title a {
+        color: var(--text);
+        text-decoration: none;
+    }
+
+    .topic-group-title a:hover {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
+
+    .topic-group-title a:focus-visible {
+        border-radius: var(--radius-sm);
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
     /* Progress: a folder's name above its topics, in a module's list. */
     .tree-folder {
         display: flex;

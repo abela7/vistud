@@ -4,7 +4,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { foreignColours, makeStudentAccount, makeStudentWithCards, makeStudentWithModulePage, makeStudentWithNote, makeStudentWithTopics, openStudentHome, THEMES, turnOnAi, useSentinelTheme, useTheme } from './support.js';
-import { makeStudentWithSession } from './support.js';
+import { makeStudentWithFolders, makeStudentWithSession } from './support.js';
 
 /*
  * The tutor's chat on a session page, against a fake service that streams its answer slowly
@@ -256,6 +256,36 @@ test('the tutor saves cards and writes in a note that updates while it is open',
     await expect(editor).toContainText('System calls ask the kernel for help.', { timeout: 15_000 });
     await expect(note.locator('[data-save-status]')).not.toHaveAttribute('data-state', 'conflict');
     await note.close();
+});
+
+test("folder: in a folder's session the tutor's cards and note go in the folder, and its tabs show them", async ({ page }) => {
+    const seed = makeStudentWithFolders();
+    await ai(page, seed, seed.first);
+    await page.getByRole('button', { name: /Study this/ }).click();
+    await page.locator('#study-menu').getByText('Whole folder', { exact: true }).click();
+    await expect(page).toHaveURL(/\/sessions\//, { timeout: 15_000 });
+    await page.getByRole('heading', { name: 'Your tutor' }).waitFor({ state: 'attached' });
+    await page.waitForLoadState('load');
+    const chat = page.locator('.chat');
+    const box = chat.getByLabel('Write to your tutor');
+    const done = chat.getByRole('list', { name: 'Done in your course' });
+
+    await box.fill('Please make cards from the lecture');
+    await box.press('Enter');
+    await expect(done.last()).toContainText('Saved 2 flashcards', { timeout: 15_000 });
+    await box.fill('Please jot this down');
+    await box.press('Enter');
+    await expect(done.last().getByRole('link', { name: /^Wrote in Study notes · Lecture 1 \+ Lab 1/ })).toBeVisible({ timeout: 15_000 });
+
+    // The folder's tabs have them; the module's other folder has none of it.
+    await page.goto(`${seed.first}?tab=cards`);
+    await expect(page.getByText('What is an OS?')).toBeVisible();
+    await expect(page.getByText('What is a kernel?')).toBeVisible();
+    await page.goto(`${seed.first}?tab=notes`);
+    await expect(page.getByRole('link', { name: /Study notes · Lecture 1 \+ Lab 1/ })).toBeVisible();
+    await page.goto(`${seed.second}?tab=cards`);
+    await expect(page.getByRole('navigation', { name: 'This folder' })).toBeVisible();
+    await expect(page.getByText('What is an OS?')).toHaveCount(0);
 });
 
 

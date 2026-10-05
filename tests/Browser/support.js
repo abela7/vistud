@@ -138,10 +138,11 @@ export async function openTab(page, name) {
 
 /**
  * On a module's or a folder's page: adds `what` ('Upload files', 'Folder', 'Link', 'Note' or 'Question') there. The page's
- * buttons are on its Files and Notes tabs (docs/specs/vistud-2-blueprint.md §3.5.3), so a module's tab is opened first.
+ * buttons are on its Files and Notes tabs (docs/specs/vistud-2-blueprint.md §3.5.3), so a module's tab, or the tab of a
+ * folder in a module (Phase 9), is opened first.
  */
 export async function newHere(page, what) {
-    const tabs = page.getByRole('navigation', { name: 'This module' });
+    const tabs = page.getByRole('navigation', { name: /^This (module|folder)$/ });
     if (what === 'Question') {
         await tabs.getByRole('link', { name: /^Questions/ }).click();
         await page.getByRole('link', { name: 'New question' }).first().click();
@@ -443,6 +444,34 @@ export function makeStudentWithModulePage() {
         `\\App\\Platform\\Database\\LearnerTables::insert(\\App\\Platform\\Access\\LearnerScope::of($p), 'engine_jobs', ['id' => \\Illuminate\\Support\\Str::uuid()->toString(), 'role' => 'reader', 'kind' => 'read_file', 'target_type' => 'file', 'target_id' => $busy->id, 'status' => 'running', 'created_at' => now()]);`,
         `app(\\App\\Study\\TopicSuggestions::class)->suggest($p, $m->id, $read->id, ['Round robin', 'Priority scheduling']);`,
         `echo json_encode(['module' => route('workspaces.modules.show', [$w->id, $m->id], false), 'file' => route('workspaces.files.show', [$w->id, $read->id], false), 'busy' => route('workspaces.files.show', [$w->id, $busy->id], false)]);`,
+    ].join(' ');
+    const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
+
+    return { email, ...JSON.parse(out) };
+}
+
+/**
+ * A student with Operating Systems and its module "Week 1: OS Structure | Processes & Threads", kept the way Abel keeps it
+ * (docs/specs/vistud-2-blueprint.md, Phase 9): two folders, a lecture with its lab in each. The first has two files, two
+ * topics (one understood), a question, a card and a topic the reader found in its lecture; the second a file and a topic.
+ * Returns the email and the paths.
+ */
+export function makeStudentWithFolders() {
+    const email = makeAccount(false);
+    const code = [
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${email}')->firstOrFail(), 'web');`,
+        `$w = app(\\App\\Study\\Workspaces::class)->create($p, ['name' => 'Operating Systems', 'colour' => 'blue', 'icon' => 'code']);`,
+        `$m = app(\\App\\Study\\Modules::class)->create($p, $w->id, ['title' => 'Week 1: OS Structure | Processes & Threads', 'starts_on' => '2026-09-21', 'ends_on' => '2026-09-27']);`,
+        `$folders = app(\\App\\Study\\Folders::class); $one = $folders->create($p, 'module', $m->id, 'Lecture 1 + Lab 1'); $two = $folders->create($p, 'module', $m->id, 'Lecture 2 + Lab 2');`,
+        `$files = app(\\App\\Study\\Files::class); $tmp = fn ($text) => tap(tempnam(sys_get_temp_dir(), 'vs'), fn ($f) => file_put_contents($f, $text));`,
+        `$lecture = $files->upload($p, 'folder', $one->id, $tmp("Operating system structure.\\n"), 'Lecture 1 - OS Structure.txt');`,
+        `$files->upload($p, 'folder', $one->id, $tmp("Command line basics.\\n"), 'Lab 01 - Command Line Basics.txt');`,
+        `$files->upload($p, 'folder', $two->id, $tmp("Processes and threads.\\n"), 'Lecture 2 - Processes and Threads.txt');`,
+        `$t = app(\\App\\Study\\Topics::class); $kernel = $t->create($p, $w->id, 'The kernel', folderId: $one->id); $t->report($p, $kernel->id, 'understood'); $t->create($p, $w->id, 'System calls', folderId: $one->id); $t->create($p, $w->id, 'Scheduling', folderId: $two->id);`,
+        `app(\\App\\Study\\Questions::class)->ask($p, $w->id, 'Why does the kernel need two modes?', folderId: $one->id);`,
+        `app(\\App\\Study\\Flashcards::class)->add($p, $w->id, $kernel->id, 'What does the kernel do?', 'It runs the hardware for every program.');`,
+        `app(\\App\\Study\\TopicSuggestions::class)->suggest($p, $m->id, $lecture->id, ['Interrupts']);`,
+        `echo json_encode(['workspace' => $w->id, 'module' => route('workspaces.modules.show', [$w->id, $m->id], false), 'first' => route('workspaces.folders.show', [$w->id, $one->id], false), 'second' => route('workspaces.folders.show', [$w->id, $two->id], false)]);`,
     ].join(' ');
     const out = execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' }).toString().trim().split('\n').pop();
 

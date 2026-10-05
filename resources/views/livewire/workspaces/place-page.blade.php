@@ -143,7 +143,7 @@
                             @if ($folder)
                                 <span class="item-icon ws-colour-amber" aria-hidden="true"><x-icon name="folder" class="size-5" /></span>
                                 <div class="min-w-0 flex-1">
-                                    <h3 class="topic-group-title"><a href="{{ route('workspaces.folders.show', [$workspaceId, $folder->id]) }}" class="tile-link">{{ $folder->name }}</a></h3>
+                                    <h3 class="topic-group-title"><a href="{{ route('workspaces.folders.show', [$workspaceId, $folder->id]) }}">{{ $folder->name }}</a></h3>
                                     <p class="text-sm text-fg-muted">{{ $group['topics'] === [] ? 'No topics yet' : "{$done} of ".count($group['topics']).' understood' }}</p>
                                 </div>
                                 <x-button size="sm" variant="primary" icon="play" wire:click="studyFolder('{{ $folder->id }}')" aria-label="Study {{ $folder->name }}">Study</x-button>

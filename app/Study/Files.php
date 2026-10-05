@@ -151,6 +151,12 @@ final class Files
                 'module_id' => $moduleId, 'folder_id' => $folderId,
                 'position' => $this->nextPosition($scope, $workspaceId, $moduleId, $folderId), 'updated_at' => now(),
             ]);
+            // The topics the reader found in it and the student hasn't added yet go with it, within its module
+            // (docs/specs/vistud-2-blueprint.md, Phase 9): a lecture put in its folder brings them to the folder.
+            if ($moduleId !== null && $moduleId === $file->module_id) {
+                LearnerTables::query($scope, 'topic_suggestions')->where('source_file_id', $id)->where('module_id', $moduleId)
+                    ->where('status', 'suggested')->update(['folder_id' => $folderId]);
+            }
         });
     }
 

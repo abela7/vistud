@@ -98,14 +98,24 @@
 
                     <div class="flex items-end gap-2">
                         <div class="field min-w-0 flex-1">
-                            <label for="topic-sheet-module" class="field-label">Module</label>
-                            <select id="topic-sheet-module" class="input" wire:model="moduleId">
+                            <label for="topic-sheet-place" class="field-label">Module or folder</label>
+                            <select id="topic-sheet-place" class="input" wire:model="place">
                                 <option value="">No module</option>
                                 @foreach ($modules as $module)
-                                    <option value="{{ $module->id }}">{{ $module->title }}</option>
+                                    @if (($folders[$module->id] ?? []) === [])
+                                        <option value="module:{{ $module->id }}">{{ $module->title }}</option>
+                                    @else
+                                        {{-- A module with folders: the module itself, then each of its folders. --}}
+                                        <optgroup label="{{ $module->title }}">
+                                            <option value="module:{{ $module->id }}">In the module</option>
+                                            @foreach ($folders[$module->id] as $folder)
+                                                <option value="folder:{{ $folder['id'] }}">{{ $folder['name'] }}</option>
+                                            @endforeach
+                                        </optgroup>
+                                    @endif
                                 @endforeach
                             </select>
-                            @error('moduleId') <p class="field-error">{{ $message }}</p> @enderror
+                            @error('place') <p class="field-error">{{ $message }}</p> @enderror
                         </div>
                         <x-button wire:click="move" wire:loading.attr="aria-busy" wire:target="move" busy-label="Moving…">Move</x-button>
                     </div>

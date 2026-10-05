@@ -187,6 +187,30 @@ class FolderStudyTest extends TestCase
         $this->assertSame([], $suggestions->list($this->by, $this->week1));
     }
 
+    public function test_a_file_put_in_a_folder_brings_the_topics_found_in_it_that_wait(): void
+    {
+        // Read before the folders were made: what the reader found waits in the module.
+        $lecture = app(Files::class)->upload($this->by, 'module', $this->week1, $this->temp("Slides.\n"), 'Lecture 1 - OS Structure.txt');
+        $suggestions = app(TopicSuggestions::class);
+        $suggestions->suggest($this->by, $this->week1, $lecture->id, ['Kernel', 'System calls']);
+        $suggestions->addAll($this->by, $this->week1, null);
+        $suggestions->suggest($this->by, $this->week1, $lecture->id, ['Interrupts']);
+        $first = app(Folders::class)->within($this->by, $this->first);
+        $this->assertSame([], $suggestions->list($this->by, $this->week1, $first));
+
+        app(Files::class)->move($this->by, $lecture->id, 'folder', $this->first);
+        $this->assertSame(['Interrupts'], array_map(fn ($s) => $s->name, $suggestions->list($this->by, $this->week1, $first)));
+        // What was added is a topic, which a file does not take along; it is put in a folder on its own.
+        $this->assertNull(collect(app(Topics::class)->list($this->by, $this->workspace))->firstWhere('name', 'Kernel')->folderId);
+
+        // Back out of the folder, they wait in the module again; to another module, they stay where they were found.
+        app(Files::class)->move($this->by, $lecture->id, 'module', $this->week1);
+        $this->assertSame([], $suggestions->list($this->by, $this->week1, $first));
+        app(Files::class)->move($this->by, $lecture->id, 'folder', $this->second);
+        app(Files::class)->move($this->by, $lecture->id, 'module', $this->week2);
+        $this->assertSame([$this->week1, $this->second], [DB::table('topic_suggestions')->where('name', 'Interrupts')->value('module_id'), DB::table('topic_suggestions')->where('name', 'Interrupts')->value('folder_id')]);
+    }
+
     public function test_moving_a_folder_to_another_module_takes_what_was_studied_in_it(): void
     {
         $topic = app(Topics::class)->create($this->by, $this->workspace, 'Kernel', folderId: $this->first);

@@ -186,7 +186,7 @@ final class Progress extends Component
             $moduleId = $payload['moduleId'] ?? null;
             foreach ($items as [$type, $id]) {
                 try {
-                    $this->topics->move($by, $id, $moduleId ?: null);
+                    $this->moveTo($by, $id, $moduleId ?: null);
                     $done++;
                 } catch (NotFound) {
                     // Ignored
@@ -353,9 +353,16 @@ final class Progress extends Component
 
     private function moved(Principal $by): string
     {
-        $this->topics->move($by, (string) $this->targetId, $this->moduleId ?: null);
+        $this->moveTo($by, (string) $this->targetId, $this->moduleId ?: null);
 
         return $this->topics->find($by, (string) $this->targetId)->name.' is moved.';
+    }
+
+    /** To another module, out of its folder; "moved" to the module it is in, it stays in its folder (Phase 9). */
+    private function moveTo(Principal $by, string $id, ?string $moduleId): void
+    {
+        $topic = $this->topics->find($by, $id);
+        $this->topics->move($by, $id, $moduleId, $topic->moduleId === $moduleId ? $topic->folderId : null);
     }
 
     private function principal(): Principal

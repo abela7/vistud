@@ -229,7 +229,7 @@ class ModulePageScreenTest extends TestCase
         $sheet->set('name', '')->call('rename')->assertHasErrors('name');
 
         $sheet->call('study')->assertDispatched('study-next', moduleId: $this->module, topicId: $topic);
-        $sheet->set('moduleId', $other)->call('move')->assertDispatched('topics-changed')->assertSet('topicId', null);
+        $sheet->set('place', "module:{$other}")->call('move')->assertDispatched('topics-changed')->assertSet('topicId', null);
         $this->assertSame($other, app(Topics::class)->find($this->by, $topic)->moduleId);
     }
 
