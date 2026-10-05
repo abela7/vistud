@@ -153,7 +153,7 @@ final class Attachments
         return "[Attached: the file \"{$name}\" ({$read->file->typeLabel()}, {$read->size()}).{$rest}]\n{$body}";
     }
 
-    /** A picture as a data URL the model can see, no bigger than it needs; null when it can't be read or sent. */
+    /** A picture of a file as a data URL the model can see, no bigger than it needs; null when it can't be read or sent. */
     private function picture(Principal $by, string $id): ?string
     {
         try {
@@ -162,6 +162,18 @@ final class Attachments
         } catch (Throwable) {
             return null;
         }
+
+        return self::shrink($bytes, $file->mime);
+    }
+
+    /**
+     * A picture's bytes as a data URL the model can see, no bigger than it needs (a JPEG of at most PICTURE_SIDE pixels
+     * on its longest side, transparent parts white); where pictures can't be resized, the bytes as they are when they fit
+     * PICTURE_BYTES. Null when it can't be read or sent. Used for the pictures of a file, and for the ones the course
+     * guide is shown once and doesn't keep.
+     */
+    public static function shrink(string $bytes, string $mime): ?string
+    {
         if (function_exists('imagecreatefromstring') && ($image = @imagecreatefromstring($bytes)) !== false) {
             [$width, $height] = [imagesx($image), imagesy($image)];
             $scale = min(1, self::PICTURE_SIDE / max($width, $height, 1));
@@ -176,7 +188,7 @@ final class Attachments
             return 'data:image/jpeg;base64,'.base64_encode($jpeg);
         }
 
-        return strlen($bytes) <= self::PICTURE_BYTES ? "data:{$file->mime};base64,".base64_encode($bytes) : null;
+        return $bytes !== '' && strlen($bytes) <= self::PICTURE_BYTES ? "data:{$mime};base64,".base64_encode($bytes) : null;
     }
 
     private static function sameCourse(string $workspaceId, SessionDetails $session): void

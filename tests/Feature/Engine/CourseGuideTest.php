@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Engine;
 
+use App\Engine\Attachments;
 use App\Engine\CourseGuide;
 use App\Engine\Engine;
 use App\Engine\EngineFailed;
@@ -16,6 +17,7 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
 use App\Study\CourseProfiles;
+use App\Study\Files;
 use App\Study\Modules;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
@@ -123,6 +125,80 @@ class CourseGuideTest extends TestCase
         $this->assertGreaterThan(0, app(Usage::class)->month($this->by)['tutor']);
     }
 
+    /** Real picture bytes: a small PNG. */
+    private function picture(int $width = 40, int $height = 20): string
+    {
+        $image = imagecreatetruecolor($width, $height);
+        ob_start();
+        imagepng($image);
+
+        return (string) ob_get_clean();
+    }
+
+    public function test_pictures_of_the_course_page_go_to_the_model_with_that_message_only_and_are_not_kept(): void
+    {
+        $this->says(['reply' => 'I read the timetable.', 'proposal' => ['modules' => [['title' => 'Week 1: OS Structure | Processes & Threads']]]]);
+
+        $result = $this->guide()->turn($this->by, $this->workspace, [['role' => 'user', 'content' => "Here is the timetable.\n[Attached earlier: a picture, shown with that message.]"], ['role' => 'assistant', 'content' => 'Which weeks?']], 'Add week 1.', 'modules', [['name' => 'timetable.png', 'bytes' => $this->picture()], ['name' => 'more.png', 'bytes' => $this->picture(3000, 2000)]]);
+
+        $this->assertSame('Week 1: OS Structure | Processes & Threads', $result['proposal']['modules'][0]['title']);
+        $messages = $this->engine->requests[0]->messages;
+        // Earlier turns are words (they say a picture came with them); the one being answered carries the pictures.
+        $this->assertSame('Here is the timetable.'."\n[Attached earlier: a picture, shown with that message.]", $messages[0]['content']);
+        $parts = $messages[2]['content'];
+        $this->assertSame('text', $parts[0]['type']);
+        $this->assertStringContainsString('Add week 1.', $parts[0]['text']);
+        $this->assertStringContainsString('[Attached: 2 pictures, shown below.', $parts[0]['text']);
+        $this->assertCount(3, $parts);
+        foreach ([1, 2] as $i) {
+            $this->assertSame('image_url', $parts[$i]['type']);
+            $this->assertStringStartsWith('data:image/jpeg;base64,', $parts[$i]['image_url']['url']);
+        }
+        // The big one is made no bigger than the model needs.
+        [$width, $height] = getimagesizefromstring((string) base64_decode(substr($parts[2]['image_url']['url'], strlen('data:image/jpeg;base64,'))));
+        $this->assertSame([Attachments::PICTURE_SIDE, (int) round(2000 * Attachments::PICTURE_SIDE / 3000)], [$width, $height]);
+        // Nothing was written, and nothing about the pictures is stored.
+        $this->assertSame([], app(Modules::class)->list($this->by, $this->workspace));
+        $this->assertSame([], app(Files::class)->list($this->by, $this->workspace));
+    }
+
+    public function test_a_message_can_be_only_a_picture_and_the_rules_say_what_to_make_of_it(): void
+    {
+        $this->says(['reply' => 'I read it.', 'proposal' => null]);
+
+        $this->guide()->turn($this->by, $this->workspace, [], '', '', [['name' => 'page.png', 'bytes' => $this->picture()]]);
+
+        $this->assertStringContainsString('(The student sent this without a message.)', $this->engine->requests[0]->messages[0]['content'][0]['text']);
+        foreach (['', 'modules'] as $for) {
+            $this->assertStringContainsString('pictures of their', CourseGuide::rules($for));
+        }
+    }
+
+    public function test_too_many_pictures_something_that_is_not_a_picture_and_a_model_that_cannot_see_are_refused_and_nothing_is_sent(): void
+    {
+        $five = array_fill(0, 5, ['name' => 'a.png', 'bytes' => $this->picture()]);
+        foreach ([[$five, 'Attach up to 4'], [[['name' => 'notes.txt', 'bytes' => 'Week 1: Introduction']], '"notes.txt" couldn\'t be read as a picture'], [[['name' => 'empty.png', 'bytes' => '']], 'couldn\'t be read as a picture']] as [$pictures, $words]) {
+            try {
+                $this->guide()->turn($this->by, $this->workspace, [], 'Here.', '', $pictures);
+                $this->fail('A refusal was expected.');
+            } catch (Unprocessable $e) {
+                $this->assertStringContainsString($words, $e->details['fields']['pictures'][0]);
+            }
+        }
+
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/plain', 'consent' => true]);
+        try {
+            $this->guide()->turn($this->by, $this->workspace, [], 'Here.', '', [['name' => 'a.png', 'bytes' => $this->picture()]]);
+            $this->fail('A refusal was expected.');
+        } catch (Unprocessable $e) {
+            $this->assertStringContainsString('can\'t see pictures', $e->details['fields']['pictures'][0]);
+        }
+        // The same words, without a picture, go to that model.
+        $this->says(['reply' => 'Fine.', 'proposal' => null]);
+        $this->guide()->turn($this->by, $this->workspace, [], 'Here.');
+        $this->assertCount(1, $this->engine->requests);
+    }
+
     public function test_the_modules_talk_has_read_the_course_and_knows_the_modules_already_there(): void
     {
         $this->guide()->apply($this->by, $this->workspace, $this->proposal(), ['about' => true, 'outcomes' => true, 'assessment' => [0, 1], 'modules' => [0]]);
@@ -173,6 +249,15 @@ class CourseGuideTest extends TestCase
         $this->says(['reply' => 'Weeks.', 'proposal' => ['modules' => [['title' => 'Week 1'], ['title' => ''], 'nonsense']]]);
         $weeks = $this->guide()->turn($this->by, $this->workspace, [], 'Week 1', 'modules')['proposal'];
         $this->assertSame([['title' => 'Week 1', 'starts_on' => null, 'ends_on' => null]], $weeks['modules']);
+    }
+
+    public function test_the_talk_sent_to_the_model_starts_with_the_students_turn(): void
+    {
+        $this->says(['reply' => 'And how is it assessed?', 'proposal' => null]);
+
+        $this->guide()->turn($this->by, $this->workspace, [['role' => 'assistant', 'content' => "Let's set up Operating Systems."], ['role' => 'user', 'content' => 'It is about OS.'], ['role' => 'assistant', 'content' => 'Noted.']], 'Next?');
+
+        $this->assertSame(['user', 'assistant', 'user'], array_column($this->engine->requests[0]->messages, 'role'));
     }
 
     public function test_an_answer_that_is_not_the_shape_asked_for_is_not_lost(): void

@@ -575,6 +575,9 @@ for (const theme of THEMES) {
  * fake service.
  */
 const timetable = 'About the Module: operating systems and their technologies. Week 1: OS Structure | Processes & Threads. Week 2: Concurrency & Scheduling | Memory Management. Week 3: Virtual Memory | Storage & IO.';
+// A one-pixel PNG: a picture the guide's upload takes, small enough to write here.
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const pictures = (page) => page.getByRole('list', { name: 'Pictures to send' });
 const weeks = 'Add Week 1: OS Structure | Processes & Threads, Week 2: Concurrency & Scheduling | Memory Management and Week 3: Virtual Memory | Storage & IO.';
 const guideProposal = (page) => page.getByRole('region', { name: 'I would add' });
 
@@ -648,6 +651,39 @@ test('guide: a course is made on its own page and set up by the guide, and the w
     await expect(page.locator('main').getByRole('link', { name: /Week 1: OS Structure/ })).toHaveCount(1);
 });
 
+test('guide: a screenshot is chosen or pasted, shows beside the box, can be taken off, and goes with the message', async ({ page }) => {
+    await startGuide(page);
+    const choose = page.locator('.guide-form input[type="file"]');
+
+    // Chosen: its name shows, and it can be taken off.
+    await choose.setInputFiles({ name: 'canvas-page.png', mimeType: 'image/png', buffer: PNG });
+    await expect(pictures(page)).toContainText('canvas-page.png', { timeout: 15_000 });
+    await page.getByRole('button', { name: 'Take canvas-page.png off' }).click();
+    await expect(pictures(page)).toHaveCount(0);
+
+    // Pasted into the box (Win + Shift + S, then Ctrl + V): it is added beside the first, not instead of it.
+    await choose.setInputFiles({ name: 'first.png', mimeType: 'image/png', buffer: PNG });
+    await expect(pictures(page)).toContainText('first.png', { timeout: 15_000 });
+    await page.evaluate((base64) => {
+        const data = new DataTransfer();
+        data.items.add(new File([Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))], 'pasted.png', { type: 'image/png' }));
+        document.getElementById('guide-text').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    }, PNG.toString('base64'));
+    await expect(pictures(page)).toContainText('pasted.png', { timeout: 15_000 });
+    await expect(pictures(page)).toContainText('first.png');
+
+    // Something that is not a picture is refused, in words.
+    await choose.setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Week 1: Introduction') });
+    await expect(page.locator('.guide-form .field-error')).toContainText(/not a picture|Attach a PNG/, { timeout: 15_000 });
+
+    // Sent with words: the talk says a picture went with it, and the box is empty again.
+    await page.getByLabel('Your message').fill(timetable);
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('log', { name: 'Talk with the guide' })).toContainText(/pictures? went with this/);
+    await expect(pictures(page)).toHaveCount(0);
+});
+
 test('guide: choosing to do it myself goes to the course page, and the guide is one step away there', async ({ page }) => {
     await ai(page, { email: makeStudentAccount() }, '/courses/new');
     await page.getByLabel('Name', { exact: true }).fill('Biology');
@@ -676,6 +712,10 @@ for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 
 
         await page.getByRole('button', { name: 'Create course' }).click();
         await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
+        await page.locator('.guide-form input[type="file"]').setInputFiles({ name: 'canvas-page.png', mimeType: 'image/png', buffer: PNG });
+        await expect(pictures(page)).toContainText('canvas-page.png', { timeout: 15_000 });
+        await useSentinelTheme(page);
+        states['the guide with a picture attached'] = await foreignColours(page);
         await page.getByLabel('Your message').fill(timetable);
         await page.getByRole('button', { name: 'Send' }).click();
         await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
@@ -697,6 +737,10 @@ for (const theme of THEMES) {
         await page.getByLabel('Name', { exact: true }).fill('Operating Systems');
         await page.getByRole('button', { name: 'Create course' }).click();
         await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
+        await page.locator('.guide-form input[type="file"]').setInputFiles({ name: 'canvas-page.png', mimeType: 'image/png', buffer: PNG });
+        await expect(pictures(page)).toContainText('canvas-page.png', { timeout: 15_000 });
+        await useTheme(page, theme);
+        expect(await analyseSheet(page), 'guide with a picture attached').toEqual([]);
         await page.getByLabel('Your message').fill(timetable);
         await page.getByRole('button', { name: 'Send' }).click();
         await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });

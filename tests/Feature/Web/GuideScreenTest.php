@@ -9,10 +9,12 @@ use App\Livewire\Workspaces\GuideChat;
 use App\Models\User;
 use App\Study\Activities;
 use App\Study\CourseProfiles;
+use App\Study\Files;
 use App\Study\Modules;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\UploadedFile;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
@@ -62,6 +64,15 @@ class GuideScreenTest extends TestCase
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
 
         return Livewire::test(GuideChat::class, ['workspaceId' => $this->os->id, 'for' => $for]);
+    }
+
+    /** Livewire's test uploads are empty placeholders: puts a real picture's bytes where the first one was stored. */
+    private function fill($page, int $index = 0): void
+    {
+        $png = imagecreatetruecolor(300, 200);
+        ob_start();
+        imagepng($png);
+        file_put_contents($page->get('pictures')[$index]->getRealPath(), (string) ob_get_clean());
     }
 
     private function says(array $answer): void
@@ -137,6 +148,54 @@ class GuideScreenTest extends TestCase
         $this->assertFalse(app(CourseProfiles::class)->get($this->principal($this->ada), $this->os->id)->hasContent());
     }
 
+    public function test_a_picture_of_the_page_goes_with_the_message_and_is_not_kept(): void
+    {
+        $this->says(['reply' => 'I read the page. Tick what to add.', 'proposal' => self::PROPOSAL]);
+
+        // (The file's name is shown too; Livewire's test uploads don't carry it, so the browser test checks that.)
+        $page = $this->guide()->set('pictures', [UploadedFile::fake()->image('canvas-page.png', 300, 200)])->assertSee('Pictures to send')->assertSeeHtml('wire:click="removePicture(0)"')
+            ->assertSee('Attach pictures')->assertSee('paste or drop a screenshot');
+        $this->fill($page);
+        // A picture alone is a message; it goes to the model as a picture, and the talk says so.
+        $page->call('send')->assertSet('pictures', [])->assertSee('A picture went with this.')->assertSee('I read the page.')->assertSee('I would add')->assertDontSee('Pictures to send');
+        $parts = $this->engine->requests[0]->messages[0]['content'];
+        $this->assertSame(['text', 'image_url'], [$parts[0]['type'], $parts[1]['type']]);
+        $this->assertStringStartsWith('data:image/jpeg;base64,', $parts[1]['image_url']['url']);
+        $this->assertSame([], app(Files::class)->list($this->principal($this->ada), $this->os->id));
+
+        // The next message is words again, and the model is told a picture came with the first one.
+        $this->says(['reply' => 'And?', 'proposal' => null]);
+        $page->set('text', 'It is a first-year module.')->call('send');
+        $history = $this->engine->requests[1]->messages;
+        $this->assertStringContainsString('[Attached earlier: a picture, shown with that message.]', $history[0]['content']);
+        $this->assertSame('It is a first-year module.', $history[2]['content']);
+        $this->assertSame(['user', 'assistant', 'user'], array_column($history, 'role'));
+    }
+
+    public function test_pictures_can_be_taken_off_are_at_most_four_and_must_be_pictures(): void
+    {
+        $page = $this->guide()->set('pictures', [UploadedFile::fake()->image('a.png'), UploadedFile::fake()->image('b.png')])->assertSeeHtml('wire:click="removePicture(1)"');
+        $page->call('removePicture', 0)->assertDontSeeHtml('wire:click="removePicture(1)"')->assertSeeHtml('wire:click="removePicture(0)"');
+        $this->assertCount(1, $page->get('pictures'));
+
+        $five = $this->guide()->set('pictures', array_map(fn ($n) => UploadedFile::fake()->image("p{$n}.png"), range(1, 5)))->assertSee('Attach up to 4 pictures to one message.');
+        $this->assertCount(4, $five->get('pictures'));
+        $pdf = $this->guide()->set('pictures', [UploadedFile::fake()->createWithContent('notes.pdf', '%PDF-1.4')])->assertHasErrors('pictures')->assertSee('Attach a PNG, JPG, GIF or WebP picture.');
+        $this->assertSame([], $pdf->get('pictures'));
+        $this->assertSame([], $this->engine->requests);
+    }
+
+    public function test_a_model_that_cannot_see_pictures_says_so_and_keeps_what_was_attached(): void
+    {
+        app(Settings::class)->set($this->principal($this->ada), ['tutor_model' => 'fake/plain', 'consent' => true]);
+
+        $page = $this->guide()->set('pictures', [UploadedFile::fake()->image('page.png')]);
+        $this->fill($page);
+        $page->call('send')
+            ->assertHasErrors('pictures')->assertSee('can&#039;t see pictures', false)->assertSeeHtml('wire:click="removePicture(0)"')->assertDontSee('AI settings</a>', false);
+        $this->assertSame([], $this->engine->requests);
+    }
+
     public function test_the_talk_is_kept_while_the_student_is_here_and_start_over_clears_it(): void
     {
         $this->says(['reply' => 'What is it assessed on?', 'proposal' => null]);
@@ -161,7 +220,7 @@ class GuideScreenTest extends TestCase
 
     public function test_an_empty_message_a_failed_answer_and_a_missing_key_say_what_to_do_and_keep_what_was_written(): void
     {
-        $this->guide()->call('send')->assertHasErrors('text')->assertSee('Write something first.');
+        $this->guide()->call('send')->assertHasErrors('text')->assertSee('Write something first, or attach a picture.');
         $this->assertSame([], $this->engine->requests);
 
         $this->engine->will(Fake::says('   '));

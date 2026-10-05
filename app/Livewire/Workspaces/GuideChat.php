@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Workspaces;
 
+use App\Engine\Attachments;
 use App\Engine\CourseGuide;
 use App\Engine\Role;
 use App\Engine\Settings;
@@ -12,9 +13,12 @@ use App\Platform\Errors\AppError;
 use App\Study\CourseProfiles;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Validator;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 
 /**
  * The course guide's page (docs/specs/vistud-2-blueprint.md, Phase 8): a talk with the tutor. It has two jobs, each its own
@@ -28,7 +32,13 @@ use Livewire\Component;
  */
 final class GuideChat extends Component
 {
-    use Notices;
+    use Notices, WithFileUploads;
+
+    /** The most one picture can weigh, in kilobytes (the guide shows the model a smaller copy). */
+    public const PICTURE_KB = 10_240;
+
+    /** The kinds of picture that can be attached, by name; the bytes are checked again when the message goes. */
+    public const PICTURE_TYPES = 'png,jpg,jpeg,gif,webp';
 
     /** How long a talk is kept when the student leaves and comes back, in seconds. */
     public const KEPT_FOR = 7_200;
@@ -40,7 +50,7 @@ final class GuideChat extends Component
     #[Locked]
     public string $for = '';
 
-    /** @var list<array{from: string, text: string}> from is you, guide, done or problem */
+    /** @var list<array{from: string, text: string, pictures?: int}> from is you, guide or done; pictures is how many went with a message of yours */
     #[Locked]
     public array $talk = [];
 
@@ -57,6 +67,14 @@ final class GuideChat extends Component
     public array $ticks = [];
 
     public string $text = '';
+
+    /**
+     * Pictures of the course's page or timetable, chosen, pasted or dropped, waiting to go with the next message. They
+     * are shown to the model once and not kept: the course only gets what is ticked.
+     *
+     * @var list<TemporaryUploadedFile>
+     */
+    public array $pictures = [];
 
     /** Why the guide can't be asked now, in one line, with the code it came from; null when it can. */
     #[Locked]
@@ -97,8 +115,9 @@ final class GuideChat extends Component
     {
         $this->resetErrorBag();
         $words = trim($this->text);
-        if ($words === '') {
-            $this->addError('text', 'Write something first.');
+        $files = array_values(array_filter($this->pictures, fn ($file) => $file instanceof TemporaryUploadedFile));
+        if ($words === '' && $files === []) {
+            $this->addError('text', 'Write something first, or attach a picture.');
 
             return;
         }
@@ -109,7 +128,8 @@ final class GuideChat extends Component
         }
 
         try {
-            $answer = $this->guide->turn($this->principal(), $this->workspaceId, $this->history(), $words, $this->for);
+            $pictures = array_map(fn (TemporaryUploadedFile $file) => ['name' => $file->getClientOriginalName(), 'bytes' => (string) file_get_contents($file->getRealPath())], $files);
+            $answer = $this->guide->turn($this->principal(), $this->workspaceId, $this->history(), $words, $this->for, $pictures);
         } catch (AppError $e) {
             $this->problem($e);
 
@@ -118,13 +138,66 @@ final class GuideChat extends Component
 
         $this->problem = null;
         $this->text = '';
-        $this->talk[] = ['from' => 'you', 'text' => $words];
+        $this->pictures = [];
+        foreach ($files as $file) {
+            $file->delete();
+        }
+        $this->talk[] = ['from' => 'you', 'text' => $words] + ($files !== [] ? ['pictures' => count($files)] : []);
         $this->talk[] = ['from' => 'guide', 'text' => $answer['reply']];
         if ($answer['proposal'] !== null) {
             $this->proposal = $answer['proposal'];
             $this->ticks = self::allTicked($answer['proposal']);
         }
         $this->keep();
+    }
+
+    /**
+     * Keeps the pictures that can go: at most one message's worth, of a kind that is a picture and not too big; the others
+     * are dropped with a word each on why. (The bytes are checked as a picture when the message goes.)
+     */
+    public function updatedPictures(): void
+    {
+        $this->resetErrorBag('pictures');
+        $kept = [];
+        foreach ($this->pictures as $file) {
+            $why = ! $file instanceof TemporaryUploadedFile ? 'That is not a picture.' : self::refusal($file);
+            if ($why === null && count($kept) >= Attachments::MOST) {
+                $why = 'Attach up to '.Attachments::MOST.' pictures to one message.';
+            }
+            if ($why === null) {
+                $kept[] = $file;
+
+                continue;
+            }
+            $this->addError('pictures', $file instanceof TemporaryUploadedFile ? mb_substr(mb_scrub($file->getClientOriginalName()), 0, 80).': '.$why : $why);
+            if ($file instanceof TemporaryUploadedFile) {
+                $file->delete();
+            }
+        }
+        $this->pictures = $kept;
+    }
+
+    /** Why a chosen file can't go as a picture, in a few words; null when it can. */
+    private static function refusal(TemporaryUploadedFile $file): ?string
+    {
+        $check = Validator::make(['picture' => $file], ['picture' => ['extensions:'.self::PICTURE_TYPES, 'max:'.self::PICTURE_KB]], [
+            'picture.extensions' => 'Attach a PNG, JPG, GIF or WebP picture.',
+            'picture.max' => 'That picture is too big. Attach one under 10 MB.',
+        ]);
+
+        return $check->fails() ? (string) $check->errors()->first('picture') : null;
+    }
+
+    /** Takes one picture off the message it was going with. */
+    public function removePicture(int $index): void
+    {
+        $file = $this->pictures[$index] ?? null;
+        if ($file instanceof TemporaryUploadedFile) {
+            $file->delete();
+        }
+        unset($this->pictures[$index]);
+        $this->pictures = array_values($this->pictures);
+        $this->resetErrorBag('pictures');
     }
 
     /** Adds what is ticked to the course. */
@@ -237,7 +310,8 @@ final class GuideChat extends Component
         $turns = [];
         foreach ($this->talk as $line) {
             if ($line['from'] === 'you') {
-                $turns[] = ['role' => 'user', 'content' => $line['text']];
+                $pictures = (int) ($line['pictures'] ?? 0);
+                $turns[] = ['role' => 'user', 'content' => trim($line['text'].($pictures > 0 ? "\n[Attached earlier: ".($pictures === 1 ? 'a picture' : "{$pictures} pictures").', shown with that message.]' : ''))];
             } elseif ($line['from'] === 'guide') {
                 $turns[] = ['role' => 'assistant', 'content' => $line['text']];
             } elseif ($line['from'] === 'done') {
@@ -250,6 +324,14 @@ final class GuideChat extends Component
 
     private function problem(AppError $e): void
     {
+        $fields = is_array($e->details['fields'] ?? null) ? $e->details['fields'] : [];
+        if ($e->errorCode === 'validation_failed' && $fields !== []) {
+            // A refusal that names a field says what to change there; it is not about the AI's setup.
+            $field = (string) array_key_first($fields);
+            $this->addError($field === 'pictures' ? 'pictures' : 'text', (string) (reset($fields)[0] ?? $e->getMessage()));
+
+            return;
+        }
         $this->problem = self::problemText($e->errorCode, $e->getMessage());
         $this->addError('text', $this->problem);
     }

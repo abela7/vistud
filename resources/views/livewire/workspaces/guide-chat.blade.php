@@ -23,7 +23,10 @@
                 <div @class(['guide-line', 'is-you' => $line['from'] === 'you', 'is-done' => $line['from'] === 'done']) wire:key="guide-{{ $i }}">
                     @if ($line['from'] !== 'done')<span class="sr-only">{{ $line['from'] === 'you' ? 'You' : 'Guide' }}: </span>@endif
                     @if ($line['from'] === 'done')<x-icon name="circle-check" class="size-4 shrink-0" />@endif
-                    <p class="whitespace-pre-line break-words">{{ $line['text'] }}</p>
+                    @if ($line['text'] !== '')<p class="whitespace-pre-line break-words">{{ $line['text'] }}</p>@endif
+                    @if (($line['pictures'] ?? 0) > 0)
+                        <p class="guide-sent-pictures"><x-icon name="image" class="size-4 shrink-0" />{{ $line['pictures'] === 1 ? 'A picture' : $line['pictures'].' pictures' }} went with this.</p>
+                    @endif
                 </div>
             @endforeach
             <p class="guide-line text-fg-muted" wire:loading wire:target="send" role="status"><span class="ai-dots" aria-hidden="true"><span></span><span></span><span></span></span> Reading…</p>
@@ -115,25 +118,53 @@
         </section>
     @endif
 
-    <form wire:submit="send" novalidate class="guide-form" x-data x-on:keydown.ctrl.enter.prevent="$wire.send()" x-on:keydown.meta.enter.prevent="$wire.send()">
+    <form wire:submit="send" novalidate class="guide-form"
+        x-data="{ take(event) { const files = [...((event.clipboardData ?? event.dataTransfer)?.files ?? [])].filter((file) => file.type.startsWith('image/')); if (files.length > 0) { event.preventDefault(); $wire.uploadMultiple('pictures', files); } } }"
+        x-on:keydown.ctrl.enter.prevent="$wire.send()" x-on:keydown.meta.enter.prevent="$wire.send()">
         @if ($problem !== null && $errors->isEmpty())
             <x-alert tone="warning">{{ $problem }} <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-link">AI settings</a></x-alert>
         @endif
         <div class="field">
             <label for="guide-text" class="field-label">Your message</label>
             <textarea id="guide-text" class="input" rows="4" wire:model="text" maxlength="{{ \App\Engine\CourseGuide::MAX_MESSAGE }}"
-                placeholder="{{ $for === 'modules' ? 'Paste the timetable, tell me the weeks, or ask me to suggest some…' : 'Tell me about the course, or paste its page…' }}" wire:loading.attr="disabled" wire:target="send"></textarea>
+                placeholder="{{ $for === 'modules' ? 'Paste the timetable, tell me the weeks, or ask me to suggest some…' : 'Tell me about the course, or paste its page…' }}" wire:loading.attr="disabled" wire:target="send"
+                x-on:paste="take($event)" x-on:drop="take($event)" x-on:dragover.prevent></textarea>
             @error('text')
                 <p class="field-error">{{ $message }}@if ($problem !== null) <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-link">AI settings</a>@endif</p>
             @enderror
         </div>
+
+        {{-- Pictures of the course page or the timetable: a screenshot pasted, dropped or chosen goes with the next message. --}}
+        @if ($pictures !== [])
+            <ul class="chat-files guide-pictures" role="list" aria-label="Pictures to send">
+                @foreach ($pictures as $i => $picture)
+                    <li class="chat-file" wire:key="guide-picture-{{ $i }}">
+                        @if (method_exists($picture, 'isPreviewable') && $picture->isPreviewable())
+                            <img src="{{ $picture->temporaryUrl() }}" alt="" class="guide-thumb">
+                        @else
+                            <x-icon name="image" class="size-4 shrink-0" />
+                        @endif
+                        <span class="truncate">{{ $picture->getClientOriginalName() }}</span>
+                        <button type="button" class="chat-file-remove" wire:click="removePicture({{ $i }})" aria-label="Take {{ $picture->getClientOriginalName() }} off"><x-icon name="x" class="size-3.5" /></button>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+        <p class="guide-line text-fg-muted" wire:loading wire:target="pictures" role="status"><x-icon name="loader-circle" class="size-4 animate-spin" />Getting the picture…</p>
+        @error('pictures')<p class="field-error">{{ $message }}</p>@enderror
+        @error('pictures.*')<p class="field-error">{{ $message }}</p>@enderror
+
         <div class="guide-actions">
             <x-button type="submit" variant="primary" icon="arrow-right" wire:loading.attr="aria-busy" wire:target="send" busy-label="Reading…">Send</x-button>
+            <label class="btn btn-secondary chat-upload">
+                <x-icon name="paperclip" class="size-4" />Attach pictures
+                <input type="file" class="sr-only" multiple accept="image/png,image/jpeg,image/webp,image/gif" wire:model="pictures">
+            </label>
             @if ($toModules)
                 <a href="{{ route('workspaces.show', [$workspace->id, 'modules']) }}" class="btn btn-secondary"><x-icon name="layers" class="size-4" />Go to Modules</a>
             @endif
             <a href="{{ route('workspaces.show', $workspace->id) }}" class="btn btn-secondary">I'm done for now</a>
         </div>
-        <p class="text-sm text-fg-muted">Ctrl + Enter sends. Nothing is added until you tick it and press Add.</p>
+        <p class="text-sm text-fg-muted">Ctrl + Enter sends. You can paste or drop a screenshot of the course page{{ $for === 'modules' ? ' or timetable' : '' }} into the box. Nothing is added until you tick it and press Add.</p>
     </form>
 </div>
