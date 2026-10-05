@@ -3,17 +3,20 @@
 namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
+use App\Platform\Errors\NotFound;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Sessions;
 use App\Study\Topics;
 
 /**
- * What the study session is about: a topic the course has, or a new one made in the session's module. The
- * student can change it on the session page too; what's saved afterwards goes to it.
+ * What the study session is about: a topic the course has, or a new one made in the session's module (in its folder,
+ * when the session studies in one: docs/specs/vistud-2-blueprint.md, Phase 9). The student can change it on the
+ * session page too; what's saved afterwards goes to it.
  */
 final class SetTopicTool implements Tool
 {
-    public function __construct(private Sessions $sessions, private Topics $topics, private Modules $modules) {}
+    public function __construct(private Sessions $sessions, private Topics $topics, private Modules $modules, private Folders $folders) {}
 
     public function name(): string
     {
@@ -22,7 +25,7 @@ final class SetTopicTool implements Tool
 
     public function description(): string
     {
-        return 'Sets what this study session is about: one of the course\'s topics, by its exact name, or a new topic made in the session\'s module when the course doesn\'t have it. Use it when the session has no topic and when you move on to another part (whether to ask first, the Topics section of your instructions says). Look at the course\'s topics first and use an existing one when it fits. Flashcards, questions and key points saved afterwards go to it.';
+        return 'Sets what this study session is about: one of the course\'s topics, by its exact name, or a new topic made in the session\'s module (and folder) when the course doesn\'t have it. Use it when the session has no topic and when you move on to another part (whether to ask first, the Topics section of your instructions says). Look at the course\'s topics first and use an existing one when it fits. Flashcards, questions and key points saved afterwards go to it.';
     }
 
     public function parameters(): array
@@ -48,7 +51,15 @@ final class SetTopicTool implements Tool
 
         $topic = collect($this->topics->list($by, $context->workspaceId))->first(fn ($t) => mb_strtolower($t->name) === mb_strtolower($name));
         $made = $topic === null;
-        $topic ??= $this->topics->create($by, $context->workspaceId, $name, $session->moduleId);
+        $folder = null;
+        if ($made && $session->folderId !== null) {
+            try {
+                $folder = $this->folders->find($by, $session->folderId);
+            } catch (NotFound) {
+                // Deleted since: the topic goes in the module.
+            }
+        }
+        $topic ??= $this->topics->create($by, $context->workspaceId, $name, $session->moduleId, $folder?->id);
         if ($session->topicId === $topic->id) {
             return "The session's topic is \"{$topic->name}\" already.";
         }
@@ -59,6 +70,8 @@ final class SetTopicTool implements Tool
         }
         $module = $topic->moduleId !== null ? $this->modules->find($by, $topic->moduleId)->title : null;
 
-        return "The session's topic is now \"{$topic->name}\"".($made ? ', new in the course'.($module !== null ? " in {$module}" : '') : '').'. Tell the student in a line.';
+        $where = $folder !== null ? "{$folder->name}, in {$module}" : $module;
+
+        return "The session's topic is now \"{$topic->name}\"".($made ? ', new in the course'.($where !== null ? " in {$where}" : '') : '').'. Tell the student in a line.';
     }
 }

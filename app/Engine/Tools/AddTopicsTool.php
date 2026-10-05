@@ -3,20 +3,24 @@
 namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
+use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Sessions;
 use App\Study\Topics;
 
 /**
  * Topics into the course, each in a module: the headings of a file the student shared, say, when the course
- * doesn't have them yet. Names the course has already are left as they are, so asking twice adds nothing.
+ * doesn't have them yet. Names the course has already are left as they are, so asking twice adds nothing. With no
+ * module named, they go in the session's module, and in its folder when it studies in one (docs/specs/vistud-2-
+ * blueprint.md, Phase 9).
  */
 final class AddTopicsTool implements Tool
 {
     public const MAX = 15;
 
-    public function __construct(private Topics $topics, private Modules $modules, private Sessions $sessions) {}
+    public function __construct(private Topics $topics, private Modules $modules, private Sessions $sessions, private Folders $folders) {}
 
     public function name(): string
     {
@@ -33,7 +37,7 @@ final class AddTopicsTool implements Tool
         return ['type' => 'object', 'properties' => [
             'topics' => ['type' => 'array', 'description' => 'The topics to add, in the order they are studied.', 'minItems' => 1, 'maxItems' => self::MAX, 'items' => ['type' => 'object', 'properties' => [
                 'name' => ['type' => 'string', 'description' => 'The topic\'s name, short like a chapter heading.'],
-                'module' => ['type' => 'string', 'description' => 'The module\'s title. Left out: the session\'s module.'],
+                'module' => ['type' => 'string', 'description' => 'The module\'s title. Left out: the session\'s module (and its folder, in a folder\'s session).'],
             ], 'required' => ['name'], 'additionalProperties' => false]],
         ], 'required' => ['topics'], 'additionalProperties' => false];
     }
@@ -45,7 +49,16 @@ final class AddTopicsTool implements Tool
             return 'Nothing to add: send at least one topic.';
         }
         $modules = $this->modules->list($by, $context->workspaceId);
-        $sessionModule = $context->sessionId !== null ? $this->sessions->find($by, $context->sessionId)->moduleId : null;
+        $session = $context->sessionId !== null ? $this->sessions->find($by, $context->sessionId) : null;
+        $sessionModule = $session?->moduleId;
+        $sessionFolder = null;
+        if ($session?->folderId !== null) {
+            try {
+                $sessionFolder = $this->folders->find($by, $session->folderId)->id;
+            } catch (NotFound) {
+                // Deleted since: the module, then.
+            }
+        }
         $known = [];
         foreach ($this->topics->list($by, $context->workspaceId) as $topic) {
             $known[mb_strtolower($topic->name)] = true;
@@ -64,7 +77,7 @@ final class AddTopicsTool implements Tool
 
                 continue;
             }
-            $moduleId = $sessionModule;
+            [$moduleId, $folderId] = [$sessionModule, $sessionFolder];
             if (($title = Lookup::text($one, 'module')) !== null) {
                 $module = Lookup::one($modules, $title, fn ($m) => $m->title, 'module');
                 if (is_string($module)) {
@@ -72,10 +85,11 @@ final class AddTopicsTool implements Tool
 
                     continue;
                 }
-                $moduleId = $module->id;
+                // Another module than the session's: in that module, in no folder.
+                [$moduleId, $folderId] = [$module->id, $module->id === $sessionModule ? $sessionFolder : null];
             }
             try {
-                $this->topics->create($by, $context->workspaceId, $name, $moduleId);
+                $this->topics->create($by, $context->workspaceId, $name, $moduleId, $folderId);
             } catch (Unprocessable $e) {
                 $problems[] = "{$name}: ".(array_values($e->details['fields'] ?? [])[0][0] ?? $e->getMessage());
 

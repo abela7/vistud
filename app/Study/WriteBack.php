@@ -117,6 +117,8 @@ final class WriteBack
             $topics[$topic->id] = $topic;
         }
         $moduleId = $session->moduleId ?? ($session->topicId !== null ? ($topics[$session->topicId]->moduleId ?? null) : null);
+        // A session in a folder saves into it (docs/specs/vistud-2-blueprint.md, Phase 9), while the folder is there.
+        $folderId = $session->folderId !== null && LearnerTables::query($scope, 'folders')->where('id', $session->folderId)->exists() ? $session->folderId : null;
         $at = $session->endedAt ?? Memory::now();
         $quiz = $session->tutoring['quiz'] ?? 'normal';
 
@@ -129,7 +131,7 @@ final class WriteBack
                 continue;
             }
             try {
-                $topicId = in_array($item['kind'], ['summary', 'checkpoint'], true) ? null : $this->topicFor($by, $session, $item, $topics, $moduleId);
+                $topicId = in_array($item['kind'], ['summary', 'checkpoint'], true) ? null : $this->topicFor($by, $session, $item, $topics, $moduleId, $folderId);
                 $topicName = $topicId !== null ? $topics[$topicId]->name : null;
                 match ($item['kind']) {
                     'flashcard' => $this->flashcards->add($by, $session->workspaceId, $topicId, $item['front'] ?? '', $item['back'] ?? '', 'ai', $session->id, $topicId === null ? $moduleId : null),
@@ -159,7 +161,7 @@ final class WriteBack
 
         $noteId = null;
         if ($note && $kept !== []) {
-            $noteId = $this->sessionNote($by, $session, $kept, $moduleId, $topics);
+            $noteId = $this->sessionNote($by, $session, $kept, $moduleId, $topics, $folderId);
         }
         if ($fingerprints !== []) {
             $this->sessions->remember($by, $session->id, $fingerprints, $noteId);
@@ -169,10 +171,10 @@ final class WriteBack
     }
 
     /**
-     * The topic an item goes to: the one chosen, a new one made with the given name (once per name), or, for a
-     * flashcard or a question chosen with none (`topic_id` ''), no topic.
+     * The topic an item goes to: the one chosen, a new one made with the given name (once per name; in the session's
+     * folder when it has one), or, for a flashcard or a question chosen with none (`topic_id` ''), no topic.
      */
-    private function topicFor(Principal $by, SessionDetails $session, array $item, array &$topics, ?string $moduleId): ?string
+    private function topicFor(Principal $by, SessionDetails $session, array $item, array &$topics, ?string $moduleId, ?string $folderId = null): ?string
     {
         $chosen = (string) ($item['topic_id'] ?? '');
         if ($chosen === '' && in_array($item['kind'], ['flashcard', 'question'], true)) {
@@ -187,7 +189,7 @@ final class WriteBack
                 return $topic->id;
             }
         }
-        $created = $this->topics->create($by, $session->workspaceId, $name === '' ? 'General' : $name, $moduleId);
+        $created = $this->topics->create($by, $session->workspaceId, $name === '' ? 'General' : $name, $moduleId, $folderId);
         $topics[$created->id] = $created;
 
         return $created->id;
@@ -241,10 +243,11 @@ final class WriteBack
     }
 
     /**
-     * The session note: what was saved, readable in the module. The first
-     * write-back makes it; later ones add to it.
+     * The session note: what was saved, readable in the module (in the
+     * session's folder, when it has one). The first write-back makes it;
+     * later ones add to it.
      */
-    private function sessionNote(Principal $by, SessionDetails $session, array $kept, ?string $moduleId, array $topics): ?string
+    private function sessionNote(Principal $by, SessionDetails $session, array $kept, ?string $moduleId, array $topics, ?string $folderId = null): ?string
     {
         $zone = $this->sessions->timezone($by);
         $when = CarbonImmutable::parse($session->startedAt)->setTimezone($zone);
@@ -268,9 +271,11 @@ final class WriteBack
         }
 
         $title = mb_substr('Session: '.($topicName ?? 'study').' · '.$when->format('D j M'), 0, 200);
-        $note = $moduleId !== null
-            ? $this->notes->create($by, 'module', $moduleId, $title)
-            : $this->notes->create($by, 'workspace', $session->workspaceId, $title);
+        $note = match (true) {
+            $folderId !== null => $this->notes->create($by, 'folder', $folderId, $title),
+            $moduleId !== null => $this->notes->create($by, 'module', $moduleId, $title),
+            default => $this->notes->create($by, 'workspace', $session->workspaceId, $title),
+        };
         $intro = [self::paragraph('From a study session on '.$when->format('D j M Y, H:i').'. What the tutor marked and you saved.')];
         $this->saveNote($by, $note->id, $note->version, $title, ['type' => 'doc', 'content' => [...$intro, ...$blocks]]);
 

@@ -3,6 +3,7 @@
 namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
+use App\Study\Folders;
 use App\Study\NoteDoc;
 use App\Study\Notes;
 
@@ -11,7 +12,7 @@ final class ReadNoteTool implements Tool
 {
     public const LIMIT = 8_000;
 
-    public function __construct(private Notes $notes) {}
+    public function __construct(private Notes $notes, private Folders $folders) {}
 
     public function name(): string
     {
@@ -30,7 +31,7 @@ final class ReadNoteTool implements Tool
 
     public function run(Principal $by, Context $context, array $input): string
     {
-        $note = Lookup::one($this->notes->list($by, $context->workspaceId), Lookup::text($input, 'note') ?? '', fn ($n) => $n->displayTitle(), 'note');
+        $note = Lookup::here($this->notes->list($by, $context->workspaceId), Lookup::folder($this->folders, $by, $context), Lookup::text($input, 'note') ?? '', fn ($n) => $n->displayTitle(), 'note');
         if (is_string($note)) {
             return $note;
         }

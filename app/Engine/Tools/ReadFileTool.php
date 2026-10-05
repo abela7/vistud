@@ -6,6 +6,7 @@ use App\Platform\Access\Principal;
 use App\Study\Files;
 use App\Study\FileText;
 use App\Study\FileTexts;
+use App\Study\Folders;
 
 /**
  * One of the student's files, a few pages at a time: a PDF's pages, a PowerPoint's slides (with the speaker's
@@ -18,7 +19,7 @@ final class ReadFileTool implements Tool
 
     public const CHARS = 11_000;
 
-    public function __construct(private Files $files, private FileTexts $texts) {}
+    public function __construct(private Files $files, private FileTexts $texts, private Folders $folders) {}
 
     public function name(): string
     {
@@ -40,7 +41,8 @@ final class ReadFileTool implements Tool
 
     public function run(Principal $by, Context $context, array $input): string
     {
-        $file = Lookup::one($this->files->list($by, $context->workspaceId), Lookup::text($input, 'file') ?? '', fn ($f) => $f->fileName(), 'file');
+        // In a folder's session, a name the folder's files fit is one of them.
+        $file = Lookup::here($this->files->list($by, $context->workspaceId), Lookup::folder($this->folders, $by, $context), Lookup::text($input, 'file') ?? '', fn ($f) => $f->fileName(), 'file');
         if (is_string($file)) {
             return $file;
         }

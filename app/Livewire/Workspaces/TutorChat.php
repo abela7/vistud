@@ -16,6 +16,8 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Files;
 use App\Study\FileTypes;
+use App\Study\FolderDetails;
+use App\Study\Folders;
 use App\Study\MarkdownPreview;
 use App\Study\Modules;
 use App\Study\Notes;
@@ -32,8 +34,9 @@ use Livewire\Component;
  * The built-in chat on a study session's page (docs/specs/study-memory.md §6): the student's turns and the
  * tutor's, the look-ups each answer made and what the chat has cost against the limit, a box to write in, and
  * a way to keep what the tutor marked (the write-back's review, opened on the chat's replies). Notes and files
- * from the module (the session's chosen material first) can be attached to a message, and a file or a picture
- * uploaded, pasted or dropped into the box goes into the module's "From the chat" folder first. The answer
+ * from the module (the session's chosen material first; the folder's, in a folder's session) can be attached to a
+ * message, and a file or a picture uploaded, pasted or dropped into the box goes into the "From the chat" folder of
+ * the session's folder, or else of its module, first. The answer
  * streams in as the tutor writes it, with what it is looking up meanwhile; a turn the engine failed on can be
  * tried again. A thin adapter over App\Engine\SessionChat; the engine's refusals show as a line under the box.
  */
@@ -88,9 +91,11 @@ final class TutorChat extends Component
 
     private Modules $modules;
 
-    public function boot(SessionChat $chat, Settings $settings, Sessions $sessions, PrincipalFactory $principals, ChatStream $stream, Notes $notes, Files $files, Topics $topics, Models $models, Modules $modules): void
+    private Folders $folders;
+
+    public function boot(SessionChat $chat, Settings $settings, Sessions $sessions, PrincipalFactory $principals, ChatStream $stream, Notes $notes, Files $files, Topics $topics, Models $models, Modules $modules, Folders $folders): void
     {
-        [$this->notes, $this->files, $this->topics, $this->models, $this->modules] = [$notes, $files, $topics, $models, $modules];
+        [$this->notes, $this->files, $this->topics, $this->models, $this->modules, $this->folders] = [$notes, $files, $topics, $models, $modules, $folders];
         $this->chat = $chat;
         $this->settings = $settings;
         $this->sessions = $sessions;
@@ -243,8 +248,9 @@ final class TutorChat extends Component
             'account' => (string) auth()->id(),
             'upload' => [
                 'url' => route('api.v1.files.store'),
-                'type' => ($module = $this->moduleOf($by, $session)) !== null ? 'module' : 'workspace',
-                'id' => $module ?? $session->workspaceId,
+                // Into the session's folder (its "From the chat" folder), else the module's, else the course's.
+                'type' => ($folder = $this->folderOf($by, $session)) !== null ? 'folder' : (($module = $this->moduleOf($by, $session)) !== null ? 'module' : 'workspace'),
+                'id' => $folder?->id ?? $module ?? $session->workspaceId,
                 'maxBytes' => Files::maxBytes(),
                 'accept' => implode(',', array_map(fn (string $extension) => ".{$extension}", array_keys(FileTypes::TYPES))),
                 'icons' => array_map(fn (string $icon) => Icons::url($icon), self::ICONS),
@@ -301,22 +307,28 @@ final class TutorChat extends Component
     private const ICONS = ['note' => 'notebook-pen', 'file' => 'file-text', 'picture' => 'file-image'];
 
     /**
-     * What can be attached: the session's chosen material first, then the rest of its module's notes and files
-     * (the course's, when the session has no module).
+     * What can be attached: the session's chosen material first, then the rest of its folder's notes and files (docs/
+     * specs/vistud-2-blueprint.md, Phase 9), else its module's (the course's, when the session has no module).
      *
      * @return array{module: ?string, items: list<array{ref: string, name: string, kind: string, chosen: bool}>}
      */
     private function attachable(Principal $by, SessionDetails $session): array
     {
         $module = $this->moduleOf($by, $session);
+        $folder = $this->folderOf($by, $session);
+        $inside = $folder === null ? null : $this->folders->within($by, $folder->id);
+        $here = fn (?string $itemModule, ?string $itemFolder) => match (true) {
+            $inside !== null => $itemFolder !== null && in_array($itemFolder, $inside, true),
+            default => $module === null || $itemModule === $module,
+        };
         $items = [];
         foreach ($this->notes->list($by, $session->workspaceId) as $note) {
-            if ($module === null || $note->moduleId === $module || $session->uses("note:{$note->id}")) {
+            if ($here($note->moduleId, $note->folderId) || $session->uses("note:{$note->id}")) {
                 $items[] = ['ref' => "note:{$note->id}", 'name' => $note->displayTitle(), 'kind' => 'note', 'chosen' => $session->uses("note:{$note->id}")];
             }
         }
         foreach ($this->files->list($by, $session->workspaceId) as $file) {
-            if ($module === null || $file->moduleId === $module || $session->uses("file:{$file->id}")) {
+            if ($here($file->moduleId, $file->folderId) || $session->uses("file:{$file->id}")) {
                 $items[] = ['ref' => "file:{$file->id}", 'name' => $file->fileName(), 'kind' => $file->kind === 'image' ? 'picture' : 'file', 'chosen' => $session->uses("file:{$file->id}")];
             }
         }
@@ -341,6 +353,9 @@ final class TutorChat extends Component
                 // Removed since.
             }
         }
+        if (($folder = $this->folderOf($by, $session)) !== null) {
+            $quizzes[] = ['label' => "On {$folder->name}", 'text' => "Quiz me on the folder {$folder->name}."];
+        }
         if (($module = $this->moduleOf($by, $session)) !== null) {
             try {
                 $title = $this->modules->find($by, $module)->title;
@@ -355,6 +370,19 @@ final class TutorChat extends Component
     }
 
     /** The session's module: its own, or its topic's. */
+    /** The folder the session studies in, while it is there. */
+    private function folderOf(Principal $by, SessionDetails $session): ?FolderDetails
+    {
+        if ($session->folderId === null) {
+            return null;
+        }
+        try {
+            return $this->folders->find($by, $session->folderId);
+        } catch (NotFound) {
+            return null;
+        }
+    }
+
     private function moduleOf(Principal $by, SessionDetails $session): ?string
     {
         if ($session->moduleId !== null || $session->topicId === null) {

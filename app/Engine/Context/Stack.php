@@ -8,6 +8,7 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Study\CourseProfiles;
 use App\Study\Files;
+use App\Study\Folders;
 use App\Study\Instructions;
 use App\Study\LearnerProfiles;
 use App\Study\ModuleBriefs;
@@ -62,6 +63,7 @@ final class Stack
         private CourseProfiles $courseProfiles,
         private LearnerProfiles $learnerProfiles,
         private ModuleBriefs $briefs,
+        private Folders $folders,
     ) {}
 
     /** The tutor's standing context for a session: its system prompt, its tools and the report on its layers. */
@@ -176,7 +178,9 @@ final class Stack
         [$material, $materialText] = $this->material($by, $session, $withTools);
 
         $tutoring = Tutoring::normalised($session->tutoring);
-        $brief = $module === null ? null : $this->briefs->for($by, $module->id);
+        // In a folder (docs/specs/vistud-2-blueprint.md, Phase 9): the folder's brief and topics, where it sits, and the module's other folders.
+        [$folderName, $folderIds, $otherFolders] = $module === null ? [null, null, []] : $this->folderOf($by, $session, $module);
+        $brief = $module === null ? null : ($folderIds !== null ? $this->briefs->forFolder($by, (string) $session->folderId) : $this->briefs->for($by, $module->id));
         $course = $this->courseProfiles->get($by, $workspace->id);
         $today = CarbonImmutable::now();
 
@@ -195,11 +199,13 @@ final class Stack
             moduleTitle: $module?->title,
             moduleDates: $module === null ? null : self::dates($module),
             moduleInstructions: $instructions['module'],
-            topics: $module === null ? [] : self::topicsOf($topics, $module),
+            topics: $module === null ? [] : self::topicsOf($topics, $module, $folderIds),
             moduleFiles: $brief?->files ?? [],
             moduleQuestions: $brief?->questions ?? [],
             moduleKeyPoints: $brief?->keyPoints ?? [],
             moduleLast: $brief?->last,
+            folderName: $folderName,
+            otherFolders: $otherFolders,
             mode: $session->mode,
             topicNow: $topic?->name,
             topicPractice: $topic === null ? null : ($topic->byTutor() ? "you marked it {$status($topic)}" : "the student says {$status($topic)}").'; practice: '.$topic->evidence(),
@@ -303,19 +309,32 @@ final class Stack
         if ($f->moduleTitle === null) {
             return [];
         }
-        $lines = [['## The module: '.$f->moduleTitle.($f->moduleDates !== null ? " ({$f->moduleDates})" : ''), true]];
+        $title = $f->moduleTitle.($f->moduleDates !== null ? " ({$f->moduleDates})" : '');
+        $here = $f->folderName !== null;
+        if ($here) {
+            // A folder's session (docs/specs/vistud-2-blueprint.md, Phase 9): first where the tutor is, then what that means.
+            $lines = [['## Where you are', true], [implode(' › ', array_filter([$f->courseName, $title, $f->folderName])), true]];
+            $lines[] = ["This session is in the folder {$f->folderName}: teach from its files and keep to its topics. What you save (notes, cards, questions, key points, new topics) goes in it.", true];
+            if ($f->otherFolders !== []) {
+                $lines[] = ['The module\'s other folders are for other sessions: '.implode(' · ', array_slice($f->otherFolders, 0, 8)).'.', true];
+            }
+        } else {
+            $lines = [['## The module: '.$title, true]];
+        }
         if ($f->moduleInstructions !== '') {
             $lines[] = ["Instructions for this module, in the student's words: {$f->moduleInstructions}", true];
         }
-        $lines[] = [$f->topics === [] ? 'Topics: none yet.' : 'Topics, with what the student says of each:', true];
+        $lines[] = [$f->topics === []
+            ? ($here ? 'Topics in this folder: none yet.' : 'Topics: none yet.')
+            : ($here ? 'Topics in this folder, with what the student says of each:' : 'Topics, with what the student says of each:'), true];
         foreach ($f->topics as $topic) {
             $lines[] = ["- {$topic['name']}: {$topic['status']}", false];
         }
         if ($f->moduleLast !== null) {
-            $lines[] = ["Last time: {$f->moduleLast}", true];
+            $lines[] = [($here ? 'Last time in this folder: ' : 'Last time: ').$f->moduleLast, true];
         }
         // What can be fetched with a tool comes after what can't, and goes first when the layer is over its budget.
-        foreach (['Files' => $f->moduleFiles, 'Open questions' => $f->moduleQuestions, 'Key points' => $f->moduleKeyPoints] as $name => $items) {
+        foreach ([($here ? 'Files in this folder' : 'Files') => $f->moduleFiles, 'Open questions' => $f->moduleQuestions, 'Key points' => $f->moduleKeyPoints] as $name => $items) {
             if ($items !== []) {
                 $lines[] = ["{$name}:", true];
                 foreach ($items as $item) {
@@ -336,11 +355,17 @@ final class Stack
         'free' => 'Mode: free. Answer what they ask; no plan and no checkpoints.',
     ];
 
+    /** The same for a session in a folder: the whole of it is the folder. */
+    private const FOLDER_MODES = [
+        'module' => 'Mode: whole folder. Go through the folder\'s material in order, topic by topic.',
+        'test' => 'Mode: test. Ten to fifteen exam-level questions over the folder, scored at the end.',
+    ];
+
     /** @return list<array{0: string, 1: bool}> */
     private function session(Facts $f): array
     {
         $lines = [['## This session', true]];
-        $lines[] = [self::MODES[$f->mode] ?? self::MODES['topic'], true];
+        $lines[] = [($f->folderName !== null ? (self::FOLDER_MODES[$f->mode] ?? null) : null) ?? self::MODES[$f->mode] ?? self::MODES['topic'], true];
         $lines[] = [$f->topicNow !== null
             ? "Topic now: {$f->topicNow} ({$f->topicPractice})."
             : 'Topic now: none chosen. Propose one and ask whether to take it.', true];
@@ -428,9 +453,39 @@ final class Stack
      * @param  list<TopicDetails>  $topics
      * @return list<array{name: string, status: string}>
      */
-    private static function topicsOf(array $topics, ModuleDetails $module): array
+    private static function topicsOf(array $topics, ModuleDetails $module, ?array $folderIds = null): array
     {
-        return array_map(fn ($t) => ['name' => $t->name, 'status' => self::status($t)], array_values(array_filter($topics, fn ($t) => $t->moduleId === $module->id)));
+        return array_map(fn ($t) => ['name' => $t->name, 'status' => self::status($t)], array_values(array_filter($topics, fn ($t) => $folderIds !== null ? $t->in($folderIds) : $t->moduleId === $module->id)));
+    }
+
+    /**
+     * The session's folder, when it studies in one of the module's: its name with the folders above it ("Lecture 1 +
+     * Lab 1 › Labs"), it and the folders inside it, and the names of the module's other folders. Nothing when it has
+     * none, or the folder is gone or in another module.
+     *
+     * @return array{0: ?string, 1: ?list<string>, 2: list<string>}
+     */
+    private function folderOf(Principal $by, SessionDetails $session, ModuleDetails $module): array
+    {
+        if ($session->folderId === null) {
+            return [null, null, []];
+        }
+        try {
+            $path = $this->folders->path($by, $session->folderId);
+        } catch (NotFound) {
+            return [null, null, []];
+        }
+        if ($path[0]->moduleId !== $module->id) {
+            return [null, null, []];
+        }
+        $others = [];
+        foreach ($this->folders->tree($by, $module->workspaceId) as $folder) {
+            if ($folder->moduleId === $module->id && $folder->parentId === null && $folder->id !== $path[0]->id) {
+                $others[] = $folder->name;
+            }
+        }
+
+        return [implode(' › ', array_map(fn ($folder) => $folder->name, $path)), $this->folders->within($by, $session->folderId), $others];
     }
 
     private static function status(TopicDetails $topic): string

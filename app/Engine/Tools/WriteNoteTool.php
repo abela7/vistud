@@ -8,6 +8,7 @@ use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Gone;
 use App\Platform\Errors\NotFound;
 use App\Platform\Ids;
+use App\Study\Folders;
 use App\Study\MarkdownDoc;
 use App\Study\Modules;
 use App\Study\NoteDetails;
@@ -19,15 +20,16 @@ use Carbon\CarbonImmutable;
 /**
  * The tutor takes notes with the student: what it writes (Markdown) is added at the end of a note, which an open
  * editor shows as it changes. Unless told another, it writes in the session's own study note ("Study notes ·
- * Joins · Mon 5 Oct", made in the session's module the first time and kept on the chat); it can also add to a
- * note the student names, or start a new one with a title.
+ * Joins · Mon 5 Oct", made in the session's module the first time, in its folder when the session studies in one
+ * (docs/specs/vistud-2-blueprint.md, Phase 9), and kept on the chat); it can also add to a note the student names, or
+ * start a new one with a title, which goes there too.
  */
 final class WriteNoteTool implements Tool
 {
     /** The most one write may add, in characters. */
     public const MAX_TEXT = 12_000;
 
-    public function __construct(private Notes $notes, private Sessions $sessions, private Topics $topics, private Modules $modules) {}
+    public function __construct(private Notes $notes, private Sessions $sessions, private Topics $topics, private Modules $modules, private Folders $folders) {}
 
     public function name(): string
     {
@@ -67,7 +69,7 @@ final class WriteNoteTool implements Tool
 
         $note = null;
         if (($wanted = Lookup::text($input, 'note')) !== null) {
-            $note = Lookup::one($this->notes->list($by, $context->workspaceId), $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
+            $note = Lookup::here($this->notes->list($by, $context->workspaceId), Lookup::folder($this->folders, $by, $context), $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
             if (is_string($note)) {
                 return $note.' Or give a title to start a new note.';
             }
@@ -124,7 +126,13 @@ final class WriteNoteTool implements Tool
     {
         $session = $this->sessions->find($by, $context->sessionId);
         $module = $this->moduleOf($by, $session->moduleId, $session->topicId);
-        $note = $this->notes->createWritten($by, $module !== null ? 'module' : 'workspace', $module ?? $context->workspaceId, [
+        $folder = $this->folderOf($by, $session->folderId);
+        [$placeType, $placeId] = match (true) {
+            $folder !== null => ['folder', $folder],
+            $module !== null => ['module', $module],
+            default => ['workspace', $context->workspaceId],
+        };
+        $note = $this->notes->createWritten($by, $placeType, $placeId, [
             'create_id' => Ids::new(), 'title' => $title, 'doc' => ['type' => 'doc', 'content' => $blocks],
         ]);
         if ($remember) {
@@ -134,13 +142,15 @@ final class WriteNoteTool implements Tool
         return $note;
     }
 
-    /** "Study notes · Joins · Mon 5 Oct": the session's topic, else its module. */
+    /** "Study notes · Joins · Mon 5 Oct": the session's topic, else its folder, else its module. */
     private function studyTitle(Principal $by, Context $context): string
     {
         $session = $this->sessions->find($by, $context->sessionId);
         $on = null;
         try {
             $on = $session->topicId !== null ? $this->topics->find($by, $session->topicId)->name : null;
+            $folder = $this->folderOf($by, $session->folderId);
+            $on ??= $folder !== null ? $this->folders->find($by, $folder)->name : null;
             $module = $this->moduleOf($by, $session->moduleId, $session->topicId);
             $on ??= $module !== null ? $this->modules->find($by, $module)->title : null;
         } catch (NotFound) {
@@ -148,6 +158,19 @@ final class WriteNoteTool implements Tool
         }
 
         return mb_substr(implode(' · ', array_filter(['Study notes', $on, CarbonImmutable::parse($session->startedAt)->setTimezone($context->zone)->format('D j M')])), 0, 200);
+    }
+
+    /** The session's folder while it is there. */
+    private function folderOf(Principal $by, ?string $folderId): ?string
+    {
+        if ($folderId === null) {
+            return null;
+        }
+        try {
+            return $this->folders->find($by, $folderId)->id;
+        } catch (NotFound) {
+            return null;
+        }
     }
 
     private function moduleOf(Principal $by, ?string $moduleId, ?string $topicId): ?string

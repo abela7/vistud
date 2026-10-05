@@ -131,7 +131,7 @@ final class SessionChat
         $built = $this->stack->build($by, $session, $thread->summary, $withTools);
         [$system, $tools] = [$built->system, $built->tools];
         $messages = $this->messagesOf($by, $thread, $model === null || $model->images, $choices->tutorModel);
-        $context = new Context($session->workspaceId, $session->moduleId, $session->id, $this->sessions->timezone($by));
+        $context = new Context($session->workspaceId, $session->moduleId, $session->id, $this->sessions->timezone($by), folderId: $session->folderId);
         $fallbacks = $choices->fallbackModel !== '' ? [$choices->fallbackModel] : [];
         $rounds = max(0, (int) config('vistud.engine.tool_rounds'));
         $reply = null;

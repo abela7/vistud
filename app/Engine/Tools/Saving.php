@@ -3,7 +3,9 @@
 namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
+use App\Platform\Errors\NotFound;
 use App\Study\Capture;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Sessions;
 use App\Study\Topics;
@@ -14,15 +16,15 @@ use App\Study\WriteBack;
  * course through the write-back, as kept marks do, so the same limits, topics and evidence apply and the same
  * item saved twice in a session is saved once. An item goes to the topic it names when the course has it, else
  * to the session's topic; the tutor never makes topics by saving (set_topic and add_topics do, when the student
- * agrees). Without either, a flashcard or a question goes under the session's module with no topic, and a key
- * point waits for a topic.
+ * agrees). Without either, a flashcard or a question goes under the session's module with no topic (in its folder,
+ * when the session studies in one: docs/specs/vistud-2-blueprint.md, Phase 9), and a key point waits for a topic.
  */
 abstract class Saving implements Tool
 {
     /** The kinds that can be saved without a topic, under the session's module. */
     private const LOOSE = ['flashcard', 'question'];
 
-    public function __construct(private WriteBack $writeBack, private Sessions $sessions, private Topics $topics, private Modules $modules) {}
+    public function __construct(private WriteBack $writeBack, private Sessions $sessions, private Topics $topics, private Modules $modules, private Folders $folders) {}
 
     /**
      * @param  list<array{topic: mixed, fields: array<string, mixed>}>  $wanted
@@ -72,6 +74,13 @@ abstract class Saving implements Tool
 
         $reviewed = $this->writeBack->reviewItems($by, $context->sessionId, $items);
         $module = $session->moduleId !== null ? $this->modules->find($by, $session->moduleId)->title : null;
+        if ($session->folderId !== null) {
+            try {
+                $module = $this->folders->find($by, $session->folderId)->name;
+            } catch (NotFound) {
+                // Deleted since: the module's name says where it went.
+            }
+        }
         foreach ($reviewed as &$item) {
             if ($item['topic'] === null) {
                 // No topic: under the session's module (the write-back keeps '' as none).

@@ -16,7 +16,8 @@ final readonly class Facts
      * @param  list<string>  $moduleFiles  the module's files, a line each ("Lecture 3.pdf (18 pages: scheduling)")
      * @param  list<string>  $moduleQuestions  its open questions, stuck first
      * @param  list<string>  $moduleKeyPoints  what the student keeps on its topics
-     * @param  list<array{name: string, status: string}>  $topics  the module's topics, with the student's word on each
+     * @param  list<array{name: string, status: string}>  $topics  the module's topics (the folder's, in a folder's session), with the student's word on each
+     * @param  list<string>  $otherFolders  in a folder's session, the module's other folders (docs/specs/vistud-2-blueprint.md, Phase 9)
      * @param  list<string>  $teaching  how to teach in this session, one instruction a line
      * @param  list<string>  $material  the session's chosen material, a line each
      * @param  list<string>  $materialText  for a model that can't look things up: the chosen notes' text, a block each
@@ -44,6 +45,10 @@ final readonly class Facts
         public array $moduleQuestions = [],
         public array $moduleKeyPoints = [],
         public ?string $moduleLast = null,
+        // 4 · the folder the session studies in, when it has one: the files, topics, questions, key points and last stop
+        // above are then the folder's
+        public ?string $folderName = null,
+        public array $otherFolders = [],
         // 5 · the session
         public string $mode = 'topic',
         public ?string $topicNow = null,
