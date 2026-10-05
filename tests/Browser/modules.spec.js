@@ -32,8 +32,8 @@ async function openPlace(page, name) {
     await page.locator('main').getByRole('link', { name, exact: true }).click();
     await page.getByRole('heading', { level: 1, name }).waitFor();
     await page.waitForLoadState('load');
-    // A module's folders, files and links are on its Files tab.
-    const tabs = page.getByRole('navigation', { name: 'This module' });
+    // A module's folders, files and links are on its Files tab, and so are those of a folder in a module (Phase 9).
+    const tabs = page.getByRole('navigation', { name: /^This (module|folder)$/ });
     if ((await tabs.count()) > 0) {
         await tabs.getByRole('link', { name: /^Files/ }).click();
         // The page moves in place (resources/js/page.js): the tab is current once the new page has arrived.
@@ -135,7 +135,9 @@ test('moving, renaming and deleting folders, and the refusals', async ({ page })
     await page.locator('.row-menu:not([hidden])').getByRole('button', { name: 'Delete' }).click();
     await dialog(page).getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Labs' })).toBeVisible();
-    await expect(page.getByText('Nothing here yet')).toBeVisible();
+    // Labs is a folder in a module: it opens on its Topics tab, and its Files tab is empty now.
+    await page.getByRole('link', { name: 'Go to Files' }).click();
+    await expect(page.getByText('No files yet')).toBeVisible();
 });
 
 test('phone: modules and their dialog work from the tab bar', async ({ page }) => {
