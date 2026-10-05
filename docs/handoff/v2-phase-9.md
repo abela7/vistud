@@ -20,7 +20,12 @@ Branch `claude/persistent-study-context-zsilo6`. Asked for by the owner on 2026-
 - **The session in a folder** is named for it, with *Week 1 › Lecture 1 + Lab 1* above; the side panel is *Topics in Lecture 1 + Lab 1* and the folder's material; Back goes to the folder. The chat offers the folder's notes and files, an upload goes into the folder, and *Quiz me* offers *On Lecture 1 + Lab 1*.
 - **A topic's sheet** has **Module or folder**: a module, or one of its folders, so a topic made before the folders existed can be put in one.
 - **Cards** from a folder show only its cards (*Only the cards in Lecture 1 + Lab 1*, with *Show the whole module*), and its review round is its cards. **Progress** shows a module's topics under their folders.
-- Fixed while testing: on a module's Topics tab the folder's name no longer covers the other folders' Study buttons.
+- Fixed while testing:
+  - On a module's Topics tab the folder's name no longer covers the other folders' Study buttons.
+  - A module's (or folder's) page now redraws when a topic's sheet changes a topic (its status, name or place); before, it showed only after a reload unless a file was being read.
+  - A folder right in a module names its module once above its title; the path line is for folders deeper down.
+  - The session's side panel keeps a long file name inside it (it ends in "…").
+  - Two uploads at the same moment by different students could fail (a database deadlock); the upload is now tried again.
 
 **Tests added or changed**: `Study/FolderStudyTest` (sessions, topics, cards, questions and quizzes finding their folder, lists by folder, the reader's topics, a file bringing them, moving and deleting folders, the folder's brief), `Engine/FolderSessionTest` (where you are, the folder's layer and what is left out, look-ups defaulting to the folder, topics, cards, questions, notes and the session's end going in it, the chat's material, uploads and quiz), `Web/FolderStudyScreenTest` (the folder's page and tabs, a loose folder, adding topics and questions, cards and their review, the module's Topics tab, Study now on a folder, the session, the topic sheet's folder choice, Progress, and Progress's move keeping a topic's folder), `ModulesScreenTest`, `NotesScreenTest` and `ModulePageScreenTest` brought up to date. Browser: `folders.spec.js` (the folder's page on a computer and a phone, Whole folder, the module's folders and moving a topic between them, questions and cards, tokens, axe in three themes, 320 px at 200 % text, previews) and the `folder:` test in `chat.spec.js` (the tutor's cards and note in a folder's session land on the folder's tabs). Previews: `folder-*`, `module-folders-*`, `folder-session-*`.
 
