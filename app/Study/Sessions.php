@@ -120,6 +120,30 @@ final class Sessions
     }
 
     /**
+     * Every study session in a folder (or a folder inside it), newest first: the folder's page counts them, and the
+     * tutor is told where the last one stopped.
+     *
+     * @param  list<string>  $folderIds  the folder and those inside it (Folders::within)
+     * @return list<SessionDetails>
+     */
+    public function forFolder(Principal $by, string $workspaceId, array $folderIds): array
+    {
+        $scope = Guard::learner($by);
+        Input::workspace($scope, $workspaceId);
+        if ($folderIds === []) {
+            return [];
+        }
+        $open = $this->openRow($scope);
+        if ($open !== null && $open->workspace_id === $workspaceId) {
+            $this->settled($scope, $by, $open->id);
+        }
+
+        return LearnerTables::query($scope, 'study_sessions')->where('workspace_id', $workspaceId)->whereIn('folder_id', $folderIds)
+            ->orderByDesc('started_at')->orderByDesc('id')->get()
+            ->map(fn ($row) => $this->details($scope, $row))->all();
+    }
+
+    /**
      * Study time in a workspace: since $since (the start of the week, say),
      * and in all. A session counts where it started.
      *
@@ -196,9 +220,10 @@ final class Sessions
      *
      * @param  ?array{focus?: mixed, short?: mixed, long?: mixed, every?: mixed, auto?: mixed}  $pomodoro
      * @param  ?array{method?: mixed, check_ins?: mixed, quiz?: mixed, pace?: mixed}  $tutoring  how the assistant should teach; the student's answers in "How you learn", else the defaults, when null
-     * @param  ?string  $mode  one of MODES; not given, a module alone means module, anything else topic (with none chosen yet, the tutor proposes one)
+     * @param  ?string  $mode  one of MODES; not given, a module or folder alone means the whole of it (module), anything else topic (with none chosen yet, the tutor proposes one)
+     * @param  ?string  $folderId  a folder to study in (docs/specs/vistud-2-blueprint.md, Phase 9): the session is in its module; a topic that is in a folder brings its own when none is given
      */
-    public function start(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $pomodoro = null, ?array $tutoring = null, ?string $mode = null): SessionDetails
+    public function start(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $pomodoro = null, ?array $tutoring = null, ?string $mode = null, ?string $folderId = null): SessionDetails
     {
         Input::refuse($mode === null || in_array($mode, self::MODES, true) ? [] : ['mode' => 'Unknown way to study.']);
         $scope = Guard::learner($by);
@@ -211,15 +236,15 @@ final class Sessions
         }
         $id = Ids::new();
 
-        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $pomodoro, $tutoring, $mode, $id) {
+        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $pomodoro, $tutoring, $mode, $folderId, $id) {
             Input::workspace($scope, $workspaceId, lock: true);
-            [$topicId, $moduleId] = $this->place($scope, $workspaceId, $topicId, $moduleId);
-            $mode ??= $topicId === null && $moduleId !== null ? 'module' : 'topic';
+            [$topicId, $moduleId, $folderId] = $this->place($scope, $workspaceId, $topicId, $moduleId, $folderId);
+            $mode ??= $topicId === null && ($moduleId !== null || $folderId !== null) ? 'module' : 'topic';
             $now = self::now();
             // The database keeps one open session per student (open_learner is unique): a start in another tab at the same moment loses.
             try {
                 LearnerTables::insert($scope, 'study_sessions', [
-                    'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'topic_id' => $topicId, 'mode' => $mode,
+                    'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'folder_id' => $folderId, 'topic_id' => $topicId, 'mode' => $mode,
                     'pomodoro' => $pomodoro === null ? null : json_encode($pomodoro), 'phase' => $pomodoro === null ? null : 'focus',
                     'phase_started_at' => $pomodoro === null ? null : $now, 'tutoring' => json_encode($tutoring),
                     'state' => 'running', 'started_at' => $now, 'last_activity_at' => $now, 'revision' => 1,
@@ -332,15 +357,16 @@ final class Sessions
     }
 
     /**
-     * What the open session is about: a topic of its workspace, or none. The session keeps its module; one without
-     * a module takes the topic's. A new revision of its journal record says so.
+     * What the open session is about: a topic of its workspace, or none. The session keeps its module and its folder (a
+     * topic from elsewhere is studied there); one without a module takes the topic's, and its folder. A new revision of
+     * its journal record says so.
      */
     public function setTopic(Principal $by, string $id, ?string $topicId): SessionDetails
     {
         $this->change($by, $id, ['running', 'paused', 'break'], function (LearnerScope $scope, object $row) use ($topicId) {
-            [$topicId, $topicModule] = $this->place($scope, (string) $row->workspace_id, $topicId, null);
+            [$topicId, $topicModule, $topicFolder] = $this->place($scope, (string) $row->workspace_id, $topicId, null);
 
-            return ['topic_id' => $topicId, 'module_id' => $row->module_id ?? $topicModule];
+            return ['topic_id' => $topicId, 'module_id' => $row->module_id ?? $topicModule, 'folder_id' => $row->module_id === null ? $topicFolder : $row->folder_id];
         }, journal: true);
 
         return $this->find($by, $id);
@@ -818,19 +844,38 @@ final class Sessions
     }
 
     /** @return array{0: ?string, 1: ?string} the topic and module, checked to be the workspace's; a topic's module when none is given */
-    private function place(LearnerScope $scope, string $workspaceId, ?string $topicId, ?string $moduleId): array
+    /**
+     * Where a session is: its topic, its module and its folder, each of the workspace (404 otherwise). The module is the
+     * one given, else the folder's, else the topic's; a folder must be in the module given. With no folder given, a topic
+     * that is in one brings it, when the session is in that topic's module (or in none): studying a folder's topic is
+     * studying in the folder.
+     *
+     * @return array{0: ?string, 1: ?string, 2: ?string} topic, module, folder
+     */
+    private function place(LearnerScope $scope, string $workspaceId, ?string $topicId, ?string $moduleId, ?string $folderId = null): array
     {
         $topic = null;
         if ($topicId !== null && $topicId !== '') {
             $topic = LearnerTables::query($scope, 'topics')->where('id', $topicId)->where('workspace_id', $workspaceId)->whereNull('retired_at')->first() ?? throw new NotFound;
         }
+        $folder = null;
+        if ($folderId !== null && $folderId !== '') {
+            $folder = LearnerTables::query($scope, 'folders')->where('id', $folderId)->where('workspace_id', $workspaceId)->first() ?? throw new NotFound;
+        }
         if ($moduleId !== null && $moduleId !== '') {
             $moduleId = (LearnerTables::query($scope, 'modules')->where('id', $moduleId)->where('workspace_id', $workspaceId)->first() ?? throw new NotFound)->id;
+            if ($folder !== null && $folder->module_id !== $moduleId) {
+                throw new NotFound;
+            }
         } else {
-            $moduleId = $topic?->module_id;
+            $moduleId = $folder !== null ? $folder->module_id : $topic?->module_id;
+        }
+        if ($folder === null && $topic?->folder_id !== null && ($moduleId === null || $moduleId === $topic->module_id)) {
+            $folder = LearnerTables::query($scope, 'folders')->where('id', $topic->folder_id)->first();
+            $moduleId ??= $folder?->module_id;
         }
 
-        return [$topic?->id, $moduleId];
+        return [$topic?->id, $moduleId, $folder?->id];
     }
 
     /** A new revision of the session's journal record. */
@@ -899,6 +944,7 @@ final class Sessions
             $row->material === null ? [] : array_values(json_decode((string) $row->material, true) ?: []),
             $row->summary, $row->checkpoint,
             in_array($row->mode ?? null, self::MODES, true) ? $row->mode : 'topic',
+            $row->folder_id ?? null,
         );
     }
 

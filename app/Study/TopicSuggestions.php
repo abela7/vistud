@@ -20,13 +20,17 @@ final class TopicSuggestions
 {
     public function __construct(private Topics $topics) {}
 
-    /** @return list<TopicSuggestionDetails> waiting for the student, oldest first */
-    public function list(Principal $by, string $moduleId): array
+    /**
+     * @param  ?list<string>  $folderIds  only those found in these folders' files (Folders::within: a folder and those inside it)
+     * @return list<TopicSuggestionDetails> waiting for the student, oldest first
+     */
+    public function list(Principal $by, string $moduleId, ?array $folderIds = null): array
     {
         $scope = Guard::learner($by);
         $this->module($scope, $moduleId);
+        $list = $this->pending($scope, [$moduleId])[$moduleId] ?? [];
 
-        return $this->pending($scope, [$moduleId])[$moduleId] ?? [];
+        return $folderIds === null ? $list : array_values(array_filter($list, fn (TopicSuggestionDetails $s) => $s->folderId !== null && in_array($s->folderId, $folderIds, true)));
     }
 
     /**
@@ -49,7 +53,8 @@ final class TopicSuggestions
 
     /**
      * Notes the topics the reader found in a file of the module. Those the module has, or has had suggested, are left
-     * out. Returns how many are new.
+     * out. A file in a folder of the module gives its folder (docs/specs/vistud-2-blueprint.md, Phase 9): added, the
+     * topics go there. Returns how many are new.
      *
      * @param  list<string>  $names
      */
@@ -57,6 +62,8 @@ final class TopicSuggestions
     {
         $scope = Guard::learner($by);
         $module = $this->module($scope, $moduleId);
+        $file = $fileId === null ? null : LearnerTables::query($scope, 'files')->where('id', $fileId)->first(['module_id', 'folder_id']);
+        $folderId = $file !== null && $file->module_id === $moduleId ? $file->folder_id : null;
         $known = [];
         foreach ($this->topics->list($by, $module->workspace_id) as $topic) {
             if ($topic->moduleId === $moduleId) {
@@ -74,7 +81,7 @@ final class TopicSuggestions
             }
             $known[self::key($name)] = true;
             LearnerTables::insert($scope, 'topic_suggestions', [
-                'id' => Ids::new(), 'module_id' => $moduleId, 'name' => $name, 'name_key' => self::key($name),
+                'id' => Ids::new(), 'module_id' => $moduleId, 'folder_id' => $folderId, 'name' => $name, 'name_key' => self::key($name),
                 'source_file_id' => $fileId, 'status' => 'suggested', 'created_at' => now(),
             ]);
             $new++;
@@ -83,13 +90,13 @@ final class TopicSuggestions
         return $new;
     }
 
-    /** Adds every waiting suggestion of the module as a topic, in order. Returns how many. */
-    public function addAll(Principal $by, string $moduleId): int
+    /** Adds every waiting suggestion of the module (or of some of its folders) as a topic, in order. Returns how many. */
+    public function addAll(Principal $by, string $moduleId, ?array $folderIds = null): int
     {
         $scope = Guard::learner($by);
         $this->module($scope, $moduleId);
 
-        return $this->add($by, array_map(fn (TopicSuggestionDetails $s) => $s->id, $this->list($by, $moduleId)));
+        return $this->add($by, array_map(fn (TopicSuggestionDetails $s) => $s->id, $this->list($by, $moduleId, $folderIds)));
     }
 
     /**
@@ -110,7 +117,9 @@ final class TopicSuggestions
         DB::transaction(function () use ($by, $scope, $rows, &$added) {
             foreach ($rows as $row) {
                 $module = $this->module($scope, $row->module_id);
-                $this->topics->create($by, $module->workspace_id, $row->name, $row->module_id);
+                // In the folder of the file it was found in, while that folder is in the module.
+                $folder = $row->folder_id === null ? null : LearnerTables::query($scope, 'folders')->where('id', $row->folder_id)->where('module_id', $row->module_id)->value('id');
+                $this->topics->create($by, $module->workspace_id, $row->name, $row->module_id, $folder);
                 LearnerTables::query($scope, 'topic_suggestions')->where('id', $row->id)->update(['status' => 'added']);
                 $added++;
             }
@@ -127,11 +136,15 @@ final class TopicSuggestions
         LearnerTables::query($scope, 'topic_suggestions')->where('id', $id)->where('status', 'suggested')->update(['status' => 'dismissed']);
     }
 
-    public function dismissAll(Principal $by, string $moduleId): void
+    public function dismissAll(Principal $by, string $moduleId, ?array $folderIds = null): void
     {
         $scope = Guard::learner($by);
         $this->module($scope, $moduleId);
-        LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('status', 'suggested')->update(['status' => 'dismissed']);
+        $query = LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('status', 'suggested');
+        if ($folderIds !== null) {
+            $query->whereIn('folder_id', $folderIds === [] ? [''] : $folderIds);
+        }
+        $query->update(['status' => 'dismissed']);
     }
 
     // ---------- Inside ----------
@@ -150,7 +163,7 @@ final class TopicSuggestions
         $by = [];
         foreach ($rows as $row) {
             $file = $files[$row->source_file_id] ?? null;
-            $by[$row->module_id][] = new TopicSuggestionDetails($row->id, $row->module_id, $row->name, $file?->id, $file === null ? null : "{$file->name}.{$file->extension}");
+            $by[$row->module_id][] = new TopicSuggestionDetails($row->id, $row->module_id, $row->name, $file?->id, $file === null ? null : "{$file->name}.{$file->extension}", $row->folder_id ?? null);
         }
 
         return $by;

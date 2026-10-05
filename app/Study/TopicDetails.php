@@ -42,7 +42,15 @@ final readonly class TopicDetails
         public ?string $lastContact,
         public ?string $statusBy = null,
         public ?string $statusAt = null,
+        /** The folder of its module it belongs to (docs/specs/vistud-2-blueprint.md, Phase 9), or null. */
+        public ?string $folderId = null,
     ) {}
+
+    /** Whether it is in one of these folders (Folders::within gives a folder and those inside it). @param list<string> $folderIds */
+    public function in(array $folderIds): bool
+    {
+        return $this->folderId !== null && in_array($this->folderId, $folderIds, true);
+    }
 
     /** The one word shown: mastered is earned, the rest is the student's word. */
     public function shown(): string

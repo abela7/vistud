@@ -27,6 +27,8 @@ final readonly class FlashcardDetails
         public string $createdAt,
         /** The module the card belongs to: its topic's, or the one it was made in; null for the course as a whole. */
         public ?string $moduleId = null,
+        /** The folder of its module it belongs to (docs/specs/vistud-2-blueprint.md, Phase 9), or null. */
+        public ?string $folderId = null,
     ) {}
 
     public function isNew(): bool

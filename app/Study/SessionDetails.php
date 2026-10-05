@@ -38,6 +38,8 @@ final readonly class SessionDetails
         public ?string $summary = null,
         public ?string $checkpoint = null,
         public string $mode = 'topic',
+        /** The folder the session studies in (docs/specs/vistud-2-blueprint.md, Phase 9), or null for its whole module. */
+        public ?string $folderId = null,
     ) {}
 
     /** Whether a note or file (`note:{id}`, `file:{id}`) is in the session's material. */

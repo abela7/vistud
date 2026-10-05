@@ -83,7 +83,9 @@ final class Quizzes
         $since = LearnerTables::query($scope, 'quizzes')->where('session_id', $sessionId)->max('finished_at');
         $id = Ids::new();
         LearnerTables::insert($scope, 'quizzes', [
-            'id' => $id, 'workspace_id' => $session->workspaceId, 'session_id' => $sessionId, 'module_id' => $moduleId, 'topic_id' => $quizTopic?->id,
+            'id' => $id, 'workspace_id' => $session->workspaceId, 'session_id' => $sessionId, 'module_id' => $moduleId,
+            // A quiz in a folder's session is the folder's (docs/specs/vistud-2-blueprint.md, Phase 9).
+            'folder_id' => $session->moduleId !== null && $session->moduleId === $moduleId ? $session->folderId : null, 'topic_id' => $quizTopic?->id,
             'kind' => $kind, 'questions' => json_encode($questions), 'score' => self::score($questions), 'asked' => count($questions),
             'started_at' => CarbonImmutable::parse($since ?? $session->startedAt, 'UTC'), 'finished_at' => $now,
         ]);

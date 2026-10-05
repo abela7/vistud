@@ -36,15 +36,19 @@ final class Questions
      * @param  ?string  $moduleId  only a module's questions (asked in it, or about one of its topics)
      * @param  ?string  $sessionId  only those asked in a study session
      * @param  ?array  $snapshot  the derived state, when the caller has taken it already (Memory::snapshot)
+     * @param  ?list<string>  $folderIds  only those in these folders (Folders::within: a folder and those inside it)
      * @return list<QuestionDetails> newest first, with the derived state of each
      */
-    public function list(Principal $by, string $workspaceId, ?string $moduleId = null, ?string $sessionId = null, ?array $snapshot = null): array
+    public function list(Principal $by, string $workspaceId, ?string $moduleId = null, ?string $sessionId = null, ?array $snapshot = null, ?array $folderIds = null): array
     {
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
         $query = LearnerTables::query($scope, 'questions')->where('workspace_id', $workspaceId)->whereNull('retired_at');
         if ($moduleId !== null) {
             $query->where('module_id', $moduleId);
+        }
+        if ($folderIds !== null) {
+            $query->whereIn('folder_id', $folderIds === [] ? [''] : $folderIds);
         }
         if ($sessionId !== null) {
             $query->where('session_id', $sessionId);
@@ -70,23 +74,34 @@ final class Questions
      * Registers a question, about a topic of the workspace or none, in a
      * module (the one given, else the topic's). Asked while a study session
      * is open in the workspace, it belongs to that session unless another
-     * is given.
+     * is given. It is in a folder (docs/specs/vistud-2-blueprint.md, Phase 9):
+     * the one given, else its topic's, else (with no topic) the folder of the
+     * session it was asked in, when that session is in the question's module.
      */
-    public function ask(Principal $by, string $workspaceId, mixed $text, ?string $topicId = null, ?string $moduleId = null, ?string $sessionId = null): QuestionDetails
+    public function ask(Principal $by, string $workspaceId, mixed $text, ?string $topicId = null, ?string $moduleId = null, ?string $sessionId = null, ?string $folderId = null): QuestionDetails
     {
         $scope = Guard::learner($by);
         $text = self::validatedText($text);
         [$id, $askId] = [Ids::new(), Ids::new()];
 
-        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $sessionId, $text, $id, $askId) {
+        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $sessionId, $folderId, $text, $id, $askId) {
             Input::workspace($scope, $workspaceId, lock: true);
             $topicId = $this->topicIn($scope, $workspaceId, $topicId);
-            if ($moduleId !== null && $moduleId !== '') {
+            if ($folderId !== null && $folderId !== '') {
+                $folder = LearnerTables::query($scope, 'folders')->where('id', $folderId)->where('workspace_id', $workspaceId)->first() ?? throw new NotFound;
+                [$moduleId, $folderId] = [$folder->module_id, $folder->id];
+            } elseif ($moduleId !== null && $moduleId !== '') {
                 LearnerTables::query($scope, 'modules')->where('id', $moduleId)->where('workspace_id', $workspaceId)->exists() || throw new NotFound;
+                $folderId = null;
             } else {
                 $moduleId = $topicId === null ? null : LearnerTables::query($scope, 'topics')->where('id', $topicId)->value('module_id');
+                $folderId = null;
             }
             $sessionId ??= Sessions::openIn($scope, $workspaceId);
+            $folderId ??= self::folderFor($scope, $topicId, $moduleId, $sessionId);
+            if ($folderId !== null && $moduleId === null) {
+                $moduleId = LearnerTables::query($scope, 'folders')->where('id', $folderId)->value('module_id');
+            }
             $ask = Memory::observation($scope, $by, 'question', [], $topicId === null ? [] : [['rel' => 'about', 'target' => "topic:{$topicId}"]], ['text' => $text]);
             $ask['id'] = $askId;
             $this->memory->append($scope, [
@@ -95,7 +110,7 @@ final class Questions
                 Memory::claim($scope, $by, 'refers_to', ["event:{$askId}"], ['entity' => "question:{$id}"]),
             ], $workspaceId);
             LearnerTables::insert($scope, 'questions', [
-                'id' => $id, 'workspace_id' => $workspaceId, 'topic_id' => $topicId, 'module_id' => $moduleId, 'text' => $text,
+                'id' => $id, 'workspace_id' => $workspaceId, 'topic_id' => $topicId, 'module_id' => $moduleId, 'folder_id' => $folderId, 'text' => $text,
                 'status' => 'pending', 'session_id' => $sessionId, 'ask_event_id' => $askId, 'created_at' => now(), 'updated_at' => now(),
             ]);
         });
@@ -171,8 +186,10 @@ final class Questions
                     Memory::claim($scope, $by, 'defines', ["question:{$id}"], ['entity_type' => 'question', 'status' => 'active'], ['phrasing' => $text]),
                 ], $row->workspace_id);
             }
+            $module = $moduleId === '' ? null : ($moduleId ?? $row->module_id);
             LearnerTables::query($scope, 'questions')->where('id', $id)->update([
-                'text' => $text, 'module_id' => $moduleId === '' ? null : ($moduleId ?? $row->module_id), 'updated_at' => now(),
+                // Another module takes it out of its folder.
+                'text' => $text, 'module_id' => $module, 'folder_id' => $module === $row->module_id ? $row->folder_id : null, 'updated_at' => now(),
             ]);
         });
 
@@ -249,7 +266,27 @@ final class Questions
         return new QuestionDetails(
             $row->id, $row->workspace_id, $row->topic_id, $row->text, (bool) $row->ask_teacher,
             $derived['state'] ?? 'open', $derived['flags'] ?? [], Carbon::parse($row->created_at)->utc()->format('Y-m-d\TH:i:s.up'),
-            $row->module_id, self::shownStatus($row, $derived), $row->answer, $row->session_id,
+            $row->module_id, self::shownStatus($row, $derived), $row->answer, $row->session_id, $row->folder_id ?? null,
         );
+    }
+
+    /**
+     * The folder something made in a study session belongs to (docs/specs/vistud-2-blueprint.md, Phase 9): its topic's,
+     * else, with no topic, the session's; either only when it is in the thing's module (or the thing is in none).
+     * Shared with the cards (Flashcards::add).
+     */
+    public static function folderFor(LearnerScope $scope, ?string $topicId, ?string $moduleId, ?string $sessionId): ?string
+    {
+        if ($topicId !== null) {
+            $topic = LearnerTables::query($scope, 'topics')->where('id', $topicId)->first(['module_id', 'folder_id']);
+
+            return $topic !== null && ($moduleId === null || $moduleId === $topic->module_id) ? $topic->folder_id : null;
+        }
+        if ($sessionId === null) {
+            return null;
+        }
+        $session = LearnerTables::query($scope, 'study_sessions')->where('id', $sessionId)->first(['module_id', 'folder_id']);
+
+        return $session !== null && ($moduleId === null || $moduleId === $session->module_id) ? $session->folder_id : null;
     }
 }

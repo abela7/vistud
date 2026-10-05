@@ -599,6 +599,30 @@ Every phase ends with: the full PHP suite green; the browser specs for the scree
 
 **Abel checks:** nothing new to see; everything from Phases 1–6 still works.
 
+### Phase 9 · Study by folder (asked for by the owner on 2026-10-05)
+
+**Why.** Abel's course is organised like his university's: each week is a module, and in a week a lecture goes with its lab (*Week 1: Lecture 1 – OS Structure.pdf with Lab 01 – Command Line Basics; Lecture 2 – Processes and Threads.pdf with Lab 02*). In his words: *"create two folders under week one… 1, lecture one with lab one; 2, lecture two with lab two. Next I start study the folder… instead of start study anywhere and confuse the AI… the AI first understands where he is, then focuses on the folder and the files; when I tell him to create a note it will focus based on the folder… topic should be only based on the folder. One folder, everything inside it including topic, note, questions, flashcards."*
+
+**The idea.** A folder in a module becomes a **place to study**: the smallest unit the student and the AI work in. The module stays the week (its page shows everything in it, grouped by folder); the folder is the sitting. Nothing is required: a module without folders works as before, and so does studying a whole module.
+
+**Data (additive; organisation only, never the journal, ADR 0003 §9.2).** `folder_id` (nullable) on `study_sessions`, `topics`, `questions`, `flashcards`, `quizzes` and `topic_suggestions`, beside the `module_id` each already has (a folder's things are its module's things too, so every module view keeps working). A new `folder_briefs` table keeps the folder's layer of the tutor's context, as `module_briefs` does for a module. "In a folder" means the folder or any folder inside it.
+
+- A **session** started on a folder keeps it: its module is the folder's; its mode *module* means the whole folder.
+- A **topic** made in a folder (on its page, by the tutor in a folder session, or added from what the reader found in the folder's files) belongs to it. Topic names stay unique in the course, so the tutor and the student can name a topic and mean one thing.
+- A **card**, **question** or **quiz** takes its topic's folder; with no topic, the folder of the session it was made in.
+- A **note** the tutor writes in a folder session goes in the folder; so does the session note.
+- Moving a folder to another module takes everything in it along; deleting an empty folder lifts its topics, cards and questions to where the folder was.
+
+**The AI, in a folder (layer 4 of §3.6.2).** The layer starts with **where you are**, one line: *Operating Systems › Week 1 – OS Structure | Processes & Threads › Lecture 1 + Lab 1*, then what that means: this session is about this folder; teach from its files and keep to its topics; what you save goes in it; the module's other folders are for other sessions (named, so the tutor can say so). Then the folder's own brief: its files with a line each, its topics with the student's word on each, its open questions, key points and where the last session in it stopped. The module's other topics are left out. The tools default to the folder: `module_files` lists its files, `topics` its topics, `set_topic` and `add_topics` make topics in it, saved cards, questions and key points go in it, `write_note` writes in it. The chat's material is the folder's notes and files; *Quiz me* offers the folder.
+
+**Screens.**
+- **A folder's page** is a study place: the module above the title, *Study this ▾* (*Whole folder · Pick a topic · Quiz me · Test me*), and tabs **Topics · Files · Notes · Questions · Cards**, each the folder's: what the reader found in its files with *Add all*, its topics with status and Study, its files and notes as today, its questions, its cards with *Review*.
+- **A module's Topics tab** groups its topics by folder, each folder a heading with **Study** beside it; topics in no folder come first, as the module's own.
+- **The session** in a folder says so: the folder's name is the title (with the topic, if one), the module above it, Back goes to the folder; the rail shows the folder's topics and material.
+- **Cards** and the review take `?folder=`; **Progress** shows a module's topics under their folders.
+
+**Tests.** Services (start in a folder, topics and cards and questions finding their folder, move and delete, briefs), the stack (where you are, the folder layer, what is left out), the tools in a folder session, the screens (folder tabs, Study this, module grouping, the session's header and rail), browser flow (make two folders, upload, study a folder, the tutor's note and cards land in it), axe and tokens on the new screens.
+
 ### Order, parallel work and what Abel sees when
 
 ```

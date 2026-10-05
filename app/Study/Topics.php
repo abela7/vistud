@@ -52,20 +52,24 @@ final class Topics
         return self::details($row, $this->memory->snapshot($scope)['topics'][$id] ?? null);
     }
 
-    public function create(Principal $by, string $workspaceId, mixed $name, ?string $moduleId = null): TopicDetails
+    /**
+     * A new topic, in a module and (docs/specs/vistud-2-blueprint.md, Phase 9) in one of its folders, or in neither. A
+     * folder is in its own module: given one, the topic is in that module whatever module is given.
+     */
+    public function create(Principal $by, string $workspaceId, mixed $name, ?string $moduleId = null, ?string $folderId = null): TopicDetails
     {
         $scope = Guard::learner($by);
         $name = self::validatedName($name);
         $id = Ids::new();
 
-        DB::transaction(function () use ($scope, $by, $workspaceId, $moduleId, $name, $id) {
+        DB::transaction(function () use ($scope, $by, $workspaceId, $moduleId, $folderId, $name, $id) {
             Input::workspace($scope, $workspaceId, lock: true);
-            $moduleId = $this->moduleIn($scope, $workspaceId, $moduleId);
+            [$moduleId, $folderId] = $this->placeIn($scope, $workspaceId, $moduleId, $folderId);
             $this->memory->append($scope, [
                 Memory::claim($scope, $by, 'defines', ["topic:{$id}"], ['entity_type' => 'topic', 'status' => 'active', 'kind' => 'concept', 'aliases' => []], ['label' => $name]),
             ], $workspaceId);
             LearnerTables::insert($scope, 'topics', [
-                'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'name' => $name,
+                'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'folder_id' => $folderId, 'name' => $name,
                 'position' => (int) LearnerTables::query($scope, 'topics')->where('workspace_id', $workspaceId)->max('position') + 1,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
@@ -82,15 +86,16 @@ final class Topics
         LearnerTables::query($scope, 'topics')->where('id', $id)->update(['name' => $name, 'updated_at' => now()]);
     }
 
-    /** Puts the topic in a module of its workspace, or (null) in none. */
-    public function move(Principal $by, string $id, ?string $moduleId): void
+    /** Puts the topic in a module of its workspace, or (null) in none; and in one of the module's folders, or none. */
+    public function move(Principal $by, string $id, ?string $moduleId, ?string $folderId = null): void
     {
         $scope = Guard::learner($by);
         $row = $this->row($scope, $id);
-        $moduleId = $this->moduleIn($scope, $row->workspace_id, $moduleId);
-        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['module_id' => $moduleId, 'updated_at' => now()]);
-        // Its cards go with it.
-        LearnerTables::query($scope, 'flashcards')->where('topic_id', $id)->update(['module_id' => $moduleId, 'updated_at' => now()]);
+        [$moduleId, $folderId] = $this->placeIn($scope, $row->workspace_id, $moduleId, $folderId);
+        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['module_id' => $moduleId, 'folder_id' => $folderId, 'updated_at' => now()]);
+        // Its cards go with it, and so do its questions' folder.
+        LearnerTables::query($scope, 'flashcards')->where('topic_id', $id)->update(['module_id' => $moduleId, 'folder_id' => $folderId, 'updated_at' => now()]);
+        LearnerTables::query($scope, 'questions')->where('topic_id', $id)->update(['folder_id' => $folderId]);
     }
 
     /** Moves the topic to $position (0 is first) among its workspace's topics. */
@@ -184,6 +189,22 @@ final class Topics
         });
     }
 
+    /**
+     * A topic's module and folder, each of the workspace (404 otherwise): the folder's module when a folder is given,
+     * else the module given; null for none.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function placeIn(LearnerScope $scope, string $workspaceId, ?string $moduleId, ?string $folderId): array
+    {
+        if ($folderId === null || $folderId === '') {
+            return [$this->moduleIn($scope, $workspaceId, $moduleId), null];
+        }
+        $folder = LearnerTables::query($scope, 'folders')->where('id', $folderId)->where('workspace_id', $workspaceId)->first() ?? throw new NotFound;
+
+        return [$folder->module_id, $folder->id];
+    }
+
     /** The module's id when it belongs to the workspace; null for none; 404 otherwise. */
     private function moduleIn(LearnerScope $scope, string $workspaceId, ?string $moduleId): ?string
     {
@@ -220,6 +241,7 @@ final class Topics
             $row->id, $row->workspace_id, $row->module_id, $row->name, $row->status, (int) $row->position,
             $derived['label'] ?? 'not_started', $derived['flags'] ?? [], $derived['facts']['last_contact'] ?? null,
             $row->status === null ? null : ($row->status_by ?? 'student'), $row->status === null || $row->status_at === null ? null : (string) $row->status_at,
+            $row->folder_id ?? null,
         );
     }
 }

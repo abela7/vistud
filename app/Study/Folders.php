@@ -24,6 +24,9 @@ final class Folders
 
     public const MAX_NAME = 120;
 
+    /** What can be in a folder besides its notes, files and links: what was studied in it (Phase 9). */
+    public const STUDIED = ['topics', 'questions', 'flashcards', 'quizzes', 'study_sessions', 'topic_suggestions'];
+
     /**
      * Every folder in the workspace: parents before their children, siblings
      * in order, the modules' folders first and the top level's last.
@@ -61,6 +64,40 @@ final class Folders
     public function find(Principal $by, string $id): FolderDetails
     {
         return self::details($this->row(Guard::learner($by), $id));
+    }
+
+    /**
+     * The folder and every folder inside it, at any depth: what "in this folder" means when it is studied (docs/specs/
+     * vistud-2-blueprint.md, Phase 9). The folder's own id comes first.
+     *
+     * @return list<string>
+     */
+    public function within(Principal $by, string $id): array
+    {
+        $scope = Guard::learner($by);
+
+        return array_column($this->subtree($scope, $this->row($scope, $id)), 'id');
+    }
+
+    /**
+     * The folders from the top of the folder's branch down to it, the folder last: "Lecture 1 + Lab 1 › Labs".
+     *
+     * @return list<FolderDetails>
+     */
+    public function path(Principal $by, string $id): array
+    {
+        $scope = Guard::learner($by);
+        $row = $this->row($scope, $id);
+        $byId = [];
+        foreach ($this->rows($scope, $row->workspace_id) as $each) {
+            $byId[$each->id] = $each;
+        }
+        $path = [self::details($row)];
+        for ($parent = $row->parent_id; $parent !== null && isset($byId[$parent]); $parent = $byId[$parent]->parent_id) {
+            array_unshift($path, self::details($byId[$parent]));
+        }
+
+        return $path;
     }
 
     /** A new folder at the end of a workspace's top level (`workspace`), a module (`module`) or another folder (`folder`). */
@@ -168,9 +205,13 @@ final class Folders
                 LearnerTables::query($scope, 'folders')->where('id', $row->id)->update(['module_id' => $moduleId, 'depth' => (int) $row->depth + $shift]);
             }
             // The notes, files and links inside go with their folders.
-            LearnerTables::query($scope, 'notes')->whereIn('folder_id', array_column($subtree, 'id'))->update(['module_id' => $moduleId]);
-            LearnerTables::query($scope, 'files')->whereIn('folder_id', array_column($subtree, 'id'))->update(['module_id' => $moduleId]);
-            LearnerTables::query($scope, 'links')->whereIn('folder_id', array_column($subtree, 'id'))->update(['module_id' => $moduleId]);
+            $ids = array_column($subtree, 'id');
+            LearnerTables::query($scope, 'notes')->whereIn('folder_id', $ids)->update(['module_id' => $moduleId]);
+            LearnerTables::query($scope, 'files')->whereIn('folder_id', $ids)->update(['module_id' => $moduleId]);
+            LearnerTables::query($scope, 'links')->whereIn('folder_id', $ids)->update(['module_id' => $moduleId]);
+            if ($moduleId !== $folder->module_id) {
+                $this->carry($scope, $ids, $moduleId);
+            }
         });
     }
 
@@ -196,15 +237,43 @@ final class Folders
         $scope = Guard::learner($by);
 
         DB::transaction(function () use ($scope, $id) {
-            $this->row($scope, $id, lock: true);
+            $folder = $this->row($scope, $id, lock: true);
             if (LearnerTables::query($scope, 'folders')->where('parent_id', $id)->exists()
                 || LearnerTables::query($scope, 'notes')->where('folder_id', $id)->whereNull('trashed_at')->exists()
                 || LearnerTables::query($scope, 'files')->where('folder_id', $id)->whereNull('trashed_at')->exists()
                 || LearnerTables::query($scope, 'links')->where('folder_id', $id)->exists()) {
                 throw new Conflict('not_empty', 'Move or delete what\'s inside first.');
             }
+            // What was studied in it stays, where the folder was: in the folder around it, or in the module.
+            foreach (self::STUDIED as $table) {
+                LearnerTables::query($scope, $table)->where('folder_id', $id)->update(['folder_id' => $folder->parent_id]);
+            }
+            LearnerTables::query($scope, 'folder_briefs')->where('folder_id', $id)->delete();
             LearnerTables::query($scope, 'folders')->where('id', $id)->delete();
         });
+    }
+
+    /**
+     * What was studied in these folders goes with them to another module (or none). A topic the reader found waits in
+     * one module once: where the new module already has it, the moved one goes.
+     *
+     * @param  list<string>  $ids
+     */
+    private function carry(LearnerScope $scope, array $ids, ?string $moduleId): void
+    {
+        foreach (self::STUDIED as $table) {
+            if ($table === 'topic_suggestions') {
+                continue;
+            }
+            LearnerTables::query($scope, $table)->whereIn('folder_id', $ids)->update(['module_id' => $moduleId]);
+        }
+        $suggested = LearnerTables::query($scope, 'topic_suggestions')->whereIn('folder_id', $ids)->get();
+        foreach ($suggested as $row) {
+            $there = $moduleId !== null && LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('name_key', $row->name_key)->exists();
+            $there || $moduleId === null
+                ? LearnerTables::query($scope, 'topic_suggestions')->where('id', $row->id)->delete()
+                : LearnerTables::query($scope, 'topic_suggestions')->where('id', $row->id)->update(['module_id' => $moduleId]);
+        }
     }
 
     /** @return list<object> the folder and everything inside it */

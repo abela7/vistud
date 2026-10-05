@@ -19,6 +19,8 @@ final readonly class QuestionDetails
         public string $status = 'pending',
         public ?string $answer = null,
         public ?string $sessionId = null,
+        /** The folder it is in (docs/specs/vistud-2-blueprint.md, Phase 9), or null. */
+        public ?string $folderId = null,
     ) {}
 
     /** open or understood, as the Progress page groups them. */

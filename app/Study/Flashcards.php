@@ -45,13 +45,16 @@ final class Flashcards
 
     public function __construct(private Memory $memory, private Sessions $sessions, private JournalStore $journal) {}
 
-    /** @return list<FlashcardDetails> newest first; $topicId narrows to a topic, $moduleId to a module ('' to cards with none) */
-    public function list(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null): array
+    /**
+     * @param  ?list<string>  $folderIds  only the cards in these folders (Folders::within: a folder and those inside it)
+     * @return list<FlashcardDetails> newest first; $topicId narrows to a topic, $moduleId to a module ('' to cards with none)
+     */
+    public function list(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $folderIds = null): array
     {
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
 
-        return $this->query($scope, $workspaceId, $topicId, $moduleId)->orderByDesc('created_at')->orderByDesc('id')->get()
+        return $this->query($scope, $workspaceId, $topicId, $moduleId, $folderIds)->orderByDesc('created_at')->orderByDesc('id')->get()
             ->map(fn ($row) => self::details($row))->all();
     }
 
@@ -67,7 +70,7 @@ final class Flashcards
      *
      * @return array{total: int, due: int, new: int, overdue: int, next_on: ?string, next_count: int, topics: array<string, array{total: int, due: int, overdue: int}>, modules: array<string, array{total: int, due: int, overdue: int}>}
      */
-    public function counts(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null): array
+    public function counts(Principal $by, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $folderIds = null): array
     {
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
@@ -75,7 +78,7 @@ final class Flashcards
         // Overdue is long overdue: a week or more past its day (docs/specs/vistud-2-blueprint.md §3.8).
         $overdueBy = CarbonImmutable::parse($today)->subDays(self::OVERDUE_DAYS)->toDateString();
         $counts = ['total' => 0, 'due' => 0, 'new' => 0, 'overdue' => 0, 'next_on' => null, 'next_count' => 0, 'topics' => [], 'modules' => []];
-        foreach ($this->query($scope, $workspaceId, $topicId, $moduleId)->get(['topic_id', 'module_id', 'due_on']) as $row) {
+        foreach ($this->query($scope, $workspaceId, $topicId, $moduleId, $folderIds)->get(['topic_id', 'module_id', 'due_on']) as $row) {
             $dueOn = $row->due_on === null ? null : substr((string) $row->due_on, 0, 10);
             $due = $dueOn === null || $dueOn <= $today;
             $overdue = $dueOn !== null && $dueOn <= $overdueBy;
@@ -109,12 +112,12 @@ final class Flashcards
      *
      * @return list<string> card ids
      */
-    public function queue(Principal $by, string $workspaceId, ?string $topicId = null, bool $early = false, ?string $moduleId = null): array
+    public function queue(Principal $by, string $workspaceId, ?string $topicId = null, bool $early = false, ?string $moduleId = null, ?array $folderIds = null): array
     {
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
         $today = $this->today($by);
-        $query = $this->query($scope, $workspaceId, $topicId, $moduleId);
+        $query = $this->query($scope, $workspaceId, $topicId, $moduleId, $folderIds);
         $early
             ? $query->where('due_on', '>', $today)->orderBy('due_on')
             : $query->where(fn ($q) => $q->whereNull('due_on')->orWhere('due_on', '<=', $today))->orderByRaw('due_on is null')->orderBy('due_on');
@@ -122,19 +125,29 @@ final class Flashcards
         return $query->orderBy('created_at')->orderBy('id')->limit(self::ROUND)->pluck('id')->map(fn ($id) => (string) $id)->all();
     }
 
-    public function add(Principal $by, string $workspaceId, ?string $topicId, mixed $front, mixed $back, string $author = 'student', ?string $sessionId = null, ?string $moduleId = null): string
+    /**
+     * A new card. It is in a module (its topic's, else the one given, else its session's) and maybe in one of the
+     * module's folders (docs/specs/vistud-2-blueprint.md, Phase 9): the one given, else its topic's, else its session's.
+     */
+    public function add(Principal $by, string $workspaceId, ?string $topicId, mixed $front, mixed $back, string $author = 'student', ?string $sessionId = null, ?string $moduleId = null, ?string $folderId = null): string
     {
         $scope = Guard::learner($by);
         [$front, $back] = self::validated($front, $back);
         $id = Ids::new();
         $author = in_array($author, ['student', 'ai'], true) ? $author : 'student';
 
-        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $front, $back, $author, $sessionId, $id) {
+        DB::transaction(function () use ($scope, $by, $workspaceId, $topicId, $moduleId, $folderId, $front, $back, $author, $sessionId, $id) {
             Input::workspace($scope, $workspaceId, lock: true);
             $this->topicIn($scope, $workspaceId, $topicId);
-            $moduleId = $this->moduleFor($scope, $workspaceId, $topicId, $moduleId, $sessionId);
+            if ($folderId !== null && $folderId !== '') {
+                $folder = LearnerTables::query($scope, 'folders')->where('id', $folderId)->where('workspace_id', $workspaceId)->first() ?? throw new NotFound;
+                [$moduleId, $folderId] = [$folder->module_id, $folder->id];
+            } else {
+                $moduleId = $this->moduleFor($scope, $workspaceId, $topicId, $moduleId, $sessionId);
+                $folderId = Questions::folderFor($scope, $topicId, $moduleId, $sessionId);
+            }
             LearnerTables::insert($scope, 'flashcards', [
-                'id' => $id, 'workspace_id' => $workspaceId, 'topic_id' => $topicId, 'module_id' => $moduleId, 'front' => $front, 'back' => $back,
+                'id' => $id, 'workspace_id' => $workspaceId, 'topic_id' => $topicId, 'module_id' => $moduleId, 'folder_id' => $folderId, 'front' => $front, 'back' => $back,
                 'author' => $author, 'session_id' => $sessionId, 'created_at' => now(), 'updated_at' => now(),
             ]);
             $specs = [self::taskRecord($scope, $by, $id, $front, $back, 1, 'active')];
@@ -180,8 +193,10 @@ final class Flashcards
             if ($specs !== []) {
                 $this->memory->append($scope, $specs, $row->workspace_id);
             }
+            // Its folder: the new topic's; with no topic, its own while it stays in its module.
+            $folderId = $topicId !== null ? Questions::folderFor($scope, $topicId, $moduleId, null) : ($moduleId === $row->module_id ? $row->folder_id : null);
             LearnerTables::query($scope, 'flashcards')->where('id', $id)->update([
-                'topic_id' => $topicId, 'module_id' => $moduleId, 'front' => $front, 'back' => $back, 'revision' => $revision, 'updated_at' => now(),
+                'topic_id' => $topicId, 'module_id' => $moduleId, 'folder_id' => $folderId, 'front' => $front, 'back' => $back, 'revision' => $revision, 'updated_at' => now(),
             ]);
         });
     }
@@ -287,9 +302,12 @@ final class Flashcards
         return 'card-'.$cardId;
     }
 
-    private function query(LearnerScope $scope, string $workspaceId, ?string $topicId = null, ?string $moduleId = null)
+    private function query(LearnerScope $scope, string $workspaceId, ?string $topicId = null, ?string $moduleId = null, ?array $folderIds = null)
     {
         $query = LearnerTables::query($scope, 'flashcards')->where('workspace_id', $workspaceId)->whereNull('retired_at');
+        if ($folderIds !== null) {
+            $query->whereIn('folder_id', $folderIds === [] ? [''] : $folderIds);
+        }
         if ($topicId === '') {
             $query->whereNull('topic_id');
         } elseif ($topicId !== null) {
@@ -398,6 +416,7 @@ final class Flashcards
             (int) $row->revision, (int) $row->step, $row->due_on === null ? null : substr((string) $row->due_on, 0, 10),
             (int) $row->reviews, (int) $row->lapses, $row->last_result === null ? null : (string) $row->last_result, (string) $row->created_at,
             isset($row->module_id) ? (string) $row->module_id : null,
+            isset($row->folder_id) ? (string) $row->folder_id : null,
         );
     }
 }
