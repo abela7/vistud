@@ -84,6 +84,9 @@ final class Files
         $key = "learners/{$scope->learnerId}/files/{$id}";
         $disk = self::disk();
         try {
+            // Tried up to three times: the quota's locking read takes the gap after the learner's files, which a learner
+            // whose id comes next takes too, so two first uploads at once can deadlock; the one MySQL rolls back runs
+            // again (writing the same key again is harmless).
             DB::transaction(function () use ($scope, $placeType, $placeId, $path, $id, $key, $disk, $name, $extension, $kind, $mime, $size) {
                 [$workspaceId, $moduleId, $folderId] = Input::place($scope, $placeType, $placeId);
                 $quota = (int) config('vistud.files.quota_bytes');
@@ -104,7 +107,7 @@ final class Files
                     'position' => $this->nextPosition($scope, $workspaceId, $moduleId, $folderId),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
-            });
+            }, 3);
         } catch (Throwable $e) {
             // Nothing stored without its record.
             $disk->delete($key);
