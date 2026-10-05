@@ -86,11 +86,15 @@ test('a student adds modules as cards, reorders them, and opens one to build fol
     await expect(page.locator('.folder-tile')).toContainText('Labs');
 
     await openPlace(page, 'Labs');
-    await expect(page.getByRole('navigation', { name: 'Path' })).toContainText('Week 1: Cells');
+    // A folder right in a module says which above its name; the path is for a folder deeper down.
+    await expect(page.locator('.section-header-eyebrow')).toHaveText('Week 1: Cells');
+    await expect(page.getByRole('navigation', { name: 'Path' })).toHaveCount(0);
     await newInPlace(page, 'Folder');
     await dialog(page).getByLabel('Name').fill('Lab 1');
     await dialog(page).getByRole('button', { name: 'Add folder' }).click();
     await expect(page.locator('.folder-tile')).toContainText('Lab 1');
+    await openPlace(page, 'Lab 1');
+    await expect(page.getByRole('navigation', { name: 'Path' })).toContainText('Week 1: Cells');
 
     // Up to the module: it opens on its Topics tab, where Labs is a place to study; on Files, a folder with what it holds.
     await page.getByRole('navigation', { name: 'Path' }).getByRole('link', { name: 'Week 1: Cells' }).click();
@@ -180,7 +184,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         await useSentinelTheme(page);
         states['folder page'] = await foreignColours(page);
 
-        await (viewport === phone ? page.getByRole('link', { name: 'Back to Week 1: Cells' }) : page.getByRole('navigation', { name: 'Path' }).getByRole('link', { name: 'Week 1: Cells' })).click();
+        await page.getByRole('link', { name: 'Back to Week 1: Cells' }).click();
         await page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: /^Sessions/ }).click();
         // The page moves in place (resources/js/page.js): the test theme goes on once it has arrived.
         await expect(page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: /^Sessions/ })).toHaveAttribute('aria-current', 'page');

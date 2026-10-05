@@ -48,8 +48,9 @@
 @endphp
 <div class="space-y-6" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()" @if ($readingNow) wire:poll.3s @endif>
     <div class="space-y-2">
-        {{-- A folder's whole path, once it says more than the Back link does. --}}
-        @if (! $isModule && count($trail) > 1)
+        {{-- A folder's whole path, once it says more than the Back link does (and, for a folder in a module, more than the
+             module's name above its title). --}}
+        @if (! $isModule && count($trail) > ($studyPlace ? 2 : 1))
             <nav aria-label="Path" class="crumbs">
                 <ol role="list">
                     @foreach ($trail as [$label, $url])

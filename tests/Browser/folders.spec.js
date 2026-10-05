@@ -34,8 +34,9 @@ for (const [name, viewport] of Object.entries(sizes)) {
         await page.setViewportSize(viewport);
         await openFolder(page);
 
-        // The module above the folder's name (on a phone the path above it is hidden, so this line is how it says so).
+        // The module above the folder's name, once: the path line is only for a folder deeper down.
         await expect(page.locator('.section-header-eyebrow')).toHaveText('Week 1: OS Structure | Processes & Threads');
+        await expect(page.getByRole('navigation', { name: 'Path' })).toHaveCount(0);
         await expect(page.getByRole('link', { name: 'Back to Week 1: OS Structure | Processes & Threads' })).toBeVisible();
         await expect(page.getByText('1 of 2 understood')).toBeVisible();
         for (const label of ['Topics', 'Files', 'Notes', 'Questions', 'Cards']) {

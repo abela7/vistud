@@ -3678,6 +3678,14 @@
         gap: 0.125rem;
     }
 
+    /* The rail's columns are its width, never a long file name's: a name too long for it ends in "…". */
+    .session-rail,
+    .rail-body,
+    .rail-section,
+    .rail-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
     .rail-row {
         text-decoration: none;
         display: flex;
