@@ -92,8 +92,11 @@ test('a student adds modules as cards, reorders them, and opens one to build fol
     await dialog(page).getByRole('button', { name: 'Add folder' }).click();
     await expect(page.locator('.folder-tile')).toContainText('Lab 1');
 
+    // Up to the module: it opens on its Topics tab, where Labs is a place to study; on Files, a folder with what it holds.
     await page.getByRole('navigation', { name: 'Path' }).getByRole('link', { name: 'Week 1: Cells' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Week 1: Cells' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Labs' })).toContainText('No topics yet');
+    await page.getByRole('navigation', { name: 'This module' }).getByRole('link', { name: /^Files/ }).click();
     await expect(page.locator('.folder-tile').filter({ hasText: 'Labs' })).toContainText('1 item');
 });
 
