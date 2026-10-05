@@ -480,6 +480,10 @@ final class Contents extends Component
     #[On('pins-changed')]
     public function pinsChanged(): void {}
 
+    /** A topic's sheet changed one (its status, name or place, or took it away): the Topics tab draws it again. */
+    #[On('topics-changed')]
+    public function topicsChanged(): void {}
+
     public function restoreNote(string $id): void
     {
         $note = $this->notes->restore($this->principal(), $id);

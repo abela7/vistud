@@ -216,7 +216,11 @@ class FolderStudyScreenTest extends TestCase
             ->assertSee('Lecture 1 + Lab 1 › Labs')
             ->assertDontSee('Old handouts');
 
+        $module = Livewire::test(Contents::class, ['workspaceId' => $this->workspace, 'view' => 'module', 'placeId' => $this->week1])
+            ->assertSeeInOrder(['In the module', 'The kernel', 'Lecture 1 + Lab 1', 'No topics yet']);
         $sheet->set('place', "folder:{$this->first}")->call('move')->assertHasNoErrors()->assertDispatched('topics-changed');
+        // The module's page, open behind the sheet, draws the topic in its folder.
+        $module->dispatch('topics-changed')->assertDontSee('In the module')->assertSeeInOrder(['Lecture 1 + Lab 1', '0 of 1 understood', 'The kernel']);
         $kernel = app(Topics::class)->find($this->by, $topic);
         $this->assertSame([$this->week1, $this->first], [$kernel->moduleId, $kernel->folderId]);
         $this->assertSame($this->first, app(Flashcards::class)->find($this->by, $card)->folderId);

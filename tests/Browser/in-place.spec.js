@@ -41,7 +41,8 @@ test('links move between pages without reloading, and each page works as if open
 
     // The page swapped in works: its menus open, its Livewire actions answer, and the tab's title follows.
     await expect(page).toHaveTitle(/Labs/);
-    await page.getByRole('button', { name: 'New folder', exact: true }).click();
+    await page.getByRole('button', { name: 'More for Labs' }).click();
+    await page.locator('#page-menu').getByRole('button', { name: 'Rename' }).click();
     await expect(page.locator('#structure-dialog')).toBeVisible();
     await page.keyboard.press('Escape');
 
