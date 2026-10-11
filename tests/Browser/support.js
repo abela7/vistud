@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 export const sentinel = JSON.parse(readFileSync(new URL('./fixtures/sentinel-theme.json', import.meta.url)));
 
-export const THEMES = ['vistud-light', 'vistud-dark', 'ember', 'blossom'];
+export const THEMES = ['vistud-light', 'vistud-dark', 'ember', 'blossom', 'blossom-dark'];
 
 /** Switch the theme in place, as a saved preset or custom theme would, without reloading. */
 export async function useTheme(page, theme) {

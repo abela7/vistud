@@ -41,14 +41,25 @@ final class Themes
     }
 
     /**
-     * The themes of one scheme, for choosing which one light (or dark) mode uses.
+     * The themes a student chooses between (config vistud.appearance.themes): each a light and a
+     * dark theme, checked to exist and to be of that scheme.
      *
-     * @param  'light'|'dark'  $scheme
-     * @return array<string, Theme> keyed by ID, sorted
+     * @param  array<string, array{name: string, light: string, dark: string}>  $pairs
+     * @return array<string, array{name: string, light: Theme, dark: Theme}>
      */
-    public function ofScheme(string $scheme): array
+    public function pairs(array $pairs): array
     {
-        return array_filter($this->all(), fn (Theme $theme) => $theme->scheme === $scheme);
+        $resolved = [];
+        foreach ($pairs as $id => $pair) {
+            $light = $this->get($pair['light']);
+            $dark = $this->get($pair['dark']);
+            if ($light->scheme !== 'light' || $dark->scheme !== 'dark') {
+                throw new InvalidArgumentException("Theme {$id} must pair a light theme with a dark one.");
+            }
+            $resolved[$id] = ['name' => $pair['name'], 'light' => $light, 'dark' => $dark];
+        }
+
+        return $resolved;
     }
 
     public function get(string $id): Theme

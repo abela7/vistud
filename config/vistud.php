@@ -80,6 +80,13 @@ return [
         // (ADR 0003 §6.4, DESIGN.md §3.6).
         'light' => 'vistud-light',
         'dark' => 'vistud-dark',
+        // The themes a student chooses between in Settings > Appearance: each is a light and a dark
+        // theme from resources/themes, and the mode (system, light or dark) picks between the two.
+        'themes' => [
+            'vistud' => ['name' => 'ViStud', 'light' => 'vistud-light', 'dark' => 'vistud-dark'],
+            'blossom' => ['name' => 'Blossom', 'light' => 'blossom', 'dark' => 'blossom-dark'],
+            'ember' => ['name' => 'Ember', 'light' => 'ember', 'dark' => 'vistud-dark'],
+        ],
     ],
 
 ];

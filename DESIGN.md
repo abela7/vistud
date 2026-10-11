@@ -177,8 +177,9 @@ The generated files are checked for freshness in CI: changing a theme without re
 | **ViStud Dark** (`vistud-dark`) | Dark | The default dark theme. Deep brand gradients, light teal accents, the logo plate |
 | **Ember** (`ember`) | Light | An alternate preset proving the system's flexibility: a plum to berry to amber brand gradient at a different angle and stop positions, and a **solid** primary action. It uses exactly the same components. Kept as the third built-in theme (PM decision) |
 | **Blossom** (`blossom`) | Light | Rose pink (the owner's ask, 2026-10-11): a plum to rose brand gradient, a rose accent (`#c2185b`, 5.9:1 with white) and blush surfaces |
+| **Blossom Dark** (`blossom-dark`) | Dark | Blossom's dark look: plum-black surfaces, light rose text and links (`#f48fb1`), rose accent fills (`#b8336a`) and a deep plum to rose brand gradient |
 
-**Choosing the light theme** (2026-10-11): Settings → Appearance lists every light theme under *Light theme* (`<x-theme-picker>`), each with a small preview drawn by its own tokens (`data-theme` on the preview). The choice is kept in this browser (`vistud.theme-light`), applied before the first paint by the inline script, which accepts only a light theme's ID, and put back on each page swapped in. Dark mode always uses ViStud Dark.
+**Choosing a theme** (2026-10-11): what a student chooses is a **theme**, a light and a dark theme together (`config('vistud.appearance.themes')`: ViStud = ViStud Light + ViStud Dark, Blossom = Blossom + Blossom Dark, Ember = Ember + ViStud Dark until Ember has a dark look); System, Light or Dark then picks between its two. Settings → Appearance shows the themes first (`<x-theme-picker>`, each card previewing both looks, drawn by their own tokens with `data-theme` on the preview), then *Light or dark*. The choice is kept in this browser (`vistud.theme`), applied before the first paint by the inline script, which accepts only a listed theme, and put back on each page swapped in.
 
 Themes are JSON in `resources/themes/`. After editing one, run `php artisan vistud:themes:build`, which validates contrast and regenerates the stylesheet.
 

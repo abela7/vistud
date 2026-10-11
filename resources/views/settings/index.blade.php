@@ -6,7 +6,7 @@
 @php
     $parts = [
         'ai' => ['AI', 'AI settings', 'Your key, your models and what they cost.', 'brain'],
-        'appearance' => ['Appearance', 'Appearance', 'Light or dark, and the theme light mode uses.', 'palette'],
+        'appearance' => ['Appearance', 'Appearance', 'Your theme, and whether it is light or dark.', 'palette'],
         'security' => ['Security', 'Security', 'How you sign in.', 'shield-check'],
         'data' => ['Your data', 'Your data', 'What ViStud has recorded about your studying.', 'notebook-text'],
     ];
@@ -27,8 +27,11 @@
         @elseif ($part === 'appearance')
             <section class="settings-panel" aria-labelledby="settings-appearance">
                 <h2 id="settings-appearance" class="panel-title">Appearance</h2>
-                <x-appearance-switcher />
                 <x-theme-picker />
+                <div class="space-y-2">
+                    <p class="field-label">Light or dark</p>
+                    <x-appearance-switcher />
+                </div>
             </section>
         @elseif ($part === 'security')
             <section class="settings-panel" aria-labelledby="settings-security">
