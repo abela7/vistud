@@ -14,6 +14,12 @@ GlobalWorkerOptions.workerSrc = workerUrl;
 /** Device pixels per PDF point at most: sharp on a phone, without canvases too big for it. */
 const MAX_SCALE = 2.5;
 
+/**
+ * How long PDF.js gets to open a document. Where workers never start (some embedded browsers, Cursor's
+ * among them) it waits silently for ever, so after this the browser's own viewer takes over.
+ */
+const OPEN_TIMEOUT_MS = 8000;
+
 function getPdfStorageKey(rawUrl) {
     if (!rawUrl) return null;
     try {
@@ -44,9 +50,27 @@ export async function drawPdf(frame) {
     };
 
     let pdf;
+    const loading = getDocument({ url, withCredentials: true, isEvalSupported: false });
+    let timer;
     try {
-        pdf = await getDocument({ url, withCredentials: true, isEvalSupported: false }).promise;
+        pdf = await Promise.race([
+            loading.promise,
+            new Promise((resolve, reject) => {
+                timer = setTimeout(() => reject(new Error('PDF.js did not open the document in time.')), OPEN_TIMEOUT_MS);
+            }),
+        ]);
     } catch {
+        loading.destroy();
+        if (navigator.pdfViewerEnabled) {
+            const native = document.createElement('iframe');
+            native.className = view.className.replace('pdf-view', '').trim();
+            native.title = frame.title;
+            native.src = url;
+            native.dataset.shown = '';
+            view.replaceWith(native);
+            native.dispatchEvent(new CustomEvent('pdf-shown', { bubbles: true }));
+            return;
+        }
         const problem = document.createElement('p');
         problem.className = 'pdf-view-problem';
         problem.textContent = 'This document can\'t be shown here. ';
@@ -60,6 +84,8 @@ export async function drawPdf(frame) {
         view.replaceChildren(problem);
         shown();
         return;
+    } finally {
+        clearTimeout(timer);
     }
 
     // Every page has its place at once (the first page's shape until its own is known), so the scroll bar is right.

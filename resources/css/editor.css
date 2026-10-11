@@ -2015,6 +2015,11 @@
         opacity: 0;
     }
 
+    /* The browser's own viewer, where PDF.js couldn't open the document (resources/js/pdf-viewer.js). */
+    .file-preview-office > iframe[data-shown] {
+        opacity: 1;
+    }
+
     /* A PDF drawn by PDF.js (resources/js/pdf-viewer.js): its pages one under another, scrolled inside the frame. */
     .pdf-view {
         position: relative;
