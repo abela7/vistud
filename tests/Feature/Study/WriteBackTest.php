@@ -79,6 +79,14 @@ class WriteBackTest extends TestCase
         $this->assertSame([], Capture::parse('Nothing marked here. <finding topic="x"></finding> <status topic="Joins" proposed="mastered">no</status>'));
     }
 
+    public function test_noise_and_trivial_findings_are_discarded(): void
+    {
+        $chat = '<finding topic="Joins">hi</finding><finding topic="Joins">hello</finding><finding topic="Joins">thank you</finding><finding topic="Joins">A real finding that explains joins</finding>';
+        $items = Capture::parse($chat);
+        $this->assertCount(1, $items);
+        $this->assertSame('A real finding that explains joins', $items[0]['text']);
+    }
+
     public function test_the_review_matches_topics_keeps_the_last_checkpoint_and_leaves_statuses_unticked(): void
     {
         $session = app(Sessions::class)->start($this->by, $this->databases->id, $this->joins->id);

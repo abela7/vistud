@@ -12,6 +12,7 @@ use App\Study\FileDigests;
 use App\Study\Files;
 use App\Study\Findings;
 use App\Study\Flashcards;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\NoteDoc;
 use App\Study\Notes;
@@ -461,5 +462,90 @@ class ToolboxTest extends TestCase
         $this->assertStringStartsWith('"OS types.pptx": an outline of its 3 slides', $outline);
         $this->assertStringEndsWith("Slide 1: What is an OS?\nSlide 2: Batch systems\nSlide 3: Real-time systems", $outline);
         $this->assertStringNotContainsString('Details of', $outline);
+    }
+
+    public function test_the_tutor_answers_an_open_question_concisely(): void
+    {
+        $questions = app(Questions::class);
+        $stuck = collect($questions->list($this->by, $this->databases->id))->firstWhere('status', 'stuck');
+        $this->assertNotNull($stuck);
+
+        // Answers the matching open question with a concise answer
+        $out = $this->look('answer_question', [
+            'question' => 'left join',
+            'answer' => 'A LEFT JOIN retains all rows from the left table, padding unmatched right rows with NULL.',
+        ]);
+
+        $this->assertStringStartsWith('Saved answer to question "Why does a left join keep unmatched rows?":', $out);
+        $updated = $questions->find($this->by, $stuck->id);
+        $this->assertSame('answered', $updated->status);
+        $this->assertSame('A LEFT JOIN retains all rows from the left table, padding unmatched right rows with NULL.', $updated->answer);
+
+        // Validation errors
+        $this->assertSame('Say which question to answer.', $this->look('answer_question', ['question' => '', 'answer' => 'Test']));
+        $this->assertSame('Give the concise answer to put on the question.', $this->look('answer_question', ['question' => 'left join', 'answer' => '']));
+        $this->assertStringContainsString('Could not find a question matching "nonexistent question"', $this->look('answer_question', ['question' => 'nonexistent question', 'answer' => 'Test']));
+    }
+
+    public function test_the_tutor_can_edit_topics_folders_course_module_and_notes(): void
+    {
+        $topics = app(Topics::class);
+        $folders = app(Folders::class);
+        $modules = app(Modules::class);
+        $workspaces = app(Workspaces::class);
+        $notes = app(Notes::class);
+
+        // 1. Rename topic
+        $topic = $topics->create($this->by, $this->databases->id, 'Old Topic', $this->week1);
+        $out = $this->look('rename_topic', ['topic' => 'Old Topic', 'new_name' => 'Renamed Topic']);
+        $this->assertSame('Renamed topic "Old Topic" to "Renamed Topic".', $out);
+        $this->assertSame('Renamed Topic', $topics->find($this->by, $topic->id)->name);
+
+        // 2. Delete topic
+        $out = $this->look('delete_topic', ['topic' => 'Renamed Topic']);
+        $this->assertSame('Removed topic "Renamed Topic" from the course.', $out);
+        $this->assertEmpty(collect($topics->list($this->by, $this->databases->id))->where('id', $topic->id));
+
+        // 3. Rename folder
+        $folder = $folders->create($this->by, 'workspace', $this->databases->id, 'Old Folder');
+        $out = $this->look('rename_folder', ['folder' => 'Old Folder', 'new_name' => 'New Folder']);
+        $this->assertSame('Renamed folder "Old Folder" to "New Folder".', $out);
+        $this->assertSame('New Folder', $folders->find($this->by, $folder->id)->name);
+
+        // 4. Rename course
+        $out = $this->look('rename_course', ['new_name' => 'Advanced Databases']);
+        $this->assertSame('Renamed course to "Advanced Databases".', $out);
+        $this->assertSame('Advanced Databases', $workspaces->find($this->by, $this->databases->id)->name);
+
+        // 5. Rename module
+        $out = $this->look('rename_module', ['module' => 'Week 1', 'new_title' => 'Week 1: Fundamentals']);
+        $this->assertSame('Renamed module to "Week 1: Fundamentals".', $out);
+        $this->assertSame('Week 1: Fundamentals', $modules->find($this->by, $this->week1)->title);
+
+        // 6. Rename note
+        $note = $notes->create($this->by, 'workspace', $this->databases->id, 'Draft Note');
+        $out = $this->look('rename_note', ['note' => 'Draft Note', 'new_title' => 'Final Note']);
+        $this->assertSame('Renamed note to "Final Note".', $out);
+        $this->assertSame('Final Note', $notes->find($this->by, $note->id)->title);
+
+        // 7. Write note in replace mode
+        $out = $this->look('write_note', ['note' => 'Final Note', 'text' => "# Clean Note\nReplaced content.", 'mode' => 'replace']);
+        $this->assertStringStartsWith('Updated the note "Final Note".', $out);
+        $this->assertStringContainsString('Clean Note', NoteDoc::markdown($notes->open($this->by, $note->id)->doc));
+
+        // 8. Edit note directly in real time (find & replace a line)
+        $out = $this->look('edit_note', ['note' => 'Final Note', 'search' => 'Replaced content.', 'replace' => 'man ls (Example)']);
+        $this->assertStringStartsWith('Updated the note "Final Note": Replaced "Replaced content." with "man ls (Example)"', $out);
+        $this->assertStringContainsString('man ls (Example)', NoteDoc::markdown($notes->open($this->by, $note->id)->doc));
+
+        // 9. Edit note with insert_after
+        $out = $this->look('edit_note', ['note' => 'Final Note', 'mode' => 'insert_after', 'search' => 'man ls (Example)', 'text' => 'Follow up note.']);
+        $this->assertStringStartsWith('Updated the note "Final Note": Inserted content after', $out);
+        $this->assertStringContainsString('Follow up note.', NoteDoc::markdown($notes->open($this->by, $note->id)->doc));
+
+        // 10. Write note with in-place text replacement
+        $out = $this->look('write_note', ['note' => 'Final Note', 'search' => 'Follow up note.', 'text' => 'Updated line in place.']);
+        $this->assertStringStartsWith('Updated the note "Final Note".', $out);
+        $this->assertStringContainsString('Updated line in place.', NoteDoc::markdown($notes->open($this->by, $note->id)->doc));
     }
 }

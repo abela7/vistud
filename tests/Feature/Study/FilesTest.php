@@ -176,6 +176,14 @@ class FilesTest extends TestCase
         $this->assertThrows(fn () => $this->files->find($this->by, $file->id), NotFound::class);
     }
 
+    public function test_delete_permanently_removes_file_and_storage_without_trashing(): void
+    {
+        $file = $this->upload('Permanent.pdf', $this->pdf());
+        $this->files->deletePermanently($this->by, $file->id);
+        $this->assertSame([], Storage::disk('local')->allFiles());
+        $this->assertThrows(fn () => $this->files->find($this->by, $file->id), NotFound::class);
+    }
+
     public function test_another_students_file_is_missing(): void
     {
         $bob = $this->principal($this->student());

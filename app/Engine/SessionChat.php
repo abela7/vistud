@@ -67,24 +67,25 @@ final class SessionChat
      *
      * @param  (Closure(string, string): void)|null  $onEvent
      */
-    public function send(Principal $by, string $sessionId, mixed $text, ?Closure $onEvent = null, mixed $attach = []): Reply
+    public function send(Principal $by, string $sessionId, mixed $text, ?Closure $onEvent = null, mixed $attach = [], ?string $model = null): Reply
     {
         $scope = Guard::learner($by);
         [$session, $choices, $key] = $this->ready($by, $sessionId);
+        $activeModel = $model && trim($model) !== '' ? trim($model) : $choices->tutorModel;
         $text = is_string($text) ? trim(str_replace("\r\n", "\n", $text)) : '';
-        $items = $this->attachments->resolve($by, $session, $attach, $this->models->find($choices->tutorModel, $key));
+        $items = $this->attachments->resolve($by, $session, $attach, $this->models->find($activeModel, $key));
         Input::refuse(match (true) {
             $text === '' && $items === [] => ['text' => 'Write something first.'],
             mb_strlen($text) > self::MAX_TEXT => ['text' => 'Keep a message to '.self::MAX_TEXT.' characters.'],
             default => [],
         });
 
-        $thread = $this->thread($scope, $session, $choices->tutorModel);
+        $thread = $this->thread($scope, $session, $activeModel);
         $this->refuseOverCap($scope, $thread, $choices, $this->sessions->timezone($by));
         $position = (int) LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->max('position');
         $this->keep($scope, $thread->id, ++$position, ['role' => 'user', 'content' => $text, 'attachments' => $items === [] ? null : json_encode($items)]);
 
-        return $this->answer($by, $session, $thread, $choices, $key, $position, $onEvent);
+        return $this->answer($by, $session, $thread, $choices, $key, $position, $onEvent, $activeModel);
     }
 
     /**
@@ -101,10 +102,38 @@ final class SessionChat
         if ($thread === null || ! $this->unanswered($scope, $thread->id)) {
             throw new Unprocessable('nothing_to_retry', 'There is nothing to try again: the tutor has answered.');
         }
+        $activeModel = $thread->model ?: $choices->tutorModel;
         $this->refuseOverCap($scope, $thread, $choices, $this->sessions->timezone($by));
         $position = (int) LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->max('position');
 
-        return $this->answer($by, $session, $thread, $choices, $key, $position, $onEvent);
+        return $this->answer($by, $session, $thread, $choices, $key, $position, $onEvent, $activeModel);
+    }
+
+    /** Sets or switches the active model for an open session thread. */
+    public function setModel(Principal $by, string $sessionId, string $model): void
+    {
+        $scope = Guard::learner($by);
+        $this->sessions->find($by, $sessionId);
+        $model = trim($model);
+        if ($model === '') {
+            return;
+        }
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first();
+        if ($thread !== null) {
+            LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update([
+                'model' => $model,
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
+    /** The model recorded on the session thread, or null if no thread yet. */
+    public function threadModel(Principal $by, string $sessionId): ?string
+    {
+        $scope = Guard::learner($by);
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first();
+
+        return $thread?->model;
     }
 
     /** Whether the chat's last words are the student's (or a look-up's) with no answer after them. */
@@ -118,19 +147,45 @@ final class SessionChat
     }
 
     /**
+     * Clears the chat conversation and memory context of a session:
+     * removes all messages, resets memory summary, turns and wrapped status.
+     */
+    public function resetChat(Principal $by, string $sessionId): void
+    {
+        $scope = Guard::learner($by);
+        $this->sessions->find($by, $sessionId);
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first();
+        if ($thread === null) {
+            return;
+        }
+        DB::transaction(function () use ($scope, $thread) {
+            LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->delete();
+            LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update([
+                'summary' => null,
+                'folded_through' => 0,
+                'turns' => 0,
+                'wrapped_at' => null,
+                'spent_micros' => 0,
+                'updated_at' => now(),
+            ]);
+        });
+    }
+
+    /**
      * The engine's turn: the standing context, the chat so far and the tools; look-ups run and sent back, a few rounds
      * at most; every message kept with its cost.
      *
      * @param  (Closure(string, string): void)|null  $onEvent
      */
-    private function answer(Principal $by, SessionDetails $session, object $thread, Choices $choices, ?string $key, int $position, ?Closure $onEvent): Reply
+    private function answer(Principal $by, SessionDetails $session, object $thread, Choices $choices, ?string $key, int $position, ?Closure $onEvent, ?string $overrideModel = null): Reply
     {
+        $activeModel = $overrideModel && trim($overrideModel) !== '' ? trim($overrideModel) : $choices->tutorModel;
         $scope = Guard::learner($by);
-        $model = $this->models->find($choices->tutorModel, $key);
+        $model = $this->models->find($activeModel, $key);
         $withTools = $model === null || $model->tools;
         $built = $this->stack->build($by, $session, $thread->summary, $withTools);
         [$system, $tools] = [$built->system, $built->tools];
-        $messages = $this->messagesOf($by, $thread, $model === null || $model->images, $choices->tutorModel);
+        $messages = $this->messagesOf($by, $thread, $model === null || $model->images, $activeModel);
         $context = new Context($session->workspaceId, $session->moduleId, $session->id, $this->sessions->timezone($by), folderId: $session->folderId);
         $fallbacks = $choices->fallbackModel !== '' ? [$choices->fallbackModel] : [];
         $rounds = max(0, (int) config('vistud.engine.tool_rounds'));
@@ -138,7 +193,7 @@ final class SessionChat
 
         for ($round = 0; $round <= $rounds; $round++) {
             // Room for a model that thinks before it answers: its thinking counts against the limit.
-            $request = new Request($choices->tutorModel, $system, $messages, $round < $rounds ? $tools : [], $fallbacks, maxTokens: 8000, noTraining: $choices->noTraining, key: $key);
+            $request = new Request($activeModel, $system, $messages, $round < $rounds ? $tools : [], $fallbacks, maxTokens: 8000, noTraining: $choices->noTraining, key: $key);
             $reply = $onEvent === null ? $this->engine->reply($request) : $this->engine->stream($request, fn (string $words) => $onEvent('text', $words));
             // A call's arguments are always an object, even with none: a service refuses a list there.
             $calls = array_map(fn (ToolCall $c) => ['id' => $c->id, 'type' => 'function', 'function' => ['name' => $c->name, 'arguments' => (string) json_encode($c->arguments === [] ? new \stdClass : $c->arguments)]], $reply->toolCalls);
@@ -169,7 +224,7 @@ final class SessionChat
         }
 
         LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update([
-            'turns' => DB::raw('turns + 1'), 'model' => $choices->tutorModel, 'updated_at' => now(),
+            'turns' => DB::raw('turns + 1'), 'model' => $activeModel, 'updated_at' => now(),
         ]);
         $this->foldIfLong($by, $session->workspaceId, $thread->id);
 
@@ -338,6 +393,13 @@ final class SessionChat
 
             return null;
         }
+        $firstUserText = mb_strtolower(trim((string) reset($asked)->content));
+        if (count($asked) === 1 && in_array($firstUserText, ['hi', 'hello', 'hey', 'yo', 'test'], true)) {
+            // Trivial greeting-only exchange: skip wrap-up LLM run to avoid token waste and hallucinated summaries.
+            $this->markWrapped($scope, $thread->id, 0);
+
+            return null;
+        }
         try {
             $this->settings->ready($by, Role::Reader);
         } catch (Unprocessable) {
@@ -353,7 +415,12 @@ final class SessionChat
         }
         try {
             $reply = $this->runner->run($by, Role::Reader, 'wrap_up', $session->workspaceId, 'session', $sessionId, fn (Run $run) => $run->ask(
-                'You write the record of one study session\'s chat between a student and their tutor, for the student\'s own study memory in ViStud. Answer with one JSON object and nothing else: {"summary": "...", "checkpoint": "..."}. summary: what was studied and explained, what the student got right or wrong, and what still confuses them, in plain prose of at most '.self::WRAP_SUMMARY_CHARS.' characters, no headings or lists. checkpoint: where the session stopped (like slide 7 of 18) and what comes next, in one or two sentences of at most '.self::WRAP_CHECKPOINT_CHARS.' characters. Write in the language the student wrote in. Only what is in the chat: never invent what wasn\'t said.',
+                'You write the record of one study session\'s chat between a student and their tutor, for the student\'s own study memory in ViStud. Answer with one JSON object and nothing else: {"summary": "...", "checkpoint": "..."}. '
+                .'summary: what was studied and explained, what the student got right or wrong, and what still confuses them, in plain prose of at most '.self::WRAP_SUMMARY_CHARS.' characters, no headings or lists. '
+                .'checkpoint: the concept, section or topic reached and what comes next (never mention page or slide numbers; mentioning the file name if applicable is enough), in one or two sentences of at most '.self::WRAP_CHECKPOINT_CHARS.' characters. '
+                .'Write in the language the student wrote in. Only what is in the chat: strictly never invent what wasn\'t said, and do not speculate. '
+                .'Ignore greetings, pleasantries, small talk, questions about AI models or the interface, and quickly self-corrected typos. '
+                .'If no real study happened, return empty strings: {"summary": "", "checkpoint": ""}.',
                 $text,
                 900,
             ));
@@ -430,6 +497,11 @@ final class SessionChat
     {
         $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $session->id)->first();
         if ($thread !== null) {
+            if ($model !== '' && $thread->model !== $model) {
+                LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update(['model' => $model, 'updated_at' => now()]);
+                $thread->model = $model;
+            }
+
             return $thread;
         }
         $id = Ids::new();
@@ -545,7 +617,7 @@ final class SessionChat
 
         try {
             $reply = $this->runner->run($by, Role::Reader, 'fold', $workspaceId, 'thread', $threadId, fn (Run $run) => $run->ask(
-                'You summarise one study session\'s chat between a student and their tutor, so the tutor can go on with it later. Keep what was explained and how far the student got, what they got right or wrong, what still confuses them, and where the chat stands. Plain text, at most '.self::SUMMARY_CHARS.' characters, no headings.',
+                'You summarise one study session\'s chat between a student and their tutor, so the tutor can go on with it later. Keep only what was explained, how far the student got, what they got right or wrong, and what still confuses them. Ignore greetings, small talk, app/UI/model comments, and fleeting typos. Plain text, at most '.self::SUMMARY_CHARS.' characters, no headings. Never invent facts not in the chat.',
                 $earlier.$transcript,
                 800,
             ));
@@ -579,6 +651,12 @@ final class SessionChat
     {
         $clean = trim((string) preg_replace('/^```[a-z]*\s*|\s*```$/i', '', trim($text)));
         $json = json_decode($clean, true);
+        if (! is_array($json) && preg_match('/\{[\s\S]*\}/', $clean, $match)) {
+            $candidate = json_decode($match[0], true);
+            if (is_array($candidate)) {
+                $json = $candidate;
+            }
+        }
         if (! is_array($json)) {
             return [mb_substr($clean, 0, Sessions::SUMMARY_LIMIT), ''];
         }

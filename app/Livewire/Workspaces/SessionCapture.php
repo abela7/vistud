@@ -108,6 +108,26 @@ final class SessionCapture extends Component
         $this->items = [];
     }
 
+    /** Keep only summary and checkpoint, unticking questions, findings, cards, and attempts. */
+    public function setEssentialsOnly(): void
+    {
+        foreach ($this->items as &$item) {
+            if (! ($item['saved'] ?? false)) {
+                $item['include'] = in_array($item['kind'] ?? '', ['summary', 'checkpoint'], true);
+            }
+        }
+    }
+
+    /** Ticks or unticks all unsaved items. */
+    public function toggleAll(bool $include): void
+    {
+        foreach ($this->items as &$item) {
+            if (! ($item['saved'] ?? false)) {
+                $item['include'] = $include && ($item['kind'] ?? '') !== 'status';
+            }
+        }
+    }
+
     public function save(): void
     {
         if ($this->step !== 'review') {

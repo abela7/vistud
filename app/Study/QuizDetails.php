@@ -2,6 +2,8 @@
 
 namespace App\Study;
 
+use Carbon\CarbonImmutable;
+
 /**
  * A quiz or a test, as the screens see it (docs/specs/vistud-2-blueprint.md §3.9): what was asked and how each answer
  * went, the score, and, for a test, the status each topic it touched would earn.
@@ -31,5 +33,38 @@ final readonly class QuizDetails
     public function right(): int
     {
         return count(array_filter($this->questions, fn (array $q) => $q['result'] === 'correct'));
+    }
+
+    /** Duration of the quiz in seconds. */
+    public function durationSeconds(): int
+    {
+        $start = CarbonImmutable::parse($this->startedAt);
+        $end = CarbonImmutable::parse($this->finishedAt);
+
+        return max(1, (int) abs($end->diffInSeconds($start)));
+    }
+
+    /** Human-readable duration (e.g. "45s", "2m 15s"). */
+    public function durationWords(): string
+    {
+        $secs = $this->durationSeconds();
+        if ($secs < 60) {
+            return "{$secs}s";
+        }
+        $mins = (int) floor($secs / 60);
+        $rem = $secs % 60;
+
+        return $rem > 0 ? "{$mins}m {$rem}s" : "{$mins}m";
+    }
+
+    /** Average pace per question (e.g. "27s / question"). */
+    public function paceWords(): string
+    {
+        if ($this->asked <= 0) {
+            return '';
+        }
+        $avg = (int) round($this->durationSeconds() / $this->asked);
+
+        return "{$avg}s / question";
     }
 }

@@ -515,6 +515,46 @@ final class Sessions
         return $this->find($by, $id);
     }
 
+    /**
+     * Resets the session timer to 00:00:00 without affecting chat conversation,
+     * course material, notes, or topics. Starts a fresh study segment from now.
+     */
+    public function resetTime(Principal $by, string $id): SessionDetails
+    {
+        $this->change($by, $id, ['running', 'paused', 'break'], function (LearnerScope $scope, object $row, CarbonImmutable $now) {
+            LearnerTables::query($scope, 'session_segments')->where('session_id', $row->id)->delete();
+            $this->openSegment($scope, $row->id, 'study', $now);
+
+            return [
+                'study_seconds' => 0,
+                'break_seconds' => 0,
+                'started_at' => $now,
+                'last_activity_at' => $now,
+                'state' => 'running',
+                'paused_by' => null,
+                'phase' => $row->pomodoro !== null ? 'focus' : null,
+                'phase_started_at' => $row->pomodoro !== null ? $now : null,
+                'pomodoros' => 0,
+                'pomodoros_skipped' => 0,
+            ];
+        }, journal: true);
+
+        return $this->find($by, $id);
+    }
+
+    /** Clears checkpoints, summaries and marks remembered from the session chat. */
+    public function clearTutorNotes(Principal $by, string $id): void
+    {
+        $scope = Guard::learner($by);
+        $this->lock($scope, $id);
+        LearnerTables::query($scope, 'study_sessions')->where('id', $id)->update([
+            'checkpoint' => null,
+            'summary' => null,
+            'captured' => null,
+            'updated_at' => self::now(),
+        ]);
+    }
+
     /** Activity while the clock runs (the page is in use), so an idle pause doesn't happen. */
     public function touch(Principal $by, string $id): void
     {

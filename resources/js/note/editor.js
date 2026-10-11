@@ -10,7 +10,7 @@
 | the note's and autosave takes over. Left empty, nothing is kept.
 */
 
-import { Editor, Extension, Node, mergeAttributes } from '@tiptap/core';
+import { Editor, Extension, Node, Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Document from '@tiptap/extension-document';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
@@ -81,7 +81,35 @@ function withIds(nodes) {
     });
 }
 
-/** A highlight keeps only a tone's name (app/Study/NoteDoc.php); the theme draws it. */
+/** Normalize custom highlight color to lowercase hex if valid. */
+function normalizeHighlightColor(val) {
+    if (!val || typeof val !== 'string') return null;
+    const trimmed = val.trim();
+    if (trimmed.startsWith('#') && (trimmed.length === 4 || trimmed.length === 7 || trimmed.length === 9)) {
+        return trimmed.toLowerCase();
+    }
+    const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/i.exec(trimmed);
+    if (m) {
+        const r = Number(m[1]).toString(16).padStart(2, '0');
+        const g = Number(m[2]).toString(16).padStart(2, '0');
+        const b = Number(m[3]).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`.toLowerCase();
+    }
+    return null;
+}
+
+/** Check if custom background color is dark for text contrast. */
+function isDarkColor(hex) {
+    if (!hex || typeof hex !== 'string') return false;
+    const clean = hex.replace('#', '');
+    if (clean.length < 6) return false;
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) < 140;
+}
+
+/** A highlight keeps a tone name or custom hex color (app/Study/NoteDoc.php). */
 const NoteHighlight = Highlight.extend({
     addAttributes() {
         return {
@@ -90,10 +118,75 @@ const NoteHighlight = Highlight.extend({
                 parseHTML: (el) => el.getAttribute('data-tone'),
                 renderHTML: (attrs) => (attrs.tone ? { 'data-tone': attrs.tone } : {}),
             },
+            color: {
+                default: null,
+                parseHTML: (el) => normalizeHighlightColor(el.getAttribute('data-color') || el.style.backgroundColor),
+                renderHTML: (attrs) => {
+                    if (!attrs.color) return {};
+                    const contrast = isDarkColor(attrs.color) ? 'dark' : 'light';
+                    return {
+                        'data-color': attrs.color,
+                        'data-contrast': contrast,
+                        style: `background-color: ${attrs.color};`,
+                    };
+                },
+            },
         };
     },
 });
 const HIGHLIGHT = NoteHighlight.name;
+
+/** A text color mark keeps a theme category tone or custom hex color (app/Study/NoteDoc.php). */
+const NoteTextColor = Mark.create({
+    name: 'textColor',
+    addAttributes() {
+        return {
+            tone: {
+                default: null,
+                parseHTML: (el) => el.getAttribute('data-text-tone'),
+                renderHTML: (attrs) => (attrs.tone ? { 'data-text-tone': attrs.tone } : {}),
+            },
+            color: {
+                default: null,
+                parseHTML: (el) => normalizeHighlightColor(el.getAttribute('data-text-color') || el.style.color),
+                renderHTML: (attrs) => {
+                    if (!attrs.color) return {};
+                    return {
+                        'data-text-color': attrs.color,
+                        style: `color: ${attrs.color};`,
+                    };
+                },
+            },
+        };
+    },
+    parseHTML() {
+        return [
+            { tag: 'span[data-text-color]' },
+            { tag: 'span[data-text-tone]' },
+            {
+                tag: 'span[style*="color"]',
+                getAttrs: (el) => {
+                    const color = normalizeHighlightColor(el.style.color);
+                    return color ? { color } : false;
+                },
+            },
+        ];
+    },
+    renderHTML({ HTMLAttributes }) {
+        return ['span', mergeAttributes(HTMLAttributes), 0];
+    },
+    addCommands() {
+        return {
+            setTextColor: (attributes) => ({ commands }) => {
+                return commands.setMark(this.name, attributes);
+            },
+            unsetTextColor: () => ({ commands }) => {
+                return commands.unsetMark(this.name);
+            },
+        };
+    },
+});
+const TEXT_COLOR = NoteTextColor.name;
 
 /** A STEM callout card (Theorem, Definition, Key Formula, Example, Note). In Markdown it is an alert, > [!THEOREM] and so on. */
 const NoteCallout = Node.create({
@@ -631,6 +724,40 @@ export async function mount(host) {
         },
     });
 
+    const CUSTOM_HIGHLIGHT_STORAGE_KEY = 'vistud.custom-highlight-color';
+    let activeCustomColor = null;
+    try {
+        const stored = localStorage.getItem(CUSTOM_HIGHLIGHT_STORAGE_KEY);
+        activeCustomColor = normalizeHighlightColor(stored);
+    } catch {}
+    let lastUsedHighlight = activeCustomColor ? { type: 'color', value: activeCustomColor } : null;
+    let savedHighlightSelection = null;
+
+    function captureHighlightSelection() {
+        if (!editor || (typeof lastFocused !== 'undefined' && lastFocused === 'title')) return;
+        const { selection } = editor.state;
+        if (selection && !selection.empty) {
+            savedHighlightSelection = { from: selection.from, to: selection.to };
+        }
+    }
+
+    const CUSTOM_TEXT_COLOR_STORAGE_KEY = 'vistud.custom-text-color';
+    let activeCustomTextColor = null;
+    try {
+        const stored = localStorage.getItem(CUSTOM_TEXT_COLOR_STORAGE_KEY);
+        activeCustomTextColor = normalizeHighlightColor(stored);
+    } catch {}
+    let lastUsedTextColor = activeCustomTextColor ? { type: 'color', value: activeCustomTextColor } : null;
+    let savedTextColorSelection = null;
+
+    function captureTextColorSelection() {
+        if (!editor || (typeof lastFocused !== 'undefined' && lastFocused === 'title')) return;
+        const { selection } = editor.state;
+        if (selection && !selection.empty) {
+            savedTextColorSelection = { from: selection.from, to: selection.to };
+        }
+    }
+
     editor = new Editor({
         element: host.querySelector('[data-note-body]'),
         // Its default styles hardcode colours; resources/css/editor.css has themed ones.
@@ -648,6 +775,7 @@ export async function mount(host) {
             TaskItem.configure({ nested: true }),
             TextAlign.configure({ types: ['heading', 'paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
             NoteHighlight,
+            NoteTextColor,
             NoteCallout,
             NoteImage,
             NotePageBreak,
@@ -750,6 +878,13 @@ export async function mount(host) {
             if (!loading) changed();
             showImport();
         },
+        onSelectionUpdate: () => {
+            captureHighlightSelection();
+            captureTextColorSelection();
+            if (typeof checkTextSelection === 'function') {
+                setTimeout(checkTextSelection, 20);
+            }
+        },
         onTransaction: ({ transaction: tr }) => {
             if (updatingPagination) return;
             updateToolbar();
@@ -845,7 +980,11 @@ export async function mount(host) {
             } catch {}
             host.dataset.saveUrl = data.save_url;
             host.dataset.noteUrl = data.url;
+            host.dataset.noteId = data.id;
             delete host.dataset.createUrl;
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'note-active', noteId: data.id }, '*');
+            }
             // A new note in its own window stays there: the address keeps ?window=1 for a reload.
             history.replaceState(history.state, '', inWindow ? `${data.url}?window=1${inSplit ? '&split=1' : ''}` : data.url);
             startAutosave();
@@ -887,7 +1026,12 @@ export async function mount(host) {
     }
 
     // ---------- A draft left in this browser ----------
-    if (note.id) startAutosave();
+    if (note.id) {
+        startAutosave();
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: 'note-active', noteId: note.id }, '*');
+        }
+    }
     const [draft] = note.id && drafts ? await drafts.forNote(note.id).catch(() => []) : [];
     if (draft) {
         editor.commands.setContent(draft.doc, { emitUpdate: false });
@@ -918,6 +1062,15 @@ export async function mount(host) {
             if (saved.italic) titleField.dataset.italic = 'true';
             if (saved.underline) titleField.dataset.underline = 'true';
             if (saved.tone) titleField.dataset.tone = saved.tone;
+            if (saved.color) {
+                titleField.dataset.color = saved.color;
+                titleField.style.backgroundColor = saved.color;
+            }
+            if (saved.textTone) titleField.dataset.textTone = saved.textTone;
+            if (saved.textColor) {
+                titleField.dataset.textColor = saved.textColor;
+                titleField.style.color = saved.textColor;
+            }
         } catch {}
     };
     const saveTitleStyle = () => {
@@ -927,6 +1080,9 @@ export async function mount(host) {
                 italic: titleField.dataset.italic === 'true',
                 underline: titleField.dataset.underline === 'true',
                 tone: titleField.dataset.tone || '',
+                color: titleField.dataset.color || '',
+                textTone: titleField.dataset.textTone || '',
+                textColor: titleField.dataset.textColor || '',
             };
             localStorage.setItem(titleStyleKey(), JSON.stringify(style));
         } catch {}
@@ -996,6 +1152,7 @@ export async function mount(host) {
     const items = [...toolbar.querySelectorAll('[data-toolbar-scroll] button, [data-toolbar-scroll] select, .toolbar-more-button')];
     const blockStyle = toolbar.querySelector('[data-block-style]');
     const highlightMenu = host.querySelector('#note-highlight-menu');
+    const textColorMenu = host.querySelector('#note-text-color-menu');
     const aiMenu = host.querySelector('#note-ai-menu');
     const alignMenu = host.querySelector('#note-align-menu');
     const calloutMenu = host.querySelector('#note-callout-menu');
@@ -1021,6 +1178,41 @@ export async function mount(host) {
     const imageToolbar = host.querySelector('#note-image-toolbar');
     const count = host.querySelector('[data-note-count]');
     const alignOf = () => ['center', 'right', 'justify'].find((a) => editor.isActive({ textAlign: a })) ?? 'left';
+    const getDefaultTone = () => highlightMenu?.querySelector('[data-highlight]:not([data-highlight=""])')?.dataset.highlight || null;
+
+    const syncCustomHighlightUI = (color) => {
+        if (!highlightMenu) return;
+        const swatch = highlightMenu.querySelector('[data-highlight-custom-swatch]');
+        const label = highlightMenu.querySelector('[data-highlight-custom-label]');
+        const picker = highlightMenu.querySelector('[data-highlight-color-picker]');
+        if (color) {
+            if (swatch) swatch.style.backgroundColor = color;
+            if (label) label.textContent = `Custom (${color})`;
+            if (picker && picker.value !== color) {
+                try { picker.value = color; } catch {}
+            }
+        } else {
+            if (swatch) swatch.style.removeProperty('background-color');
+            if (label) label.textContent = 'Custom color';
+        }
+    };
+
+    const syncCustomTextColorUI = (color) => {
+        if (!textColorMenu) return;
+        const swatch = textColorMenu.querySelector('[data-text-color-custom-swatch]');
+        const label = textColorMenu.querySelector('[data-text-color-custom-label]');
+        const picker = textColorMenu.querySelector('[data-text-color-picker]');
+        if (color) {
+            if (swatch) swatch.style.backgroundColor = color;
+            if (label) label.textContent = `Custom (${color})`;
+            if (picker && picker.value !== color) {
+                try { picker.value = color; } catch {}
+            }
+        } else {
+            if (swatch) swatch.style.removeProperty('background-color');
+            if (label) label.textContent = 'Custom colour';
+        }
+    };
 
     let lastFocused = 'editor';
     titleField.addEventListener('focus', () => {
@@ -1369,18 +1561,55 @@ export async function mount(host) {
             blockStyle.value = '1';
             const align = titleField.dataset.align || 'left';
             toolbar.querySelectorAll('[data-align-icon]').forEach((icon) => { icon.toggleAttribute('hidden', icon.dataset.alignIcon !== align); });
-            alignMenu.querySelectorAll('[data-align]').forEach((item) => item.setAttribute('aria-checked', String(item.dataset.align === align)));
-            const tone = titleField.dataset.tone || null;
-            highlightMenu.querySelectorAll('[role=menuitemradio]').forEach((item) => item.setAttribute('aria-checked', String(item.dataset.highlight === tone)));
         } else {
             const level = [1, 2, 3, 4].find((l) => editor.isActive('heading', { level: l }));
             blockStyle.value = level ? String(level) : 'paragraph';
             const align = alignOf();
             toolbar.querySelectorAll('[data-align-icon]').forEach((icon) => { icon.toggleAttribute('hidden', icon.dataset.alignIcon !== align); });
             alignMenu.querySelectorAll('[data-align]').forEach((item) => item.setAttribute('aria-checked', String(item.dataset.align === align)));
-            const tone = editor.isActive(HIGHLIGHT) ? (editor.getAttributes(HIGHLIGHT).tone ?? highlightMenu.querySelector('[role=menuitemradio]').dataset.highlight) : null;
-            highlightMenu.querySelectorAll('[role=menuitemradio]').forEach((item) => item.setAttribute('aria-checked', String(item.dataset.highlight === tone)));
         }
+
+        const highlightAttrs = inTitle
+            ? { tone: titleField.dataset.tone || null, color: titleField.dataset.color || null }
+            : (editor.isActive(HIGHLIGHT) ? editor.getAttributes(HIGHLIGHT) : null);
+        const currentTone = highlightAttrs?.tone ?? null;
+        const currentColor = highlightAttrs?.color ?? null;
+
+        highlightMenu?.querySelectorAll('[role=menuitemradio]').forEach((item) => {
+            const val = item.dataset.highlight;
+            if (val === '') {
+                item.setAttribute('aria-checked', String(!currentTone && !currentColor));
+            } else {
+                item.setAttribute('aria-checked', String(val === currentTone));
+            }
+        });
+
+        const customApplyBtn = highlightMenu?.querySelector('[data-highlight-custom-apply]');
+        if (customApplyBtn) {
+            customApplyBtn.setAttribute('aria-checked', String(Boolean(currentColor)));
+        }
+
+        const effectiveCustom = currentColor || activeCustomColor;
+        syncCustomHighlightUI(effectiveCustom);
+
+        const textColorAttrs = inTitle
+            ? { tone: titleField.dataset.textTone || null, color: titleField.dataset.textColor || null }
+            : (editor.isActive(TEXT_COLOR) ? editor.getAttributes(TEXT_COLOR) : null);
+        const currentTextTone = textColorAttrs?.tone ?? null;
+        const currentTextColor = textColorAttrs?.color ?? null;
+
+        textColorMenu?.querySelectorAll('[role=menuitemradio]').forEach((item) => {
+            const val = item.dataset.textColor;
+            item.setAttribute('aria-checked', String(val === currentTextTone));
+        });
+
+        const customTextColorApplyBtn = textColorMenu?.querySelector('[data-text-color-custom-apply]');
+        if (customTextColorApplyBtn) {
+            customTextColorApplyBtn.setAttribute('aria-checked', String(Boolean(currentTextColor)));
+        }
+
+        const effectiveCustomTextColor = currentTextColor || activeCustomTextColor;
+        syncCustomTextColorUI(effectiveCustomTextColor);
         // The toolbar's one tab stop is never on a tool that can't take the focus (Undo, before there's anything to undo).
         const stop = items.find((b) => b.tabIndex === 0);
         if (!stop || stop.disabled) {
@@ -1483,6 +1712,8 @@ export async function mount(host) {
                 delete titleField.dataset.italic;
                 delete titleField.dataset.underline;
                 delete titleField.dataset.tone;
+                delete titleField.dataset.color;
+                titleField.style.removeProperty('background-color');
                 saveTitleStyle();
                 updateToolbar();
                 titleField.focus();
@@ -1522,8 +1753,8 @@ export async function mount(host) {
         next.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     });
 
-    // The menus (highlight colours, alignment, callouts, math, more tools) open under their button.
-    for (const menu of [highlightMenu, aiMenu, alignMenu, calloutMenu, mathMenu, moreToolsMenu].filter(Boolean)) {
+    // The menus (highlight colours, text colours, alignment, callouts, math, more tools) open under their button.
+    for (const menu of [highlightMenu, textColorMenu, aiMenu, alignMenu, calloutMenu, mathMenu, moreToolsMenu].filter(Boolean)) {
         const opener = toolbar.querySelector(`[data-menu-for="${menu.id}"]`);
         if (!opener) continue;
         menu.addEventListener('toggle', (event) => {
@@ -1610,6 +1841,11 @@ export async function mount(host) {
                     delete titleField.dataset.italic;
                     delete titleField.dataset.underline;
                     delete titleField.dataset.tone;
+                    delete titleField.dataset.color;
+                    titleField.style.removeProperty('background-color');
+                    delete titleField.dataset.textTone;
+                    delete titleField.dataset.textColor;
+                    titleField.style.removeProperty('color');
                     saveTitleStyle();
                     updateToolbar();
                     titleField.focus();
@@ -1661,22 +1897,280 @@ export async function mount(host) {
             editor.chain().focus().insertContentAt({ from, to }, text.replace(/\n+/g, ' ')).run();
         }
     });
-    highlightMenu.addEventListener('click', (event) => {
-        const item = event.target.closest('[data-highlight]');
-        if (!item) return;
-        // Closed first: closing hands focus back to its button, and the writing goes on in the note.
+    const customHighlightTrigger = highlightMenu.querySelector('[data-highlight-custom-trigger]');
+    const highlightColorPicker = highlightMenu.querySelector('[data-highlight-color-picker]');
+    const customApplyBtn = highlightMenu.querySelector('[data-highlight-custom-apply]');
+
+    const openHighlightPicker = () => {
+        if (!highlightColorPicker) return;
+        try {
+            if (typeof highlightColorPicker.showPicker === 'function') {
+                highlightColorPicker.showPicker();
+                return;
+            }
+        } catch {}
+        highlightColorPicker.click();
+    };
+
+    const applyHighlight = ({ tone = null, color = null }) => {
         highlightMenu.hidePopover();
+
+        if (color) {
+            activeCustomColor = color;
+            lastUsedHighlight = { type: 'color', value: color };
+            try {
+                localStorage.setItem(CUSTOM_HIGHLIGHT_STORAGE_KEY, color);
+            } catch {}
+            syncCustomHighlightUI(color);
+        } else if (tone) {
+            lastUsedHighlight = { type: 'tone', value: tone };
+        }
+
         if (lastFocused === 'title') {
-            if (item.dataset.highlight) titleField.dataset.tone = item.dataset.highlight;
-            else delete titleField.dataset.tone;
+            if (color) {
+                delete titleField.dataset.tone;
+                titleField.dataset.color = color;
+                titleField.style.backgroundColor = color;
+            } else if (tone) {
+                delete titleField.dataset.color;
+                titleField.style.removeProperty('background-color');
+                titleField.dataset.tone = tone;
+            } else {
+                delete titleField.dataset.tone;
+                delete titleField.dataset.color;
+                titleField.style.removeProperty('background-color');
+            }
             saveTitleStyle();
             updateToolbar();
             titleField.focus();
             return;
         }
+
         backToNote();
-        const chain = editor.chain().focus();
-        (item.dataset.highlight === '' ? chain.unsetHighlight() : chain.setHighlight({ tone: item.dataset.highlight })).run();
+
+        const currentSel = editor.state.selection;
+        const sel = (currentSel && !currentSel.empty)
+            ? { from: currentSel.from, to: currentSel.to }
+            : (savedHighlightSelection && savedHighlightSelection.from !== savedHighlightSelection.to ? savedHighlightSelection : null);
+
+        const chain = editor.chain();
+        if (sel) {
+            chain.setTextSelection(sel);
+        }
+
+        if (color) {
+            chain.unsetHighlight().setHighlight({ color, tone: null });
+        } else if (tone) {
+            chain.unsetHighlight().setHighlight({ tone, color: null });
+        } else {
+            chain.unsetHighlight();
+        }
+
+        chain.run();
+        savedHighlightSelection = null;
+        updateToolbar();
+    };
+
+    if (customHighlightTrigger && highlightColorPicker) {
+        customHighlightTrigger.addEventListener('click', (event) => {
+            if (event.target === highlightColorPicker) return;
+            event.preventDefault();
+            captureHighlightSelection();
+            openHighlightPicker();
+        });
+    }
+
+    if (customApplyBtn) {
+        customApplyBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            captureHighlightSelection();
+            if (!activeCustomColor) {
+                openHighlightPicker();
+                return;
+            }
+            applyHighlight({ color: activeCustomColor, tone: null });
+        });
+    }
+
+    if (highlightColorPicker) {
+        highlightColorPicker.addEventListener('input', (event) => {
+            const val = normalizeHighlightColor(event.target.value);
+            if (val) syncCustomHighlightUI(val);
+        });
+
+        highlightColorPicker.addEventListener('change', (event) => {
+            const color = normalizeHighlightColor(event.target.value);
+            if (!color) return;
+            activeCustomColor = color;
+            lastUsedHighlight = { type: 'color', value: color };
+            try {
+                localStorage.setItem(CUSTOM_HIGHLIGHT_STORAGE_KEY, color);
+            } catch {}
+            syncCustomHighlightUI(color);
+
+            const hasSelection = (savedHighlightSelection && savedHighlightSelection.from !== savedHighlightSelection.to)
+                || (editor && !editor.state.selection.empty)
+                || (lastFocused === 'title');
+
+            if (hasSelection) {
+                applyHighlight({ color, tone: null });
+            }
+        });
+    }
+
+    const highlightOpener = toolbar.querySelector('[data-menu-for="note-highlight-menu"]');
+    highlightOpener?.addEventListener('pointerdown', captureHighlightSelection);
+
+    highlightMenu.addEventListener('toggle', (event) => {
+        if (event.newState === 'open') {
+            captureHighlightSelection();
+            syncCustomHighlightUI(activeCustomColor);
+        }
+    });
+
+    highlightMenu.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-highlight]');
+        if (!item) return;
+        const tone = item.dataset.highlight || null;
+        applyHighlight({ tone, color: null });
+    });
+
+    const customTextColorTrigger = textColorMenu?.querySelector('[data-text-color-custom-trigger]');
+    const textColorPicker = textColorMenu?.querySelector('[data-text-color-picker]');
+    const customTextColorApplyBtn = textColorMenu?.querySelector('[data-text-color-custom-apply]');
+
+    const openTextColorPicker = () => {
+        if (!textColorPicker) return;
+        try {
+            if (typeof textColorPicker.showPicker === 'function') {
+                textColorPicker.showPicker();
+                return;
+            }
+        } catch {}
+        textColorPicker.click();
+    };
+
+    const applyTextColor = ({ tone = null, color = null }) => {
+        textColorMenu?.hidePopover();
+
+        if (color) {
+            activeCustomTextColor = color;
+            lastUsedTextColor = { type: 'color', value: color };
+            try {
+                localStorage.setItem(CUSTOM_TEXT_COLOR_STORAGE_KEY, color);
+            } catch {}
+            syncCustomTextColorUI(color);
+        } else if (tone) {
+            lastUsedTextColor = { type: 'tone', value: tone };
+        }
+
+        if (lastFocused === 'title') {
+            if (color) {
+                delete titleField.dataset.textTone;
+                titleField.dataset.textColor = color;
+                titleField.style.color = color;
+            } else if (tone) {
+                delete titleField.dataset.textColor;
+                titleField.style.removeProperty('color');
+                titleField.dataset.textTone = tone;
+            } else {
+                delete titleField.dataset.textTone;
+                delete titleField.dataset.textColor;
+                titleField.style.removeProperty('color');
+            }
+            saveTitleStyle();
+            updateToolbar();
+            titleField.focus();
+            return;
+        }
+
+        backToNote();
+
+        const currentSel = editor.state.selection;
+        const sel = (currentSel && !currentSel.empty)
+            ? { from: currentSel.from, to: currentSel.to }
+            : (savedTextColorSelection && savedTextColorSelection.from !== savedTextColorSelection.to ? savedTextColorSelection : null);
+
+        const chain = editor.chain();
+        if (sel) {
+            chain.setTextSelection(sel);
+        }
+
+        if (color) {
+            chain.unsetTextColor().setTextColor({ color, tone: null });
+        } else if (tone) {
+            chain.unsetTextColor().setTextColor({ tone, color: null });
+        } else {
+            chain.unsetTextColor();
+        }
+
+        chain.run();
+        savedTextColorSelection = null;
+        updateToolbar();
+    };
+
+    if (customTextColorTrigger && textColorPicker) {
+        customTextColorTrigger.addEventListener('click', (event) => {
+            if (event.target === textColorPicker) return;
+            event.preventDefault();
+            captureTextColorSelection();
+            openTextColorPicker();
+        });
+    }
+
+    if (customTextColorApplyBtn) {
+        customTextColorApplyBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            captureTextColorSelection();
+            if (!activeCustomTextColor) {
+                openTextColorPicker();
+                return;
+            }
+            applyTextColor({ color: activeCustomTextColor, tone: null });
+        });
+    }
+
+    if (textColorPicker) {
+        textColorPicker.addEventListener('input', (event) => {
+            const val = normalizeHighlightColor(event.target.value);
+            if (val) syncCustomTextColorUI(val);
+        });
+
+        textColorPicker.addEventListener('change', (event) => {
+            const color = normalizeHighlightColor(event.target.value);
+            if (!color) return;
+            activeCustomTextColor = color;
+            lastUsedTextColor = { type: 'color', value: color };
+            try {
+                localStorage.setItem(CUSTOM_TEXT_COLOR_STORAGE_KEY, color);
+            } catch {}
+            syncCustomTextColorUI(color);
+
+            const hasSelection = (savedTextColorSelection && savedTextColorSelection.from !== savedTextColorSelection.to)
+                || (editor && !editor.state.selection.empty)
+                || (lastFocused === 'title');
+
+            if (hasSelection) {
+                applyTextColor({ color, tone: null });
+            }
+        });
+    }
+
+    const textColorOpener = toolbar.querySelector('[data-menu-for="note-text-color-menu"]');
+    textColorOpener?.addEventListener('pointerdown', captureTextColorSelection);
+
+    textColorMenu?.addEventListener('toggle', (event) => {
+        if (event.newState === 'open') {
+            captureTextColorSelection();
+            syncCustomTextColorUI(activeCustomTextColor);
+        }
+    });
+
+    textColorMenu?.addEventListener('click', (event) => {
+        const item = event.target.closest('[data-text-color]');
+        if (!item) return;
+        const tone = item.dataset.textColor || null;
+        applyTextColor({ tone, color: null });
     });
     alignMenu.addEventListener('click', (event) => {
         const item = event.target.closest('[data-align]');
@@ -2576,9 +3070,654 @@ export async function mount(host) {
         }
     });
 
+    // ---------- In-Note Selection "Ask AI" (Ephemeral Pop-up) ----------
+    const aiPill = host.querySelector('[data-note-ai-pill]');
+    const aiCard = host.querySelector('[data-note-ai-card]');
+    let activeSelectedText = '';
+    let activeSelectionRect = null;
+    let aiCardOpen = false;
+
+    function isAiCardOpen() {
+        return aiCardOpen && aiCard && !aiCard.hidden;
+    }
+
+    function hideAiPill() {
+        if (!aiPill) return;
+        try {
+            if (aiPill.matches(':popover-open')) aiPill.hidePopover();
+        } catch {}
+        aiPill.hidden = true;
+    }
+
+    function showAiPill(rect, text) {
+        if (!aiPill || isAiCardOpen()) return;
+        activeSelectedText = text;
+        activeSelectionRect = rect;
+        aiPill.hidden = false;
+        try {
+            if (!aiPill.matches(':popover-open')) aiPill.showPopover();
+        } catch {}
+        placeBeside(rect, aiPill, { align: 'end', prefer: 'above', insetTop: clearOfBars() });
+    }
+
+    function checkTextSelection() {
+        if (isAiCardOpen()) return;
+        if (!editor || lastFocused === 'title') {
+            hideAiPill();
+            return;
+        }
+        const { from, to } = editor.state.selection;
+        if (from === to) {
+            hideAiPill();
+            return;
+        }
+        const text = editor.state.doc.textBetween(from, to, '\n').trim();
+        if (text.length < 2) {
+            hideAiPill();
+            return;
+        }
+        try {
+            const domSelection = window.getSelection();
+            if (!domSelection || domSelection.isCollapsed || !domSelection.rangeCount) {
+                hideAiPill();
+                return;
+            }
+            const range = domSelection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            if (rect && rect.width > 0 && rect.height > 0) {
+                showAiPill(rect, text);
+                return;
+            }
+        } catch {}
+        hideAiPill();
+    }
+
+    function resizeNoteAiInput() {
+        const input = aiCard?.querySelector('[data-note-ai-input]');
+        if (!input) return;
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 180) + 'px';
+    }
+
+    function openAiCard() {
+        if (!aiCard) return;
+        hideAiPill();
+        aiCardOpen = true;
+        aiCard.hidden = false;
+        // Reset any inline placement styles to let the right side drawer CSS take over
+        aiCard.style.top = '';
+        aiCard.style.left = '';
+        aiCard.style.right = '';
+        aiCard.style.bottom = '';
+        aiCard.style.maxWidth = '';
+        aiCard.style.maxHeight = '';
+        try {
+            if (!aiCard.matches(':popover-open')) aiCard.showPopover();
+        } catch {}
+
+        const quoteEl = aiCard.querySelector('[data-note-ai-quote]');
+        if (quoteEl) {
+            quoteEl.textContent = activeSelectedText.length > 280
+                ? activeSelectedText.slice(0, 277) + '…'
+                : activeSelectedText;
+        }
+
+        const input = aiCard.querySelector('[data-note-ai-input]');
+        if (input) {
+            input.value = '';
+            resizeNoteAiInput();
+            setTimeout(() => input.focus(), 60);
+        }
+    }
+
+    let noteAiAttachments = [];
+    let noteAiRecognition = null;
+    let noteAiTranscribing = false;
+    let noteAiInterimSpeech = '';
+
+    function stopNoteAiDictation(commit = true) {
+        if (commit && noteAiInterimSpeech.trim()) {
+            const input = aiCard?.querySelector('[data-note-ai-input]');
+            if (input) {
+                const cur = input.value.trim();
+                input.value = cur ? `${cur} ${noteAiInterimSpeech.trim()}` : noteAiInterimSpeech.trim();
+                resizeNoteAiInput();
+            }
+        }
+        noteAiInterimSpeech = '';
+        noteAiTranscribing = false;
+        if (noteAiRecognition) {
+            try { noteAiRecognition.stop(); } catch {}
+            noteAiRecognition = null;
+        }
+        const dictEl = aiCard?.querySelector('[data-note-ai-dictation]');
+        if (dictEl) dictEl.hidden = true;
+        const micIdle = aiCard?.querySelector('[data-note-ai-mic-idle]');
+        const micActive = aiCard?.querySelector('[data-note-ai-mic-active]');
+        if (micIdle) micIdle.hidden = false;
+        if (micActive) micActive.hidden = true;
+    }
+
+    function startNoteAiDictation() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('Live speech transcription is not supported in this browser.');
+            return;
+        }
+        stopNoteAiDictation(false);
+        try {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 1;
+            recognition.lang = document.documentElement.lang || navigator.language || 'en-US';
+
+            const dictEl = aiCard?.querySelector('[data-note-ai-dictation]');
+            const interimEl = aiCard?.querySelector('[data-note-ai-interim]');
+            const micIdle = aiCard?.querySelector('[data-note-ai-mic-idle]');
+            const micActive = aiCard?.querySelector('[data-note-ai-mic-active]');
+            const input = aiCard?.querySelector('[data-note-ai-input]');
+
+            recognition.onstart = () => {
+                noteAiTranscribing = true;
+                noteAiInterimSpeech = '';
+                if (dictEl) dictEl.hidden = false;
+                if (micIdle) micIdle.hidden = true;
+                if (micActive) micActive.hidden = false;
+                if (interimEl) interimEl.textContent = 'Speak now…';
+            };
+
+            recognition.onresult = (event) => {
+                let interim = '';
+                let finalizedChunk = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const transcript = event.results[i][0]?.transcript || '';
+                    if (event.results[i].isFinal) {
+                        finalizedChunk += transcript;
+                    } else {
+                        interim += transcript;
+                    }
+                }
+                if (finalizedChunk.trim() && input) {
+                    const cur = input.value.trim();
+                    input.value = cur ? `${cur} ${finalizedChunk.trim()}` : finalizedChunk.trim();
+                    resizeNoteAiInput();
+                }
+                noteAiInterimSpeech = interim.trim();
+                if (interimEl) {
+                    interimEl.textContent = noteAiInterimSpeech || 'Listening…';
+                }
+            };
+
+            recognition.onerror = () => {
+                stopNoteAiDictation(false);
+            };
+
+            recognition.onend = () => {
+                if (noteAiTranscribing) {
+                    stopNoteAiDictation(true);
+                }
+            };
+
+            noteAiRecognition = recognition;
+            recognition.start();
+        } catch {
+            stopNoteAiDictation(false);
+        }
+    }
+
+    function renderNoteAiAttachments() {
+        const attachContainer = aiCard?.querySelector('[data-note-ai-attachments]');
+        if (!attachContainer) return;
+        attachContainer.replaceChildren();
+        if (noteAiAttachments.length === 0) {
+            attachContainer.hidden = true;
+            return;
+        }
+        attachContainer.hidden = false;
+        noteAiAttachments.forEach((att, idx) => {
+            const chip = document.createElement('div');
+            chip.className = 'note-ai-attach-chip';
+            if (att.isImage) {
+                const img = document.createElement('img');
+                img.src = att.data;
+                img.alt = att.name;
+                chip.appendChild(img);
+            }
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'note-ai-attach-chip-name';
+            nameSpan.textContent = att.name;
+            chip.appendChild(nameSpan);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'note-ai-attach-chip-remove';
+            removeBtn.title = 'Remove';
+            removeBtn.setAttribute('aria-label', `Remove ${att.name}`);
+            removeBtn.innerHTML = '<svg class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+            removeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                noteAiAttachments.splice(idx, 1);
+                renderNoteAiAttachments();
+            });
+            chip.appendChild(removeBtn);
+            attachContainer.appendChild(chip);
+        });
+    }
+
+    async function addNoteAiFiles(files) {
+        if (!files || files.length === 0) return;
+        for (const file of files) {
+            if (noteAiAttachments.length >= 4) break;
+            const isImage = file.type.startsWith('image/');
+            const reader = new FileReader();
+            await new Promise((resolve) => {
+                reader.onload = () => {
+                    noteAiAttachments.push({
+                        name: file.name || (isImage ? 'pasted-image.png' : 'file'),
+                        data: reader.result,
+                        isImage: isImage,
+                    });
+                    resolve();
+                };
+                reader.onerror = resolve;
+                reader.readAsDataURL(file);
+            });
+        }
+        renderNoteAiAttachments();
+    }
+
+    function closeAiCard() {
+        if (!aiCard) return;
+        stopNoteAiDictation(false);
+        toggleModelPopover(false);
+        noteAiAttachments = [];
+        renderNoteAiAttachments();
+        aiCardOpen = false;
+        try {
+            if (aiCard.matches(':popover-open')) aiCard.hidePopover();
+        } catch {}
+        aiCard.hidden = true;
+        activeSelectedText = '';
+        activeSelectionRect = null;
+
+        // Ephemeral: clear all conversation history immediately
+        const msgsEl = aiCard.querySelector('[data-note-ai-messages]');
+        if (msgsEl) {
+            msgsEl.replaceChildren();
+            msgsEl.hidden = true;
+        }
+        const loadingEl = aiCard.querySelector('[data-note-ai-loading]');
+        if (loadingEl) loadingEl.hidden = true;
+        const input = aiCard.querySelector('[data-note-ai-input]');
+        if (input) {
+            input.value = '';
+            resizeNoteAiInput();
+        }
+    }
+
+    async function sendNoteAiQuery(question) {
+        stopNoteAiDictation(true);
+        const queryText = (question || '').trim();
+        if ((!queryText && noteAiAttachments.length === 0) || !activeSelectedText || !aiCard) return;
+        const askUrl = host.dataset.askAiUrl;
+        if (!askUrl) return;
+
+        const effectivePrompt = queryText || 'Review the attached file(s) for this selection';
+        const sendingAttachments = [...noteAiAttachments];
+        noteAiAttachments = [];
+        renderNoteAiAttachments();
+
+        const msgsEl = aiCard.querySelector('[data-note-ai-messages]');
+        const loadingEl = aiCard.querySelector('[data-note-ai-loading]');
+        const input = aiCard.querySelector('[data-note-ai-input]');
+
+        if (msgsEl) {
+            msgsEl.hidden = false;
+            const userBubble = document.createElement('div');
+            userBubble.className = 'note-ai-msg note-ai-msg-user';
+            if (sendingAttachments.length > 0) {
+                const attWrap = document.createElement('div');
+                attWrap.className = 'note-ai-attachments mb-1';
+                sendingAttachments.forEach((att) => {
+                    const chip = document.createElement('div');
+                    chip.className = 'note-ai-attach-chip';
+                    if (att.isImage) {
+                        const img = document.createElement('img');
+                        img.src = att.data;
+                        img.alt = att.name;
+                        chip.appendChild(img);
+                    }
+                    const nameSpan = document.createElement('span');
+                    nameSpan.className = 'note-ai-attach-chip-name';
+                    nameSpan.textContent = att.name;
+                    chip.appendChild(nameSpan);
+                    attWrap.appendChild(chip);
+                });
+                userBubble.appendChild(attWrap);
+            }
+            if (queryText) {
+                const textNode = document.createElement('div');
+                textNode.textContent = queryText;
+                userBubble.appendChild(textNode);
+            }
+            msgsEl.appendChild(userBubble);
+            msgsEl.scrollTop = msgsEl.scrollHeight;
+        }
+
+        if (loadingEl) loadingEl.hidden = false;
+        if (input) {
+            input.value = '';
+            resizeNoteAiInput();
+        }
+
+        try {
+            const response = await fetch(askUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-XSRF-TOKEN': xsrf(),
+                },
+                body: JSON.stringify({
+                    note_id: host.dataset.noteId || null,
+                    selection: activeSelectedText,
+                    question: effectivePrompt,
+                    prompt: effectivePrompt,
+                    attachments: sendingAttachments.map((a) => ({ name: a.name, data: a.data })),
+                    model: activeNoteAiModel || null,
+                }),
+            });
+
+            const data = await response.json();
+            if (loadingEl) loadingEl.hidden = true;
+
+            if (response.ok && data.status === 'ok' && data.answer) {
+                if (msgsEl) {
+                    const aiBubble = document.createElement('div');
+                    aiBubble.className = 'note-ai-msg note-ai-msg-ai';
+                    const paragraphs = data.answer.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+                    if (paragraphs.length > 1) {
+                        for (const p of paragraphs) {
+                            const pEl = document.createElement('p');
+                            pEl.textContent = p;
+                            aiBubble.appendChild(pEl);
+                        }
+                    } else {
+                        aiBubble.textContent = data.answer;
+                    }
+                    msgsEl.appendChild(aiBubble);
+                    msgsEl.scrollTop = msgsEl.scrollHeight;
+                    const bodyEl = aiCard.querySelector('[data-note-ai-body]');
+                    if (bodyEl) {
+                        bodyEl.scrollTop = bodyEl.scrollHeight;
+                    }
+                }
+            } else {
+                if (msgsEl) {
+                    const errBubble = document.createElement('div');
+                    errBubble.className = 'note-ai-msg note-ai-msg-ai text-danger';
+                    errBubble.textContent = data.error || data.message || 'Could not get an answer right now.';
+                    msgsEl.appendChild(errBubble);
+                    msgsEl.scrollTop = msgsEl.scrollHeight;
+                }
+            }
+        } catch {
+            if (loadingEl) loadingEl.hidden = true;
+            if (msgsEl) {
+                const errBubble = document.createElement('div');
+                errBubble.className = 'note-ai-msg note-ai-msg-ai text-danger';
+                errBubble.textContent = 'Connection error. Please try again.';
+                msgsEl.appendChild(errBubble);
+                msgsEl.scrollTop = msgsEl.scrollHeight;
+            }
+        }
+    }
+
+    aiPill?.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) e.preventDefault();
+    });
+
+    aiPill?.querySelector('[data-note-selection-highlight]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        hideAiPill();
+        if (!editor) return;
+
+        const effectiveHighlight = lastUsedHighlight
+            || (activeCustomColor ? { type: 'color', value: activeCustomColor } : { type: 'tone', value: getDefaultTone() });
+
+        if (effectiveHighlight?.type === 'color' && effectiveHighlight.value) {
+            const isCurrentActive = editor.isActive(HIGHLIGHT, { color: effectiveHighlight.value });
+            if (isCurrentActive) {
+                applyHighlight({ color: null, tone: null });
+            } else {
+                applyHighlight({ color: effectiveHighlight.value, tone: null });
+            }
+        } else {
+            const toneVal = effectiveHighlight?.value || getDefaultTone();
+            const isCurrentActive = toneVal && editor.isActive(HIGHLIGHT, { tone: toneVal });
+            if (isCurrentActive) {
+                applyHighlight({ color: null, tone: null });
+            } else {
+                applyHighlight({ tone: toneVal, color: null });
+            }
+        }
+    });
+
+    aiPill?.querySelector('[data-note-ai-trigger]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openAiCard();
+    });
+
+    aiCard?.querySelector('[data-note-ai-close]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeAiCard();
+    });
+
+    aiCard?.querySelectorAll('[data-quick-prompt]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            sendNoteAiQuery(btn.dataset.quickPrompt);
+        });
+    });
+
+    aiCard?.querySelector('[data-note-ai-mic]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (noteAiTranscribing) {
+            stopNoteAiDictation(true);
+        } else {
+            startNoteAiDictation();
+        }
+    });
+
+    aiCard?.querySelector('[data-note-ai-dictation-done]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        stopNoteAiDictation(true);
+    });
+
+    aiCard?.querySelector('[data-note-ai-dictation-cancel]')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        stopNoteAiDictation(false);
+    });
+
+    aiCard?.querySelector('[data-note-ai-file-input]')?.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files || []);
+        e.target.value = '';
+        addNoteAiFiles(files);
+    });
+
+    aiCard?.addEventListener('paste', (e) => {
+        const files = Array.from((e.clipboardData || {}).files || []);
+        if (files.length > 0) {
+            e.preventDefault();
+            addNoteAiFiles(files);
+        }
+    });
+
+    aiCard?.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+
+    aiCard?.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const files = Array.from((e.dataTransfer || {}).files || []);
+        if (files.length > 0) {
+            addNoteAiFiles(files);
+        }
+    });
+
+    const noteAiInput = aiCard?.querySelector('[data-note-ai-input]');
+    noteAiInput?.addEventListener('input', () => {
+        resizeNoteAiInput();
+    });
+    noteAiInput?.addEventListener('paste', () => {
+        setTimeout(resizeNoteAiInput, 0);
+    });
+    noteAiInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+            e.preventDefault();
+            const val = noteAiInput.value.trim();
+            sendNoteAiQuery(val);
+        }
+    });
+
+    aiCard?.querySelector('[data-note-ai-form]')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const input = aiCard.querySelector('[data-note-ai-input]');
+        const val = input?.value?.trim();
+        sendNoteAiQuery(val);
+    });
+
+    // Active AI model picker for Note selection Ask AI
+    const modelPicker = aiCard?.querySelector('[data-note-ai-model-picker]');
+    const modelBtn = aiCard?.querySelector('[data-note-ai-model-btn]');
+    const modelPopover = aiCard?.querySelector('[data-note-ai-model-popover]');
+    const modelNameEl = aiCard?.querySelector('[data-note-ai-model-name]');
+    const modelChevron = aiCard?.querySelector('[data-note-ai-model-chevron]');
+
+    let activeNoteAiModel = (function () {
+        const defaultMod = modelPicker?.dataset?.defaultModel || '';
+        try {
+            const saved = localStorage.getItem('vistud_note_ai_model');
+            if (saved && modelPicker?.querySelector(`[data-note-ai-model-option="${CSS.escape(saved)}"]`)) {
+                return saved;
+            }
+        } catch {}
+        return defaultMod;
+    })();
+
+    function toggleModelPopover(open) {
+        if (!modelPopover) return;
+        const willOpen = open !== undefined ? open : modelPopover.hidden;
+        modelPopover.hidden = !willOpen;
+        if (modelChevron) {
+            modelChevron.classList.toggle('rotate-180', willOpen);
+        }
+    }
+
+    function selectNoteAiModel(modelId, modelName) {
+        if (!modelId) return;
+        activeNoteAiModel = modelId;
+        try {
+            localStorage.setItem('vistud_note_ai_model', modelId);
+        } catch {}
+
+        if (modelNameEl && modelName) {
+            modelNameEl.textContent = modelName;
+        }
+        if (modelBtn) {
+            modelBtn.title = `Current model: ${modelName} (click to change)`;
+        }
+
+        modelPicker?.querySelectorAll('[data-note-ai-model-option]').forEach((opt) => {
+            const isMatch = opt.dataset.noteAiModelOption === modelId;
+            opt.classList.toggle('is-active', isMatch);
+            const check = opt.querySelector('[data-note-ai-model-check]');
+            if (check) {
+                check.style.display = isMatch ? '' : 'none';
+            }
+        });
+    }
+
+    if (activeNoteAiModel && modelPicker) {
+        const matchingOpt = modelPicker.querySelector(`[data-note-ai-model-option="${CSS.escape(activeNoteAiModel)}"]`);
+        if (matchingOpt) {
+            selectNoteAiModel(activeNoteAiModel, matchingOpt.dataset.modelName || matchingOpt.innerText.trim());
+        }
+    }
+
+    modelBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleModelPopover();
+    });
+
+    modelPicker?.querySelectorAll('[data-note-ai-model-option]').forEach((opt) => {
+        opt.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const mId = opt.dataset.noteAiModelOption;
+            const mName = opt.dataset.modelName || opt.innerText.trim();
+            selectNoteAiModel(mId, mName);
+            toggleModelPopover(false);
+        });
+    });
+
+    const noteBody = host.querySelector('[data-note-body]');
+    noteBody?.addEventListener('mouseup', () => {
+        setTimeout(checkTextSelection, 10);
+    });
+    noteBody?.addEventListener('keyup', () => {
+        setTimeout(checkTextSelection, 10);
+    });
+    on(document, 'selectionchange', () => {
+        if (!isAiCardOpen()) {
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed) {
+                hideAiPill();
+            }
+        }
+    });
+
+    on(document, 'pointerdown', (e) => {
+        if (modelPopover && !modelPopover.hidden && !modelPicker?.contains(e.target)) {
+            toggleModelPopover(false);
+        }
+        if (isAiCardOpen()) {
+            if (!aiCard.contains(e.target)) {
+                closeAiCard();
+            }
+            return;
+        }
+        if (aiPill && !aiPill.hidden && !aiPill.contains(e.target) && !e.target.closest('[data-note-body]')) {
+            hideAiPill();
+        }
+    });
+
     // The page's shortcuts; the note's own are NoteKeys, and a key it used is done with.
     on(document, 'keydown', (event) => {
         if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
+        if (event.key === 'Escape') {
+            if (modelPopover && !modelPopover.hidden) {
+                event.preventDefault();
+                toggleModelPopover(false);
+                return;
+            }
+            if (isAiCardOpen()) {
+                event.preventDefault();
+                closeAiCard();
+                return;
+            }
+            if (aiPill && !aiPill.hidden) {
+                hideAiPill();
+                return;
+            }
+        }
         const isMod = event.ctrlKey || event.metaKey;
         const key = event.key.toLowerCase();
         const activeTag = document.activeElement?.tagName;

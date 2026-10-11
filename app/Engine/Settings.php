@@ -38,6 +38,8 @@ final class Settings
         $row = LearnerTables::query(Guard::learner($by), 'engine_settings')->first();
         $defaults = $this->setup->defaultModels();
         $key = self::decrypt($row);
+        $rawFavorites = $row->favorite_models ?? null;
+        $favoriteModels = is_string($rawFavorites) ? (json_decode($rawFavorites, true) ?: []) : (is_array($rawFavorites) ? $rawFavorites : []);
 
         return new Choices(
             tutorModel: (string) ($row->tutor_model ?? $defaults['tutor']),
@@ -55,6 +57,7 @@ final class Settings
             autoReadFiles: (bool) ($row->auto_read_files ?? true),
             tutorMarksTopics: (bool) ($row->tutor_marks_topics ?? true),
             copyPasteAi: (bool) ($row->copy_paste_ai ?? false),
+            favoriteModels: $favoriteModels,
         );
     }
 
@@ -181,11 +184,17 @@ final class Settings
         Input::refuse($errors);
 
         $consent = filter_var($input['consent'] ?? ($existing?->consented_at !== null), FILTER_VALIDATE_BOOL);
+        $favs = $input['favorite_models'] ?? ($existing?->favorite_models ? json_decode($existing->favorite_models, true) : []);
+        $validFavs = [];
+        if (is_array($favs)) {
+            $validFavs = array_values(array_unique(array_filter(array_map('trim', $favs), fn ($m) => is_string($m) && $m !== '' && preg_match(self::MODEL_ID, $m) === 1)));
+        }
         $values = [
             'tutor_model' => $models['tutor_model'],
             'reader_model' => $models['reader_model'],
             'helper_model' => $models['helper_model'],
             'fallback_model' => $models['fallback_model'],
+            'favorite_models' => $validFavs === [] ? null : json_encode($validFavs),
             'session_cap_micros' => $caps['session_cap'],
             'month_cap_micros' => $caps['month_cap'],
             'no_training' => filter_var($input['no_training'] ?? true, FILTER_VALIDATE_BOOL),

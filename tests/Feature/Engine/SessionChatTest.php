@@ -237,6 +237,28 @@ class SessionChatTest extends TestCase
         $this->assertStringContainsString('The tutor\'s summary: Left joins were explained', app(Briefings::class)->forSession($this->by, $next->id)->markdown);
     }
 
+    public function test_wrap_up_handles_small_model_preamble_and_markdown(): void
+    {
+        $this->engine->will(Fake::says('A left join keeps every left row.'));
+        $this->chat()->send($this->by, $this->session->id, 'What is a left join?');
+        app(Sessions::class)->end($this->by, $this->session->id);
+
+        $messyOutput = "Here is the summary of your session:\n```json\n{\"summary\": \"Understood left joins well.\", \"checkpoint\": \"Left joins done; right joins next.\"}\n```\nHope this helps!";
+        $this->engine->will(Fake::says($messyOutput, 300, 'fake/quick'));
+        $written = $this->chat()->wrapUp($this->by, $this->session->id);
+        $this->assertSame(['summary' => 'Understood left joins well.', 'checkpoint' => 'Left joins done; right joins next.'], $written);
+    }
+
+    public function test_wrap_up_skips_trivial_greeting_only_session(): void
+    {
+        $this->engine->will(Fake::says('Hello! Ready to study?'));
+        $this->chat()->send($this->by, $this->session->id, 'hi');
+        app(Sessions::class)->end($this->by, $this->session->id);
+
+        $written = $this->chat()->wrapUp($this->by, $this->session->id);
+        $this->assertNull($written);
+    }
+
     public function test_the_wrap_up_needs_a_chat_keeps_what_the_student_ticked_and_leaves_a_failed_try_for_later(): void
     {
         // No chat yet: nothing to write from, nothing asked.
@@ -506,5 +528,16 @@ class SessionChatTest extends TestCase
         $this->engine->will(Fake::says('Hi.'));
         $this->chat()->send($this->by, $this->session->id, 'Hi');
         $this->assertSame([], array_filter($this->engine->last()->messages, fn ($m) => isset($m['reasoning_details'])));
+    }
+
+    public function test_a_session_chat_can_be_reset(): void
+    {
+        $this->engine->will(Fake::says('Hello! Let us study joins.'));
+        $this->chat()->send($this->by, $this->session->id, 'Hello tutor');
+        $this->assertCount(2, $this->chat()->transcript($this->by, $this->session->id));
+
+        $this->chat()->resetChat($this->by, $this->session->id);
+        $this->assertSame([], $this->chat()->transcript($this->by, $this->session->id));
+        $this->assertSame(0, $this->chat()->spent($this->by, $this->session->id)['session']);
     }
 }

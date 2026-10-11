@@ -8,12 +8,14 @@ use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
 use App\Http\Controllers\FilePreviewController;
 use App\Http\Controllers\FlashcardReviewController;
+use App\Http\Controllers\NoteAiController;
 use App\Http\Controllers\NoteExportController;
 use App\Http\Controllers\NotePageController;
 use App\Http\Controllers\PlacePageController;
 use App\Http\Controllers\QuestionPageController;
 use App\Http\Controllers\SessionBriefingController;
 use App\Http\Controllers\SessionPageController;
+use App\Http\Controllers\TopicPageController;
 use App\Http\Controllers\WorkspacePageController;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Guard;
@@ -72,6 +74,11 @@ Route::middleware('auth')->group(function () {
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'note' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.notes.show');
 
+    // In-note quick AI assistant on selected text
+    Route::post('/courses/{workspace}/notes/ask-ai', NoteAiController::class)
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.notes.ask-ai');
+
     // Embedded note images (served with learner authentication).
     Route::get('/notes/images/{id}', [NoteImageController::class, 'show'])
         ->where('id', '[A-Za-z0-9-]{1,64}')
@@ -114,6 +121,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/courses/{workspace}/folders/{folder}', [PlacePageController::class, 'folder'])
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'folder' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.folders.show');
+
+    // A topic's dedicated deep-dive page (docs/specs/vistud-2-blueprint.md).
+    Route::get('/courses/{workspace}/topics/{topic}', TopicPageController::class)
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'topic' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.topics.show');
 
     // Reviewing a workspace's flashcards (docs/specs/study-memory.md §4.5).
     Route::get('/courses/{workspace}/flashcards/review', FlashcardReviewController::class)

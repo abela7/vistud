@@ -6,6 +6,7 @@ use App\Platform\Access\Principal;
 use App\Study\Activities;
 use App\Study\Files;
 use App\Study\Flashcards;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Questions;
@@ -23,6 +24,7 @@ final class CourseOverview implements Tool
         private Notes $notes,
         private Files $files,
         private Flashcards $flashcards,
+        private Folders $folders,
     ) {}
 
     public function name(): string
@@ -32,7 +34,7 @@ final class CourseOverview implements Tool
 
     public function description(): string
     {
-        return 'The course at a glance: every module with its dates, how many of its topics are understood, confused or not started, and how many notes and files it holds; plus open questions, what is due in the next 14 days, and flashcards due. Start here when the student asks where they stand.';
+        return 'The course at a glance: every module with its dates, folders, how many of its topics are understood, confused or not started, and how many notes and files it holds; plus open questions, what is due in the next 14 days, and flashcards due. Start here when the student asks where they stand.';
     }
 
     public function parameters(): array
@@ -46,6 +48,11 @@ final class CourseOverview implements Tool
         $topics = $this->topics->list($by, $w);
         $notes = $this->notes->list($by, $w);
         $files = $this->files->list($by, $w);
+        $tree = $this->folders->tree($by, $w);
+        $folderNames = [];
+        foreach ($tree as $f) {
+            $folderNames[$f->id] = $f->name;
+        }
         $modules = [];
         foreach ($this->modules->list($by, $w) as $i => $module) {
             $statuses = [];
@@ -68,14 +75,15 @@ final class CourseOverview implements Tool
         $open = array_filter($this->questions->list($by, $w), fn ($q) => $q->status !== 'answered');
         $due = array_filter($this->activities->list($by, $w), fn ($a) => $a->status !== 'done' && $a->dueOn !== null && $a->dueOn <= $today->addDays(14)->toDateString());
 
-        return Lookup::json([
+        return Lookup::json(array_filter([
             'today' => $today->toDateString(),
+            'current_folder' => $context->folderId !== null ? ($folderNames[$context->folderId] ?? null) : null,
             'modules' => $modules,
             'topics_in_no_module' => count(array_filter($topics, fn ($t) => $t->moduleId === null)) ?: null,
             'open_questions' => count($open),
             'stuck_questions' => count(array_filter($open, fn ($q) => $q->status === 'stuck')),
             'due_in_14_days' => count($due),
             'flashcards_due' => $this->flashcards->counts($by, $w)['due'],
-        ]);
+        ], fn ($v) => $v !== null));
     }
 }

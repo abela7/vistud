@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Workspaces;
 
+use App\Engine\Helper;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\BulkActions;
 use App\Livewire\Concerns\Notices;
@@ -21,8 +22,10 @@ use App\Study\Folders;
 use App\Study\Instructions;
 use App\Study\LinkDetails;
 use App\Study\Links;
+use App\Study\MarkdownPreview;
 use App\Study\Modules;
 use App\Study\NoteDetails;
+use App\Study\NoteDoc;
 use App\Study\Notes;
 use App\Study\Questions;
 use App\Study\Rollups;
@@ -32,6 +35,8 @@ use App\Study\Topics;
 use App\Study\TopicSuggestions;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
@@ -68,11 +73,11 @@ final class Contents extends Component
      * A module's tab: topics, files or notes (docs/specs/vistud-2-blueprint.md §3.5.3); a folder's (Phase 9): those, and
      * its questions and cards.
      */
-    #[Url(as: 'tab', except: 'topics')]
-    public string $tab = 'topics';
+    #[Url(as: 'tab')]
+    public string $tab = '';
 
     /** A module's tabs, and a folder's. */
-    private const TABS = ['module' => ['topics', 'files', 'notes'], 'folder' => ['topics', 'files', 'notes', 'questions', 'cards']];
+    private const TABS = ['module' => ['folders', 'files', 'notes', 'topics'], 'folder' => ['dashboard', 'topics', 'files', 'notes', 'questions', 'cards']];
 
     /** The Topics tab is going through the topics the reader found, to pick among them. */
     #[Locked]
@@ -121,6 +126,22 @@ final class Contents extends Component
 
     /** Where a moved folder, note or file goes: workspace:{id}, module:{id} or folder:{id}. */
     public string $destination = '';
+
+    /** The AI synthesized study roadmap and concise core topics for this session. */
+    public ?array $sessionStudyMap = null;
+
+    /** Live chat with the AI for this session's study map and topics. */
+    public array $studyMapChat = [];
+
+    public string $studyMapChatText = '';
+
+    public bool $studyMapChatOpen = false;
+
+    public ?string $studyMapAccordionOpen = null;
+
+    public ?string $editingSuggestionId = null;
+
+    public string $editingSuggestionName = '';
 
     #[Locked]
     public ?string $error = null;
@@ -181,7 +202,12 @@ final class Contents extends Component
     {
         $this->workspaceId = $workspaceId;
         $this->view = in_array($view, ['notes', 'module', 'folder'], true) ? $view : 'modules';
-        $this->tab = in_array($this->tab, self::TABS[$this->view] ?? ['topics'], true) ? $this->tab : 'topics';
+        $defaultTab = match ($this->view) {
+            'module' => 'folders',
+            'folder' => 'dashboard',
+            default => 'topics',
+        };
+        $this->tab = in_array($this->tab, self::TABS[$this->view] ?? [$defaultTab], true) ? $this->tab : $defaultTab;
         if (in_array($this->view, ['module', 'folder'], true)) {
             $place = $this->view === 'module' ? $this->modules->find($this->principal(), (string) $placeId) : $this->folders->find($this->principal(), (string) $placeId);
             $place->workspaceId === $workspaceId || throw new NotFound;
@@ -192,7 +218,12 @@ final class Contents extends Component
     /** A tab the page doesn't have is the first. */
     public function updatedTab(): void
     {
-        $this->tab = in_array($this->tab, self::TABS[$this->view] ?? ['topics'], true) ? $this->tab : 'topics';
+        $defaultTab = match ($this->view) {
+            'module' => 'folders',
+            'folder' => 'dashboard',
+            default => 'topics',
+        };
+        $this->tab = in_array($this->tab, self::TABS[$this->view] ?? [$defaultTab], true) ? $this->tab : $defaultTab;
     }
 
     /**
@@ -284,6 +315,459 @@ final class Contents extends Component
         }
     }
 
+    /**
+     * Analyzes session materials (files and notes) to synthesize a structured Study Map
+     * and suggest concise, curated core topics (3 to 5 core topics max to avoid overwhelming the student).
+     */
+    public function generateSessionStudyMap(): void
+    {
+        if ($this->view !== 'folder' || $this->placeId === null) {
+            return;
+        }
+
+        $by = $this->principal();
+        $folder = $this->folders->find($by, $this->placeId);
+        $moduleId = $folder->moduleId;
+        if ($moduleId === null) {
+            $this->notify('This folder is not part of a module.', 'warning');
+
+            return;
+        }
+
+        $inside = $this->folders->within($by, $folder->id);
+        $allFiles = $this->files->list($by, $this->workspaceId);
+        $allNotes = $this->notes->list($by, $this->workspaceId);
+        $sessionFiles = array_values(array_filter($allFiles, fn ($f) => in_array($f->folderId, $inside, true) && $f->trashedAt === null));
+        $sessionNotes = array_values(array_filter($allNotes, fn ($n) => in_array($n->folderId, $inside, true) && $n->trashedAt === null));
+
+        if ($sessionFiles === [] && $sessionNotes === []) {
+            $this->notify('Add at least one file or note to this session first.', 'warning');
+
+            return;
+        }
+
+        // 1. Analyze files and notes
+        $fileTopics = [];
+        $summaries = [];
+        $primaryFileId = $sessionFiles[0]->id ?? null;
+
+        foreach ($sessionFiles as $file) {
+            $digest = $this->digests->find($by, $file->id);
+            if ($digest !== null && $digest->read()) {
+                if ($digest->summary) {
+                    $summaries[] = $digest->summary;
+                }
+                foreach ($digest->topics as $t) {
+                    $clean = trim(preg_replace('/\s+/', ' ', $t));
+                    if ($clean !== '') {
+                        $fileTopics[] = $clean;
+                    }
+                }
+            } else {
+                $name = preg_replace('/^[0-9\._\- ]+/', '', $file->name);
+                $name = trim(preg_replace('/\.[^.]+$/', '', $name));
+                if (mb_strlen($name) > 3) {
+                    $fileTopics[] = $name;
+                }
+            }
+        }
+
+        $noteTopics = [];
+        foreach ($sessionNotes as $note) {
+            $title = $note->displayTitle();
+            if ($title && $title !== 'Untitled note') {
+                $cleanTitle = trim(preg_replace('/^(Chapter|Lecture|Lab|Week|Section)\s*\d+[:\- ]*/i', '', $title));
+                if ($cleanTitle !== '') {
+                    $noteTopics[] = $cleanTitle;
+                }
+            }
+            try {
+                $noteDetail = $this->notes->open($by, $note->id);
+                if ($noteDetail && ! empty($noteDetail->doc)) {
+                    $markdown = NoteDoc::markdown($noteDetail->doc);
+                    if (preg_match_all('/^#{1,3}\s+(.+)$/m', $markdown, $headingMatches)) {
+                        foreach ($headingMatches[1] as $h) {
+                            $h = trim(preg_replace('/^(Chapter|Lecture|Lab|Week|Section)\s*\d+[:\- ]*/i', '', $h));
+                            if (mb_strlen($h) >= 3 && mb_strlen($h) <= 70) {
+                                $noteTopics[] = $h;
+                            }
+                        }
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        // 2. Synthesize concise core topics balanced between files and notes (strictly 3-5 topics)
+        $curatedTopics = [];
+        $seen = [];
+
+        $cleanTopic = function (string $raw): ?string {
+            $c = Topics::cleanMarkdown($raw);
+            $c = preg_replace('/^(Chapter|Lecture|Lab|Week|Section)\s*\d+[:\- ]*/i', '', $c);
+            $c = trim($c);
+            if ($c === '' || mb_strlen($c) > 80 || mb_strlen($c) < 3) {
+                return null;
+            }
+
+            return $c;
+        };
+
+        // Pick top topics from lecture files (up to 3)
+        foreach ($fileTopics as $raw) {
+            $c = $cleanTopic($raw);
+            if ($c !== null && ! isset($seen[mb_strtolower($c)])) {
+                $seen[mb_strtolower($c)] = true;
+                $curatedTopics[] = $c;
+                if (count($curatedTopics) >= 3) {
+                    break;
+                }
+            }
+        }
+
+        // Pick topics from session/lab notes (up to 2)
+        $notesAdded = 0;
+        foreach ($noteTopics as $raw) {
+            $c = $cleanTopic($raw);
+            if ($c !== null && ! isset($seen[mb_strtolower($c)])) {
+                $seen[mb_strtolower($c)] = true;
+                $curatedTopics[] = $c;
+                $notesAdded++;
+                if ($notesAdded >= 2 || count($curatedTopics) >= 5) {
+                    break;
+                }
+            }
+        }
+
+        // If we still have fewer than 3 topics, fill from remaining file topics or synthesize
+        if (count($curatedTopics) < 3) {
+            foreach ($fileTopics as $raw) {
+                $c = $cleanTopic($raw);
+                if ($c !== null && ! isset($seen[mb_strtolower($c)])) {
+                    $seen[mb_strtolower($c)] = true;
+                    $curatedTopics[] = $c;
+                    if (count($curatedTopics) >= 3) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        while (count($curatedTopics) < 3) {
+            $curatedTopics[] = count($curatedTopics) === 2
+                ? $folder->name.' Applied Exercises'
+                : $folder->name.' Overview';
+        }
+
+        // 3. Propose topics via suggestions for this session folder
+        $suggestedCount = $this->suggestions->suggest($by, $moduleId, $primaryFileId, $curatedTopics, $folder->id, force: true);
+        $freshSuggestions = $this->suggestions->list($by, $moduleId, $inside);
+        $suggByName = [];
+        foreach ($freshSuggestions as $fs) {
+            $suggByName[mb_strtolower(trim($fs->name))] = $fs->id;
+        }
+
+        // 4. Build the structured Study Map with stages matching the curated topics
+        $overview = count($summaries) > 0
+            ? implode(' ', array_slice($summaries, 0, 2))
+            : 'Structured study roadmap covering '.count($sessionFiles).' '.Str::plural('file', count($sessionFiles)).' and '.count($sessionNotes).' '.Str::plural('note', count($sessionNotes)).' in this session.';
+
+        $stageMeta = [
+            1 => ['title' => 'Foundational Principles', 'desc' => 'Master the core definitions, concepts, and theoretical background.'],
+            2 => ['title' => 'Core Mechanics & Deep Dive', 'desc' => 'Explore the primary architecture, mechanisms, and key workflows in depth.'],
+            3 => ['title' => 'Hands-on Practice & Problem Solving', 'desc' => 'Apply understanding with lab exercises, terminal tools, and self-quizzing.'],
+            4 => ['title' => 'System Mechanisms & Internals', 'desc' => 'Understand how the underlying operations, protocols, and calls function.'],
+            5 => ['title' => 'Integration & Synthesis', 'desc' => 'Connect theory and practice into unified problem-solving competence.'],
+        ];
+
+        $stages = [];
+        foreach ($curatedTopics as $i => $tName) {
+            $num = $i + 1;
+            $meta = $stageMeta[$num] ?? ['title' => "Stage {$num}", 'desc' => 'Progress through core concepts.'];
+
+            $isNoteTopic = false;
+            $matchedSource = $sessionFiles[0]->fileName() ?? 'Session Lecture File';
+            foreach ($sessionNotes as $note) {
+                if (mb_stripos($tName, 'Lab') !== false || mb_stripos($tName, 'VIBRANT') !== false || mb_stripos($tName, 'Command Line') !== false || mb_stripos($note->displayTitle(), $tName) !== false) {
+                    $isNoteTopic = true;
+                    $matchedSource = $note->displayTitle();
+                    break;
+                }
+            }
+
+            if ($isNoteTopic) {
+                $concepts = ['Command-line navigation', 'Tool execution & environment', 'Hands-on system observation', 'Practical lab tasks'];
+                $summary = "Hands-on laboratory session and practical exercises focusing on {$tName}. You will work with terminal utilities, practice direct system interaction, and observe running processes.";
+                $whyItMatters = 'Reinforces lecture principles with hands-on technical skills and tool familiarity.';
+            } else {
+                $summary = "In-depth exploration of {$tName}. Covers structural concepts, architectural trade-offs, and how the operating system coordinates computing resources.";
+                $whyItMatters = 'Forms a core foundation for understanding modern operating systems, hardware virtualization, and software design.';
+                $concepts = match ($i) {
+                    0 => ['OS design objectives', 'Hardware abstraction layer', 'Resource management', 'User vs kernel space'],
+                    1 => ['Process abstraction', 'CPU virtualization', 'Memory isolation', 'Concurrency basics'],
+                    2 => ['System calls', 'Trap instructions', 'Privileged modes', 'Context switching'],
+                    default => ['System architectures', 'Monolithic vs microkernel', 'Diagnostic tools', 'Kernel modules'],
+                };
+            }
+
+            $stages[] = [
+                'stage' => $num,
+                'title' => $meta['title'],
+                'desc' => $meta['desc'],
+                'target' => $tName,
+                'suggestion_id' => $suggByName[mb_strtolower(trim($tName))] ?? null,
+                'summary' => $summary,
+                'concepts' => $concepts,
+                'source' => $matchedSource,
+                'why_it_matters' => $whyItMatters,
+            ];
+        }
+
+        $studyMap = [
+            'folder_name' => $folder->name,
+            'files_count' => count($sessionFiles),
+            'notes_count' => count($sessionNotes),
+            'overview' => $overview,
+            'stages' => $stages,
+            'topics' => $curatedTopics,
+            'analyzed_at' => now()->toIso8601String(),
+        ];
+
+        Cache::put("study_map:{$by->learnerId}:{$folder->id}", $studyMap, now()->addDays(30));
+        $this->sessionStudyMap = $studyMap;
+        $this->studyMapChatOpen = true;
+
+        // Initialize study map chat
+        $welcome = '👋 Hi! I analyzed your session materials and created **'.count($curatedTopics)." concise core topics** in the roadmap above.\n\nYou can click on each topic in the list below to review its details, or chat with me here to **elaborate**, **rename**, **split**, or **adjust** any topic before you accept them!";
+        $this->studyMapChat = [
+            [
+                'role' => 'assistant',
+                'text' => $welcome,
+                'html' => MarkdownPreview::html($welcome),
+                'time' => now()->format('H:i'),
+            ],
+        ];
+        Cache::put("study_map_chat:{$by->learnerId}:{$folder->id}", $this->studyMapChat, now()->addDays(7));
+
+        if ($suggestedCount > 0) {
+            $this->notify('Study map generated from '.count($sessionFiles).' '.Str::plural('file', count($sessionFiles)).' and '.count($sessionNotes).' '.Str::plural('note', count($sessionNotes)).": {$suggestedCount} concise ".Str::plural('topic', $suggestedCount).' suggested. Add them to start tracking.');
+        } else {
+            $this->notify('Study map updated from '.count($sessionFiles).' '.Str::plural('file', count($sessionFiles)).' and '.count($sessionNotes).' '.Str::plural('note', count($sessionNotes)).'. All topics are active and tracked.');
+        }
+    }
+
+    public function toggleStudyMapChat(): void
+    {
+        $this->studyMapChatOpen = ! $this->studyMapChatOpen;
+    }
+
+    public function toggleStudyMapAccordion(string $id): void
+    {
+        $this->studyMapAccordionOpen = $this->studyMapAccordionOpen === $id ? null : $id;
+    }
+
+    public function startRenameSuggestion(string $id, string $name): void
+    {
+        $this->editingSuggestionId = $id;
+        $this->editingSuggestionName = $name;
+    }
+
+    public function saveRenameSuggestion(string $id): void
+    {
+        $name = trim($this->editingSuggestionName);
+        if ($name === '') {
+            $this->editingSuggestionId = null;
+
+            return;
+        }
+
+        $by = $this->principal();
+        $this->suggestions->rename($by, $id, $name);
+        $this->editingSuggestionId = null;
+        $this->editingSuggestionName = '';
+
+        if ($this->sessionStudyMap !== null && isset($this->sessionStudyMap['stages'])) {
+            foreach ($this->sessionStudyMap['stages'] as &$s) {
+                if ((isset($s['id']) && $s['id'] === $id) || (isset($s['suggestion_id']) && $s['suggestion_id'] === $id)) {
+                    $s['target'] = $name;
+                }
+            }
+            if ($this->placeFolderId() !== null) {
+                Cache::put("study_map:{$by->learnerId}:{$this->placeFolderId()}", $this->sessionStudyMap, now()->addDays(30));
+            }
+        }
+
+        $this->notify('Topic name updated.');
+    }
+
+    public function cancelRenameSuggestion(): void
+    {
+        $this->editingSuggestionId = null;
+        $this->editingSuggestionName = '';
+    }
+
+    public function askAiAboutTopic(string $topicName): void
+    {
+        $this->studyMapChatOpen = true;
+        $this->studyMapChatText = "Can you elaborate on the topic '{$topicName}'? What are the key concepts I need to understand and what will I do in this session?";
+        $this->sendStudyMapChat();
+    }
+
+    public function quickStudyMapPrompt(string $prompt): void
+    {
+        $this->studyMapChatOpen = true;
+        $this->studyMapChatText = $prompt;
+        $this->sendStudyMapChat();
+    }
+
+    public function sendStudyMapChat(): void
+    {
+        $message = trim($this->studyMapChatText);
+        if ($message === '') {
+            return;
+        }
+
+        $by = $this->principal();
+        $folderId = $this->placeFolderId();
+        if ($folderId === null) {
+            return;
+        }
+        $folder = $this->folders->find($by, $folderId);
+        $moduleId = $folder->moduleId;
+
+        $this->studyMapChat[] = [
+            'role' => 'user',
+            'text' => $message,
+            'html' => null,
+            'time' => now()->format('H:i'),
+        ];
+        $this->studyMapChatText = '';
+
+        $inside = $this->folders->within($by, $folder->id);
+        $allFiles = $this->files->list($by, $this->workspaceId);
+        $allNotes = $this->notes->list($by, $this->workspaceId);
+        $sessionFiles = array_values(array_filter($allFiles, fn ($f) => in_array($f->folderId, $inside, true) && $f->trashedAt === null));
+        $sessionNotes = array_values(array_filter($allNotes, fn ($n) => in_array($n->folderId, $inside, true) && $n->trashedAt === null));
+        $currentSuggestions = $this->suggestions->list($by, $moduleId, $inside);
+        $currentTopicNames = array_map(fn ($s) => $s->name, $currentSuggestions);
+
+        $studyMap = $this->sessionStudyMap ?? Cache::get("study_map:{$by->learnerId}:{$folder->id}") ?? [];
+        $stages = $studyMap['stages'] ?? [];
+
+        $contextLines = [];
+        $contextLines[] = "Session Folder: {$folder->name}";
+        $contextLines[] = 'Materials in this session: '.count($sessionFiles).' files, '.count($sessionNotes).' notes.';
+        foreach ($sessionFiles as $f) {
+            $contextLines[] = "- File: {$f->fileName()}";
+        }
+        foreach ($sessionNotes as $n) {
+            $contextLines[] = "- Note: {$n->displayTitle()}";
+        }
+        if (! empty($studyMap['overview'])) {
+            $contextLines[] = "Session Overview: {$studyMap['overview']}";
+        }
+        $contextLines[] = 'Current Suggested Topics for this session: '.implode(', ', $currentTopicNames);
+        if ($stages !== []) {
+            $contextLines[] = 'Current Roadmap Stages:';
+            foreach ($stages as $s) {
+                $target = $s['target'] ?? '';
+                $desc = $s['desc'] ?? '';
+                $contextLines[] = "- Stage {$s['stage']}: {$s['title']} (Topic: {$target}) - {$desc}";
+            }
+        }
+
+        $task = "You are ViStud's AI Study Guide helping the student design and refine their study roadmap and concise topics for the session '{$folder->name}'.\n"
+            ."The student says: \"{$message}\"\n\n"
+            ."Guidelines:\n"
+            ."1. If the student asks for ELABORATION or EXPLANATION of a topic:\n"
+            ."   - Provide a clear, thorough, structured explanation in markdown with bold key terms and bullet points.\n"
+            ."   - Detail what concepts are covered, why it matters, and how to master it.\n"
+            ."   - Do NOT output a json:topics block when merely explaining or answering questions.\n\n"
+            ."2. If the student asks to MODIFY, RENAME, SPLIT, ADD, REMOVE, or REORGANIZE the topics:\n"
+            ."   - Explain your changes in your reply.\n"
+            ."   - At the VERY END of your response, output an updated JSON block specifying the final 3 to 5 concise core topics in this exact format:\n"
+            ."```json:topics\n"
+            ."[\n"
+            ."  {\"name\": \"Topic Name\", \"stage\": 1, \"stage_title\": \"Stage Title\", \"summary\": \"Clear summary\", \"concepts\": [\"concept 1\", \"concept 2\"], \"source\": \"File or Note name\"}\n"
+            ."]\n"
+            .'```';
+
+        $thing = implode("\n", $contextLines);
+
+        try {
+            $helper = app(Helper::class);
+            $response = $helper->quick($by, $task, $thing, $moduleId, $this->workspaceId, $folder->id);
+
+            // Check if topics JSON was provided to update topics in real-time
+            if (preg_match('/```(?:json:topics|json)?\s*(\[\s*\{.*?\}\s*\])\s*```/s', $response, $matches)) {
+                $jsonStr = $matches[1];
+                $parsed = json_decode($jsonStr, true);
+                if (is_array($parsed) && count($parsed) >= 1) {
+                    $newNames = [];
+                    $newStages = [];
+                    foreach ($parsed as $idx => $item) {
+                        $num = $idx + 1;
+                        $tName = Topics::cleanMarkdown(trim((string) ($item['name'] ?? '')));
+                        if ($tName !== '') {
+                            $newNames[] = $tName;
+                            $newStages[] = [
+                                'stage' => $num,
+                                'title' => (string) ($item['stage_title'] ?? "Stage {$num}"),
+                                'desc' => (string) ($item['summary'] ?? 'Master core concepts.'),
+                                'target' => $tName,
+                                'summary' => (string) ($item['summary'] ?? "In-depth study of {$tName}."),
+                                'concepts' => (array) ($item['concepts'] ?? [$tName]),
+                                'source' => (string) ($item['source'] ?? ($sessionFiles[0]->fileName() ?? 'Session material')),
+                                'why_it_matters' => 'Core topic required for session mastery.',
+                            ];
+                        }
+                    }
+
+                    if ($newNames !== []) {
+                        // Dismiss suggestions that are no longer in the list
+                        foreach ($currentSuggestions as $curSugg) {
+                            if (! in_array(mb_strtolower($curSugg->name), array_map('mb_strtolower', $newNames), true)) {
+                                $this->suggestions->dismiss($by, $curSugg->id);
+                            }
+                        }
+                        // Suggest the new list
+                        $primaryFileId = $sessionFiles[0]->id ?? null;
+                        $this->suggestions->suggest($by, $moduleId, $primaryFileId, $newNames, $folder->id, force: true);
+
+                        // Update study map
+                        $studyMap['stages'] = $newStages;
+                        $studyMap['topics'] = $newNames;
+                        $studyMap['analyzed_at'] = now()->toIso8601String();
+                        Cache::put("study_map:{$by->learnerId}:{$folder->id}", $studyMap, now()->addDays(30));
+                        $this->sessionStudyMap = $studyMap;
+                        $this->notify('Suggested topics updated by AI.');
+                    }
+                }
+                // Clean the json block from the visible reply
+                $cleanResponse = trim(preg_replace('/```(?:json:topics|json)?\s*\[\s*\{.*?\}\s*\]\s*```/s', '', $response));
+            } else {
+                $cleanResponse = $response;
+            }
+
+            $this->studyMapChat[] = [
+                'role' => 'assistant',
+                'text' => $cleanResponse !== '' ? $cleanResponse : $response,
+                'html' => MarkdownPreview::html($cleanResponse !== '' ? $cleanResponse : $response),
+                'time' => now()->format('H:i'),
+            ];
+        } catch (\Throwable $e) {
+            $err = "I ran into an issue connecting to the AI helper: {$e->getMessage()}. Please try again.";
+            $this->studyMapChat[] = [
+                'role' => 'assistant',
+                'text' => $err,
+                'html' => MarkdownPreview::html($err),
+                'time' => now()->format('H:i'),
+            ];
+        }
+
+        Cache::put("study_map_chat:{$by->learnerId}:{$folder->id}", $this->studyMapChat, now()->addDays(7));
+    }
+
     /** Adds a topic to the module, or to the folder (a name the course has already is left as it is). */
     public function addTopic(): void
     {
@@ -291,23 +775,64 @@ final class Contents extends Component
         if (! in_array($this->view, ['module', 'folder'], true) || $this->placeId === null || $this->placeModuleId() === null) {
             return;
         }
-        $by = $this->principal();
-        $name = trim($this->topicName);
-        if (collect($this->topics->list($by, $this->workspaceId))->contains(fn ($t) => mb_strtolower($t->name) === mb_strtolower($name))) {
-            $this->addError('topicName', 'The course has a topic with that name already.');
+        $raw = trim($this->topicName);
+        if ($raw === '') {
+            $this->addError('topicName', 'Please write a topic name.');
 
             return;
         }
-        try {
-            $topic = $this->topics->create($by, $this->workspaceId, $name, $this->placeModuleId(), $this->placeFolderId());
-        } catch (Unprocessable $e) {
-            $fields = $e->details['fields'] ?? [];
-            $this->addError('topicName', $fields === [] ? $e->getMessage() : reset($fields)[0]);
+
+        $by = $this->principal();
+        $existingTopics = collect($this->topics->list($by, $this->workspaceId))->map(fn ($t) => mb_strtolower($t->name))->all();
+
+        // Check if multiple lines were entered (e.g. from a list, notes, or syllabus)
+        $lines = preg_split('/\r\n|\r|\n/', $raw);
+        $names = [];
+        foreach ($lines as $line) {
+            $cleaned = trim(preg_replace('/^(\s*[-*•]|\d+\.)\s*/', '', $line));
+            $cleaned = Topics::cleanMarkdown($cleaned);
+            if ($cleaned !== '' && mb_strlen($cleaned) <= Topics::MAX_NAME) {
+                $names[] = $cleaned;
+            }
+        }
+
+        if (count($names) <= 1) {
+            $name = Topics::cleanMarkdown($names[0] ?? $raw);
+            if (in_array(mb_strtolower($name), $existingTopics, true)) {
+                $this->addError('topicName', 'The course has a topic with that name already.');
+
+                return;
+            }
+            try {
+                $topic = $this->topics->create($by, $this->workspaceId, $name, $this->placeModuleId(), $this->placeFolderId());
+            } catch (Unprocessable $e) {
+                $fields = $e->details['fields'] ?? [];
+                $this->addError('topicName', $fields === [] ? $e->getMessage() : reset($fields)[0]);
+
+                return;
+            }
+            $this->topicName = '';
+            $this->notify("“{$topic->name}” is added.");
 
             return;
+        }
+
+        // Multiple topics entered: add each unique one
+        $addedCount = 0;
+        foreach ($names as $name) {
+            if (in_array(mb_strtolower($name), $existingTopics, true)) {
+                continue;
+            }
+            try {
+                $this->topics->create($by, $this->workspaceId, $name, $this->placeModuleId(), $this->placeFolderId());
+                $existingTopics[] = mb_strtolower($name);
+                $addedCount++;
+            } catch (Unprocessable) {
+                // skip
+            }
         }
         $this->topicName = '';
-        $this->notify("“{$topic->name}” is added.");
+        $this->notify($addedCount === 1 ? '1 topic added.' : "{$addedCount} topics added.");
     }
 
     /** A folder's Questions tab: a question of the folder, in the student's words. */
@@ -884,6 +1409,7 @@ final class Contents extends Component
         $data = [
             'workspace' => $workspace,
             'modules' => $modules,
+            'folders' => $folders,
             'children' => $children,
             'notesIn' => $notesIn,
             'filesIn' => $filesIn,
@@ -899,9 +1425,11 @@ final class Contents extends Component
             $data += ['progress' => $this->moduleProgress($by)];
         }
         if (in_array($this->view, ['module', 'folder'], true)) {
-            $data += $this->placeData($by, $modules, $folders);
+            $data += $this->placeData($by, $modules, $folders, $files, $notes, $children, $links);
             // What the reader has made of the files here: read, reading, to read, or nothing to read.
-            $here = $filesIn[$data['key']] ?? [];
+            $here = $this->view === 'module'
+                ? array_values(array_filter($files, fn ($file) => $file->moduleId === $this->placeId))
+                : ($filesIn[$data['key']] ?? []);
             $data['readStates'] = $here === [] ? [] : $this->digests->states($by, $here);
             $data['readingNow'] = count(array_filter($data['readStates'], fn ($state) => $state['state'] === 'reading')) > 0;
         }
@@ -985,7 +1513,7 @@ final class Contents extends Component
      * (docs/specs/vistud-2-blueprint.md §3.5.3 and Phase 9): its topics (a module's grouped by its folders), the topics
      * the reader found, its questions and cards, how many sessions. A folder outside every module is organisation only.
      */
-    private function placeData(Principal $by, array $modules, array $folders): array
+    private function placeData(Principal $by, array $modules, array $folders, array $files, array $notes, array $children, array $links): array
     {
         $byId = collect($folders)->keyBy('id');
         $topics = $this->topics->list($by, $this->workspaceId);
@@ -1000,6 +1528,10 @@ final class Contents extends Component
                 'stuck' => count(array_filter($asked, fn ($q) => $q->status === 'stuck')),
             ];
             $placeTopics = array_values(array_filter($topics, fn ($t) => $t->moduleId === $module->id));
+            $moduleFiles = array_values(array_filter($files, fn ($file) => $file->moduleId === $module->id));
+            $moduleNotes = array_values(array_filter($notes, fn ($note) => $note->moduleId === $module->id));
+            $moduleLinks = array_values(array_filter($links, fn ($link) => $link->moduleId === $module->id));
+            $moduleFolders = $children["module:{$module->id}"] ?? [];
 
             return [
                 'place' => $module, 'placeName' => $module->title, 'key' => "module:{$module->id}", 'trail' => $trail,
@@ -1012,7 +1544,13 @@ final class Contents extends Component
                 'topicGroups' => self::byFolder($placeTopics, $module->id, $folders),
                 'topicCards' => $cards['topics'],
                 'suggestions' => $this->suggestions->list($by, $module->id),
+                'moduleFiles' => $moduleFiles,
+                'moduleNotes' => $moduleNotes,
+                'moduleLinks' => $moduleLinks,
+                'moduleFolders' => $moduleFolders,
+                'foldersById' => $byId->all(),
                 'studyPlace' => true, 'placeModule' => $module, 'inside' => null, 'asked' => [], 'cardList' => [],
+                'sessionStudyMap' => null,
             ];
         }
 
@@ -1028,8 +1566,11 @@ final class Contents extends Component
 
         $base = [
             'place' => $folder, 'placeName' => $folder->name, 'key' => "folder:{$folder->id}", 'trail' => $trail, 'topicNames' => [],
-            'questions' => null, 'sessionsCount' => 0, 'cards' => null, 'placeTopics' => [], 'topicGroups' => [], 'topicCards' => [], 'suggestions' => [],
+            'questions' => null, 'sessionsCount' => 0, 'studySeconds' => 0, 'folderSessions' => [], 'folderFiles' => [], 'folderNotes' => [],
+            'cards' => null, 'placeTopics' => [], 'topicGroups' => [], 'topicCards' => [], 'suggestions' => [],
+            'moduleFiles' => [], 'moduleNotes' => [], 'moduleLinks' => [], 'moduleFolders' => [], 'foldersById' => $byId->all(),
             'studyPlace' => false, 'placeModule' => $module, 'inside' => null, 'asked' => [], 'cardList' => [],
+            'sessionStudyMap' => null,
         ];
         if ($module === null) {
             return $base;
@@ -1039,6 +1580,26 @@ final class Contents extends Component
         $inside = $this->folders->within($by, $folder->id);
         $asked = $this->questions->list($by, $this->workspaceId, folderIds: $inside);
         $cards = $this->flashcards->counts($by, $this->workspaceId, null, null, $inside);
+        $folderSessions = $this->sessions->forFolder($by, $this->workspaceId, $inside);
+        $studySeconds = array_sum(array_map(fn ($s) => $s->studySeconds, $folderSessions));
+        $folderFiles = array_values(array_filter($files, fn ($file) => in_array($file->folderId, $inside, true)));
+        $folderNotes = array_values(array_filter($notes, fn ($note) => in_array($note->folderId, $inside, true)));
+        $sessionStudyMap = $this->sessionStudyMap ?? Cache::get("study_map:{$by->learnerId}:{$folder->id}");
+        if ($this->studyMapChat === []) {
+            $this->studyMapChat = Cache::get("study_map_chat:{$by->learnerId}:{$folder->id}") ?? [];
+            if ($sessionStudyMap !== null && $this->studyMapChat === []) {
+                $count = count($sessionStudyMap['topics'] ?? []);
+                $welcome = "👋 Hi! I analyzed your session materials and prepared **{$count} concise core topics** in the roadmap above.\n\nYou can click on each topic in the list below to review its details, or chat with me here to **elaborate**, **rename**, **split**, or **adjust** any topic before you accept them!";
+                $this->studyMapChat = [
+                    [
+                        'role' => 'assistant',
+                        'text' => $welcome,
+                        'html' => MarkdownPreview::html($welcome),
+                        'time' => now()->format('H:i'),
+                    ],
+                ];
+            }
+        }
 
         return [
             ...$base,
@@ -1050,12 +1611,18 @@ final class Contents extends Component
                 'stuck' => count(array_filter($asked, fn ($q) => $q->status === 'stuck')),
             ],
             'asked' => $asked,
-            'sessionsCount' => count($this->sessions->forFolder($by, $this->workspaceId, $inside)),
+            'sessionsCount' => count($folderSessions),
+            'studySeconds' => $studySeconds,
+            'folderSessions' => $folderSessions,
+            'folderFiles' => $folderFiles,
+            'folderNotes' => $folderNotes,
             'cards' => $cards,
             'cardList' => $this->tab === 'cards' ? $this->flashcards->list($by, $this->workspaceId, folderIds: $inside) : [],
             'placeTopics' => array_values(array_filter($topics, fn ($t) => $t->in($inside))),
             'topicCards' => $cards['topics'],
             'suggestions' => $this->suggestions->list($by, $module->id, $inside),
+            'sessionStudyMap' => $sessionStudyMap,
+            'studyMapChat' => $this->studyMapChat,
         ];
     }
 

@@ -289,6 +289,23 @@ class SessionsTest extends TestCase
         $this->assertSame('running', $this->sessions->current($this->principal($bob))->state);
     }
 
+    public function test_a_session_timer_can_be_reset(): void
+    {
+        $joins = app(Topics::class)->create($this->by, $this->databases->id, 'Joins');
+        $session = $this->sessions->start($this->by, $this->databases->id, $joins->id);
+
+        $this->minutes(15);
+        $this->assertSame(900, $this->sessions->current($this->by)->studySeconds);
+
+        $reset = $this->sessions->resetTime($this->by, $session->id);
+        $this->assertSame(0, $reset->studySeconds);
+        $this->assertSame('running', $reset->state);
+        $this->assertSame($joins->id, $reset->topicId);
+
+        $this->minutes(5);
+        $this->assertSame(300, $this->sessions->current($this->by)->studySeconds);
+    }
+
     private function minutes(int $minutes): void
     {
         $this->travel($minutes)->minutes();

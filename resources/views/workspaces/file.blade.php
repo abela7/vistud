@@ -10,10 +10,12 @@
     $content = route('files.content', $file->id);
     $openWith = ['document' => 'Word, Pages or LibreOffice', 'slides' => 'PowerPoint, Keynote or LibreOffice', 'spreadsheet' => 'Excel, Numbers or LibreOffice'][$file->kind] ?? 'an app on your device';
     $hasPreview = $file->trashedAt === null && ($file->previewable() || $officePreview !== null || $markdown !== null);
+    $split = request()->boolean('split');
 @endphp
-<x-layouts.app :title="$file->fileName().' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'">
+<x-dynamic-component :component="$split ? 'layouts.note-window' : 'layouts.app'" :title="$file->fileName().' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'" :module-id="$file->moduleId" :folder-id="$file->folderId" :livewire="$split">
     <div
         class="file-page"
+        @if ($split) data-split @endif
         x-data="{
             isFullscreen: false,
             splitOpen: false,
@@ -28,7 +30,27 @@
                     if (val >= 20 && val <= 80) this.splitPercent = val;
                 }
                 this.$watch('isFullscreen', () => this.$nextTick(() => this.fitFrame()));
-                this.$nextTick(() => this.fitFrame());
+                this.$nextTick(() => {
+                    this.fitFrame();
+                    const textPreview = this.$el.querySelector('.file-markdown, .file-text');
+                    if (textPreview) {
+                        const key = 'vistud-file-scroll-{{ $file->id }}';
+                        try {
+                            const savedScroll = localStorage.getItem(key);
+                            if (savedScroll) textPreview.scrollTop = parseInt(savedScroll, 10);
+                        } catch {}
+                        let scrollTimeout = null;
+                        textPreview.addEventListener('scroll', () => {
+                            if (textPreview.clientHeight <= 0) return;
+                            clearTimeout(scrollTimeout);
+                            scrollTimeout = setTimeout(() => {
+                                if (textPreview.clientHeight > 0) {
+                                    try { localStorage.setItem(key, String(textPreview.scrollTop)); } catch {}
+                                }
+                            }, 150);
+                        }, { passive: true });
+                    }
+                });
                 window.addEventListener('load', () => this.fitFrame(), { once: true });
             },
 
@@ -37,7 +59,7 @@
             fitFrame() {
                 const frame = this.$refs.splitContainer;
                 if (!frame || !frame.isConnected) return;
-                if (this.isFullscreen) {
+                if (this.isFullscreen || @js($split)) {
                     this.$root.style.removeProperty('--frame-h');
                     return;
                 }
@@ -159,104 +181,106 @@
         x-on:touchend.window="if (isDragging) { isDragging = false; localStorage.setItem('vistud-file-split-percent', splitPercent); }"
         x-bind:class="isFullscreen && 'is-fullscreen'"
     >
-        @php
-            [$backTo, $backUrl] = $trail !== [] ? end($trail) : [$inModule ? 'Modules' : 'Notes & files', route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes'])];
-        @endphp
-        {{-- On a narrow screen the buttons go under the name: the name never shrinks to nothing, and nothing scrolls sideways. --}}
-        <header class="file-toolbar flex flex-wrap items-center justify-between gap-x-3 gap-y-2 min-w-0 py-0.5">
-            <div class="flex min-w-0 basis-48 items-center gap-2 flex-1">
-                <x-back :href="$backUrl" :to="$backTo" compact class="size-8 shrink-0" />
-                <nav aria-label="Where this file is" class="hidden min-w-0 max-w-[50%] items-center overflow-hidden xl:flex">
-                    <ol class="breadcrumbs text-xs text-fg-muted font-medium flex flex-nowrap items-center gap-1.5 min-w-0 whitespace-nowrap">
-                        <li class="shrink-0"><a class="hover:text-fg transition-colors" href="{{ route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes']) }}">{{ $inModule ? 'Modules' : 'Notes & files' }}</a></li>
-                        @foreach ($trail as [$label, $url])
-                            <li class="flex items-center gap-1.5 min-w-0">
-                                <x-icon name="chevron-right" class="size-3.5 shrink-0 text-fg-subtle" />
-                                @if ($url)
-                                    <a class="hover:text-fg transition-colors truncate max-w-[100px] md:max-w-[140px]" href="{{ $url }}">{{ $label }}</a>
-                                @else
-                                    <span class="truncate max-w-[100px] md:max-w-[140px]">{{ $label }}</span>
-                                @endif
-                            </li>
-                        @endforeach
-                    </ol>
-                    <x-icon name="chevron-right" class="size-3.5 shrink-0 text-fg-subtle ml-1.5 mr-2" />
-                </nav>
-                <div class="flex min-w-[min(8rem,50%)] flex-1 items-center gap-1.5">
-                    <span class="ws-chip size-6 rounded shrink-0" aria-hidden="true">
-                        <x-icon :name="$file->icon()" class="size-3.5" />
-                    </span>
-                    <h1 class="text-xs sm:text-sm font-semibold text-fg truncate" title="{{ $file->fileName() }}">
-                        {{ $file->fileName() }}
-                    </h1>
-                    <span class="hidden lg:inline text-xs text-fg-muted font-normal shrink-0" title="Uploaded {{ Carbon::parse($file->uploadedAt)->format('j M Y') }}">
-                        · {{ $file->humanSize() }}
-                    </span>
+        @if (! $split)
+            @php
+                [$backTo, $backUrl] = $trail !== [] ? end($trail) : [$inModule ? 'Modules' : 'Notes & files', route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes'])];
+            @endphp
+            {{-- On a narrow screen the buttons go under the name: the name never shrinks to nothing, and nothing scrolls sideways. --}}
+            <header class="file-toolbar flex flex-wrap items-center justify-between gap-x-3 gap-y-2 min-w-0 py-0.5">
+                <div class="flex min-w-0 basis-48 items-center gap-2 flex-1">
+                    <x-back :href="$backUrl" :to="$backTo" compact class="size-8 shrink-0" />
+                    <nav aria-label="Where this file is" class="hidden min-w-0 max-w-[50%] items-center overflow-hidden xl:flex">
+                        <ol class="breadcrumbs text-xs text-fg-muted font-medium flex flex-nowrap items-center gap-1.5 min-w-0 whitespace-nowrap">
+                            <li class="shrink-0"><a class="hover:text-fg transition-colors" href="{{ route('workspaces.show', $inModule ? [$workspace->id, 'modules'] : [$workspace->id, 'notes']) }}">{{ $inModule ? 'Modules' : 'Notes & files' }}</a></li>
+                            @foreach ($trail as [$label, $url])
+                                <li class="flex items-center gap-1.5 min-w-0">
+                                    <x-icon name="chevron-right" class="size-3.5 shrink-0 text-fg-subtle" />
+                                    @if ($url)
+                                        <a class="hover:text-fg transition-colors truncate max-w-[100px] md:max-w-[140px]" href="{{ $url }}">{{ $label }}</a>
+                                    @else
+                                        <span class="truncate max-w-[100px] md:max-w-[140px]">{{ $label }}</span>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ol>
+                        <x-icon name="chevron-right" class="size-3.5 shrink-0 text-fg-subtle ml-1.5 mr-2" />
+                    </nav>
+                    <div class="flex min-w-[min(8rem,50%)] flex-1 items-center gap-1.5">
+                        <span class="ws-chip size-6 rounded shrink-0" aria-hidden="true">
+                            <x-icon :name="$file->icon()" class="size-3.5" />
+                        </span>
+                        <h1 class="text-xs sm:text-sm font-semibold text-fg truncate" title="{{ $file->fileName() }}">
+                            {{ $file->fileName() }}
+                        </h1>
+                        <span class="hidden lg:inline text-xs text-fg-muted font-normal shrink-0" title="Uploaded {{ Carbon::parse($file->uploadedAt)->format('j M Y') }}">
+                            · {{ $file->humanSize() }}
+                        </span>
+                    </div>
                 </div>
-            </div>
-            <div class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-                @if ($file->trashedAt === null)
-                    @if ($hasPreview)
-                        <button
-                            type="button"
-                            class="btn btn-ghost btn-sm p-1.5 sm:px-2.5"
-                            x-on:click="toggleFullscreen()"
-                            x-bind:title="isFullscreen ? 'Exit full screen (Esc)' : 'View in full screen'"
-                            x-bind:aria-label="isFullscreen ? 'Exit full screen' : 'View in full screen'"
-                            data-fullscreen-button
-                        >
-                            <span x-show="! isFullscreen" class="inline-flex items-center gap-1.5">
-                                <x-icon name="maximize-2" class="size-4" />
-                                <span class="max-md:sr-only text-xs">Full screen</span>
-                            </span>
-                            <span x-show="isFullscreen" class="inline-flex items-center gap-1.5" x-cloak>
-                                <x-icon name="minimize-2" class="size-4" />
-                                <span class="max-md:sr-only text-xs">Exit full screen</span>
-                                <kbd class="hidden sm:inline-block px-1 py-0.5 text-[10px] uppercase font-mono rounded bg-surface-sunken border border-border text-fg-muted leading-none">Esc</kbd>
-                            </span>
-                        </button>
-                    @endif
-                    @if ($officePreview !== null)
-                        <a class="btn btn-ghost btn-sm p-1.5 sm:px-2.5" href="{{ $officePreview }}" target="_blank" rel="noopener" title="Open in a new tab">
-                            <x-icon name="external-link" class="size-4" />
-                            <span class="max-md:sr-only text-xs">Open in a new tab</span>
+                <div class="ml-auto flex max-w-full flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+                    @if ($file->trashedAt === null)
+                        @if ($hasPreview)
+                            <button
+                                type="button"
+                                class="btn btn-ghost btn-sm p-1.5 sm:px-2.5"
+                                x-on:click="toggleFullscreen()"
+                                x-bind:title="isFullscreen ? 'Exit full screen (Esc)' : 'View in full screen'"
+                                x-bind:aria-label="isFullscreen ? 'Exit full screen' : 'View in full screen'"
+                                data-fullscreen-button
+                            >
+                                <span x-show="! isFullscreen" class="inline-flex items-center gap-1.5">
+                                    <x-icon name="maximize-2" class="size-4" />
+                                    <span class="max-md:sr-only text-xs">Full screen</span>
+                                </span>
+                                <span x-show="isFullscreen" class="inline-flex items-center gap-1.5" x-cloak>
+                                    <x-icon name="minimize-2" class="size-4" />
+                                    <span class="max-md:sr-only text-xs">Exit full screen</span>
+                                    <kbd class="hidden sm:inline-block px-1 py-0.5 text-[10px] uppercase font-mono rounded bg-surface-sunken border border-border text-fg-muted leading-none">Esc</kbd>
+                                </span>
+                            </button>
+                        @endif
+                        @if ($officePreview !== null)
+                            <a class="btn btn-ghost btn-sm p-1.5 sm:px-2.5" href="{{ $officePreview }}" target="_blank" rel="noopener" title="Open in a new tab">
+                                <x-icon name="external-link" class="size-4" />
+                                <span class="max-md:sr-only text-xs">Open in a new tab</span>
+                            </a>
+                        @elseif ($file->previewable())
+                            <a class="btn btn-ghost btn-sm p-1.5 sm:px-2.5" href="{{ $content }}" target="_blank" rel="noopener" title="Open in a new tab">
+                                <x-icon name="external-link" class="size-4" />
+                                <span class="max-md:sr-only text-xs">Open in a new tab</span>
+                            </a>
+                        @endif
+                        @if ($takeNotes !== null)
+                            <a
+                                class="btn btn-sm transition-colors"
+                                x-bind:class="splitOpen ? 'btn-secondary ring-1 ring-accent' : 'btn-primary'"
+                                href="{{ $takeNotes }}" target="_blank" data-note-window
+                                x-on:click="toggleNotes($event)"
+                                x-bind:title="splitOpen ? 'Close notes pane' : 'Take notes beside this file (Split screen)'"
+                                data-split-toggle
+                            >
+                                <x-icon name="notebook-pen" class="size-4" />
+                                <span x-show="! splitOpen" class="text-xs">Take notes</span>
+                                <span x-show="splitOpen" class="text-xs" x-cloak>Close notes</span>
+                            </a>
+                        @endif
+                        @if ($openAsNote !== null)
+                            <a class="btn btn-secondary btn-sm" href="{{ $openAsNote }}" title="A new note made from this file; the file stays as it is">
+                                <x-icon name="file-plus" class="size-4" />
+                                <span class="max-sm:sr-only text-xs">Open as a note</span>
+                            </a>
+                        @endif
+                        <a class="btn btn-secondary btn-sm" href="{{ route('files.content', [$file->id, 'download' => 1]) }}" title="Download {{ $file->fileName() }}">
+                            <x-icon name="download" class="size-4" />
+                            <span class="max-sm:sr-only text-xs">Download</span>
                         </a>
-                    @elseif ($file->previewable())
-                        <a class="btn btn-ghost btn-sm p-1.5 sm:px-2.5" href="{{ $content }}" target="_blank" rel="noopener" title="Open in a new tab">
-                            <x-icon name="external-link" class="size-4" />
-                            <span class="max-md:sr-only text-xs">Open in a new tab</span>
-                        </a>
                     @endif
-                    @if ($takeNotes !== null)
-                        <a
-                            class="btn btn-sm transition-colors"
-                            x-bind:class="splitOpen ? 'btn-secondary ring-1 ring-accent' : 'btn-primary'"
-                            href="{{ $takeNotes }}" target="_blank" data-note-window
-                            x-on:click="toggleNotes($event)"
-                            x-bind:title="splitOpen ? 'Close notes pane' : 'Take notes beside this file (Split screen)'"
-                            data-split-toggle
-                        >
-                            <x-icon name="notebook-pen" class="size-4" />
-                            <span x-show="! splitOpen" class="text-xs">Take notes</span>
-                            <span x-show="splitOpen" class="text-xs" x-cloak>Close notes</span>
-                        </a>
-                    @endif
-                    @if ($openAsNote !== null)
-                        <a class="btn btn-secondary btn-sm" href="{{ $openAsNote }}" title="A new note made from this file; the file stays as it is">
-                            <x-icon name="file-plus" class="size-4" />
-                            <span class="max-sm:sr-only text-xs">Open as a note</span>
-                        </a>
-                    @endif
-                    <a class="btn btn-secondary btn-sm" href="{{ route('files.content', [$file->id, 'download' => 1]) }}" title="Download {{ $file->fileName() }}">
-                        <x-icon name="download" class="size-4" />
-                        <span class="max-sm:sr-only text-xs">Download</span>
-                    </a>
-                @endif
-                <livewire:workspaces.file-actions :file-id="$file->id" />
-            </div>
-        </header>
+                    <livewire:workspaces.file-actions :file-id="$file->id" />
+                </div>
+            </header>
 
-        <livewire:workspaces.file-digest :file-id="$file->id" />
+            <livewire:workspaces.file-digest :file-id="$file->id" />
+        @endif
 
         <div
             class="file-workspace"
@@ -281,7 +305,7 @@
                         <p class="file-preview-wait" x-show="! ready" role="status">
                             <x-icon name="loader-circle" class="size-5 animate-spin" />Preparing the preview. The first time takes a few seconds.
                         </p>
-                        <iframe data-pdf-src="{{ $officePreview }}" data-pdf-made title="{{ $file->fileName() }}" x-bind:class="! ready && 'opacity-0'"></iframe>
+                        <iframe data-pdf-src="{{ $officePreview }}" data-pdf-made data-download-src="{{ route('files.content', [$file->id, 'download' => 1]) }}" title="{{ $file->fileName() }}"></iframe>
                     </div>
                 @elseif ($office)
                     <section class="file-preview file-preview-none">
@@ -341,7 +365,7 @@
                 @endif
             </div>
 
-            @if ($takeNotes !== null)
+            @if ($takeNotes !== null && ! $split)
                 {{-- Resizable Splitter Handle (Center) --}}
                 <div
                     x-show="splitOpen"
@@ -418,5 +442,7 @@
             @endif
         </div>
     </div>
-    <livewire:workspaces.ai-assist :workspace-id="$workspace->id" key="ai-assist" />
-</x-layouts.app>
+    @if (! $split)
+        <livewire:workspaces.ai-assist :workspace-id="$workspace->id" key="ai-assist" />
+    @endif
+</x-dynamic-component>

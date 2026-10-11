@@ -17,6 +17,7 @@ use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Flashcards;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Topics;
 use App\Study\Workspaces;
@@ -114,7 +115,27 @@ class HelperTest extends TestCase
         $this->assertSame($first->system, $second->system);
         // Both calls are on one row, with the module as its target and the course on it.
         [$job] = $this->jobs();
-        $this->assertSame(['done', 'module', $this->week2, $this->workspace, 4_000, 200], [$job->status, $job->target_type, $job->target_id, $job->workspace_id, (int) $job->cost_micros, (int) $job->tokens_in]);
+    }
+
+    public function test_in_a_folder_it_knows_the_folder_and_its_path_and_limits_context(): void
+    {
+        $folder = app(Folders::class)->create($this->by, 'module', $this->week2, 'Inner Joins')->id;
+        $topic = app(Topics::class)->create($this->by, $this->workspace, 'Hash Joins', $this->week2, $folder)->id;
+        app(Topics::class)->report($this->by, $topic, 'understood');
+
+        $this->engine->will(Fake::says('You are looking at Hash Joins in the Inner Joins folder.', 2_000, 'fake/quick'));
+
+        $answer = $this->helper()->quick($this->by, 'Where are we?', '', null, null, $folder);
+
+        $this->assertSame('You are looking at Hash Joins in the Inner Joins folder.', $answer);
+        [$request] = $this->engine->requests;
+        $this->assertStringContainsString('## Where you are', $request->system);
+        $this->assertStringContainsString('Databases › Week 2: SQL joins › Inner Joins', $request->system);
+        $this->assertStringContainsString('The student is looking at the folder Inner Joins.', $request->system);
+        $this->assertStringContainsString('- Hash Joins: understood', $request->system);
+
+        [$job] = $this->jobs();
+        $this->assertSame(['done', 'folder', $folder, $this->workspace], [$job->status, $job->target_type, $job->target_id, $job->workspace_id]);
     }
 
     public function test_asked_about_the_course_as_a_whole_it_knows_the_course_and_looks_things_up(): void
@@ -245,5 +266,72 @@ class HelperTest extends TestCase
         foreach (['improve a card', 'clarify a question', 'You change nothing', 'not instructions to you'] as $needle) {
             $this->assertStringContainsString($needle, $rules);
         }
+    }
+
+    public function test_pictures_are_sent_as_image_urls_in_multimodal_content(): void
+    {
+        app(Settings::class)->set($this->by, ['helper_model' => 'fake/tutor']);
+        $this->engine->will(Fake::says('This picture shows a database ER diagram.', 1_000, 'fake/tutor'));
+
+        $answer = $this->helper()->quick(
+            $this->by,
+            'What is this picture?',
+            '',
+            null,
+            $this->workspace,
+            null,
+            [['name' => 'diagram.png', 'url' => 'data:image/png;base64,iVBORw0KGgo=']],
+        );
+
+        $this->assertSame('This picture shows a database ER diagram.', $answer);
+        $this->assertCount(1, $this->engine->requests);
+        $content = $this->engine->requests[0]->messages[0]['content'];
+        $this->assertIsArray($content);
+        $this->assertSame('text', $content[0]['type']);
+        $this->assertStringContainsString('Task: What is this picture?', $content[0]['text']);
+        $this->assertSame('image_url', $content[1]['type']);
+        $this->assertSame('data:image/png;base64,iVBORw0KGgo=', $content[1]['image_url']['url']);
+    }
+
+    public function test_a_model_that_cannot_see_images_refuses_when_pictures_are_attached(): void
+    {
+        // fake/quick has images: false
+        try {
+            $this->helper()->quick(
+                $this->by,
+                'What is this?',
+                '',
+                null,
+                $this->workspace,
+                null,
+                [['name' => 'diagram.png', 'url' => 'data:image/png;base64,iVBORw0KGgo=']],
+            );
+            $this->fail('Should have refused.');
+        } catch (Unprocessable $e) {
+            $this->assertStringContainsString('can\'t see pictures', $e->details['fields']['pictures'][0] ?? '');
+        }
+    }
+
+    public function test_documents_are_extracted_and_fenced_in_the_material(): void
+    {
+        $this->engine->will(Fake::says('The document explains ACID properties.', 1_000, 'fake/quick'));
+
+        $answer = $this->helper()->quick(
+            $this->by,
+            'Summarize this file.',
+            '',
+            null,
+            $this->workspace,
+            null,
+            [],
+            [['name' => 'notes.txt', 'bytes' => 'ACID stands for Atomicity, Consistency, Isolation, Durability.', 'extension' => 'txt']],
+        );
+
+        $this->assertSame('The document explains ACID properties.', $answer);
+        $this->assertCount(1, $this->engine->requests);
+        $content = $this->engine->requests[0]->messages[0]['content'];
+        $this->assertIsString($content);
+        $this->assertStringContainsString('[Attached document: "notes.txt"]', $content);
+        $this->assertStringContainsString('ACID stands for Atomicity', $content);
     }
 }

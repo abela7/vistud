@@ -14,16 +14,34 @@ GlobalWorkerOptions.workerSrc = workerUrl;
 /** Device pixels per PDF point at most: sharp on a phone, without canvases too big for it. */
 const MAX_SCALE = 2.5;
 
+function getPdfStorageKey(rawUrl) {
+    if (!rawUrl) return null;
+    try {
+        const parsed = new URL(rawUrl, window.location.origin);
+        return 'vistud-pdf-pos-' + parsed.pathname;
+    } catch {
+        return 'vistud-pdf-pos-' + encodeURIComponent(rawUrl.split('?')[0]);
+    }
+}
+
 /** Replaces the frame with the PDF drawn page by page. Says 'pdf-shown' (bubbling) once something is there. */
 export async function drawPdf(frame) {
     const url = frame.dataset.pdfSrc;
+    const downloadUrl = frame.dataset.downloadSrc || url;
     const view = document.createElement('div');
-    view.className = `${frame.getAttribute('class') ?? ''} pdf-view`.trim();
+    const existingClasses = (frame.getAttribute('class') ?? '')
+        .split(/\s+/)
+        .filter((c) => c && c !== 'opacity-0');
+    view.className = [...existingClasses, 'pdf-view'].join(' ').trim();
     view.setAttribute('role', 'document');
     view.setAttribute('aria-label', frame.title);
     view.tabIndex = 0;
     frame.replaceWith(view);
-    const shown = () => view.dispatchEvent(new CustomEvent('pdf-shown', { bubbles: true }));
+    const shown = () => {
+        view.dataset.shown = '';
+        view.classList.remove('opacity-0');
+        view.dispatchEvent(new CustomEvent('pdf-shown', { bubbles: true }));
+    };
 
     let pdf;
     try {
@@ -33,10 +51,11 @@ export async function drawPdf(frame) {
         problem.className = 'pdf-view-problem';
         problem.textContent = 'This document can\'t be shown here. ';
         const open = document.createElement('a');
-        open.href = url;
+        open.className = 'btn btn-secondary btn-sm inline-flex items-center gap-1.5 ml-2';
+        open.href = downloadUrl;
         open.target = '_blank';
         open.rel = 'noopener';
-        open.textContent = 'Open it';
+        open.textContent = 'Download file';
         problem.append(open);
         view.replaceChildren(problem);
         shown();
@@ -55,6 +74,76 @@ export async function drawPdf(frame) {
         holders.push(holder);
     }
     view.replaceChildren(...holders);
+
+    const storageKey = getPdfStorageKey(url);
+    let isRestored = false;
+
+    const restorePosition = () => {
+        if (!storageKey) {
+            isRestored = true;
+            return;
+        }
+        if (view.clientHeight <= 0 || view.clientWidth <= 0) {
+            return;
+        }
+        try {
+            const raw = localStorage.getItem(storageKey);
+            if (raw) {
+                const saved = JSON.parse(raw);
+                if (saved && typeof saved.page === 'number' && saved.page >= 1 && saved.page <= pdf.numPages) {
+                    const target = holders[saved.page - 1];
+                    if (target) {
+                        const pageTop = target.offsetTop;
+                        const offset = (typeof saved.offsetPercent === 'number' && saved.offsetPercent > 0)
+                            ? Math.round(target.offsetHeight * saved.offsetPercent)
+                            : 0;
+                        view.scrollTop = pageTop + offset;
+                    }
+                }
+            }
+        } catch {}
+        setTimeout(() => {
+            isRestored = true;
+        }, 300);
+    };
+
+    requestAnimationFrame(restorePosition);
+
+    if (storageKey) {
+        let scrollTimeout = null;
+        view.addEventListener('scroll', () => {
+            if (!isRestored) return;
+            if (view.clientHeight <= 0 || view.clientWidth <= 0) return;
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                if (view.clientHeight <= 0 || view.clientWidth <= 0) return;
+                const viewTop = view.scrollTop;
+                let activePage = 1;
+                let offsetPercent = 0;
+                for (let i = 0; i < holders.length; i++) {
+                    const h = holders[i];
+                    const top = h.offsetTop;
+                    const height = h.offsetHeight;
+                    if (viewTop >= top - 20 && viewTop < top + height) {
+                        activePage = i + 1;
+                        offsetPercent = height > 0 ? Math.max(0, viewTop - top) / height : 0;
+                        break;
+                    }
+                    if (viewTop < top) {
+                        activePage = Math.max(1, i);
+                        break;
+                    }
+                }
+                try {
+                    localStorage.setItem(storageKey, JSON.stringify({
+                        page: activePage,
+                        offsetPercent: Math.round(offsetPercent * 1000) / 1000,
+                        scrollTop: Math.round(viewTop),
+                    }));
+                } catch {}
+            }, 150);
+        }, { passive: true });
+    }
 
     async function draw(holder) {
         const width = holder.clientWidth;
@@ -89,6 +178,9 @@ export async function drawPdf(frame) {
     // A turned phone or a moved split: the pages near the screen are drawn again at the new width.
     let resizing = null;
     new ResizeObserver(() => {
+        if (!isRestored && view.clientHeight > 0 && view.clientWidth > 0) {
+            restorePosition();
+        }
         clearTimeout(resizing);
         resizing = setTimeout(() => holders.forEach((holder) => {
             observer.unobserve(holder);

@@ -155,4 +155,28 @@ class EngineSettingsScreenTest extends TestCase
             ->assertSee('$0.17 of $20.00, all three together')
             ->set('monthCap', '0')->call('save')->assertSee('No monthly limit');
     }
+
+    public function test_student_can_manage_favorite_models_in_settings(): void
+    {
+        $ada = $this->student();
+        $by = $this->principal($ada);
+        $this->actingAs($ada);
+        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+
+        Livewire::test(EngineSettings::class)
+            ->assertSee('Favorite models in chat')
+            ->assertSee('Popular recommendations:')
+            ->call('addFavoriteModel', 'anthropic/claude-3.5-sonnet')
+            ->assertSet('favoriteModels', ['anthropic/claude-3.5-sonnet'])
+            ->call('addFavoriteModel', 'openai/gpt-4o')
+            ->assertSet('favoriteModels', ['anthropic/claude-3.5-sonnet', 'openai/gpt-4o'])
+            ->call('removeFavoriteModel', 'anthropic/claude-3.5-sonnet')
+            ->assertSet('favoriteModels', ['openai/gpt-4o']);
+
+        $choices = app(Settings::class)->get($by);
+        $this->assertSame(['openai/gpt-4o'], $choices->favoriteModels);
+        $this->assertContains('openai/gpt-4o', $choices->chatModels());
+        $this->assertContains('fake/tutor', $choices->chatModels());
+    }
 }

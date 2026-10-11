@@ -3,6 +3,7 @@
 namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Notes;
 use Carbon\CarbonImmutable;
@@ -10,7 +11,7 @@ use Carbon\CarbonImmutable;
 /** The student's notes, by module, newest first; read one with read_note. */
 final class NotesTool implements Tool
 {
-    public function __construct(private Notes $notes, private Modules $modules) {}
+    public function __construct(private Notes $notes, private Modules $modules, private Folders $folders) {}
 
     public function name(): string
     {
@@ -31,6 +32,10 @@ final class NotesTool implements Tool
     {
         $modules = $this->modules->list($by, $context->workspaceId);
         $titles = collect($modules)->pluck('title', 'id');
+        $folderNames = [];
+        foreach ($this->folders->tree($by, $context->workspaceId) as $f) {
+            $folderNames[$f->id] = $f->name;
+        }
         $only = null;
         if (($wanted = Lookup::text($input, 'module')) !== null) {
             $module = Lookup::one($modules, $wanted, fn ($m) => $m->title, 'module');
@@ -46,6 +51,7 @@ final class NotesTool implements Tool
             $rows[] = array_filter([
                 'note' => $note->displayTitle(),
                 'module' => $note->moduleId !== null ? $titles[$note->moduleId] ?? null : 'the course\'s top level',
+                'folder' => $note->folderId !== null ? $folderNames[$note->folderId] ?? null : null,
                 'changed' => CarbonImmutable::parse($note->updatedAt)->setTimezone($context->zone)->toDateString(),
             ]);
         }

@@ -221,7 +221,7 @@ final class StudyTime extends Component
 
     public function close(): void
     {
-        $this->reset('mode', 'busyId', 'topicId', 'moduleId', 'date', 'time', 'minutes', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto', 'method', 'checkIns', 'quiz', 'pace');
+        $this->reset('mode', 'busyId', 'topicId', 'moduleId', 'date', 'time', 'minutes', 'clock', 'preset', 'focus', 'short', 'long', 'every', 'auto', 'method', 'checkIns', 'quiz', 'pace', 'customDo', 'customDont');
         $this->resetErrorBag();
     }
 

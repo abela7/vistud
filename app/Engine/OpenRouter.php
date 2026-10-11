@@ -36,7 +36,9 @@ final class OpenRouter implements Engine
     {
         $timeout = (int) config('vistud.engine.timeout');
         $response = $this->send(
-            fn (PendingRequest $http) => $http->timeout($timeout * 3)->withOptions(['stream' => true, 'read_timeout' => $timeout])
+            fn (PendingRequest $http) => $http->timeout($timeout * 3)
+                ->accept('text/event-stream')
+                ->withOptions(['stream' => true, 'read_timeout' => $timeout])
                 ->post('/chat/completions', $this->body($request) + ['stream' => true]),
             $request->key,
         );

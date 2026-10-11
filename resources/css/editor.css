@@ -453,6 +453,89 @@
         height: 1.125rem;
         border: 1px solid var(--border-strong);
         border-radius: var(--radius-sm);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .highlight-swatch-custom {
+        background-color: transparent;
+        border: 1px dashed var(--border-strong);
+    }
+
+    .note-highlight-divider {
+        height: 1px;
+        background-color: var(--divider);
+        margin: 0.25rem 0;
+    }
+
+    .note-highlight-custom-row {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .note-highlight-picker-trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.875rem;
+        height: 1.875rem;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        flex-shrink: 0;
+        color: var(--text-muted);
+    }
+
+    .note-highlight-picker-trigger:hover {
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    .text-color-swatch {
+        width: 1.125rem;
+        height: 1.125rem;
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-sm);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .text-color-swatch-custom {
+        background-color: transparent;
+        border: 1px dashed var(--border-strong);
+    }
+
+    .note-text-color-divider {
+        height: 1px;
+        background-color: var(--divider);
+        margin: 0.25rem 0;
+    }
+
+    .note-text-color-custom-row {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .note-text-color-picker-trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.875rem;
+        height: 1.875rem;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        flex-shrink: 0;
+        color: var(--text-muted);
+    }
+
+    .note-text-color-picker-trigger:hover {
+        background-color: var(--hover);
+        color: var(--text);
     }
 
     .callout-indicator {
@@ -1245,18 +1328,44 @@
         content: counter(note-page);
     }
 
-    /* Highlights: named colours the themes draw, never a colour stored in the note. */
+    /* Highlights: named colours the themes draw, and custom color support. */
     .note-prose mark,
     .highlight-swatch {
-        background-color: var(--category-amber-subtle);
+        background-color: var(--highlight-yellow);
         color: inherit;
     }
 
-    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='yellow'] { background-color: var(--category-amber-subtle); }
-    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='green'] { background-color: var(--category-green-subtle); }
-    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='blue'] { background-color: var(--category-blue-subtle); }
-    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='pink'] { background-color: var(--category-pink-subtle); }
-    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='purple'] { background-color: var(--category-purple-subtle); }
+    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='yellow'] { background-color: var(--highlight-yellow); }
+    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='green'] { background-color: var(--highlight-green); }
+    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='blue'] { background-color: var(--highlight-blue); }
+    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='pink'] { background-color: var(--highlight-pink); }
+    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='purple'] { background-color: var(--highlight-purple); }
+    :is(.note-prose mark, .highlight-swatch, .note-title)[data-tone='orange'] { background-color: var(--highlight-orange); }
+
+    .note-prose mark[data-contrast='dark'] {
+        color: var(--on-primary);
+    }
+
+    /* Text colours: themed category tokens for content, title, and swatches */
+    :is(.note-prose [data-text-tone='red'], .note-title[data-text-tone='red']) { color: var(--category-red); }
+    :is(.note-prose [data-text-tone='orange'], .note-title[data-text-tone='orange']) { color: var(--category-orange); }
+    :is(.note-prose [data-text-tone='amber'], .note-title[data-text-tone='amber']) { color: var(--category-amber); }
+    :is(.note-prose [data-text-tone='green'], .note-title[data-text-tone='green']) { color: var(--category-green); }
+    :is(.note-prose [data-text-tone='teal'], .note-title[data-text-tone='teal']) { color: var(--category-teal); }
+    :is(.note-prose [data-text-tone='blue'], .note-title[data-text-tone='blue']) { color: var(--category-blue); }
+    :is(.note-prose [data-text-tone='purple'], .note-title[data-text-tone='purple']) { color: var(--category-purple); }
+    :is(.note-prose [data-text-tone='pink'], .note-title[data-text-tone='pink']) { color: var(--category-pink); }
+    :is(.note-prose [data-text-tone='muted'], .note-title[data-text-tone='muted']) { color: var(--text-muted); }
+
+    .text-color-swatch[data-text-tone='red'] { background-color: var(--category-red); }
+    .text-color-swatch[data-text-tone='orange'] { background-color: var(--category-orange); }
+    .text-color-swatch[data-text-tone='amber'] { background-color: var(--category-amber); }
+    .text-color-swatch[data-text-tone='green'] { background-color: var(--category-green); }
+    .text-color-swatch[data-text-tone='teal'] { background-color: var(--category-teal); }
+    .text-color-swatch[data-text-tone='blue'] { background-color: var(--category-blue); }
+    .text-color-swatch[data-text-tone='purple'] { background-color: var(--category-purple); }
+    .text-color-swatch[data-text-tone='pink'] { background-color: var(--category-pink); }
+    .text-color-swatch[data-text-tone='muted'] { background-color: var(--text-muted); }
 
     .note-prose mark {
         padding: 0.05em 0.1em;
@@ -1761,6 +1870,16 @@
         border-bottom: 1px solid var(--border);
     }
 
+    .file-page[data-split] {
+        width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+        margin: 0;
+        padding: 0;
+        gap: 0;
+        overflow: hidden;
+    }
+
     /* The preview takes the rest of the screen. */
     .file-preview {
         display: block;
@@ -1781,6 +1900,15 @@
         border-radius: var(--radius-lg);
     }
 
+    .file-page[data-split] .file-preview {
+        flex: 1 1 0% !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-height: 0 !important;
+        border: 0;
+        border-radius: 0;
+    }
+
     /* Split screen workspace & note pane */
     .file-workspace {
         display: flex;
@@ -1794,7 +1922,8 @@
     }
 
     .file-page:fullscreen .file-workspace,
-    .file-page.is-fullscreen .file-workspace {
+    .file-page.is-fullscreen .file-workspace,
+    .file-page[data-split] .file-workspace {
         flex: 1 1 0% !important;
         width: 100% !important;
         height: 100% !important;
@@ -1883,15 +2012,18 @@
         width: 100%;
         height: 100%;
         border: 0;
+        opacity: 0;
     }
 
     /* A PDF drawn by PDF.js (resources/js/pdf-viewer.js): its pages one under another, scrolled inside the frame. */
     .pdf-view {
+        position: relative;
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
         padding: 0.5rem;
         overflow-y: auto;
+        overflow-x: hidden;
         overscroll-behavior: contain;
         background-color: var(--surface-sunken);
     }
@@ -1899,6 +2031,7 @@
     .file-preview-office > .pdf-view {
         position: absolute;
         inset: 0;
+        opacity: 1 !important;
     }
 
     .pdf-page {
@@ -2248,15 +2381,16 @@
     .capture-item {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: 0.5rem;
-        padding: 0.75rem 1rem;
+        gap: 0.625rem;
+        padding: 0.875rem 1rem;
+        transition: background-color 0.15s ease;
     }
 
     .capture-keep {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.625rem;
         cursor: pointer;
     }
 
@@ -2264,7 +2398,7 @@
         display: grid;
         grid-template-columns: minmax(0, 1fr);
         gap: 0.5rem;
-        padding-left: 1.5rem;
+        padding-left: 1.625rem;
     }
 
     .capture-topic {
@@ -2272,6 +2406,85 @@
         min-width: 0;
         max-width: 100%;
         padding-block: 0.25rem;
+    }
+
+    .capture-saved-accordion {
+        margin-top: 1rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+        background-color: var(--surface-sunken);
+        padding: 0.625rem 0.875rem;
+    }
+
+    .capture-saved-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        cursor: pointer;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        user-select: none;
+    }
+
+    .capture-saved-summary:hover {
+        color: var(--text);
+    }
+
+    .capture-saved-list {
+        margin-top: 0.625rem;
+        padding-top: 0.625rem;
+        border-top: 1px solid var(--divider);
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .capture-saved-item {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        padding: 0.375rem 0.25rem;
+    }
+
+    .capture-checkpoint-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.625rem;
+        padding: 0.625rem 0.75rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        background-color: var(--surface-sunken);
+    }
+
+    .capture-status-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+        padding: 0.625rem 0.75rem;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        background-color: var(--surface-sunken);
+    }
+
+    .capture-note-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+        background-color: var(--surface-raised);
+        cursor: pointer;
+        transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .capture-note-card:hover {
+        border-color: var(--accent);
     }
 
     /* The briefing: the text any AI receives, to read, copy or download. */
@@ -2469,8 +2682,10 @@
         color: var(--text-muted);
         font-size: 0.8125rem;
         font-weight: 600;
-        /* On one line, unless it is wider than its row (very large text on a small phone): then it wraps there. */
+        /* On one line, never breaking letters across lines */
         max-width: 100%;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
     }
 
     .status-count {
@@ -2937,6 +3152,281 @@
         background-color: var(--hover);
         color: var(--accent-contrast);
         border-color: var(--focus-ring);
+    }
+
+    /* Note Selection Ask AI Pill & Card */
+    .note-selection-ai-pill {
+        position: fixed;
+        inset: auto;
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: transparent;
+        z-index: 25;
+    }
+
+    .note-selection-ai-pill[hidden] {
+        display: none;
+    }
+
+    .note-selection-pill-group {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 9999px;
+        border: 1px solid var(--border-strong);
+        background-color: var(--surface-raised);
+        box-shadow: var(--elevation-md);
+        overflow: hidden;
+    }
+
+    .note-selection-pill-group .note-ai-pill-btn {
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .note-ai-pill-divider {
+        width: 1px;
+        height: 1rem;
+        background-color: var(--border-strong);
+        flex-shrink: 0;
+    }
+
+    .note-ai-pill-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.625rem;
+        border-radius: 9999px;
+        border: 1px solid var(--border-strong);
+        background-color: var(--surface-raised);
+        color: var(--text);
+        font-size: 0.75rem;
+        font-weight: 600;
+        box-shadow: var(--elevation-md);
+        cursor: pointer;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+    }
+
+    .note-ai-pill-btn:hover {
+        border-color: var(--accent);
+        background-color: var(--surface-sunken);
+        color: var(--accent);
+        transform: translateY(-1px);
+    }
+
+    .note-selection-ai-card {
+        position: fixed !important;
+        inset: 0 0 0 auto !important;
+        top: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        left: auto !important;
+        margin: 0 !important;
+        width: 23rem !important;
+        max-width: min(23rem, 90vw) !important;
+        height: 100% !important;
+        max-height: 100vh !important;
+        border: none !important;
+        border-left: 1px solid var(--border-strong) !important;
+        border-radius: 0 !important;
+        background-color: var(--surface) !important;
+        color: var(--text);
+        box-shadow: var(--elevation-lg);
+        display: flex;
+        flex-direction: column;
+        z-index: 50;
+        overflow: hidden;
+    }
+
+    .note-selection-ai-card[hidden] {
+        display: none !important;
+    }
+
+    .note-ai-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border);
+        background-color: var(--surface-raised);
+        flex-shrink: 0;
+    }
+
+    .note-ai-card-quote {
+        margin: 0.75rem 1rem 0 1rem;
+        font-size: 0.75rem;
+        font-style: italic;
+        color: var(--text-muted);
+        background-color: var(--surface-sunken);
+        border-left: 3px solid var(--accent);
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-sm);
+        line-height: 1.4;
+        max-height: 5.5rem;
+        overflow-y: auto;
+        word-break: break-word;
+        flex-shrink: 0;
+    }
+
+    .note-ai-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        flex: 1 1 0%;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    .note-ai-quick-prompts {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        flex-wrap: wrap;
+        flex-shrink: 0;
+    }
+
+    .note-ai-quick-btn {
+        font-size: 0.75rem;
+        font-weight: 500;
+        padding: 0.25rem 0.625rem;
+        border-radius: 9999px;
+        border: 1px solid var(--border);
+        background-color: var(--surface-sunken);
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all 0.12s ease;
+        white-space: nowrap;
+    }
+
+    .note-ai-quick-btn:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background-color: var(--accent-subtle);
+    }
+
+    .note-ai-messages {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+        flex: 1 1 auto;
+        padding-bottom: 0.25rem;
+    }
+
+    .note-ai-msg {
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        padding: 0.625rem 0.75rem;
+        border-radius: var(--radius-md);
+        word-break: break-word;
+    }
+
+    .note-ai-msg.note-ai-msg-user {
+        background-color: var(--accent-subtle);
+        color: var(--text);
+        font-weight: 500;
+        align-self: flex-end;
+        border: 1px solid var(--border);
+        max-width: 90%;
+    }
+
+    .note-ai-msg.note-ai-msg-ai {
+        background-color: var(--surface-sunken);
+        color: var(--text);
+        border: 1px solid var(--border);
+        align-self: flex-start;
+        width: 100%;
+    }
+
+    .note-ai-msg.note-ai-msg-ai p + p {
+        margin-top: 0.375rem;
+    }
+
+    .note-ai-loading {
+        padding: 0.5rem 0.75rem;
+        background-color: var(--surface-sunken);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+
+    .note-ai-dock {
+        display: flex;
+        flex-direction: column;
+        padding: 0.75rem 1rem;
+        background-color: var(--surface-raised);
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+        overflow: visible;
+    }
+
+    .note-ai-dock .chat-compose {
+        background-color: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        overflow: visible;
+    }
+
+    .note-ai-dock .chat-compose:focus-within {
+        border-color: var(--focus-ring);
+        box-shadow: 0 0 0 2px var(--accent-subtle);
+    }
+
+    .note-ai-dock .chat-model-btn {
+        max-width: 8.5rem;
+    }
+
+    .note-ai-attachments {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+        padding-top: 0.125rem;
+    }
+
+    .note-ai-attach-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        background-color: var(--surface-sunken);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 0.125rem 0.375rem;
+        font-size: 0.6875rem;
+        color: var(--text);
+        max-width: 100%;
+    }
+
+    .note-ai-attach-chip img {
+        width: 1.25rem;
+        height: 1.25rem;
+        object-fit: cover;
+        border-radius: var(--radius-xs);
+    }
+
+    .note-ai-attach-chip-name {
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .note-ai-attach-chip-remove {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 0;
+        margin-left: 0.125rem;
+    }
+
+    .note-ai-attach-chip-remove:hover {
+        color: var(--danger);
     }
 
     /* Image Dropzone in Modal */

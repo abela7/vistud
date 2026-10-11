@@ -69,7 +69,35 @@ class BriefingsTest extends TestCase
 
         $this->assertSame(Tutoring::DEFAULTS, Tutoring::validated([]));
         $this->assertThrows(fn () => Tutoring::validated(['method' => 'lecture']), Unprocessable::class);
-        $this->assertSame('Socratic · a quiz at the end · exam level questions · a section at a time', Tutoring::summary(['method' => 'socratic', 'check_ins' => 'end', 'quiz' => 'exam', 'pace' => 'section']));
+        $this->assertSame('Socratic · a quiz at the end · master level · a section at a time', Tutoring::summary(['method' => 'socratic', 'check_ins' => 'end', 'quiz' => 'exam', 'pace' => 'section']));
+    }
+
+    public function test_custom_instructions_are_included_in_prompt_when_provided_and_omitted_when_empty(): void
+    {
+        // When empty or not provided: completely omitted
+        $emptyPrompt = Tutoring::prompt(['custom_do' => '', 'custom_dont' => '   ']);
+        $this->assertStringNotContainsString('## Custom instructions', $emptyPrompt);
+        $this->assertStringNotContainsString('What to do', $emptyPrompt);
+        $this->assertStringNotContainsString('What NOT to do', $emptyPrompt);
+
+        // When provided: included in dedicated section
+        $customPrompt = Tutoring::prompt([
+            'custom_do' => 'Speak casually and relate concepts to Python',
+            'custom_dont' => 'Never give raw answers without asking me first',
+        ]);
+        $this->assertStringContainsString("## Custom instructions\n\n- What to do: Speak casually and relate concepts to Python\n- What NOT to do: Never give raw answers without asking me first", $customPrompt);
+
+        // Validation accepts and trims
+        $validated = Tutoring::validated([
+            'custom_do' => '  Keep answers short  ',
+            'custom_dont' => '  No LaTeX  ',
+        ]);
+        $this->assertSame('Keep answers short', $validated['custom_do']);
+        $this->assertSame('No LaTeX', $validated['custom_dont']);
+
+        // Validation rejects strings longer than MAX_CUSTOM characters
+        $this->assertThrows(fn () => Tutoring::validated(['custom_do' => str_repeat('a', Tutoring::MAX_CUSTOM + 1)]), Unprocessable::class);
+        $this->assertThrows(fn () => Tutoring::validated(['custom_dont' => str_repeat('b', Tutoring::MAX_CUSTOM + 1)]), Unprocessable::class);
     }
 
     public function test_the_briefing_says_who_the_student_is_where_they_stand_and_what_this_session_is(): void
@@ -117,7 +145,7 @@ class BriefingsTest extends TestCase
             '## The module: Week 1: Relational model', 'No instructions for this module.',
             '## This session', '- Started: Mon 5 Oct 2026, 09:00', '- Topic: Joins. The student says: understood. Evidence: no contact yet · not practised yet.',
             '- Clock: Pomodoro, 25-minute focus periods with 5-minute breaks (15 minutes after every 4).',
-            '- Teaching: Socratic · checks after every section · exam level questions · one slide at a time.',
+            '- Teaching: Socratic · checks after every section · master level · one slide at a time.',
             '## What the student has recorded about Joins', '- A left join keeps every row of the left table. (from Lecture 3: joins, slide 12)',
             '## Still confusing', '- Primary and foreign keys (Week 1: Relational model)',
             '## Open questions', '- Why does a left join keep unmatched rows? (Joins; for the teacher)',

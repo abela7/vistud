@@ -59,6 +59,7 @@ final readonly class Facts
         public ?string $checkpoint = null,
         public ?string $summary = null,
         public ?string $studied = null,
+        public ?string $openedNoteTitle = null,
         public array $materialText = [],
         // 6 · the chat so far, when its oldest turns were folded
         public ?string $folded = null,

@@ -31,7 +31,37 @@ final readonly class Choices
         public bool $tutorMarksTopics = true,
         /** The copy-paste path (briefing, paste-and-review) is shown, for use with another AI. */
         public bool $copyPasteAi = false,
+        /** Favorite models chosen to be available mid-chat. */
+        public array $favoriteModels = [],
     ) {}
+
+    /**
+     * Models available for quick switching mid-chat: favorite models if set,
+     * otherwise a curated set of popular models, always including the tutor model.
+     *
+     * @return list<string>
+     */
+    public function chatModels(): array
+    {
+        $models = array_values(array_filter($this->favoriteModels));
+        if ($models === []) {
+            $models = [
+                'anthropic/claude-3.5-sonnet',
+                'openai/gpt-4o',
+                'openai/gpt-4o-mini',
+                'google/gemini-2.5-flash',
+                'deepseek/deepseek-chat',
+            ];
+        }
+        if ($this->tutorModel !== '' && ! in_array($this->tutorModel, $models, true)) {
+            array_unshift($models, $this->tutorModel);
+        }
+        if ($this->fallbackModel !== '' && ! in_array($this->fallbackModel, $models, true)) {
+            $models[] = $this->fallbackModel;
+        }
+
+        return array_values(array_unique($models));
+    }
 
     public function ready(): bool
     {

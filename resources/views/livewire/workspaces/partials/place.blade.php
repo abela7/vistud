@@ -17,25 +17,61 @@
 @if ($placeFolders !== [])
     <ul class="folder-grid" role="list" aria-label="Folders">
         @foreach ($placeFolders as $i => $folder)
-            @php $inside = $itemCounts[$folder->id] ?? 0; @endphp
-            <li class="folder-tile" wire:key="folder-{{ $folder->id }}"
+            @php
+                $inside = $itemCounts[$folder->id] ?? 0;
+                $folderFiles = count($filesIn["folder:{$folder->id}"] ?? []);
+                $folderNotes = count($notesIn["folder:{$folder->id}"] ?? []);
+                $folderLinks = count($linksIn["folder:{$folder->id}"] ?? []);
+                $folderSubs = count($children["folder:{$folder->id}"] ?? []);
+                $materialParts = [];
+                if ($folderFiles > 0) $materialParts[] = $folderFiles . ' ' . \Illuminate\Support\Str::plural('file', $folderFiles);
+                if ($folderNotes > 0) $materialParts[] = $folderNotes . ' ' . \Illuminate\Support\Str::plural('note', $folderNotes);
+                if ($folderLinks > 0) $materialParts[] = $folderLinks . ' ' . \Illuminate\Support\Str::plural('link', $folderLinks);
+                if ($folderSubs > 0) $materialParts[] = $folderSubs . ' ' . \Illuminate\Support\Str::plural('subfolder', $folderSubs);
+                $materialsDesc = $materialParts !== [] ? implode(' · ', $materialParts) : ($inside === 0 ? 'Empty folder' : ($inside === 1 ? '1 item' : $inside.' items'));
+            @endphp
+            <li class="folder-tile group" wire:key="folder-{{ $folder->id }}"
                 data-select-key="folder:{{ $folder->id }}"
                 :class="{ 'is-selected': isSelected('folder:{{ $folder->id }}') }"
                 x-on:click="handleRowClick($event, 'folder:{{ $folder->id }}')">
-                <x-selection-check key="folder:{{ $folder->id }}" label="Select {{ $folder->name }}" />
-                <span class="item-icon ws-colour-amber" aria-hidden="true"><x-icon name="folder" class="size-5" /></span>
-                <span class="min-w-0 flex-1">
-                    <a href="{{ route('workspaces.folders.show', [$workspaceId, $folder->id]) }}" class="tile-link">{{ $folder->name }}</a>
-                    <span class="item-meta">{{ $inside === 0 ? 'Empty' : ($inside === 1 ? '1 item' : $inside.' items') }}</span>
-                </span>
-                <x-ai-menu kind="folder" :id="$folder->id" :label="$folder->name" />
-                @include('livewire.workspaces.partials.row-menu', ['id' => $folder->id, 'label' => $folder->name, 'items' => [
-                    ['Rename', 'pencil', "renameFolder('{$folder->id}')", false],
-                    ['Move to…', 'folder-input', "moveFolder('{$folder->id}')", false],
-                    ['Move up', 'arrow-up', "moveFolderBy('{$folder->id}', -1)", $i === 0],
-                    ['Move down', 'arrow-down', "moveFolderBy('{$folder->id}', 1)", $i === count($placeFolders) - 1],
-                    ['Delete', 'trash-2', "confirmDelete('folder', '{$folder->id}')", false],
-                ]])
+                <div class="folder-card-head">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <x-selection-check key="folder:{{ $folder->id }}" label="Select {{ $folder->name }}" />
+                        <span class="folder-card-icon" aria-hidden="true">
+                            <x-icon name="folder" class="size-4.5" />
+                        </span>
+                        <span class="badge badge-neutral text-xs font-medium shrink-0">
+                            {{ $inside === 0 ? 'Empty' : ($inside === 1 ? '1 item' : $inside.' items') }}
+                        </span>
+                    </div>
+                    <div class="relative z-10 flex items-center gap-1 shrink-0 -mr-1">
+                        <x-ai-menu kind="folder" :id="$folder->id" :label="$folder->name" />
+                        @include('livewire.workspaces.partials.row-menu', ['id' => $folder->id, 'label' => $folder->name, 'items' => [
+                            ['Rename', 'pencil', "renameFolder('{$folder->id}')", false],
+                            ['Move to…', 'folder-input', "moveFolder('{$folder->id}')", false],
+                            ['Move up', 'arrow-up', "moveFolderBy('{$folder->id}', -1)", $i === 0],
+                            ['Move down', 'arrow-down', "moveFolderBy('{$folder->id}', 1)", $i === count($placeFolders) - 1],
+                            ['Delete', 'trash-2', "confirmDelete('folder', '{$folder->id}')", false],
+                        ]])
+                    </div>
+                </div>
+                <div class="folder-card-body">
+                    <h3 class="folder-card-title">
+                        <a href="{{ route('workspaces.folders.show', [$workspaceId, $folder->id]) }}" class="tile-link">
+                            {{ $folder->name }}
+                        </a>
+                    </h3>
+                    <p class="folder-card-materials">
+                        <span>{{ $materialsDesc }}</span>
+                    </p>
+                </div>
+                <div class="folder-card-foot">
+                    <div></div>
+                    <span class="folder-card-open" aria-hidden="true">
+                        <span>Open</span>
+                        <x-icon name="chevron-right" class="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
+                    </span>
+                </div>
             </li>
         @endforeach
     </ul>

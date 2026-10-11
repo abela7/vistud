@@ -4,21 +4,32 @@ namespace App\Engine;
 
 use App\Engine\Tools\AddQuestionsTool;
 use App\Engine\Tools\AddTopicsTool;
+use App\Engine\Tools\AnswerQuestionTool;
 use App\Engine\Tools\AssignmentPlanTool;
 use App\Engine\Tools\AssignmentsTool;
+use App\Engine\Tools\CalculateTool;
 use App\Engine\Tools\CalendarTool;
 use App\Engine\Tools\Context;
 use App\Engine\Tools\CourseOverview;
+use App\Engine\Tools\CreateSnippetTool;
+use App\Engine\Tools\DeleteTopicTool;
 use App\Engine\Tools\EarlierSessionsTool;
+use App\Engine\Tools\EditNoteTool;
 use App\Engine\Tools\FilesTool;
 use App\Engine\Tools\FindingsTool;
 use App\Engine\Tools\MakeFlashcardsTool;
 use App\Engine\Tools\ModuleFilesTool;
 use App\Engine\Tools\NotesTool;
+use App\Engine\Tools\PlotGraphTool;
 use App\Engine\Tools\QuestionsTool;
 use App\Engine\Tools\ReadFileTool;
 use App\Engine\Tools\ReadNoteTool;
 use App\Engine\Tools\RecordQuizTool;
+use App\Engine\Tools\RenameCourseTool;
+use App\Engine\Tools\RenameFolderTool;
+use App\Engine\Tools\RenameModuleTool;
+use App\Engine\Tools\RenameNoteTool;
+use App\Engine\Tools\RenameTopicTool;
 use App\Engine\Tools\SaveKeyPointsTool;
 use App\Engine\Tools\SearchNotesTool;
 use App\Engine\Tools\SetTopicStatusTool;
@@ -63,8 +74,19 @@ final class Toolbox
         MakeFlashcardsTool::class,
         SaveKeyPointsTool::class,
         AddQuestionsTool::class,
+        AnswerQuestionTool::class,
         WriteNoteTool::class,
+        EditNoteTool::class,
         RecordQuizTool::class,
+        RenameTopicTool::class,
+        DeleteTopicTool::class,
+        RenameFolderTool::class,
+        RenameCourseTool::class,
+        RenameModuleTool::class,
+        RenameNoteTool::class,
+        PlotGraphTool::class,
+        CalculateTool::class,
+        CreateSnippetTool::class,
     ];
 
     /** @var list<string>|null the names of the only tools this toolbox offers and runs; null for all of them */
@@ -99,11 +121,14 @@ final class Toolbox
         'course_overview' => 'the course', 'topics' => 'your topics', 'questions' => 'your questions', 'findings' => 'your key points',
         'assignments' => 'your assignments', 'assignment_plan' => 'an assignment plan', 'calendar' => 'your calendar', 'notes' => 'your notes',
         'read_note' => 'a note', 'search_notes' => 'your notes', 'files' => 'your files', 'read_file' => 'a file', 'earlier_sessions' => 'earlier sessions',
+        'plot_graph' => 'a function graph', 'calculate' => 'a calculation', 'create_snippet' => 'a copyable snippet',
     ];
 
     /** What each tool that changes the course does, as the chat says it while it works ("Saving flashcards…"). */
     public const DOING = [
-        'set_topic' => 'Setting the topic', 'set_topic_status' => 'Marking a topic', 'record_quiz' => 'Recording the quiz', 'add_topics' => 'Adding topics', 'make_flashcards' => 'Saving flashcards', 'save_key_points' => 'Saving key points', 'add_questions' => 'Adding questions', 'write_note' => 'Writing in your note',
+        'set_topic' => 'Setting the topic', 'set_topic_status' => 'Marking a topic', 'record_quiz' => 'Recording the quiz', 'add_topics' => 'Adding topics', 'make_flashcards' => 'Saving flashcards', 'save_key_points' => 'Saving key points', 'add_questions' => 'Adding questions', 'answer_question' => 'Answering question', 'write_note' => 'Writing in your note',
+        'rename_topic' => 'Renaming topic', 'delete_topic' => 'Removing topic', 'rename_folder' => 'Renaming folder', 'rename_course' => 'Renaming course', 'rename_module' => 'Renaming module', 'rename_note' => 'Renaming note',
+        'plot_graph' => 'Plotting function graph', 'calculate' => 'Calculating', 'create_snippet' => 'Creating copyable snippet',
     ];
 
     public static function words(string $tool): string

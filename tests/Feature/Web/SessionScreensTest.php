@@ -7,6 +7,8 @@ use App\Livewire\Workspaces\Progress;
 use App\Livewire\Workspaces\StudySession;
 use App\Livewire\Workspaces\StudyTime;
 use App\Models\User;
+use App\Platform\Errors\NotFound;
+use App\Study\Files;
 use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Notes;
@@ -18,13 +20,14 @@ use Carbon\CarbonImmutable;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
+use Tests\Concerns\MakesStudyFiles;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
 /** Study sessions on screen: Home's study time, the session page and the top bar's clock (docs/specs/study-memory.md §4). */
 class SessionScreensTest extends TestCase
 {
-    use CreatesAccounts, RefreshesDatabase;
+    use CreatesAccounts, MakesStudyFiles, RefreshesDatabase;
 
     private User $ada;
 
@@ -302,6 +305,39 @@ class SessionScreensTest extends TestCase
         $this->assertNull($this->current());
     }
 
+    public function test_a_session_timer_and_full_restart_can_be_triggered_from_the_screen(): void
+    {
+        $session = app(Sessions::class)->start($this->principal($this->ada), $this->databases->id);
+        $this->travel(15)->minutes();
+        $this->assertSame(900, $this->current()->studySeconds);
+
+        // Reset timer
+        $this->page($session->id)
+            ->call('confirmResetTime')
+            ->assertSet('mode', 'reset_time')
+            ->assertSee('Reset timer?')
+            ->call('save')
+            ->assertSet('mode', null)
+            ->assertDispatched('session-dialog-close')
+            ->assertDispatched('session-changed');
+
+        $this->assertSame(0, $this->current()->studySeconds);
+
+        // Restart session
+        $this->travel(10)->minutes();
+        $this->page($session->id)
+            ->call('confirmResetFull')
+            ->assertSet('mode', 'reset_full')
+            ->assertSee('Restart session?')
+            ->call('save')
+            ->assertSet('mode', null)
+            ->assertDispatched('session-dialog-close')
+            ->assertDispatched('session-changed')
+            ->assertDispatched('chat-reload');
+
+        $this->assertSame(0, $this->current()->studySeconds);
+    }
+
     public function test_another_students_session_and_the_locked_ids(): void
     {
         $bob = $this->student();
@@ -314,6 +350,87 @@ class SessionScreensTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$this->databases->id, $session->id]))->assertNotFound();
         $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$maths->id, $mine->id]))->assertNotFound();
         $this->assertThrows(fn () => $this->page($mine->id)->set('sessionId', $session->id), CannotUpdateLockedPropertyException::class);
+    }
+
+    public function test_student_can_tune_tutor_in_real_time(): void
+    {
+        $session = app(Sessions::class)->start($this->principal($this->ada), $this->databases->id);
+
+        $page = $this->page($session->id)
+            ->assertSee('AI Tutor')
+            ->assertSee('My understanding')
+            ->assertSee('Intermediate')
+            ->assertSee('Beginner')
+            ->assertSee('Master')
+            ->assertSee('Teaching style')
+            ->assertSee('Explain')
+            ->assertSee('Analogies')
+            ->assertSee('Check questions')
+            ->call('setTutoringChoice', 'quiz', 'easy')
+            ->assertDispatched('session-changed');
+
+        $reloaded = app(Sessions::class)->find($this->principal($this->ada), $session->id);
+        $this->assertSame('easy', $reloaded->tutoring['quiz']);
+
+        $page->call('setTutoringChoice', 'method', 'analogy')
+            ->call('setTutoringChoice', 'check_ins', 'none')
+            ->assertDispatched('session-changed');
+
+        $reloaded = app(Sessions::class)->find($this->principal($this->ada), $session->id);
+        $this->assertSame('analogy', $reloaded->tutoring['method']);
+        $this->assertSame('none', $reloaded->tutoring['check_ins']);
+    }
+
+    public function test_custom_rules_note_editor_can_be_opened_and_saved(): void
+    {
+        $by = $this->principal($this->ada);
+        $session = app(Sessions::class)->start($by, $this->databases->id);
+
+        $this->page($session->id)
+            ->call('editCustomRules')
+            ->assertSet('mode', 'custom_rules')
+            ->assertDispatched('session-dialog-open')
+            ->assertSee('Custom Tutor Rules (Do & Don\'t)')
+            ->assertSee('What to do')
+            ->assertSee('What NOT to do')
+            ->set('customDo', "1. Explain step by step\n2. Provide code snippets")
+            ->set('customDont', "1. Never give raw answers\n2. No LaTeX")
+            ->call('save')
+            ->assertDispatched('session-changed');
+
+        $updated = app(Sessions::class)->find($by, $session->id);
+        $this->assertSame("1. Explain step by step\n2. Provide code snippets", $updated->tutoring['custom_do']);
+        $this->assertSame("1. Never give raw answers\n2. No LaTeX", $updated->tutoring['custom_dont']);
+    }
+
+    public function test_file_can_be_deleted_permanently_from_study_session_material_list(): void
+    {
+        $by = $this->principal($this->ada);
+        $session = app(Sessions::class)->start($by, $this->databases->id);
+        $file = app(Files::class)->upload($by, 'workspace', $this->databases->id, $this->temp($this->pdf()), 'Test_Diagram.pdf');
+        app(Sessions::class)->toggleMaterial($by, $session->id, 'file:'.$file->id);
+
+        $this->page($session->id)
+            ->call('deleteMaterialFile', $file->id)
+            ->assertDispatched('session-file-deleted', fileId: $file->id);
+
+        $this->assertThrows(fn () => app(Files::class)->find($by, $file->id), NotFound::class);
+        $this->assertFalse(app(Sessions::class)->find($by, $session->id)->uses('file:'.$file->id));
+    }
+
+    public function test_note_can_be_moved_to_trash_from_study_session_material_list(): void
+    {
+        $by = $this->principal($this->ada);
+        $session = app(Sessions::class)->start($by, $this->databases->id);
+        $note = app(Notes::class)->create($by, 'workspace', $this->databases->id, 'Lecture Summary');
+        app(Sessions::class)->toggleMaterial($by, $session->id, 'note:'.$note->id);
+
+        $this->page($session->id)
+            ->call('deleteMaterialNote', $note->id)
+            ->assertDispatched('session-note-deleted', noteId: $note->id);
+
+        $this->assertNotNull(app(Notes::class)->find($by, $note->id)->trashedAt);
+        $this->assertFalse(app(Sessions::class)->find($by, $session->id)->uses('note:'.$note->id));
     }
 
     private function current()

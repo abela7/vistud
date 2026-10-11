@@ -68,9 +68,13 @@ class QuestionBoardTest extends TestCase
         $by = $this->principal($this->ada);
         $session = app(Sessions::class)->start($by, $this->databases->id, null, $this->week1->id);
         app(Questions::class)->ask($by, $this->databases->id, 'Asked earlier, in the module', null, $this->week1->id, 'an-earlier-session');
+        $week2 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 2']);
+        app(Questions::class)->ask($by, $this->databases->id, 'Asked in another module', null, $week2->id, 'an-earlier-session');
 
+        // The session's side panel lists its module's questions, and no other module's.
         $this->actingAs($this->ada)->get(route('workspaces.sessions.show', [$this->databases->id, $session->id]))
-            ->assertOk()->assertDontSee('Asked earlier, in the module')->assertDontSee("What don't you get? Write it down…", false);
+            ->assertOk()->assertSee('Asked earlier, in the module')->assertDontSee('Asked in another module')
+            ->assertDontSee("What don't you get? Write it down…", false);
 
         // A question is asked from the box's + menu: it goes to the module and to the session, and is on the module's Questions tab.
         Livewire::test(StudySession::class, ['workspaceId' => $this->databases->id, 'sessionId' => $session->id])

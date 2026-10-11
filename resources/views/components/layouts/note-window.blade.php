@@ -5,7 +5,7 @@
     `workspace` and `section` are taken so a page can switch between this
     and layouts.app with the same attributes.
 --}}
-@props(['title', 'workspace' => null, 'section' => null])
+@props(['title', 'workspace' => null, 'section' => null, 'moduleId' => null, 'folderId' => null, 'livewire' => false])
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
     data-theme="{{ config('vistud.appearance.light') }}"
@@ -33,5 +33,8 @@
             <button type="button" class="toast-close" aria-label="Dismiss" data-toast-close><x-icon name="x" class="size-4" /></button>
         </div>
     </template>
+    @if ($livewire)
+        @livewireScripts
+    @endif
 </body>
 </html>

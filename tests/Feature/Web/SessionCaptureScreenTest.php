@@ -94,6 +94,22 @@ class SessionCaptureScreenTest extends TestCase
             ->assertSee('Some things weren&#039;t saved', false)->assertSee('Write what you need to know.');
     }
 
+    public function test_quick_filters_toggle_essentials_and_all(): void
+    {
+        $session = app(Sessions::class)->start($this->principal($this->ada), $this->databases->id, $this->joins->id);
+        $capture = $this->capture($session->id)->call('open')->set('text', self::CHAT)->call('read')
+            ->assertSee('Save 6');
+
+        // Essentials only: leaves only summary and checkpoint ticked (2 items)
+        $capture->call('setEssentialsOnly')->assertSee('Save 2');
+
+        // Untick all: 0 items
+        $capture->call('toggleAll', false)->assertSee('Nothing ticked');
+
+        // Tick all (except status, which requires student's explicit choice): 6 items
+        $capture->call('toggleAll', true)->assertSee('Save 6');
+    }
+
     public function test_the_browser_cannot_change_which_session_it_saves_to(): void
     {
         $session = app(Sessions::class)->start($this->principal($this->ada), $this->databases->id);

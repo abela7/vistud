@@ -4,13 +4,14 @@ namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
 use App\Study\Files;
+use App\Study\Folders;
 use App\Study\Links;
 use App\Study\Modules;
 
 /** The files and web links kept in the course: what there is, by module. A file's contents are read with read_file. */
 final class FilesTool implements Tool
 {
-    public function __construct(private Files $files, private Links $links, private Modules $modules) {}
+    public function __construct(private Files $files, private Links $links, private Modules $modules, private Folders $folders) {}
 
     public function name(): string
     {
@@ -31,6 +32,10 @@ final class FilesTool implements Tool
     {
         $modules = $this->modules->list($by, $context->workspaceId);
         $titles = collect($modules)->pluck('title', 'id');
+        $folderNames = [];
+        foreach ($this->folders->tree($by, $context->workspaceId) as $f) {
+            $folderNames[$f->id] = $f->name;
+        }
         $only = null;
         if (($wanted = Lookup::text($input, 'module')) !== null) {
             $module = Lookup::one($modules, $wanted, fn ($m) => $m->title, 'module');
@@ -42,12 +47,12 @@ final class FilesTool implements Tool
         $rows = [];
         foreach ($this->files->list($by, $context->workspaceId) as $file) {
             if ($only === null || $file->moduleId === $only) {
-                $rows[] = array_filter(['file' => $file->fileName(), 'type' => $file->typeLabel(), 'size' => $file->humanSize(), 'module' => $file->moduleId !== null ? $titles[$file->moduleId] ?? null : null]);
+                $rows[] = array_filter(['file' => $file->fileName(), 'type' => $file->typeLabel(), 'size' => $file->humanSize(), 'module' => $file->moduleId !== null ? $titles[$file->moduleId] ?? null : null, 'folder' => $file->folderId !== null ? $folderNames[$file->folderId] ?? null : null]);
             }
         }
         foreach ($this->links->list($by, $context->workspaceId) as $link) {
             if ($only === null || $link->moduleId === $only) {
-                $rows[] = array_filter(['link' => $link->title, 'url' => $link->url, 'module' => $link->moduleId !== null ? $titles[$link->moduleId] ?? null : null]);
+                $rows[] = array_filter(['link' => $link->title, 'url' => $link->url, 'module' => $link->moduleId !== null ? $titles[$link->moduleId] ?? null : null, 'folder' => $link->folderId !== null ? $folderNames[$link->folderId] ?? null : null]);
             }
         }
 

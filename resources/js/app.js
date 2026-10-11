@@ -46,7 +46,9 @@ onPage(() => {
  * seen and the page still there. False when the page was left.
  */
 async function prepared(frame) {
-    for (;;) {
+    let attempts = 0;
+    const maxAttempts = 60;
+    while (attempts++ < maxAttempts) {
         await new Promise((resolve) => whenSeen(resolve));
         if (!frame.isConnected) return false;
         let response = null;
@@ -56,26 +58,18 @@ async function prepared(frame) {
         if (response?.status !== 202) return frame.isConnected;
         await new Promise((resolve) => setTimeout(resolve, (Number(response.headers.get('Retry-After')) || 2) * 1000));
     }
+    return frame.isConnected;
 }
 
-// A PDF (or an office file shown as one), once the tab is seen, asked for once: in the browser's own viewer, or drawn
-// by PDF.js where the browser can't show a PDF inside the page (phones and tablets). Says 'pdf-shown' once it is there.
+// A PDF (or an office file shown as one), once the tab is seen, asked for once: drawn by PDF.js inside the page
+// so every page fits the pane width cleanly with no browser-plugin scrollbars. Says 'pdf-shown' once it is there.
 onPage(() => {
     const frames = document.querySelectorAll('iframe[data-pdf-src]');
     if (frames.length === 0) return;
-    const inline = navigator.pdfViewerEnabled !== false && !window.matchMedia('(hover: none) and (pointer: coarse)').matches;
     frames.forEach(async (frame) => {
         const shown = frame.hasAttribute('data-pdf-made') ? await prepared(frame) : await new Promise((resolve) => whenSeen(() => resolve(frame.isConnected)));
         if (!shown) return;
-        if (!inline) {
-            import('./pdf-viewer.js').then(({ drawPdf }) => drawPdf(frame));
-            return;
-        }
-        frame.addEventListener('load', () => {
-            frame.dataset.shown = '';
-            frame.dispatchEvent(new CustomEvent('pdf-shown', { bubbles: true }));
-        }, { once: true });
-        frame.src = frame.dataset.pdfSrc;
+        import('./pdf-viewer.js').then(({ drawPdf }) => drawPdf(frame));
     });
 });
 

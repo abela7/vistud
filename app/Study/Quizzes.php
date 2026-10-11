@@ -87,7 +87,7 @@ final class Quizzes
             // A quiz in a folder's session is the folder's (docs/specs/vistud-2-blueprint.md, Phase 9).
             'folder_id' => $session->moduleId !== null && $session->moduleId === $moduleId ? $session->folderId : null, 'topic_id' => $quizTopic?->id,
             'kind' => $kind, 'questions' => json_encode($questions), 'score' => self::score($questions), 'asked' => count($questions),
-            'started_at' => CarbonImmutable::parse($since ?? $session->startedAt, 'UTC'), 'finished_at' => $now,
+            'started_at' => CarbonImmutable::parse($input['started_at'] ?? ($since ?? $session->startedAt), 'UTC'), 'finished_at' => $now,
         ]);
 
         // What mastery counts: each answer, as an attempt on its topic.

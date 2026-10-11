@@ -12,6 +12,8 @@ use App\Study\Folders;
 use App\Study\MarkdownDoc;
 use App\Study\Modules;
 use App\Study\NoteDetails;
+use App\Study\NoteDoc;
+use App\Study\NoteEditor;
 use App\Study\Notes;
 use App\Study\Sessions;
 use App\Study\Topics;
@@ -44,9 +46,11 @@ final class WriteNoteTool implements Tool
     public function parameters(): array
     {
         return ['type' => 'object', 'properties' => [
-            'text' => ['type' => 'string', 'description' => 'What to add, in Markdown.'],
-            'note' => ['type' => 'string', 'description' => 'An existing note\'s title (or part of it) to add to. Left out: this session\'s study note.'],
-            'title' => ['type' => 'string', 'description' => 'A title for a new note, instead of adding to one.'],
+            'text' => ['type' => 'string', 'description' => 'What to write, in Markdown.'],
+            'note' => ['type' => 'string', 'description' => 'An existing note\'s title (or part of it) to write in. Left out: this session\'s study note.'],
+            'title' => ['type' => 'string', 'description' => 'A title for a new note, instead of writing in an existing one.'],
+            'mode' => ['type' => 'string', 'enum' => ['append', 'replace', 'replace_text'], 'description' => 'Whether to append at the end (default), replace/overwrite the existing content, or replace specific text in place.'],
+            'search' => ['type' => 'string', 'description' => 'Optional specific text/line in the note to find and replace with text.'],
         ], 'required' => ['text'], 'additionalProperties' => false];
     }
 
@@ -69,9 +73,14 @@ final class WriteNoteTool implements Tool
 
         $note = null;
         if (($wanted = Lookup::text($input, 'note')) !== null) {
-            $note = Lookup::here($this->notes->list($by, $context->workspaceId), Lookup::folder($this->folders, $by, $context), $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
-            if (is_string($note)) {
-                return $note.' Or give a title to start a new note.';
+            $normalized = mb_strtolower(trim($wanted));
+            if (in_array($normalized, ['the note', 'my note', 'current note', 'opened note', 'open note', 'this note', 'notes', 'study note', 'study notes'], true)) {
+                $note = $this->studyNote($by, $context);
+            } else {
+                $note = Lookup::here($this->notes->list($by, $context->workspaceId), Lookup::folder($this->folders, $by, $context), $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
+                if (is_string($note)) {
+                    return $note.' Or give a title to start a new note.';
+                }
             }
         }
         $title = Lookup::text($input, 'title');
@@ -86,20 +95,41 @@ final class WriteNoteTool implements Tool
         if ($note === null) {
             return $this->wrote($context, $this->create($by, $context, $this->studyTitle($by, $context), $blocks, remember: true), 1, new: true);
         }
+
+        $search = Lookup::text($input, 'search') ?? Lookup::text($input, 'target') ?? Lookup::text($input, 'find');
+        $mode = Lookup::text($input, 'mode') ?? ($search !== null && trim($search) !== '' ? 'replace_text' : 'append');
+
+        if ($mode === 'replace_text' || ($search !== null && trim($search) !== '')) {
+            try {
+                $opened = $this->notes->open($by, $note->id);
+                $doc = $opened->doc ?? NoteDoc::empty();
+                $result = NoteEditor::replaceText($doc, $search ?? '', $text);
+                if ($result['count'] > 0) {
+                    $saved = $this->notes->replaceDoc($by, $note->id, $result['doc'], 'tutor');
+
+                    return $this->wrote($context, $note, $saved->version, replaced: true);
+                }
+            } catch (Gone|NotFound) {
+                return "The note \"{$note->displayTitle()}\" is in the trash or gone. Give a title to start a new one.";
+            }
+        }
+
         try {
-            $saved = $this->notes->append($by, $note->id, $blocks);
+            $saved = $mode === 'replace'
+                ? $this->notes->replace($by, $note->id, $blocks)
+                : $this->notes->append($by, $note->id, $blocks);
         } catch (Gone|NotFound) {
             return "The note \"{$note->displayTitle()}\" is in the trash or gone. Give a title to start a new one.";
         }
 
-        return $this->wrote($context, $note, $saved->version);
+        return $this->wrote($context, $note, $saved->version, replaced: $mode === 'replace');
     }
 
-    private function wrote(Context $context, NoteDetails $note, int $version, bool $new = false): string
+    private function wrote(Context $context, NoteDetails $note, int $version, bool $new = false, bool $replaced = false): string
     {
         $context->effects->wrote($note->id, $note->displayTitle(), $version);
 
-        return ($new ? 'Started the note' : 'Added to the note')." \"{$note->displayTitle()}\". The student can open it beside the chat from your message; tell them in a line what you wrote.";
+        return ($new ? 'Started the note' : ($replaced ? 'Updated the note' : 'Added to the note'))." \"{$note->displayTitle()}\". The student can open it beside the chat from your message; tell them in a line what you wrote.";
     }
 
     /** This session's study note, if the tutor has started one and it is still there: kept on the chat, or found by its title. */

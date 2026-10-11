@@ -75,7 +75,13 @@
         "category-pink": "#f9a8d4",
         "category-pink-subtle": "#500724",
         "category-purple": "#d8b4fe",
-        "category-purple-subtle": "#3b0764"
+        "category-purple-subtle": "#3b0764",
+        "highlight-yellow": "#eab3084d",
+        "highlight-green": "#22c55e4d",
+        "highlight-blue": "#0ea5e94d",
+        "highlight-pink": "#ec48994d",
+        "highlight-purple": "#a855f74d",
+        "highlight-orange": "#f973164d"
     },
     "gradients": {
         "brand": { "angle": 135, "stops": [["#00245a", 0], ["#005675", 60], ["#005f63", 100]] },

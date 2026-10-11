@@ -262,6 +262,80 @@ final class Notes
         });
     }
 
+    /** Renames a note's title as its next version. */
+    public function rename(Principal $by, string $id, mixed $title): SavedVersion
+    {
+        $scope = Guard::learner($by);
+        $title = self::validatedTitle($title);
+
+        return DB::transaction(function () use ($scope, $id, $title) {
+            $note = $this->row($scope, $id, lock: true);
+            if ($note->trashed_at !== null) {
+                throw new Gone('trashed');
+            }
+            $current = LearnerTables::query($scope, 'note_versions')->where('note_id', $id)->where('version', $note->current_version)->first();
+            $doc = $current !== null ? (json_decode((string) $current->doc, true) ?: NoteDoc::empty()) : NoteDoc::empty();
+            $version = (int) $note->current_version + 1;
+            $at = now();
+            $this->addVersion($scope, $id, $version, $title, $doc, (int) $note->current_version, null, null, 'tutor', $at);
+            LearnerTables::query($scope, 'notes')->where('id', $id)->update(['title' => $title, 'current_version' => $version, 'updated_at' => $at]);
+
+            return new SavedVersion($version, self::time($at));
+        });
+    }
+
+    /**
+     * Replaces the blocks of a note as its next version.
+     *
+     * @param  list<array<string, mixed>>  $blocks
+     */
+    public function replace(Principal $by, string $id, array $blocks, string $kind = 'tutor'): SavedVersion
+    {
+        $scope = Guard::learner($by);
+
+        return DB::transaction(function () use ($scope, $id, $blocks, $kind) {
+            $note = $this->row($scope, $id, lock: true);
+            if ($note->trashed_at !== null) {
+                throw new Gone('trashed');
+            }
+            $current = LearnerTables::query($scope, 'note_versions')->where('note_id', $id)->where('version', $note->current_version)->first();
+            $doc = $current !== null ? (json_decode((string) $current->doc, true) ?: NoteDoc::empty()) : NoteDoc::empty();
+            $doc = NoteDoc::clean(['type' => 'doc', 'content' => $blocks] + $doc);
+            $version = (int) $note->current_version + 1;
+            $at = now();
+            $this->addVersion($scope, $id, $version, (string) $note->title, $doc, (int) $note->current_version, null, null, $kind, $at);
+            LearnerTables::query($scope, 'notes')->where('id', $id)->update(['current_version' => $version, 'updated_at' => $at]);
+
+            return new SavedVersion($version, self::time($at));
+        });
+    }
+
+    /**
+     * Replaces the document of a note as its next version.
+     *
+     * @param  array{type: string, content: list<array<string, mixed>>}  $doc
+     */
+    public function replaceDoc(Principal $by, string $id, array $doc, string $kind = 'tutor'): SavedVersion
+    {
+        $scope = Guard::learner($by);
+
+        return DB::transaction(function () use ($scope, $id, $doc, $kind) {
+            $note = $this->row($scope, $id, lock: true);
+            if ($note->trashed_at !== null) {
+                throw new Gone('trashed');
+            }
+            $current = LearnerTables::query($scope, 'note_versions')->where('note_id', $id)->where('version', $note->current_version)->first();
+            $oldDoc = $current !== null ? (json_decode((string) $current->doc, true) ?: NoteDoc::empty()) : NoteDoc::empty();
+            $cleaned = NoteDoc::clean(array_merge($oldDoc, $doc));
+            $version = (int) $note->current_version + 1;
+            $at = now();
+            $this->addVersion($scope, $id, $version, (string) $note->title, $cleaned, (int) $note->current_version, null, null, $kind, $at);
+            LearnerTables::query($scope, 'notes')->where('id', $id)->update(['current_version' => $version, 'updated_at' => $at]);
+
+            return new SavedVersion($version, self::time($at));
+        });
+    }
+
     /** Moves a note to the end of another place in the same workspace. */
     public function move(Principal $by, string $id, string $placeType, string $placeId): void
     {

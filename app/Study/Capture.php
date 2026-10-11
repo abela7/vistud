@@ -80,7 +80,7 @@ final class Capture
         $topic = self::clean(is_string($topic) ? $topic : '', 'topic');
         $topic = $topic === '' ? null : $topic;
         $item = match ($kind) {
-            'finding', 'question' => ($text = self::clean(is_string($fields['text'] ?? null) ? $fields['text'] : '', $kind)) === '' ? null : ['kind' => $kind, 'topic' => $topic, 'text' => $text],
+            'finding', 'question' => ($text = self::clean(is_string($fields['text'] ?? null) ? $fields['text'] : '', $kind)) === '' || self::isNoise($text) ? null : ['kind' => $kind, 'topic' => $topic, 'text' => $text],
             'flashcard' => ($front = self::clean(is_string($fields['front'] ?? null) ? $fields['front'] : '', 'front')) === '' || ($back = self::clean(is_string($fields['back'] ?? null) ? $fields['back'] : '', 'back')) === ''
                 ? null : ['kind' => $kind, 'topic' => $topic, 'front' => $front, 'back' => $back],
             default => null,
@@ -139,8 +139,11 @@ final class Capture
             case 'checkpoint':
             case 'summary':
                 $text = self::clean($inner, $kind);
+                if ($text === '' || (in_array($kind, ['finding', 'question'], true) && self::isNoise($text))) {
+                    return null;
+                }
 
-                return $text === '' ? null : ['kind' => $kind, 'topic' => in_array($kind, ['checkpoint', 'summary'], true) ? null : $topic, 'text' => $text];
+                return ['kind' => $kind, 'topic' => in_array($kind, ['checkpoint', 'summary'], true) ? null : $topic, 'text' => $text];
             case 'flashcard':
                 $front = self::clean(self::part($inner, 'front'), 'front');
                 $back = self::clean(self::part($inner, 'back'), 'back');
@@ -190,5 +193,15 @@ final class Capture
         $limit = self::LIMITS[$field];
 
         return mb_strlen($text) > $limit ? rtrim(mb_substr($text, 0, $limit - 1)).'…' : $text;
+    }
+
+    private static function isNoise(string $text): bool
+    {
+        if (mb_strlen($text) < 8) {
+            return true;
+        }
+        $lower = trim(mb_strtolower($text));
+
+        return in_array($lower, ['hello', 'hi', 'hey', 'goodbye', 'bye', 'thank you', 'thanks', 'how are you', 'how are you?'], true);
     }
 }

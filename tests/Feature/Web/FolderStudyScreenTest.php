@@ -157,13 +157,34 @@ class FolderStudyScreenTest extends TestCase
         $labs = app(Folders::class)->create($this->by, 'folder', $this->second, 'Labs')->id;
         app(Topics::class)->create($this->by, $this->workspace, 'Bash basics', folderId: $labs);
 
-        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->workspace, $this->week1]))
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->workspace, $this->week1, 'tab' => 'topics']))
             ->assertOk()->assertSeeInOrder(['In the module', 'Week overview', 'Lecture 1 + Lab 1', '0 of 1 understood', 'The kernel', 'Lecture 2 + Lab 2', 'Bash basics'])
+            ->assertSee('Study Lecture 1 + Lab 1')->assertSee('Study Lecture 2 + Lab 2');
+
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->workspace, $this->week1]))
+            ->assertOk()->assertSeeInOrder(['Folders', 'Files', 'Notes', 'Topics', 'Lecture 1 + Lab 1', 'Lecture 2 + Lab 2'])
             ->assertSee('Study Lecture 1 + Lab 1')->assertSee('Study Lecture 2 + Lab 2');
 
         $this->as();
         Livewire::test(Contents::class, ['workspaceId' => $this->workspace, 'view' => 'module', 'placeId' => $this->week1])
             ->call('studyFolder', $this->second)->assertDispatched('study-next', moduleId: $this->week1, folderId: $this->second);
+    }
+
+    public function test_a_modules_topics_tab_keeps_clean_ui_without_inline_files(): void
+    {
+        app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Slides.\n"), 'Lecture 1 - OS Structure.txt');
+        app(Notes::class)->create($this->by, 'folder', $this->first, 'Lab 01 Notes', []);
+
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->workspace, $this->week1, 'tab' => 'topics']))
+            ->assertOk()
+            ->assertSee('Lecture 1 + Lab 1')
+            ->assertSee('Study Lecture 1 + Lab 1')
+            ->assertDontSee('Lecture 1 - OS Structure.txt')
+            ->assertDontSee('Lab 01 Notes');
+
+        // The files and notes remain neatly accessible in the folder's own tabs
+        $this->folder('files')->assertSee('Lecture 1 - OS Structure.txt');
+        $this->folder('notes')->assertSee('Lab 01 Notes');
     }
 
     public function test_study_now_on_a_folder_starts_a_session_there(): void
@@ -216,7 +237,7 @@ class FolderStudyScreenTest extends TestCase
             ->assertSee('Lecture 1 + Lab 1 › Labs')
             ->assertDontSee('Old handouts');
 
-        $module = Livewire::test(Contents::class, ['workspaceId' => $this->workspace, 'view' => 'module', 'placeId' => $this->week1])
+        $module = Livewire::withQueryParams(['tab' => 'topics'])->test(Contents::class, ['workspaceId' => $this->workspace, 'view' => 'module', 'placeId' => $this->week1])
             ->assertSeeInOrder(['In the module', 'The kernel', 'Lecture 1 + Lab 1', 'No topics yet']);
         $sheet->set('place', "folder:{$this->first}")->call('move')->assertHasNoErrors()->assertDispatched('topics-changed');
         // The module's page, open behind the sheet, draws the topic in its folder.
@@ -258,5 +279,46 @@ class FolderStudyScreenTest extends TestCase
 
         $this->actingAs($this->ada)->get(route('workspaces.show', [$this->workspace, 'progress']))
             ->assertOk()->assertSeeInOrder(['Week overview', 'Lecture 1 + Lab 1', 'The kernel', 'Lecture 2 + Lab 2', 'Scheduling']);
+    }
+
+    public function test_generating_a_session_study_map_analyzes_materials_and_suggests_concise_topics(): void
+    {
+        app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Process lifecycle, states and scheduling.\n"), 'Processes.txt');
+        app(Notes::class)->create($this->by, 'folder', $this->first, 'Thread Concurrency & Locks');
+
+        $dash = $this->folder('dashboard')
+            ->assertSee('AI Study Map')
+            ->call('generateSessionStudyMap')
+            ->assertSee('Study map generated from 1 file and 1 note')
+            ->assertSee('Session Study Map')
+            ->assertSee('Foundational Principles')
+            ->assertSee('Core Mechanics & Deep Dive')
+            ->assertSee('Hands-on Practice & Problem Solving');
+
+        $this->assertNotNull($dash->get('sessionStudyMap'));
+        $this->assertCount(3, $dash->get('sessionStudyMap')['stages']);
+        $this->assertLessThanOrEqual(4, count($dash->get('sessionStudyMap')['topics']));
+
+        // Suggestions exist and can be accepted directly into the session
+        $dash->call('addSuggested')->assertSee('topics added.');
+        $topics = app(Topics::class)->list($this->by, $this->workspace);
+        $folderTopics = array_values(array_filter($topics, fn ($t) => $t->folderId === $this->first));
+        $this->assertNotEmpty($folderTopics);
+
+        // Topic statuses render correctly
+        $topic = $folderTopics[0];
+        $this->assertSame('not_started', $topic->shown());
+
+        $sheet = Livewire::test(TopicSheet::class, ['workspaceId' => $this->workspace])
+            ->dispatch('topic-sheet-open', topicId: $topic->id)
+            ->assertSee('Studying')
+            ->assertSee('Understood')
+            ->assertSee('Not understood');
+
+        $sheet->call('report', 'covered');
+        $this->assertSame('covered', app(Topics::class)->find($this->by, $topic->id)->status);
+
+        $sheet->call('report', 'confused');
+        $this->assertSame('confused', app(Topics::class)->find($this->by, $topic->id)->status);
     }
 }

@@ -119,6 +119,51 @@
             <x-field name="helperModel" label="Helper (optional)" wire:model.live.debounce.500ms="helperModel" list="engine-models" autocomplete="off" placeholder="google/gemini-2.5-flash-lite" :hint="$helperWords ?? $roles[2]->does()" />
             <x-field name="fallbackModel" label="If the tutor fails (optional)" wire:model.live.debounce.500ms="fallbackModel" list="engine-models" autocomplete="off" placeholder="anthropic/claude-haiku-4.5" :hint="$fallbackWords ?? 'Tried when the tutor is down or busy.'" />
             <p class="text-sm text-fg-muted">Empty roles use the one above: the helper the reader, the reader the tutor.</p>
+
+            <div class="pt-4 border-t border-divider space-y-3">
+                <div>
+                    <h3 class="text-sm font-semibold text-fg">Favorite models in chat</h3>
+                    <p class="text-xs text-fg-muted">Choose models you love so they appear in your tutor chat, letting you switch mid-conversation like in Cursor.</p>
+                </div>
+
+                @if ($favDetails !== [])
+                    <ul class="space-y-2" role="list">
+                        @foreach ($favDetails as $fav)
+                            <li class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-border bg-surface-sunken">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-medium text-fg truncate">{{ $fav['name'] }}</div>
+                                    <div class="text-xs text-fg-muted font-mono truncate">{{ $fav['id'] }} @if ($fav['price']) · {{ $fav['price'] }} @endif</div>
+                                </div>
+                                <x-button size="sm" variant="danger" icon="trash-2" wire:click="removeFavoriteModel('{{ $fav['id'] }}')" aria-label="Remove {{ $fav['name'] }}">Remove</x-button>
+                            </li>
+                        @endforeach
+                    </ul>
+                @else
+                    <p class="text-xs text-fg-muted">No custom favorites selected yet. A default set (including your tutor model) is available in chat.</p>
+                @endif
+
+                <div class="flex flex-col sm:flex-row gap-2 pt-1">
+                    <div class="flex-1">
+                        <label for="new-fav-model" class="sr-only">Add model id</label>
+                        <input id="new-fav-model" type="text" class="input w-full" wire:model="newFavoriteModel" list="engine-models" placeholder="Add model id (e.g. anthropic/claude-3.5-sonnet)" autocomplete="off">
+                    </div>
+                    <x-button size="sm" icon="plus" wire:click="addFavoriteModel" wire:loading.attr="aria-busy" wire:target="addFavoriteModel">Add to chat</x-button>
+                </div>
+
+                <div class="space-y-1.5 pt-1">
+                    <span class="text-xs font-medium text-fg-muted">Popular recommendations:</span>
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach ($suggested as $sugId => $sugName)
+                            @if (! in_array($sugId, $favoriteModels, true))
+                                <button type="button" class="badge hover:border-accent cursor-pointer transition-colors" wire:click="addFavoriteModel('{{ $sugId }}')">
+                                    <x-icon name="plus" class="size-3 text-accent" />
+                                    <span>{{ $sugName }}</span>
+                                </button>
+                            @endif
+                        @endforeach
+                    </div>
+                </div>
+            </div>
         </section>
 
         <section class="question-panel space-y-2" aria-labelledby="engine-tutor-heading">

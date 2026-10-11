@@ -38,6 +38,10 @@ final class EngineSettings extends Component
 
     public string $fallbackModel = '';
 
+    public array $favoriteModels = [];
+
+    public string $newFavoriteModel = '';
+
     public string $sessionCap = '';
 
     public string $monthCap = '';
@@ -128,6 +132,28 @@ final class EngineSettings extends Component
         $this->load();
     }
 
+    public function addFavoriteModel(?string $model = null): void
+    {
+        $toAdd = trim($model ?? $this->newFavoriteModel);
+        if ($toAdd === '') {
+            return;
+        }
+        if (! in_array($toAdd, $this->favoriteModels, true)) {
+            $this->favoriteModels[] = $toAdd;
+            $this->save();
+        }
+        $this->newFavoriteModel = '';
+    }
+
+    public function removeFavoriteModel(string $model): void
+    {
+        $this->favoriteModels = array_values(array_filter(
+            $this->favoriteModels,
+            fn ($m) => $m !== $model
+        ));
+        $this->save();
+    }
+
     /** The models, the language, the limits, training and consent. */
     public function save(): void
     {
@@ -135,6 +161,7 @@ final class EngineSettings extends Component
         try {
             $this->settings->set($this->principal(), [
                 'tutor_model' => $this->tutorModel, 'reader_model' => $this->readerModel, 'helper_model' => $this->helperModel, 'fallback_model' => $this->fallbackModel,
+                'favorite_models' => $this->favoriteModels,
                 'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language, 'ask_topics' => $this->askTopics,
                 'auto_read_files' => $this->autoReadFiles, 'tutor_marks_topics' => $this->tutorMarksTopics, 'copy_paste_ai' => $this->copyPasteAi,
             ]);
@@ -162,6 +189,23 @@ final class EngineSettings extends Component
         }
         $words = fn (string $id) => $id !== '' && isset($byId[$id]) ? $byId[$id]->priceWords().($byId[$id]->tools ? '' : ' · no look-ups: this model can\'t call tools') : null;
 
+        $favDetails = [];
+        foreach ($this->favoriteModels as $favId) {
+            $favDetails[] = [
+                'id' => $favId,
+                'name' => isset($byId[$favId]) ? $byId[$favId]->name : (str_contains($favId, '/') ? explode('/', $favId, 2)[1] : $favId),
+                'price' => $words($favId),
+            ];
+        }
+
+        $suggested = [
+            'anthropic/claude-3.5-sonnet' => 'Claude 3.5 Sonnet',
+            'openai/gpt-4o' => 'GPT-4o',
+            'openai/gpt-4o-mini' => 'GPT-4o mini',
+            'google/gemini-2.5-flash' => 'Gemini 2.5 Flash',
+            'deepseek/deepseek-chat' => 'DeepSeek V3',
+        ];
+
         return view('livewire.study.engine-settings', [
             'choices' => $choices,
             'roles' => EngineRole::cases(),
@@ -173,6 +217,8 @@ final class EngineSettings extends Component
             'readerWords' => $words($this->readerModel),
             'helperWords' => $words($this->helperModel),
             'fallbackWords' => $words($this->fallbackModel),
+            'favDetails' => $favDetails,
+            'suggested' => $suggested,
         ])->title('AI settings');
     }
 
@@ -183,6 +229,7 @@ final class EngineSettings extends Component
         $this->readerModel = $choices->readerModel;
         $this->helperModel = $choices->helperModel;
         $this->fallbackModel = $choices->fallbackModel;
+        $this->favoriteModels = $choices->favoriteModels;
         $this->sessionCap = number_format($choices->sessionCapMicros / 1_000_000, 2, '.', '');
         $this->monthCap = number_format($choices->monthCapMicros / 1_000_000, 2, '.', '');
         $this->noTraining = $choices->noTraining;

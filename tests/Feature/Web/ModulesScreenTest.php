@@ -162,12 +162,14 @@ class ModulesScreenTest extends TestCase
 
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
             ->assertOk()->assertSee('<title>Cells · Biology', false)
-            // The page template, then the tabs; Topics is the one open, the module's own first, then each folder with its Study.
-            ->assertSeeInOrder(['Modules', 'Cells', 'Study this', 'Topics', 'Files', 'Notes', 'Questions', 'Sessions', 'In the module', 'Mitosis', 'Labs', 'No topics yet', 'Study Labs'])
+            // The page template, then the tabs; Folders is the one open by default, showing each session folder with its Study.
+            ->assertSeeInOrder(['Modules', 'Cells', 'Folders', 'Files', 'Notes', 'Topics', 'Questions', 'Sessions', 'Labs', 'Study Labs'])
+            ->assertDontSee('Whole module')
             ->assertDontSee('Week 2');
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id, 'tab' => 'topics']))
+            ->assertOk()->assertSeeInOrder(['In the module', 'Mitosis', 'Labs', 'No topics yet', 'Study Labs']);
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id, 'tab' => 'files']))
-            ->assertOk()->assertSeeInOrder(['Upload files', 'New folder', 'Add a link', 'Labs', '2 items'])
-            ->assertSee(route('workspaces.folders.show', [$this->biology->id, $labs->id]), false);
+            ->assertOk()->assertSeeInOrder(['Upload files', 'Add a link', 'No files yet']);
 
         // A folder in a module is a place to study: the module above it, Study this, and its own tabs.
         $this->actingAs($this->ada)->get(route('workspaces.folders.show', [$this->biology->id, $labs->id]))
@@ -183,9 +185,9 @@ class ModulesScreenTest extends TestCase
             ->assertSeeInOrder(['Cells', '1 note', '2 folders', 'Topics understood', '0/1']);
 
         // The module's topics, each to study; one added by hand lands in the module.
-        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id, 'tab' => 'topics']))
             ->assertSeeInOrder(['Topics', '1', 'Mitosis', 'Not started', 'Study']);
-        $page = $this->place('module', $cells->id)->set('topicName', 'Meiosis')->call('addTopic')->assertSet('topicName', '')->assertSee('“Meiosis” is added.')
+        $page = $this->place('module', $cells->id, 'topics')->set('topicName', 'Meiosis')->call('addTopic')->assertSet('topicName', '')->assertSee('“Meiosis” is added.')
             ->set('topicName', 'mitosis')->call('addTopic')->assertHasErrors('topicName')->assertSee('The course has a topic with that name already.')
             ->set('topicName', '')->call('addTopic')->assertHasErrors('topicName');
         $meiosis = collect(app(Topics::class)->list($this->principal($this->ada), $this->biology->id))->firstWhere('name', 'Meiosis');
@@ -247,9 +249,12 @@ class ModulesScreenTest extends TestCase
         $this->assertThrows(fn () => $this->place('module', $mine->id)->set('placeId', $module->id), CannotUpdateLockedPropertyException::class);
     }
 
-    private function place(string $view, string $id)
+    private function place(string $view, string $id, string $tab = '')
     {
-        return $this->livewire(Contents::class, ['view' => $view, 'placeId' => $id]);
+        $this->actingAs($this->ada);
+        $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
+
+        return Livewire::withQueryParams($tab !== '' ? ['tab' => $tab] : [])->test(Contents::class, ['workspaceId' => $this->biology->id, 'view' => $view, 'placeId' => $id]);
     }
 
     private function livewire(string $class, array $params = [])

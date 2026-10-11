@@ -22,7 +22,7 @@ final class Topics
 {
     public const MAX_NAME = 120;
 
-    public const STATUSES = ['covered', 'understood', 'confused'];
+    public const STATUSES = ['covered', 'understood', 'confused', 'not_started'];
 
     public function __construct(private Memory $memory) {}
 
@@ -126,6 +126,12 @@ final class Topics
         Input::refuse(in_array($status, self::STATUSES, true) ? [] : ['status' => 'Unknown status.']);
         $row = $this->row($scope, $id);
 
+        if ($status === 'not_started') {
+            LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => null, 'status_by' => null, 'status_at' => null, 'updated_at' => now()]);
+
+            return;
+        }
+
         $about = [['rel' => 'about', 'target' => "topic:{$id}"]];
         $this->memory->append($scope, [match ($status) {
             'covered' => Memory::observation($scope, $by, 'exposure', ['format' => 'lecture'], $about),
@@ -223,11 +229,25 @@ final class Topics
         return ($lock ? $query->lockForUpdate() : $query)->first() ?? throw new NotFound;
     }
 
+    public static function cleanMarkdown(string $name): string
+    {
+        $c = preg_replace('/^#+\s*/u', '', $name);
+        $c = preg_replace('/(\*\*|__)(.*?)\1/u', '$2', $c);
+        $c = preg_replace('/(\*|_)(.*?)\1/u', '$2', $c);
+        $c = preg_replace('/`+(.*?)`+/u', '$1', $c);
+        $c = str_replace(['#', '*', '_', '`'], '', $c);
+
+        return trim(preg_replace('/\s+/u', ' ', $c));
+    }
+
     private static function validatedName(mixed $name): string
     {
         $name = Input::text(['name' => $name], 'name');
+        if ($name !== null) {
+            $name = self::cleanMarkdown($name);
+        }
         Input::refuse(array_filter(['name' => match (true) {
-            $name === null => 'Give the topic a name.',
+            $name === null || $name === '' => 'Give the topic a name.',
             mb_strlen($name) > self::MAX_NAME => 'Keep the name to '.self::MAX_NAME.' characters.',
             default => null,
         }]));

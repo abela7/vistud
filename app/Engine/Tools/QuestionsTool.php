@@ -3,6 +3,7 @@
 namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Questions;
 use App\Study\Topics;
@@ -11,7 +12,7 @@ use Carbon\CarbonImmutable;
 /** The questions the student wrote down: the open ones (stuck first), or all of them with their answers. */
 final class QuestionsTool implements Tool
 {
-    public function __construct(private Questions $questions, private Topics $topics, private Modules $modules) {}
+    public function __construct(private Questions $questions, private Topics $topics, private Modules $modules, private Folders $folders) {}
 
     public function name(): string
     {
@@ -39,6 +40,10 @@ final class QuestionsTool implements Tool
         $moduleList = $this->modules->list($by, $context->workspaceId);
         $topics = collect($topicList)->pluck('name', 'id');
         $modules = collect($moduleList)->pluck('title', 'id');
+        $folderNames = [];
+        foreach ($this->folders->tree($by, $context->workspaceId) as $f) {
+            $folderNames[$f->id] = $f->name;
+        }
         $onlyTopic = null;
         if (($wanted = Lookup::text($input, 'topic')) !== null) {
             $topic = Lookup::one($topicList, $wanted, fn ($t) => $t->name, 'topic');
@@ -66,6 +71,7 @@ final class QuestionsTool implements Tool
                 'status' => $q->status,
                 'topic' => $q->topicId !== null ? $topics[$q->topicId] ?? null : null,
                 'module' => $q->moduleId !== null ? $modules[$q->moduleId] ?? null : null,
+                'folder' => $q->folderId !== null ? $folderNames[$q->folderId] ?? null : null,
                 'answer' => $q->answer,
                 'for_the_teacher' => $q->askTeacher ?: null,
                 'asked' => CarbonImmutable::parse($q->askedAt)->setTimezone($context->zone)->toDateString(),

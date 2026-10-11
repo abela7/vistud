@@ -44,8 +44,8 @@ class BriefingScreensTest extends TestCase
     public function test_teaching_is_chosen_when_a_session_starts_and_offered_again_next_time(): void
     {
         $this->livewire(StudyTime::class)
-            ->call('newSession')->assertSee('How the AI teaches')->assertSee('Explain, then check · checks after every section · normal questions · one slide at a time')
-            ->set('method', 'socratic')->set('quiz', 'exam')->assertSee('Socratic · checks after every section · exam level questions')
+            ->call('newSession')->assertSee('How the AI teaches')->assertSee('Explain, then check · checks after every section · intermediate level · one slide at a time')
+            ->set('method', 'socratic')->set('quiz', 'exam')->assertSee('Socratic · checks after every section · master level')
             ->set('pace', 'fast')->call('save')->assertHasErrors('pace')
             ->set('pace', 'section')->call('save');
         $session = $this->current();
@@ -61,7 +61,7 @@ class BriefingScreensTest extends TestCase
 
         $this->page($session->id)->assertSee('How the AI teaches')
             ->call('editTeaching')->assertDispatched('session-dialog-open')->assertSet('method', 'explain')
-            ->assertSeeInOrder(['How to teach', 'Check questions', 'Quiz level', 'Pace'])
+            ->assertSeeInOrder(['How to teach', 'Check questions', 'Understanding level', 'Pace'])
             ->set('method', 'steps')->set('checkIns', 'none')->call('save')
             ->assertSee('The briefing now asks for this way of teaching.');
         $this->assertSame('steps', $this->current()->tutoring['method']);

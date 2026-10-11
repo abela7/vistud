@@ -21,13 +21,16 @@ use App\Study\Folders;
 use App\Study\MarkdownPreview;
 use App\Study\Modules;
 use App\Study\Notes;
+use App\Study\Plugins;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\TopicDetails;
 use App\Study\Topics;
+use App\Study\Tutoring;
 use Closure;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -52,6 +55,7 @@ final class TutorChat extends Component
     public const ACTIONS = [
         'cards' => ['Cards', 'gallery-vertical-end', 'Make flashcards of what we just covered.'],
         'note' => ['Note this', 'notebook-pen', 'Write what we just covered in my study note.'],
+        'plot' => ['Plot graph', 'trending-up', 'Plot a graph for this function or equation.'],
         'where' => ['Where are we', 'flag', 'Where are we? What is done and what is left?'],
     ];
 
@@ -68,8 +72,14 @@ final class TutorChat extends Component
 
     public string $text = '';
 
+    public ?string $activeModel = null;
+
     #[Locked]
     public ?string $error = null;
+
+    public bool $marksDismissed = false;
+
+    public ?string $dismissedMarkFingerprint = null;
 
     private SessionChat $chat;
 
@@ -109,6 +119,8 @@ final class TutorChat extends Component
         // A session that ended without its wrap-up (it ended by itself, or the engine was down) gets it once, here.
         $by = $this->principal();
         $session = $this->sessions->find($by, $sessionId);
+        $choices = $this->settings->get($by);
+        $this->activeModel = $this->chat->threadModel($by, $sessionId) ?: $choices->tutorModel;
         // A quiz or a test starts with its ask waiting in the message box, for the student to send (Study this ▾ on the
         // module page, or `?ask=`): the tutor asks nothing before they do.
         $ask = request()->query('ask');
@@ -141,19 +153,94 @@ final class TutorChat extends Component
 
             return;
         }
-        $this->turn(fn (Closure $on) => $this->chat->send($this->principal(), $this->sessionId, $words, $on, $attach), $words);
+        $this->turn(fn (Closure $on) => $this->chat->send($this->principal(), $this->sessionId, $words, $on, $attach, $this->activeModel), $words);
+    }
+
+    /** Switches the AI model to use for the next response in this session. */
+    public function switchModel(string $model): void
+    {
+        $model = trim($model);
+        if ($model === '') {
+            return;
+        }
+        $this->activeModel = $model;
+        $this->chat->setModel($this->principal(), $this->sessionId, $model);
+    }
+
+    /** Updates a tutoring choice in real time for this open session. */
+    public function setTutoringChoice(string $key, string $value): void
+    {
+        $by = $this->principal();
+        $session = $this->sessions->find($by, $this->sessionId);
+        $current = Tutoring::normalised($session->tutoring);
+        if (isset(Tutoring::CHOICES[$key][$value])) {
+            $current[$key] = $value;
+            $this->sessions->setTutoring($by, $this->sessionId, $current);
+            $this->dispatch('session-changed');
+        } elseif ($key === 'custom_do' || $key === 'custom_dont') {
+            $val = trim($value);
+            if ($val !== '') {
+                $current[$key] = $val;
+            } else {
+                unset($current[$key]);
+            }
+            $this->sessions->setTutoring($by, $this->sessionId, $current);
+            $this->dispatch('session-changed');
+        }
+    }
+
+    /** Toggles a subject plugin (e.g. Math, Coding, Biology, Law) on or off for this session. */
+    public function togglePlugin(string $pluginId): void
+    {
+        $by = $this->principal();
+        $session = $this->sessions->find($by, $this->sessionId);
+        $current = Tutoring::normalised($session->tutoring);
+        $active = $current['plugins'] ?? [];
+        if (in_array($pluginId, $active, true)) {
+            $active = array_values(array_filter($active, fn ($id) => $id !== $pluginId));
+        } else {
+            $active[] = $pluginId;
+        }
+        $current['plugins'] = $active;
+        $this->sessions->setTutoring($by, $this->sessionId, $current);
+        $this->dispatch('session-changed');
     }
 
     /** One of the suggested openings, or a quiz from the Quiz me menu. */
     public function say(string $text): void
     {
         $by = $this->principal();
-        if (! in_array($text, [...self::SUGGESTIONS, self::TEST_ASK, ...array_column(self::ACTIONS, 2), ...array_column($this->quizzes($by, $this->sessions->find($by, $this->sessionId)), 'text')], true)) {
+        $session = $this->sessions->find($by, $this->sessionId);
+        $pluginStarters = Plugins::starterQuestions($session->tutoring['plugins'] ?? []);
+        if (! in_array($text, [...self::SUGGESTIONS, ...$pluginStarters, self::TEST_ASK, ...array_column(self::ACTIONS, 2), ...array_column($this->quizzes($by, $session), 'text')], true)) {
             $this->dispatch('chat-done', restore: null);
 
             return;
         }
         $this->send($text);
+    }
+
+    #[On('chat-send-prompt')]
+    public function sendPrompt(string $text): void
+    {
+        $this->send($text);
+    }
+
+    #[On('chat-set-text')]
+    public function setText(string $text): void
+    {
+        $this->text = $text;
+        $this->dispatch('chat-text-updated', text: $text);
+    }
+
+    #[On('chat-reload')]
+    public function reload(): void
+    {
+        $this->text = '';
+        $this->error = null;
+        $this->marksDismissed = false;
+        $this->dismissedMarkFingerprint = null;
+        $this->dispatch('chat-done', restore: null);
     }
 
     /** Answers the last message again, after the engine failed on it. */
@@ -166,12 +253,32 @@ final class TutorChat extends Component
     public function keep(): void
     {
         $texts = [];
+        $latest = null;
         foreach ($this->chat->transcript($this->principal(), $this->sessionId) as $turn) {
             if ($turn['role'] === 'assistant' && $turn['text'] !== '') {
                 $texts[] = $turn['text'];
+                $latest = $turn['text'];
             }
         }
+        if ($latest !== null) {
+            $this->dismissedMarkFingerprint = md5($latest);
+        }
+        $this->marksDismissed = true;
         $this->dispatch('capture-open', text: implode("\n\n", $texts));
+    }
+
+    /** Dismisses the marked indicator for this session when the student chooses not to save. */
+    public function dismissMarks(): void
+    {
+        $this->marksDismissed = true;
+        $by = $this->principal();
+        $turns = $this->chat->transcript($by, $this->sessionId);
+        foreach (array_reverse($turns) as $turn) {
+            if ($turn['role'] === 'assistant' && $turn['text'] !== '') {
+                $this->dismissedMarkFingerprint = md5($turn['text']);
+                break;
+            }
+        }
     }
 
     /** The tutor's proposed status for a topic, accepted with a tap: from now on it is the student's word. */
@@ -214,22 +321,62 @@ final class TutorChat extends Component
         $turns = $this->chat->transcript($by, $this->sessionId);
         $spent = $this->chat->spent($by, $this->sessionId);
         $ready = $this->settings->keyAvailable($by) && $choices->ready();
-        $marked = false;
         $hasStatuses = array_filter($turns, fn (array $t) => ($t['statuses'] ?? []) !== []) !== [];
         $topicsNow = $hasStatuses ? array_column($this->topics->list($by, $session->workspaceId), null, 'id') : [];
+        $latestAssistant = null;
         foreach ($turns as &$turn) {
-            $turn['attachments'] = array_map(fn (array $a) => $a + ['url' => $this->urlOf($a['ref']), 'icon' => self::ICONS[$a['kind']] ?? 'file'], $turn['attachments']);
+            $turn['attachments'] = array_map(fn (array $a) => $a + [
+                'url' => $this->urlOf($a['ref']),
+                'icon' => self::ICONS[$a['kind']] ?? 'file',
+                'thumbUrl' => ($a['kind'] === 'picture' && str_starts_with($a['ref'], 'file:')) ? route('files.content', str_replace('file:', '', $a['ref'])) : null,
+            ], $turn['attachments']);
             if ($turn['role'] === 'assistant') {
                 $presented = ChatMarks::present($turn['text']);
-                $marked = $marked || $presented !== $turn['text'];
                 $turn['html'] = MarkdownPreview::html($presented);
                 $turn['looked'] = array_values(array_unique(array_map(Toolbox::words(...), array_filter($turn['tools'], fn (string $tool) => ! Toolbox::writes($tool)))));
                 $turn['savedWords'] = self::savedWords($turn['saved'] ?? []);
                 $turn['notes'] = array_map(fn (array $note) => $note + ['url' => route('workspaces.notes.show', [$this->workspaceId, $note['id'], 'window' => 1])], $turn['notes'] ?? []);
                 $turn['marks'] = self::marks($turn['statuses'] ?? [], $topicsNow);
+                if ($turn['text'] !== '') {
+                    $latestAssistant = $turn;
+                }
             }
         }
         unset($turn);
+
+        $latestText = $latestAssistant['text'] ?? '';
+        $latestHasMarks = $latestAssistant !== null && ChatMarks::present($latestText) !== $latestText;
+        $latestFingerprint = $latestHasMarks ? md5($latestText) : null;
+        $marked = $latestHasMarks && ($this->dismissedMarkFingerprint !== $latestFingerprint);
+
+        $chatModelIds = $choices->chatModels();
+        $key = $this->settings->key($by);
+        $allModels = $this->models->all(key: $key);
+        $modelsById = [];
+        foreach ($allModels as $m) {
+            $modelsById[$m->id] = $m;
+        }
+        $cleanName = function (string $rawName, string $id): string {
+            $name = preg_replace('/^(Anthropic|Google|OpenAI|Meta|DeepSeek|Mistral|Cohere|Qwen):\s*/i', '', trim($rawName));
+
+            return $name !== '' ? $name : (str_contains($id, '/') ? explode('/', $id, 2)[1] : $id);
+        };
+        $chatModels = [];
+        foreach ($chatModelIds as $mId) {
+            $mObj = $modelsById[$mId] ?? null;
+            $raw = $mObj?->name ?? (str_contains($mId, '/') ? explode('/', $mId, 2)[1] : $mId);
+            $chatModels[] = [
+                'id' => $mId,
+                'name' => $cleanName($raw, $mId),
+                'priceWords' => $mObj?->priceWords() ?? null,
+            ];
+        }
+        $currentModelId = $this->activeModel ?? $choices->tutorModel;
+        $activeModelObj = $modelsById[$currentModelId] ?? null;
+        $activeRaw = $activeModelObj?->name ?? (str_contains($currentModelId, '/') ? explode('/', $currentModelId, 2)[1] : $currentModelId);
+        $activeModelName = $cleanName($activeRaw, $currentModelId);
+        $tutoring = Tutoring::normalised($session->tutoring);
+        $pluginStarters = Plugins::starterQuestions($tutoring['plugins'] ?? []);
 
         return view('livewire.workspaces.tutor-chat', [
             'open' => $session->isOpen(),
@@ -237,9 +384,10 @@ final class TutorChat extends Component
             'choices' => $choices,
             'turns' => $turns,
             'marked' => $marked,
+            'marksDismissed' => $this->marksDismissed,
             'waiting' => $session->isOpen() && $ready && $this->chat->waiting($by, $this->sessionId),
             'spentWords' => Choices::dollars($spent['session']).($spent['session_cap'] > 0 ? ' of '.Choices::dollars($spent['session_cap']) : '').' this session',
-            'suggestions' => self::SUGGESTIONS,
+            'suggestions' => array_merge(self::SUGGESTIONS, $pluginStarters),
             'actions' => self::ACTIONS,
             'testAsk' => self::TEST_ASK,
             'mode' => $session->mode,
@@ -256,7 +404,14 @@ final class TutorChat extends Component
                 'icons' => array_map(fn (string $icon) => Icons::url($icon), self::ICONS),
             ],
             'quizzes' => $ready && $session->isOpen() ? $this->quizzes($by, $session) : [],
-            'sees' => ($model = $this->models->find($choices->tutorModel, $this->settings->key($by))) === null || $model->images,
+            'chatModels' => $chatModels,
+            'activeModel' => $currentModelId,
+            'activeModelName' => $activeModelName,
+            'sees' => ($model = $this->models->find($currentModelId, $this->settings->key($by))) === null || $model->images,
+            'tutoring' => $tutoring,
+            'tutoringChoices' => Tutoring::CHOICES,
+            'tutoringQuestions' => Tutoring::QUESTIONS,
+            'tutoringSummary' => Tutoring::summary($session->tutoring),
         ]);
     }
 
@@ -323,18 +478,36 @@ final class TutorChat extends Component
         };
         $items = [];
         foreach ($this->notes->list($by, $session->workspaceId) as $note) {
-            if ($here($note->moduleId, $note->folderId) || $session->uses("note:{$note->id}")) {
-                $items[] = ['ref' => "note:{$note->id}", 'name' => $note->displayTitle(), 'kind' => 'note', 'chosen' => $session->uses("note:{$note->id}")];
+            if (! $here($note->moduleId, $note->folderId) && ! $session->uses("note:{$note->id}")) {
+                continue;
             }
+            $items[] = [
+                'ref' => "note:{$note->id}",
+                'name' => $note->displayTitle(),
+                'kind' => 'note',
+                'ext' => 'note',
+                'chosen' => $session->uses("note:{$note->id}"),
+                'inScope' => true,
+            ];
         }
         foreach ($this->files->list($by, $session->workspaceId) as $file) {
-            if ($here($file->moduleId, $file->folderId) || $session->uses("file:{$file->id}")) {
-                $items[] = ['ref' => "file:{$file->id}", 'name' => $file->fileName(), 'kind' => $file->kind === 'image' ? 'picture' : 'file', 'chosen' => $session->uses("file:{$file->id}")];
+            if (! $here($file->moduleId, $file->folderId) && ! $session->uses("file:{$file->id}")) {
+                continue;
             }
+            $ext = strtolower(pathinfo($file->name, PATHINFO_EXTENSION));
+            $items[] = [
+                'ref' => "file:{$file->id}",
+                'name' => $file->fileName(),
+                'kind' => $file->kind === 'image' ? 'picture' : 'file',
+                'ext' => $ext ?: 'file',
+                'chosen' => $session->uses("file:{$file->id}"),
+                'thumbUrl' => $file->kind === 'image' ? route('files.content', $file->id) : null,
+                'inScope' => true,
+            ];
         }
         usort($items, fn ($a, $b) => [$b['chosen'], $a['name']] <=> [$a['chosen'], $b['name']]);
 
-        return ['module' => $module, 'items' => array_slice($items, 0, 80)];
+        return ['module' => $module, 'items' => array_slice($items, 0, 120)];
     }
 
     /**
@@ -414,6 +587,7 @@ final class TutorChat extends Component
     private function turn(Closure $run, ?string $words = null): void
     {
         $this->error = null;
+        $this->marksDismissed = false;
         // A long answer with look-ups can outlast PHP's usual 30 seconds, and leaving the page mid-answer
         // shouldn't lose it: it is kept, to read on return.
         @set_time_limit(300);
@@ -429,9 +603,14 @@ final class TutorChat extends Component
             }
             if ($kind === 'saved') {
                 $effects = json_decode($value, true);
+                $streamNotes = [];
                 // Notes the tutor wrote in: an editor open on one is told to show the new version.
                 foreach ($effects['notes'] ?? [] as $note) {
                     $changed[$note['id']] = ['id' => (string) $note['id'], 'version' => (int) $note['version']];
+                    $streamNotes[] = ['id' => (string) $note['id'], 'version' => (int) $note['version']];
+                }
+                if ($streamNotes !== []) {
+                    $this->dispatch('notes-changed', notes: $streamNotes);
                 }
                 // A new topic for the session: the session page shows it.
                 if (isset($effects['topic'])) {
@@ -469,6 +648,9 @@ final class TutorChat extends Component
 
             return;
         }
+        if ($answer !== '') {
+            $this->stream->push($this, 'answer', MarkdownPreview::html(ChatMarks::present(ChatMarks::partial($answer))));
+        }
         $this->announce($changed);
         $this->text = '';
         $this->dispatch('chat-turn');
@@ -487,6 +669,8 @@ final class TutorChat extends Component
             $this->dispatch('notes-changed', notes: array_values($notes));
         }
         $this->dispatch('questions-changed');
+        $this->dispatch('flashcards-changed');
+        $this->dispatch('quizzes-changed');
     }
 
     private function principal(): Principal

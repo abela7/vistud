@@ -84,11 +84,11 @@ final class Runner
      *
      * @throws AppError when the run isn't set up, is over the limit, or the work fails with one
      */
-    public function run(Principal $by, Role $role, string $kind, ?string $workspaceId, ?string $targetType, ?string $targetId, Closure $work): mixed
+    public function run(Principal $by, Role $role, string $kind, ?string $workspaceId, ?string $targetType, ?string $targetId, Closure $work, ?string $model = null): mixed
     {
         $id = $this->record(Guard::learner($by), $role, $kind, $workspaceId, $targetType, $targetId, 'running');
 
-        return $this->perform($by, $id, $role, $work, swallow: false);
+        return $this->perform($by, $id, $role, $work, swallow: false, modelOverride: $model);
     }
 
     /**
@@ -133,12 +133,15 @@ final class Runner
 
     // ---------- Inside ----------
 
-    private function perform(Principal $by, string $id, Role $role, Closure $work, bool $swallow): mixed
+    private function perform(Principal $by, string $id, Role $role, Closure $work, bool $swallow, ?string $modelOverride = null): mixed
     {
         $scope = Guard::learner($by);
         $this->update($scope, $id, ['status' => 'running', 'started_at' => now(), 'attempts' => DB::raw('attempts + 1')]);
         try {
             [$choices, $key, $model] = $this->settings->ready($by, $role);
+            if ($modelOverride !== null && trim($modelOverride) !== '') {
+                $model = trim($modelOverride);
+            }
             $result = $work(new Run($id, $role, $by, $choices, $key, $model, $this->sessions->timezone($by), $this->engine, $this->usage, $this->models));
             $this->update($scope, $id, ['status' => 'done', 'error_code' => null, 'finished_at' => now()]);
 

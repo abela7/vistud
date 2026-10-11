@@ -207,6 +207,14 @@ final class Files
         $this->delete($scope, $file);
     }
 
+    /** Deletes a file for good from the platform, its bytes, previews and digests included. */
+    public function deletePermanently(Principal $by, string $id): void
+    {
+        $scope = Guard::learner($by);
+        $file = $this->row($scope, $id);
+        $this->delete($scope, $file);
+    }
+
     /** Deletes the learner's files that have been in the trash longer than TRASH_DAYS. Returns how many. */
     public function purgeTrash(LearnerScope $scope): int
     {

@@ -58,6 +58,9 @@ final readonly class Theme
         'category-red', 'category-red-subtle',
         'category-pink', 'category-pink-subtle',
         'category-purple', 'category-purple-subtle',
+        // Note highlighters: vibrant marker tones for notes
+        'highlight-yellow', 'highlight-green', 'highlight-blue',
+        'highlight-pink', 'highlight-purple', 'highlight-orange',
     ];
 
     /** The colours a student can give a workspace. Each has `category-{name}` and `category-{name}-subtle`. */

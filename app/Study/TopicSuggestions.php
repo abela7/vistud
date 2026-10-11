@@ -58,33 +58,73 @@ final class TopicSuggestions
      *
      * @param  list<string>  $names
      */
-    public function suggest(Principal $by, string $moduleId, ?string $fileId, array $names): int
+    public function suggest(Principal $by, string $moduleId, ?string $fileId, array $names, ?string $folderId = null, bool $force = false): int
     {
         $scope = Guard::learner($by);
         $module = $this->module($scope, $moduleId);
-        $file = $fileId === null ? null : LearnerTables::query($scope, 'files')->where('id', $fileId)->first(['module_id', 'folder_id']);
-        $folderId = $file !== null && $file->module_id === $moduleId ? $file->folder_id : null;
-        $known = [];
+        if ($folderId === null && $fileId !== null) {
+            $file = LearnerTables::query($scope, 'files')->where('id', $fileId)->first(['module_id', 'folder_id']);
+            $folderId = $file !== null && $file->module_id === $moduleId ? $file->folder_id : null;
+        }
+        $knownTopics = [];
         foreach ($this->topics->list($by, $module->workspace_id) as $topic) {
             if ($topic->moduleId === $moduleId) {
-                $known[self::key($topic->name)] = true;
+                $knownTopics[self::key($topic->name)] = true;
             }
         }
-        foreach (LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->pluck('name_key') as $key) {
-            $known[$key] = true;
-        }
+
         $new = 0;
+        $seenInBatch = [];
         foreach ($names as $name) {
             $name = Input::text(['name' => $name], 'name');
-            if ($name === null || mb_strlen($name) > Topics::MAX_NAME || isset($known[self::key($name)])) {
+            if ($name !== null) {
+                $name = Topics::cleanMarkdown($name);
+            }
+            if ($name === null || $name === '' || mb_strlen($name) > Topics::MAX_NAME) {
                 continue;
             }
-            $known[self::key($name)] = true;
-            LearnerTables::insert($scope, 'topic_suggestions', [
-                'id' => Ids::new(), 'module_id' => $moduleId, 'folder_id' => $folderId, 'name' => $name, 'name_key' => self::key($name),
-                'source_file_id' => $fileId, 'status' => 'suggested', 'created_at' => now(),
-            ]);
-            $new++;
+            $key = self::key($name);
+            if (isset($knownTopics[$key]) || isset($seenInBatch[$key])) {
+                continue;
+            }
+            $seenInBatch[$key] = true;
+
+            $existing = LearnerTables::query($scope, 'topic_suggestions')
+                ->where('module_id', $moduleId)
+                ->where('name_key', $key)
+                ->first();
+
+            if ($existing === null) {
+                LearnerTables::insert($scope, 'topic_suggestions', [
+                    'id' => Ids::new(),
+                    'module_id' => $moduleId,
+                    'folder_id' => $folderId,
+                    'name' => $name,
+                    'name_key' => $key,
+                    'source_file_id' => $fileId,
+                    'status' => 'suggested',
+                    'created_at' => now(),
+                ]);
+                $new++;
+            } elseif ($existing->status === 'suggested') {
+                if ($folderId !== null && $existing->folder_id === null) {
+                    LearnerTables::query($scope, 'topic_suggestions')
+                        ->where('id', $existing->id)
+                        ->update(['folder_id' => $folderId]);
+                }
+            } elseif ($force || ($folderId !== null && ($existing->folder_id === null || $existing->folder_id !== $folderId))) {
+                // If explicitly requested (e.g. session study map generation) or this suggestion was previously
+                // at module level, revive and assign to this session folder
+                LearnerTables::query($scope, 'topic_suggestions')
+                    ->where('id', $existing->id)
+                    ->update([
+                        'folder_id' => $folderId,
+                        'source_file_id' => $fileId ?? $existing->source_file_id,
+                        'status' => 'suggested',
+                        'created_at' => now(),
+                    ]);
+                $new++;
+            }
         }
 
         return $new;
@@ -134,6 +174,26 @@ final class TopicSuggestions
         $scope = Guard::learner($by);
         $this->row($scope, $id);
         LearnerTables::query($scope, 'topic_suggestions')->where('id', $id)->where('status', 'suggested')->update(['status' => 'dismissed']);
+    }
+
+    /** Renames a suggestion. */
+    public function rename(Principal $by, string $id, string $newName): void
+    {
+        $scope = Guard::learner($by);
+        $this->row($scope, $id);
+        $name = Input::text(['name' => $newName], 'name');
+        if ($name !== null) {
+            $name = Topics::cleanMarkdown($name);
+        }
+        if ($name === null || $name === '' || mb_strlen($name) > Topics::MAX_NAME) {
+            return;
+        }
+        LearnerTables::query($scope, 'topic_suggestions')
+            ->where('id', $id)
+            ->update([
+                'name' => $name,
+                'name_key' => self::key($name),
+            ]);
     }
 
     public function dismissAll(Principal $by, string $moduleId, ?array $folderIds = null): void

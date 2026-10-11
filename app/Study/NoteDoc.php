@@ -25,7 +25,7 @@ final class NoteDoc
     public const MAX_FORMULA = 5_000;
 
     /** How a text run's marks nest in Markdown: code innermost, the link round everything. */
-    private const MARK_ORDER = ['code' => 0, 'bold' => 1, 'italic' => 2, 'strike' => 3, 'highlight' => 4, 'underline' => 5, 'subscript' => 6, 'superscript' => 7, 'link' => 8];
+    private const MARK_ORDER = ['code' => 0, 'bold' => 1, 'italic' => 2, 'strike' => 3, 'textColor' => 4, 'highlight' => 5, 'underline' => 6, 'subscript' => 7, 'superscript' => 8, 'link' => 9];
 
     /** Set while plain() runs: no Markdown marks, just the words. */
     private static bool $plain = false;
@@ -56,10 +56,13 @@ final class NoteDoc
         'text' => [],
     ];
 
-    private const MARKS = ['bold', 'italic', 'underline', 'strike', 'code', 'link', 'highlight', 'subscript', 'superscript'];
+    private const MARKS = ['bold', 'italic', 'underline', 'strike', 'code', 'link', 'highlight', 'textColor', 'subscript', 'superscript'];
+
+    /** A text colour's tone: semantic tones from theme categories. */
+    public const TEXT_COLORS = ['red', 'orange', 'amber', 'green', 'teal', 'blue', 'purple', 'pink', 'muted', 'custom'];
 
     /** A highlight's tone: a name the themes draw, never a colour value. The first is the default. */
-    public const HIGHLIGHTS = ['yellow', 'green', 'blue', 'pink', 'purple'];
+    public const HIGHLIGHTS = ['yellow', 'green', 'blue', 'pink', 'purple', 'orange', 'custom'];
 
     private const ALIGNMENTS = ['left', 'center', 'right', 'justify'];
 
@@ -288,6 +291,9 @@ final class NoteDoc
                 'bold' => '**'.$core.'**',
                 'italic' => '*'.$core.'*',
                 'strike' => '~~'.$core.'~~',
+                'textColor' => isset($mark['attrs']['color'])
+                    ? '<span style="color: '.$mark['attrs']['color'].'">'.$core.'</span>'
+                    : (isset($mark['attrs']['tone']) ? '<span data-text-tone="'.$mark['attrs']['tone'].'">'.$core.'</span>' : $core),
                 'highlight' => '=='.$core.'==',
                 'underline' => '<u>'.$core.'</u>',
                 'subscript' => '<sub>'.$core.'</sub>',
@@ -452,7 +458,34 @@ final class NoteDoc
             }
             if ($type === 'highlight') {
                 $tone = $mark['attrs']['tone'] ?? null;
-                $kept[] = ['type' => 'highlight', 'attrs' => ['tone' => in_array($tone, self::HIGHLIGHTS, true) ? $tone : self::HIGHLIGHTS[0]]];
+                $color = $mark['attrs']['color'] ?? null;
+                $attrs = [];
+                if (is_string($tone) && in_array($tone, self::HIGHLIGHTS, true)) {
+                    $attrs['tone'] = $tone;
+                }
+                if (is_string($color) && preg_match('/^#[0-9a-fA-F]{3,8}$/', $color)) {
+                    $attrs['color'] = strtolower($color);
+                }
+                if ($attrs === []) {
+                    $attrs['tone'] = self::HIGHLIGHTS[0];
+                }
+                $kept[] = ['type' => 'highlight', 'attrs' => $attrs];
+
+                continue;
+            }
+            if ($type === 'textColor') {
+                $tone = $mark['attrs']['tone'] ?? null;
+                $color = $mark['attrs']['color'] ?? null;
+                $attrs = [];
+                if (is_string($tone) && in_array($tone, self::TEXT_COLORS, true)) {
+                    $attrs['tone'] = $tone;
+                }
+                if (is_string($color) && preg_match('/^#[0-9a-fA-F]{3,8}$/', $color)) {
+                    $attrs['color'] = strtolower($color);
+                }
+                if ($attrs !== []) {
+                    $kept[] = ['type' => 'textColor', 'attrs' => $attrs];
+                }
 
                 continue;
             }

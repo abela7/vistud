@@ -11,7 +11,9 @@ use App\Study\Input;
 use App\Study\NoteDoc;
 use App\Study\Notes;
 use App\Study\SessionDetails;
+use Smalot\PdfParser\Parser;
 use Throwable;
+use ZipArchive;
 
 /**
  * What the student attaches to a message in the chat (docs/specs/study-memory.md §6): their notes and files, from
@@ -189,6 +191,57 @@ final class Attachments
         }
 
         return $bytes !== '' && strlen($bytes) <= self::PICTURE_BYTES ? "data:{$mime};base64,".base64_encode($bytes) : null;
+    }
+
+    /**
+     * Extracts text from uploaded document bytes (PDF, Word, or plain text), up to $maxChars characters.
+     */
+    public static function extractText(string $bytes, string $extension, int $maxChars = 12_000): string
+    {
+        $ext = strtolower($extension);
+        if ($bytes === '') {
+            return '';
+        }
+
+        if ($ext === 'pdf') {
+            try {
+                $parser = new Parser;
+                $pdf = $parser->parseContent($bytes);
+
+                return mb_substr(trim($pdf->getText()), 0, $maxChars);
+            } catch (Throwable) {
+                return '';
+            }
+        }
+
+        if ($ext === 'docx') {
+            try {
+                $temp = tempnam(sys_get_temp_dir(), 'vistud-doc-');
+                if ($temp !== false) {
+                    file_put_contents($temp, $bytes);
+                    $zip = new ZipArchive;
+                    if ($zip->open($temp) === true) {
+                        $xml = $zip->getFromName('word/document.xml');
+                        $zip->close();
+                        @unlink($temp);
+                        if ($xml !== false) {
+                            $clean = strip_tags(str_replace(['</w:p>', '<w:tab/>'], ["\n", "\t"], $xml));
+
+                            return mb_substr(trim((string) preg_replace("/\n{3,}/", "\n\n", $clean)), 0, $maxChars);
+                        }
+                    }
+                    @unlink($temp);
+                }
+            } catch (Throwable) {
+                return '';
+            }
+        }
+
+        if (in_array($ext, ['txt', 'md', 'markdown', 'csv', 'json', 'log', 'html', 'htm', 'xml', 'yaml', 'yml'], true)) {
+            return mb_substr(trim(mb_scrub($bytes)), 0, $maxChars);
+        }
+
+        return '';
     }
 
     private static function sameCourse(string $workspaceId, SessionDetails $session): void

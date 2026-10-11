@@ -46,7 +46,8 @@
         ['pageBreak', 'file-plus', 'Page break (Ctrl+Enter)', false],
     ];
     $aligns = ['left' => ['align-left', 'Left'], 'center' => ['align-center', 'Centre'], 'right' => ['align-right', 'Right'], 'justify' => ['align-justify', 'Justify']];
-    $highlights = ['yellow' => 'Yellow', 'green' => 'Green', 'blue' => 'Blue', 'pink' => 'Pink', 'purple' => 'Purple'];
+    $highlights = ['yellow' => 'Yellow', 'green' => 'Green', 'blue' => 'Blue', 'pink' => 'Pink', 'purple' => 'Purple', 'orange' => 'Orange'];
+    $textColors = ['red' => 'Red', 'orange' => 'Orange', 'amber' => 'Amber', 'green' => 'Green', 'teal' => 'Teal', 'blue' => 'Blue', 'purple' => 'Purple', 'pink' => 'Pink', 'muted' => 'Muted gray'];
     $callouts = [
         'definition' => ['Definition', 'Defines a concept'],
         'theorem' => ['Theorem / Law', 'Physics law or math theorem'],
@@ -190,6 +191,9 @@
             </div>
 
             <article class="note-card" data-note-editor @if ($window) data-window @endif @if ($split) data-split @endif data-account="{{ auth()->id() }}" data-max-bytes="{{ \App\Study\NoteDoc::MAX_BYTES }}" data-image-upload-url="{{ route('api.v1.notes.images.store') }}"
+                data-workspace-id="{{ $workspace->id }}"
+                data-note-id="{{ $new ? '' : $note->id }}"
+                data-ask-ai-url="{{ route('workspaces.notes.ask-ai', $workspace->id) }}"
                 @if ($import ?? null) data-import-url="{{ $import['url'] }}" data-import-name="{{ $import['name'] }}" data-import-kind="{{ $import['markdown'] ? 'markdown' : 'text' }}" @endif
                 @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" data-note-url="{{ route('workspaces.notes.show', [$workspace->id, $note->id]) }}" @endif>
                 <div class="note-toolbar" role="toolbar" aria-label="Formatting" aria-controls="note-body" data-note-toolbar>
@@ -214,6 +218,9 @@
                         @endforeach
                         <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-highlight-menu" popovertarget="note-highlight-menu" title="Highlight" aria-label="Highlight" aria-haspopup="menu" tabindex="-1">
                             <x-icon name="highlighter" class="size-5" /><x-icon name="chevron-down" class="size-3" />
+                        </button>
+                        <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-text-color-menu" popovertarget="note-text-color-menu" title="Text colour" aria-label="Text colour" aria-haspopup="menu" tabindex="-1">
+                            <x-icon name="baseline" class="size-5" /><x-icon name="chevron-down" class="size-3" />
                         </button>
                         @unless ($window)
                             <button type="button" class="toolbar-button toolbar-menu-button" data-menu-for="note-ai-menu" popovertarget="note-ai-menu" title="Ask the AI about the selected text" aria-label="AI help with the selection" aria-haspopup="menu" tabindex="-1">
@@ -268,8 +275,40 @@
                             <span class="highlight-swatch" data-tone="{{ $value }}" aria-hidden="true"></span>{{ $word }}
                         </button>
                     @endforeach
+                    <div class="note-highlight-divider" role="separator"></div>
+                    <div class="note-highlight-custom-row">
+                        <button type="button" class="toolbar-menu-item flex-1" role="menuitem" data-highlight-custom-apply title="Apply custom highlight color">
+                            <span class="highlight-swatch highlight-swatch-custom" data-highlight-custom-swatch aria-hidden="true"></span>
+                            <span class="flex-1 text-left" data-highlight-custom-label>Custom color</span>
+                        </button>
+                        <label class="note-highlight-picker-trigger" data-highlight-custom-trigger title="Choose custom color" aria-label="Choose custom highlight color">
+                            <x-icon name="palette" class="size-4" />
+                            <input type="color" data-highlight-color-picker class="sr-only" aria-label="Pick custom highlight color">
+                        </label>
+                    </div>
                     <button type="button" class="toolbar-menu-item" role="menuitem" data-highlight="">
                         <x-icon name="x" class="size-4" />No highlight
+                    </button>
+                </div>
+                <div id="note-text-color-menu" class="toolbar-menu" popover role="menu" aria-label="Text colour">
+                    @foreach ($textColors as $value => $word)
+                        <button type="button" class="toolbar-menu-item" role="menuitemradio" aria-checked="false" data-text-color="{{ $value }}">
+                            <span class="text-color-swatch" data-text-tone="{{ $value }}" aria-hidden="true"></span>{{ $word }}
+                        </button>
+                    @endforeach
+                    <div class="note-text-color-divider" role="separator"></div>
+                    <div class="note-text-color-custom-row">
+                        <button type="button" class="toolbar-menu-item flex-1" role="menuitem" data-text-color-custom-apply title="Apply custom text colour">
+                            <span class="text-color-swatch text-color-swatch-custom" data-text-color-custom-swatch aria-hidden="true"></span>
+                            <span class="flex-1 text-left" data-text-color-custom-label>Custom colour</span>
+                        </button>
+                        <label class="note-text-color-picker-trigger" data-text-color-custom-trigger title="Choose custom text colour" aria-label="Choose custom text colour">
+                            <x-icon name="palette" class="size-4" />
+                            <input type="color" data-text-color-picker class="sr-only" aria-label="Pick custom text colour">
+                        </label>
+                    </div>
+                    <button type="button" class="toolbar-menu-item" role="menuitem" data-text-color="">
+                        <x-icon name="x" class="size-4" />Default colour
                     </button>
                 </div>
                 @unless ($window)
@@ -686,6 +725,148 @@
                         </button>
                     </div>
                 </div>
+
+                {{-- Floating Ask AI trigger on text selection --}}
+                <div id="note-selection-ai-pill" class="note-selection-ai-pill" data-note-ai-pill popover="manual" hidden>
+                    <div class="note-selection-pill-group">
+                        <button type="button" class="note-ai-pill-btn" data-note-selection-highlight title="Highlight selection">
+                            <x-icon name="highlighter" class="size-3.5 text-warning" />
+                            <span>Highlight</span>
+                        </button>
+                        <span class="note-ai-pill-divider" aria-hidden="true"></span>
+                        <button type="button" class="note-ai-pill-btn" data-note-ai-trigger title="Ask AI about this selection">
+                            <x-icon name="sparkles" class="size-3.5 text-accent" />
+                            <span>Ask AI</span>
+                        </button>
+                    </div>
+                </div>
+
+                {{-- Ask AI Side Drawer on selected text --}}
+                <div id="note-selection-ai-card" class="note-selection-ai-card" data-note-ai-card popover="manual" hidden>
+                    <div class="note-ai-card-head">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="ws-chip size-6 rounded-md shrink-0 flex items-center justify-center">
+                                <x-icon name="sparkles" class="size-3.5 text-accent" />
+                            </span>
+                            <div class="min-w-0">
+                                <span class="text-xs font-semibold text-fg block truncate">Ask AI</span>
+                                <span class="text-[0.6875rem] text-fg-muted block truncate">In-note selection helper</span>
+                            </div>
+                        </div>
+                        <button type="button" class="topbar-button size-7" data-note-ai-close title="Close (ends session)" aria-label="Close">
+                            <x-icon name="x" class="size-4" />
+                        </button>
+                    </div>
+                    <div class="note-ai-card-quote" data-note-ai-quote title="Selected text"></div>
+                    <div class="note-ai-card-body" data-note-ai-body>
+                        <div class="note-ai-quick-prompts">
+                            <button type="button" class="note-ai-quick-btn" data-quick-prompt="Explain this simply and clearly">Explain simply</button>
+                            <button type="button" class="note-ai-quick-btn" data-quick-prompt="Summarize the core point in 1-2 sentences">Key takeaway</button>
+                            <button type="button" class="note-ai-quick-btn" data-quick-prompt="Give a clear real-world example of this concept">Example</button>
+                            <button type="button" class="note-ai-quick-btn" data-quick-prompt="Why does this matter in practice?">Why it matters</button>
+                        </div>
+                        <div class="note-ai-messages" data-note-ai-messages hidden></div>
+                        <div class="note-ai-loading" data-note-ai-loading hidden>
+                            <span class="animate-pulse flex items-center gap-1.5 text-xs text-fg-muted">
+                                <x-icon name="sparkles" class="size-3 text-accent animate-spin" />
+                                <span>AI is thinking…</span>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="note-ai-dock">
+                        <form class="chat-compose" data-note-ai-form novalidate>
+                            <div class="chat-input">
+                                {{-- Live speech dictation status pill --}}
+                                <div class="chat-dictation-pill" data-note-ai-dictation hidden role="status" aria-live="polite">
+                                    <div class="chat-dictation-waves" aria-hidden="true">
+                                        <span class="chat-dictation-wave"></span>
+                                        <span class="chat-dictation-wave"></span>
+                                        <span class="chat-dictation-wave"></span>
+                                        <span class="chat-dictation-wave"></span>
+                                        <span class="chat-dictation-wave"></span>
+                                    </div>
+                                    <div class="chat-dictation-body">
+                                        <span class="chat-dictation-status">Listening…</span>
+                                        <span class="chat-dictation-preview" data-note-ai-interim>Speak now…</span>
+                                    </div>
+                                    <div class="chat-dictation-actions">
+                                        <button type="button" class="chat-dictation-done-btn" data-note-ai-dictation-done title="Done dictating" aria-label="Done dictating">
+                                            <x-icon name="check" class="size-3" />
+                                            <span>Done</span>
+                                        </button>
+                                        <button type="button" class="chat-dictation-cancel-btn" data-note-ai-dictation-cancel title="Cancel dictation" aria-label="Cancel dictation">
+                                            <x-icon name="x" class="size-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {{-- Attached file/image chips --}}
+                                <div class="note-ai-attachments" data-note-ai-attachments hidden></div>
+
+                                <label for="note-ai-input" class="sr-only">Write to the AI tutor</label>
+                                <textarea id="note-ai-input" class="chat-box" data-note-ai-input rows="1"
+                                    placeholder="Write to the AI tutor… (Enter sends, Shift+Enter for a new line)"
+                                    aria-label="Write to the AI tutor"></textarea>
+                            </div>
+
+                            <div class="chat-compose-bar">
+                                <div class="chat-compose-tools" role="toolbar" aria-label="Attachments">
+                                    <label class="chat-tool-btn cursor-pointer" title="Attach picture or file" aria-label="Attach picture or file">
+                                        <x-icon name="paperclip" class="size-4" />
+                                        <input type="file" class="sr-only" data-note-ai-file-input multiple accept="image/*,application/pdf,.txt,.md,.docx">
+                                    </label>
+                                </div>
+
+                                <div class="chat-compose-actions">
+                                    @php
+                                        $chatModels = $chatModels ?? [];
+                                        $activeModel = $activeModel ?? ($chatModels[0]['id'] ?? 'openai/gpt-4o-mini');
+                                        $activeModelName = $activeModelName ?? ($chatModels[0]['name'] ?? 'GPT-4o mini');
+                                    @endphp
+                                    @if ($chatModels !== [])
+                                        <div class="chat-model-picker" data-note-ai-model-picker data-default-model="{{ $activeModel }}">
+                                            <button type="button" class="chat-model-btn" data-note-ai-model-btn aria-label="Switch AI model" title="Current model: {{ $activeModelName }} (click to change)">
+                                                <span class="chat-model-btn-name" data-note-ai-model-name>{{ $activeModelName }}</span>
+                                                <x-icon name="chevron-down" class="size-3 text-fg-muted transition-transform" data-note-ai-model-chevron />
+                                            </button>
+
+                                            <div class="chat-model-popover" data-note-ai-model-popover hidden role="dialog" aria-label="Choose AI model">
+                                                <div class="chat-model-popover-head">
+                                                    <span class="text-xs font-semibold text-fg">AI model</span>
+                                                    <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-xs text-link" target="_blank">Settings</a>
+                                                </div>
+                                                <div class="chat-model-popover-list" role="menu">
+                                                    @foreach ($chatModels as $m)
+                                                        <button type="button" role="menuitem" class="chat-model-option {{ $activeModel === $m['id'] ? 'is-active' : '' }}" data-note-ai-model-option="{{ $m['id'] }}" data-model-name="{{ $m['name'] }}">
+                                                            <div class="chat-model-option-text">
+                                                                <span class="chat-model-option-name">{{ $m['name'] }}</span>
+                                                                @if ($m['priceWords'])
+                                                                    <span class="chat-model-option-price">{{ $m['priceWords'] }}</span>
+                                                                @endif
+                                                            </div>
+                                                            <span class="shrink-0 flex items-center justify-center text-accent" data-note-ai-model-check style="{{ $activeModel === $m['id'] ? '' : 'display: none;' }}">
+                                                                <x-icon name="check" class="size-3.5" />
+                                                            </span>
+                                                        </button>
+                                                    @endforeach
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endif
+
+                                    <button type="button" class="chat-mic-btn" data-note-ai-mic title="Dictate with voice" aria-label="Dictate with voice">
+                                        <span data-note-ai-mic-idle><x-icon name="mic" class="size-4" /></span>
+                                        <span data-note-ai-mic-active hidden><x-icon name="mic-off" class="size-4" /></span>
+                                    </button>
+                                    <button type="submit" class="btn btn-primary chat-send" data-note-ai-send title="Ask AI" aria-label="Ask AI">
+                                        <x-icon name="arrow-up" class="size-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
                 <script type="application/json" data-note-doc>@json($payload)</script>
             </article>
         @endif

@@ -10,7 +10,7 @@
     bar of its sections. Students also get their pinned notes' button in the
     bottom corner (App\Livewire\Study\PinnedNotes).
 --}}
-@props(['title', 'area' => 'student', 'workspace' => null, 'section' => null, 'pinnedCurrent' => null])
+@props(['title', 'area' => 'student', 'workspace' => null, 'section' => null, 'pinnedCurrent' => null, 'moduleId' => null, 'folderId' => null])
 @php
     $principal = app(\App\Identity\PrincipalFactory::class)->fromRequest(request());
     $isAdmin = $principal->hasRole(\App\Platform\Access\Role::Admin);
@@ -22,6 +22,10 @@
     // A student's own workspaces, for the sidebar and the switcher.
     $workspaces = $area === 'student' && $isStudent ? app(\App\Study\Workspaces::class)->list($principal) : null;
     $homeRoute = $area === 'admin' ? 'admin.overview' : 'home';
+    $routeFolder = request()->route('folder');
+    $activeFolderId = $folderId ?? ($routeFolder instanceof \Illuminate\Database\Eloquent\Model ? $routeFolder->id : (is_string($routeFolder) ? $routeFolder : null));
+    $routeModule = request()->route('module');
+    $activeModuleId = $moduleId ?? ($routeModule instanceof \Illuminate\Database\Eloquent\Model ? $routeModule->id : (is_string($routeModule) ? $routeModule : null));
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
@@ -124,7 +128,11 @@
                     <livewire:study.pinned-notes :current="$pinnedCurrent" />
                     @if ($workspace)
                         {{-- Ask's sheet: in the page, not the top bar, which re-points the text colours. --}}
-                        <livewire:workspaces.ask :workspace-id="$workspace->id" key="ask" />
+                        <livewire:workspaces.ask
+                            :workspace-id="$workspace->id"
+                            :module-id="$activeModuleId"
+                            :folder-id="$activeFolderId"
+                            :key="'ask-'.$workspace->id.'-'.($activeFolderId ?? $activeModuleId ?? 'workspace')" />
                     @endif
                 @endif
             </main>

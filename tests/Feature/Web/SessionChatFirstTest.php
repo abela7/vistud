@@ -230,6 +230,41 @@ class SessionChatFirstTest extends TestCase
 
         $page->call('newQuestion')->set('questionText', 'Why is an inner join symmetric?')->call('save')->assertSet('mode', null)->assertDispatched('questions-changed');
         $asked = collect(app(Questions::class)->list($this->by, $this->workspace))->firstWhere('text', 'Why is an inner join symmetric?');
-        $this->assertSame([$this->joins, $this->module, $session->id], [$asked->topicId, $asked->moduleId, $session->id]);
+        $this->assertSame([$this->joins, $this->module, $session->id, 'pending'], [$asked->topicId, $asked->moduleId, $asked->sessionId, $asked->status]);
+
+        $this->engine->will(Fake::says('An inner join keeps only rows that match on both sides, so the order of the two tables does not change which pairs match.'));
+        $page->call('newQuestion')
+            ->set('questionText', 'What does an inner join keep?')
+            ->call('answerQuestionWithAi')
+            ->assertSet('questionAnswer', 'An inner join keeps only rows that match on both sides, so the order of the two tables does not change which pairs match.')
+            ->assertSee('Save question & answer')
+            ->call('save')
+            ->assertSet('mode', null)
+            ->assertDispatched('questions-changed');
+        $answered = collect(app(Questions::class)->list($this->by, $this->workspace))->firstWhere('text', 'What does an inner join keep?');
+        $this->assertSame(['answered', 'An inner join keeps only rows that match on both sides, so the order of the two tables does not change which pairs match.'], [$answered->status, $answered->answer]);
+    }
+
+    public function test_student_can_quote_and_reply_to_tutors_message_with_targeted_context(): void
+    {
+        $session = $this->start($this->joins);
+        $chat = $this->chat($session->id);
+
+        // First, the tutor answers with a numbered explanation
+        $this->engine->will(Fake::says("Here is how a page fault is handled:\n1. Trap to OS\n2. Save state\n3. Check validity\n4. Find free frame"));
+        $chat->set('text', 'How is a page fault handled?')->call('send')
+            ->assertSee('Here is how a page fault is handled')
+            ->assertSee('4. Find free frame')
+            ->assertSee('Reply');
+
+        // Now the student replies quoting step 4
+        $quotedText = "> 4. Find free frame\n\nWhat happens if there are no free frames available?";
+        $this->engine->will(Fake::says('If no frames are free, the OS runs a page replacement algorithm to evict a page.'));
+
+        $chat->set('text', $quotedText)->call('send')
+            ->assertSee('Quoting tutor')
+            ->assertSee('4. Find free frame')
+            ->assertSee('What happens if there are no free frames available?')
+            ->assertSee('If no frames are free, the OS runs a page replacement algorithm');
     }
 }

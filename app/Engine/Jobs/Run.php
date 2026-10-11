@@ -42,6 +42,12 @@ final class Run
         return $this->models->find($this->model, $this->key)?->tools ?? true;
     }
 
+    /** Whether this run's model can see images (one the service doesn't list is given the benefit of the doubt). */
+    public function canSeeImages(): bool
+    {
+        return $this->models->find($this->model, $this->key)?->images ?? true;
+    }
+
     /**
      * One call to the engine. $messages is one text for the user's turn, or a conversation in the OpenAI chat shape
      * (for a helper that looks things up, with $tools).

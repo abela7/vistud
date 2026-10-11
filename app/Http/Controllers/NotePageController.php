@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Engine\Models;
+use App\Engine\Settings;
 use App\Identity\PrincipalFactory;
 use App\Platform\Errors\NotFound;
 use App\Study\Files;
@@ -28,7 +30,7 @@ use Illuminate\Http\Request;
  */
 class NotePageController
 {
-    public function __invoke(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Notes $notes, Modules $modules, Folders $folders, string $workspace, string $note): View|RedirectResponse
+    public function __invoke(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Notes $notes, Modules $modules, Folders $folders, Settings $settings, Models $models, string $workspace, string $note): View|RedirectResponse
     {
         $by = $principals->fromRequest($request);
         $details = $workspaces->find($by, $workspace);
@@ -42,10 +44,21 @@ class NotePageController
             return redirect()->route('workspaces.notes.show', [$details->id, $opened->id]);
         }
 
-        return view('workspaces.note', ['workspace' => $details, 'note' => $opened, 'window' => $window, 'trail' => $this->trail($details->id, $opened->moduleId, $opened->folderId, $modules, $folders, $by), 'inModule' => $opened->moduleId !== null]);
+        [$chatModels, $activeModel, $activeModelName] = $this->modelPickerData($by, $settings, $models);
+
+        return view('workspaces.note', [
+            'workspace' => $details,
+            'note' => $opened,
+            'window' => $window,
+            'trail' => $this->trail($details->id, $opened->moduleId, $opened->folderId, $modules, $folders, $by),
+            'inModule' => $opened->moduleId !== null,
+            'chatModels' => $chatModels,
+            'activeModel' => $activeModel,
+            'activeModelName' => $activeModelName,
+        ]);
     }
 
-    public function create(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, Folders $folders, Files $files, string $workspace): View
+    public function create(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Modules $modules, Folders $folders, Files $files, Settings $settings, Models $models, string $workspace): View
     {
         $by = $principals->fromRequest($request);
         $details = $workspaces->find($by, $workspace);
@@ -76,9 +89,14 @@ class NotePageController
         // &title=…: a note that starts with its title (the notes beside a file), so it is made as soon as it opens.
         $title = mb_substr(trim((string) $request->query('title', '')), 0, Notes::MAX_TITLE);
 
+        [$chatModels, $activeModel, $activeModelName] = $this->modelPickerData($by, $settings, $models);
+
         return view('workspaces.note', [
             'workspace' => $details, 'note' => null, 'place' => $place, 'import' => $import, 'window' => $request->boolean('window'), 'startTitle' => $title,
             'trail' => $this->trail($details->id, $moduleId, $folderId, $modules, $folders, $by), 'inModule' => $moduleId !== null,
+            'chatModels' => $chatModels,
+            'activeModel' => $activeModel,
+            'activeModelName' => $activeModelName,
         ]);
     }
 
@@ -95,5 +113,42 @@ class NotePageController
         }
 
         return $trail;
+    }
+
+    /** @return array{0: list<array{id: string, name: string, priceWords: ?string}>, 1: string, 2: string} */
+    private function modelPickerData($by, Settings $settings, Models $models): array
+    {
+        $choices = $settings->get($by);
+        $chatModelIds = $choices->chatModels();
+        if ($choices->helperModel !== '' && ! in_array($choices->helperModel, $chatModelIds, true)) {
+            array_unshift($chatModelIds, $choices->helperModel);
+        }
+        $key = $settings->key($by);
+        $allModels = $models->all(key: $key);
+        $modelsById = [];
+        foreach ($allModels as $m) {
+            $modelsById[$m->id] = $m;
+        }
+        $cleanName = function (string $rawName, string $id): string {
+            $name = preg_replace('/^(Anthropic|Google|OpenAI|Meta|DeepSeek|Mistral|Cohere|Qwen):\s*/i', '', trim($rawName));
+
+            return $name !== '' ? $name : (str_contains($id, '/') ? explode('/', $id, 2)[1] : $id);
+        };
+        $chatModels = [];
+        foreach ($chatModelIds as $mId) {
+            $mObj = $modelsById[$mId] ?? null;
+            $raw = $mObj?->name ?? (str_contains($mId, '/') ? explode('/', $mId, 2)[1] : $mId);
+            $chatModels[] = [
+                'id' => $mId,
+                'name' => $cleanName($raw, $mId),
+                'priceWords' => $mObj?->priceWords() ?? null,
+            ];
+        }
+        $currentModelId = $choices->helperModel ?: ($chatModels[0]['id'] ?? 'openai/gpt-4o-mini');
+        $activeModelObj = $modelsById[$currentModelId] ?? null;
+        $activeRaw = $activeModelObj?->name ?? (str_contains($currentModelId, '/') ? explode('/', $currentModelId, 2)[1] : $currentModelId);
+        $activeModelName = $cleanName($activeRaw, $currentModelId);
+
+        return [$chatModels, $currentModelId, $activeModelName];
     }
 }

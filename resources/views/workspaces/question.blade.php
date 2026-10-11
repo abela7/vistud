@@ -7,7 +7,7 @@
 
     $shown = $question?->text !== null ? Str::limit($question->text, 60) : 'New question';
 @endphp
-<x-layouts.app :title="$shown.' · Questions · '.$workspace->name" :workspace="$workspace" :section="($question?->moduleId ?? ($module ?? null)) !== null ? 'modules' : 'progress'">
+<x-layouts.app :title="$shown.' · Questions · '.$workspace->name" :workspace="$workspace" :section="($question?->moduleId ?? ($module ?? null)) !== null ? 'modules' : 'progress'" :module-id="$question?->moduleId ?? ($module ?? null)" :folder-id="$question?->folderId">
     <livewire:workspaces.question-page
         :workspace-id="$workspace->id"
         :question-id="$question?->id"

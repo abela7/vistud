@@ -32,12 +32,9 @@
         @foreach (\App\Study\Workspaces::SECTIONS as [$key, $label, $icon])
             {{-- Six doors; Notes & files is reached from Modules and the course's Calendar from Home (docs/specs/vistud-2-blueprint.md §3.4). --}}
             @continue(! in_array($key, \App\Study\Workspaces::NAV, true))
-            <li>
-                <a href="{{ route('workspaces.show', $key === 'overview' ? $workspace->id : [$workspace->id, $key]) }}" class="nav-item" title="{{ $label }}" @if ($key === $section) aria-current="page" @endif>
-                    <x-icon :name="$icon" /><span class="nav-label">{{ $label }}</span>
-                </a>
-            </li>
+            <li><a href="{{ route('workspaces.show', $key === 'overview' ? $workspace->id : [$workspace->id, $key]) }}" class="nav-item" title="{{ $label }}" @if ($key === $section) aria-current="page" @endif><x-icon :name="$icon" /><span class="nav-label">{{ $label }}</span></a></li>
         @endforeach
+        <li><button type="button" class="nav-item w-full text-left" title="Ask" aria-haspopup="dialog" aria-controls="ask-sheet" x-data x-on:click="document.getElementById('app-drawer')?.close(); document.getElementById('ask-sheet')?.showModal(); document.getElementById('ask-text')?.focus()"><x-icon name="sparkles" /><span class="nav-label">Ask</span></button></li>
     </ul>
     <div>
         <p class="nav-section">Everywhere</p>

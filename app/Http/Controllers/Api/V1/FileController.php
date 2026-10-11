@@ -55,6 +55,7 @@ class FileController
             'size' => $file->size,
             'place' => ['type' => $type, 'id' => $placeId],
             'url' => route('workspaces.files.show', [$file->workspaceId, $file->id]),
+            'contentUrl' => route('files.content', $file->id),
         ], 201);
     }
 

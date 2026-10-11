@@ -4,7 +4,9 @@ namespace App\Engine\Context;
 
 use App\Engine\Settings;
 use App\Engine\Toolbox;
+use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Study\CourseProfiles;
 use App\Study\Files;
@@ -16,6 +18,8 @@ use App\Study\ModuleDetails;
 use App\Study\Modules;
 use App\Study\NoteDoc;
 use App\Study\Notes;
+use App\Study\PluginDetails;
+use App\Study\Plugins;
 use App\Study\SessionDetails;
 use App\Study\TopicDetails;
 use App\Study\Topics;
@@ -73,20 +77,49 @@ final class Stack
     }
 
     /**
-     * The helper's standing context: its short rules, the read-only tools beside them, and at most the module it is
-     * asked about (title, instructions, topics) or the course's name, nothing else. Another student's module or course
+     * The helper's standing context: its short rules, the read-only tools beside them, and at most the module or folder it is
+     * asked about (title, instructions, topics) or the course's name, nothing else. Another student's module, folder or course
      * is not found.
      *
      * @param  list<array<string, mixed>>  $tools
      */
-    public function helper(Principal $by, ?string $moduleId, array $tools, ?string $workspaceId = null): Built
+    public function helper(Principal $by, ?string $moduleId, array $tools, ?string $workspaceId = null, ?string $folderId = null): Built
     {
         $facts = new Facts(courseName: '');
-        if ($moduleId === null && $workspaceId !== null) {
-            // Asked about the course as a whole: it knows the course's name, and looks the rest up.
-            $facts = new Facts(courseName: $this->workspaces->find($by, $workspaceId)->name);
-        }
-        if ($moduleId !== null) {
+        if ($folderId !== null) {
+            $folder = $this->folders->find($by, $folderId);
+            $workspace = $this->workspaces->find($by, $folder->workspaceId);
+            $module = $folder->moduleId !== null ? $this->modules->find($by, $folder->moduleId) : null;
+            if ($module !== null) {
+                [$folderName, $folderIds, $otherFolders] = $this->folderInfo($by, $folderId, $module);
+                $brief = $folderIds !== null ? $this->briefs->forFolder($by, $folderId) : $this->briefs->for($by, $module->id);
+                $facts = new Facts(
+                    courseName: $workspace->name,
+                    moduleTitle: $module->title,
+                    moduleDates: self::dates($module),
+                    moduleInstructions: $this->instructions->forSession($by, $workspace->id, $module->id)['module'],
+                    topics: self::topicsOf($this->topics->list($by, $workspace->id), $module, $folderIds),
+                    moduleFiles: $brief->files,
+                    moduleQuestions: $brief->questions,
+                    moduleKeyPoints: $brief->keyPoints,
+                    moduleLast: $brief->last,
+                    folderName: $folderName,
+                    otherFolders: $otherFolders,
+                );
+            } else {
+                $path = $this->folders->path($by, $folder->id);
+                $folderName = implode(' › ', array_map(fn ($f) => $f->name, $path));
+                $brief = $this->briefs->forFolder($by, $folder->id);
+                $facts = new Facts(
+                    courseName: $workspace->name,
+                    moduleFiles: $brief->files,
+                    moduleQuestions: $brief->questions,
+                    moduleKeyPoints: $brief->keyPoints,
+                    moduleLast: $brief->last,
+                    folderName: $folderName,
+                );
+            }
+        } elseif ($moduleId !== null) {
             $module = $this->modules->find($by, $moduleId);
             $workspace = $this->workspaces->find($by, $module->workspaceId);
             $facts = new Facts(
@@ -100,6 +133,9 @@ final class Stack
                 moduleKeyPoints: $brief->keyPoints,
                 moduleLast: $brief->last,
             );
+        } elseif ($workspaceId !== null) {
+            // Asked about the course as a whole: it knows the course's name, and looks the rest up.
+            $facts = new Facts(courseName: $this->workspaces->find($by, $workspaceId)->name);
         }
 
         return $this->composeHelper($facts, $tools);
@@ -110,7 +146,9 @@ final class Stack
      */
     public function composeHelper(Facts $facts, array $tools): Built
     {
-        $about = $facts->moduleTitle === null && $facts->courseName !== '' ? [["## The course: {$facts->courseName}", true]] : $this->module($facts);
+        $about = $facts->moduleTitle === null && $facts->courseName !== '' && $facts->folderName === null
+            ? [["## The course: {$facts->courseName}", true]]
+            : $this->module($facts, isHelper: true);
         $layers = [0 => ['Rules', [[self::helperRules(), true]], self::HELPER_BUDGET], 4 => ['Module', $about, self::BUDGETS[4]]];
         $report = [];
         $texts = [];
@@ -184,6 +222,19 @@ final class Stack
         $course = $this->courseProfiles->get($by, $workspace->id);
         $today = CarbonImmutable::now();
 
+        $openedNoteTitle = null;
+        try {
+            $threadNoteId = LearnerTables::query(Guard::learner($by), 'engine_threads')->where('session_id', $session->id)->value('note_id');
+            if ($threadNoteId !== null) {
+                $openedNote = $this->notes->find($by, (string) $threadNoteId);
+                if ($openedNote->trashedAt === null) {
+                    $openedNoteTitle = $openedNote->displayTitle();
+                }
+            }
+        } catch (\Throwable) {
+            // Note gone or table not queryable
+        }
+
         return new Facts(
             courseName: $workspace->name,
             courseLine: $workspace->subtitle() !== '' ? $workspace->subtitle() : null,
@@ -210,11 +261,17 @@ final class Stack
             topicNow: $topic?->name,
             topicPractice: $topic === null ? null : ($topic->byTutor() ? "you marked it {$status($topic)}" : "the student says {$status($topic)}").'; practice: '.$topic->evidence(),
             clock: self::clock($session),
-            teaching: array_map(fn (string $key) => Tutoring::CHOICES[$key][$tutoring[$key]][1], array_keys(Tutoring::DEFAULTS)),
+            teaching: array_values(array_filter([
+                ...array_map(fn (string $key) => Tutoring::CHOICES[$key][$tutoring[$key]][1], array_keys(Tutoring::DEFAULTS)),
+                ! empty($tutoring['custom_do']) ? "What to do: {$tutoring['custom_do']}" : null,
+                ! empty($tutoring['custom_dont']) ? "What NOT to do: {$tutoring['custom_dont']}" : null,
+                ...array_map(fn (PluginDetails $p) => "Active plugin [{$p->name}]: ".implode(' ', $p->promptInstructions), Plugins::active($tutoring['plugins'] ?? [])),
+            ])),
             material: $material,
             checkpoint: $session->checkpoint,
             summary: $session->summary,
             studied: $session->studySeconds >= 60 ? SessionDetails::duration($session->studySeconds) : null,
+            openedNoteTitle: $openedNoteTitle,
             materialText: $materialText,
             folded: $folded,
         );
@@ -304,19 +361,26 @@ final class Stack
     }
 
     /** @return list<array{0: string, 1: bool}> */
-    private function module(Facts $f): array
+    private function module(Facts $f, bool $isHelper = false): array
     {
-        if ($f->moduleTitle === null) {
+        if ($f->moduleTitle === null && $f->folderName === null) {
             return [];
         }
-        $title = $f->moduleTitle.($f->moduleDates !== null ? " ({$f->moduleDates})" : '');
+        $title = $f->moduleTitle !== null ? $f->moduleTitle.($f->moduleDates !== null ? " ({$f->moduleDates})" : '') : null;
         $here = $f->folderName !== null;
         if ($here) {
-            // A folder's session (docs/specs/vistud-2-blueprint.md, Phase 9): first where the tutor is, then what that means.
+            // A folder's session (docs/specs/vistud-2-blueprint.md, Phase 9) or helper look-up: where they are, and what that means.
             $lines = [['## Where you are', true], [implode(' › ', array_filter([$f->courseName, $title, $f->folderName])), true]];
-            $lines[] = ["This session is in the folder {$f->folderName}: teach from its files and keep to its topics. What you save (notes, cards, questions, key points, new topics) goes in it.", true];
+            if ($isHelper) {
+                $lines[] = ["The student is looking at the folder {$f->folderName}. Answer their questions about this folder and its topics and files.", true];
+            } else {
+                $lines[] = ["This session is in the folder {$f->folderName}: teach from its files and keep to its topics. What you save (notes, cards, questions, key points, new topics) goes in it.", true];
+            }
             if ($f->otherFolders !== []) {
-                $lines[] = ['The module\'s other folders are for other sessions: '.implode(' · ', array_slice($f->otherFolders, 0, 8)).'.', true];
+                $otherText = $isHelper
+                    ? 'The module\'s other folders: '.implode(' · ', array_slice($f->otherFolders, 0, 8)).'.'
+                    : 'The module\'s other folders are for other sessions: '.implode(' · ', array_slice($f->otherFolders, 0, 8)).'.';
+                $lines[] = [$otherText, true];
             }
         } else {
             $lines = [['## The module: '.$title, true]];
@@ -378,6 +442,9 @@ final class Stack
         }
         foreach ($f->material as $line) {
             $lines[] = [$line, true];
+        }
+        if ($f->openedNoteTitle !== null) {
+            $lines[] = ["Opened note beside chat: \"{$f->openedNoteTitle}\". The student has this note open right now. When taking notes, writing, editing lines, or updating content, edit or write directly into this note (with edit_note or write_note) unless they specify another. Changes appear live on their screen.", true];
         }
         if ($f->checkpoint !== null) {
             $lines[] = ["Where this session last stood (your last checkpoint): {$f->checkpoint} Pick up from here.", false];
@@ -470,8 +537,17 @@ final class Stack
         if ($session->folderId === null) {
             return [null, null, []];
         }
+
+        return $this->folderInfo($by, $session->folderId, $module);
+    }
+
+    /**
+     * @return array{0: ?string, 1: ?list<string>, 2: list<string>}
+     */
+    public function folderInfo(Principal $by, string $folderId, ModuleDetails $module): array
+    {
         try {
-            $path = $this->folders->path($by, $session->folderId);
+            $path = $this->folders->path($by, $folderId);
         } catch (NotFound) {
             return [null, null, []];
         }
@@ -485,7 +561,7 @@ final class Stack
             }
         }
 
-        return [implode(' › ', array_map(fn ($folder) => $folder->name, $path)), $this->folders->within($by, $session->folderId), $others];
+        return [implode(' › ', array_map(fn ($folder) => $folder->name, $path)), $this->folders->within($by, $folderId), $others];
     }
 
     private static function status(TopicDetails $topic): string

@@ -60,12 +60,12 @@ class ModulePageScreenTest extends TestCase
         $this->module = app(Modules::class)->create($this->by, $this->workspace, ['title' => 'Week 3: CPU scheduling', 'starts_on' => '2026-10-05', 'ends_on' => '2026-10-11'])->id;
     }
 
-    private function page(array $params = [])
+    private function page(array $params = [], string $tab = '')
     {
         $this->actingAs($this->ada);
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
 
-        return Livewire::test(Contents::class, ['workspaceId' => $this->workspace, 'view' => 'module', 'placeId' => $this->module] + $params);
+        return Livewire::withQueryParams($tab !== '' ? ['tab' => $tab] : [])->test(Contents::class, ['workspaceId' => $this->workspace, 'view' => 'module', 'placeId' => $this->module] + $params);
     }
 
     private function ready(): void
@@ -93,8 +93,10 @@ class ModulePageScreenTest extends TestCase
             ->assertSeeInOrder(['Edit module', 'Tell the tutor about this module', 'Delete module'])
             ->assertSeeInOrder(['Study this', 'Whole module', 'Pick a topic', 'Quiz me', 'Test me'])
             // The tabs, with the topic count and the open questions; Questions and Sessions are their own pages.
-            ->assertSeeInOrder(['Topics', '2', 'Files', 'Notes', 'Questions', '1', 'Sessions'])
-            ->assertSee('aria-current="page"', false)->assertSee(route('workspaces.modules.questions', [$this->workspace, $this->module]), false)
+            ->assertSeeInOrder(['Folders', 'Files', 'Notes', 'Topics', '2', 'Questions', '1', 'Sessions'])
+            ->assertSee('aria-current="page"', false)->assertSee(route('workspaces.modules.questions', [$this->workspace, $this->module]), false);
+
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->workspace, $this->module, 'tab' => 'topics']))->assertOk()
             ->assertSeeInOrder(['Processes', 'Understood', 'Scheduling', 'Not started'])->assertSee('Add a topic, like');
 
         $this->actingAs($this->ada)->get(route('workspaces.modules.sessions', [$this->workspace, $this->module]))->assertOk()
@@ -106,7 +108,7 @@ class ModulePageScreenTest extends TestCase
         $file = $this->file();
         app(TopicSuggestions::class)->suggest($this->by, $this->module, $file, ['CPU scheduling', 'Round robin', 'Deadlocks', 'Paging', 'Memory']);
 
-        $page = $this->page()->assertSee('5 new topics found')->assertSee('in Lecture 3.txt')->assertSee('CPU scheduling, Round robin, Deadlocks, Paging…')
+        $page = $this->page(tab: 'topics')->assertSee('5 new topics found')->assertSee('in Lecture 3.txt')->assertSee('CPU scheduling, Round robin, Deadlocks, Paging…')
             ->assertSee('Add all')->assertSee('Pick')->assertSee('Not these')
             ->call('pickSuggested')->assertSet('picking', true)->assertSee('Add Round robin');
 
@@ -119,7 +121,7 @@ class ModulePageScreenTest extends TestCase
 
         // Not these: the rest is dismissed for good.
         app(TopicSuggestions::class)->suggest($this->by, $this->module, null, ['Semaphores']);
-        $this->page()->assertSee('1 new topic found')->call('dismissSuggested')->assertDontSee('new topic');
+        $this->page(tab: 'topics')->assertSee('1 new topic found')->call('dismissSuggested')->assertDontSee('new topic');
         $this->assertSame(0, app(TopicSuggestions::class)->suggest($this->by, $this->module, null, ['Semaphores']));
     }
 
@@ -139,7 +141,7 @@ class ModulePageScreenTest extends TestCase
         $this->assertSame(1, substr_count($page->html(), "wire:click=\"readFile('{$fresh}')\""));
         $this->assertSame(0, substr_count($page->html(), "readFile('{$picture}')"));
         $this->assertSame(0, substr_count($page->html(), "readFile('{$read}')"));
-        $page->assertSee('Upload files')->assertSee('New folder')->assertSee('Add a link')->assertDontSee('New note');
+        $page->assertSee('Upload files')->assertSee('Add a link')->assertDontSee('New note');
     }
 
     public function test_read_now_reads_the_file_or_says_what_is_missing(): void
@@ -173,8 +175,9 @@ class ModulePageScreenTest extends TestCase
 
         $this->page()->set('tab', 'notes')->assertSee('Lecture 3 notes')->assertSee('New note')->assertDontSee('Lecture 3.txt')->assertDontSee('Upload files');
         $this->page()->set('tab', 'files')->assertSee('Lecture 3.txt')->assertDontSee('Lecture 3 notes');
-        // An unknown tab is the first.
-        $this->page()->set('tab', 'nonsense')->assertSee('Add a topic, like');
+        // An unknown tab is the first (folders).
+        $this->page()->set('tab', 'nonsense')->assertSee('New folder');
+        $this->page()->set('tab', 'topics')->assertSee('Add a topic, like');
     }
 
     public function test_study_this_starts_with_no_dialog_a_topic_is_picked_from_a_sheet_and_quiz_and_test_carry_their_ask(): void
@@ -218,7 +221,7 @@ class ModulePageScreenTest extends TestCase
         $sheet = Livewire::test(TopicSheet::class, ['workspaceId' => $this->workspace])->dispatch('topic-sheet-open', topicId: $topic)
             ->assertSet('topicId', $topic)->assertDispatched('topic-sheet-dialog-open')
             ->assertSee('Scheduling')->assertSee('Where you stand')->assertSee('Covered')->assertSee('Understood')->assertSee('Still confusing')
-            ->assertSee('1 card, 1 due')->assertSee('Why does round robin starve long jobs?')->assertSee('Round robin gives each process a quantum.');
+            ->assertSee('Cards:')->assertSee('1 (1 due)')->assertSee('Why does round robin starve long jobs?')->assertSee('Round robin gives each process a quantum.');
 
         $sheet->call('report', 'confused')->assertSee('Saved.')->assertDispatched('topics-changed');
         $this->assertSame('confused', app(Topics::class)->find($this->by, $topic)->status);

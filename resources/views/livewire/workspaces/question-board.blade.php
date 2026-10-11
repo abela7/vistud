@@ -58,13 +58,187 @@
                 @else
                     <h2 id="questions-{{ $uid }}" @class(['section-title', 'sr-only' => $page])>{{ $page ? 'All questions' : 'Questions' }}</h2>
                 @endif
-                <form wire:submit="add" class="question-add" novalidate>
-                    <label for="question-add-{{ $uid }}" class="sr-only">A question you don't get yet</label>
-                    <span class="item-icon ws-colour-blue" aria-hidden="true"><x-icon name="circle-help" class="size-5" /></span>
-                    <input id="question-add-{{ $uid }}" type="text" class="question-add-input" wire:model="text" maxlength="{{ Questions::MAX_TEXT }}" placeholder="What don't you get? Write it down…" autocomplete="off">
-                    <x-button type="submit" variant="primary" wire:loading.attr="aria-busy" wire:target="add" busy-label="Adding…">Add</x-button>
+                <form wire:submit="add" class="module-compose-wrap" novalidate
+                    x-data="{
+                        formatOpen: false,
+                        resize() {
+                            const el = this.$refs.box;
+                            if (!el) return;
+                            el.style.height = 'auto';
+                            el.style.height = Math.min(el.scrollHeight, 220) + 'px';
+                        },
+                        wrap(before, after = before, placeholder = '') {
+                            const el = this.$refs.box;
+                            if (!el) return;
+                            const start = el.selectionStart ?? 0;
+                            const end = el.selectionEnd ?? 0;
+                            const val = el.value || '';
+                            const selected = val.substring(start, end) || placeholder;
+                            const replacement = before + selected + after;
+                            el.value = val.substring(0, start) + replacement + val.substring(end);
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                            el.focus();
+                            const cursor = selected ? start + replacement.length : start + before.length;
+                            el.setSelectionRange(cursor, cursor);
+                            this.$nextTick(() => this.resize());
+                        },
+                        toggleList() {
+                            const el = this.$refs.box;
+                            if (!el) return;
+                            const val = el.value || '';
+                            const start = el.selectionStart ?? 0;
+                            const end = el.selectionEnd ?? 0;
+                            const prevNewline = val.lastIndexOf('\n', start - 1);
+                            const lineStart = prevNewline === -1 ? 0 : prevNewline + 1;
+                            const nextNewline = val.indexOf('\n', end);
+                            const lineEnd = nextNewline === -1 ? val.length : nextNewline;
+                            const block = val.slice(lineStart, lineEnd);
+                            const lines = block.split('\n');
+                            const allBulleted = lines.every((l) => /^(\s*)[-*]\s+/.test(l));
+                            let replacement;
+                            if (allBulleted) {
+                                replacement = lines.map((l) => l.replace(/^(\s*)[-*]\s+/, '$1')).join('\n');
+                            } else {
+                                replacement = lines.map((l) => (/^(\s*)[-*]\s+/.test(l) ? l : '- ' + l)).join('\n');
+                            }
+                            el.value = val.slice(0, lineStart) + replacement + val.slice(lineEnd);
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                            el.focus();
+                            const newPos = lineStart + replacement.length;
+                            el.setSelectionRange(newPos, newPos);
+                            this.$nextTick(() => this.resize());
+                        },
+                        handleKeydown(event) {
+                            const el = this.$refs.box;
+                            if (!el) return;
+                            if (event.ctrlKey || event.metaKey) {
+                                if (event.key.toLowerCase() === 'b') {
+                                    event.preventDefault();
+                                    this.wrap('**', '**', 'bold text');
+                                    return;
+                                }
+                                if (event.key.toLowerCase() === 'i') {
+                                    event.preventDefault();
+                                    this.wrap('*', '*', 'italic text');
+                                    return;
+                                }
+                                if (event.key.toLowerCase() === 'e') {
+                                    event.preventDefault();
+                                    this.wrap('`', '`', 'code');
+                                    return;
+                                }
+                                if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    $wire.add();
+                                    return;
+                                }
+                            }
+                            if (event.key === 'Enter') {
+                                const val = el.value || '';
+                                const selStart = el.selectionStart ?? 0;
+                                const selEnd = el.selectionEnd ?? 0;
+                                const prevNewline = val.lastIndexOf('\n', selStart - 1);
+                                const lineStart = prevNewline === -1 ? 0 : prevNewline + 1;
+                                const nextNewline = val.indexOf('\n', selStart);
+                                const lineEnd = nextNewline === -1 ? val.length : nextNewline;
+                                const currentLine = val.slice(lineStart, lineEnd);
+                                const listMatch = currentLine.match(/^(\s*)([-*]|\d+\.)\s*(.*)$/);
+                                if (listMatch) {
+                                    const [full, indent, marker, lineText] = listMatch;
+                                    if (lineText.trim() === '') {
+                                        event.preventDefault();
+                                        el.value = val.slice(0, lineStart) + val.slice(lineEnd);
+                                        el.setSelectionRange(lineStart, lineStart);
+                                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                                        this.$nextTick(() => this.resize());
+                                        return;
+                                    }
+                                    if (event.shiftKey) {
+                                        event.preventDefault();
+                                        let nextMarker = marker;
+                                        if (/^\d+\.$/.test(marker)) {
+                                            nextMarker = (parseInt(marker, 10) + 1) + '.';
+                                        }
+                                        const continuation = '\n' + indent + nextMarker + ' ';
+                                        const before = val.slice(0, selStart);
+                                        const after = val.slice(selEnd);
+                                        el.value = before + continuation + after;
+                                        const newPos = selStart + continuation.length;
+                                        el.setSelectionRange(newPos, newPos);
+                                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                                        this.$nextTick(() => this.resize());
+                                        return;
+                                    }
+                                }
+                                if (!event.shiftKey && !event.isComposing) {
+                                    event.preventDefault();
+                                    $wire.add();
+                                }
+                            }
+                        }
+                    }"
+                    x-init="
+                        $nextTick(() => resize());
+                        $watch('$wire.text', (val) => {
+                            if (!val) {
+                                $nextTick(() => {
+                                    if ($refs.box) $refs.box.style.height = 'auto';
+                                });
+                            }
+                        });
+                    ">
+                    <div class="chat-compose">
+                        <label for="question-add-{{ $uid }}" class="sr-only">A question you don't get yet</label>
+                        <textarea
+                            id="question-add-{{ $uid }}"
+                            class="chat-box"
+                            rows="1"
+                            x-ref="box"
+                            wire:model="text"
+                            maxlength="{{ Questions::MAX_TEXT }}"
+                            placeholder="What don't you get? Write it down…"
+                            @error('text') aria-invalid="true" aria-describedby="question-error-{{ $uid }}" @enderror
+                            x-on:input="resize()"
+                            x-on:paste="$nextTick(() => resize())"
+                            x-on:keydown="handleKeydown($event)"></textarea>
+
+                        <div class="chat-compose-bar">
+                            <div class="chat-compose-tools" role="toolbar" aria-label="Tools and formatting">
+                                <span class="item-icon ws-colour-blue size-7 rounded-md shrink-0 flex items-center justify-center mr-1" aria-hidden="true">
+                                    <x-icon name="circle-help" class="size-4" />
+                                </span>
+                                <button type="button" class="chat-tool-btn" :class="{ 'is-active': formatOpen }" @click="formatOpen = !formatOpen" title="Formatting tools" aria-label="Formatting tools" :aria-expanded="formatOpen.toString()">
+                                    <span class="font-semibold text-xs leading-none">Aa</span>
+                                </button>
+
+                                <div class="chat-format-group" x-show="formatOpen" x-cloak x-transition>
+                                    <span class="chat-tool-divider" aria-hidden="true"></span>
+                                    <button type="button" class="chat-tool-btn" x-on:click="wrap('**', '**', 'bold text')" title="Bold" aria-label="Bold">
+                                        <x-icon name="bold" class="size-4" />
+                                    </button>
+                                    <button type="button" class="chat-tool-btn" x-on:click="wrap('*', '*', 'italic text')" title="Italic" aria-label="Italic">
+                                        <x-icon name="italic" class="size-4" />
+                                    </button>
+                                    <button type="button" class="chat-tool-btn" x-on:click="wrap('`', '`', 'code')" title="Code" aria-label="Code">
+                                        <x-icon name="code" class="size-4" />
+                                    </button>
+                                    <button type="button" class="chat-tool-btn" x-on:click="toggleList()" title="Bulleted list" aria-label="Bulleted list">
+                                        <x-icon name="list" class="size-4" />
+                                    </button>
+                                    <button type="button" class="chat-tool-btn" x-on:click="wrap('$', '$', 'formula')" title="Formula" aria-label="Formula">
+                                        <x-icon name="sigma" class="size-4" />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="chat-compose-actions">
+                                <span class="chat-shortcut-hint">Shift+Enter new line</span>
+                                <x-button type="submit" icon="plus" variant="primary" size="sm" wire:loading.attr="aria-busy" wire:target="add" busy-label="Adding…">Add</x-button>
+                            </div>
+                        </div>
+                    </div>
                 </form>
-                @error('text') <p class="field-error">{{ $message }}</p> @enderror
+                @error('text') <p id="question-error-{{ $uid }}" class="field-error mt-1">{{ $message }}</p> @enderror
             @endif
 
             <div class="space-y-3" id="questions-body-{{ $uid }}" @if ($folded) x-show="open" x-cloak @endif>

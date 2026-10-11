@@ -4,7 +4,7 @@
     while the button's form is submitting.
 --}}
 @props(['variant' => 'secondary', 'size' => 'md', 'type' => 'button', 'icon' => null, 'busyLabel' => null])
-<button type="{{ $type }}" {{ $attributes->class(['btn', "btn-{$variant}", 'btn-lg' => $size === 'lg']) }}>
+<button type="{{ $type }}" {{ $attributes->class(['btn', "btn-{$variant}", 'btn-lg' => $size === 'lg', 'btn-sm' => $size === 'sm']) }}>
     <span class="btn-idle">
         @if ($icon)
             <x-icon :name="$icon" class="size-4" />

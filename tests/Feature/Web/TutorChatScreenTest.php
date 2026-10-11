@@ -6,6 +6,7 @@ use App\Engine\ChatMarks;
 use App\Engine\Engine;
 use App\Engine\EngineFailed;
 use App\Engine\Fake;
+use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Livewire\Workspaces\ChatStream;
 use App\Livewire\Workspaces\SessionCapture;
@@ -246,5 +247,56 @@ class TutorChatScreenTest extends TestCase
         $this->chat()->call('send', 'Let us do outer joins')
             ->assertSee('Topic: Outer joins')->assertSee('Saved 1 new topic')->assertDispatched('session-changed');
         $this->assertSame('Outer joins', app(Topics::class)->find($this->by, app(Sessions::class)->find($this->by, $this->session->id)->topicId)->name);
+    }
+
+    public function test_student_can_switch_models_mid_chat(): void
+    {
+        app(Settings::class)->set($this->by, [
+            'tutor_model' => 'fake/tutor',
+            'favorite_models' => ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet'],
+            'consent' => true,
+        ]);
+        $this->engine->will(Fake::says('Answering with GPT-4o.', 1_000, 'openai/gpt-4o'));
+
+        $chat = $this->chat()
+            ->assertSet('activeModel', 'fake/tutor')
+            ->assertSee('fake/tutor · $0.00 of $2.00 this session')
+            ->call('switchModel', 'openai/gpt-4o')
+            ->assertSet('activeModel', 'openai/gpt-4o')
+            ->assertSee('openai/gpt-4o · $0.00 of $2.00 this session');
+
+        $chat->call('send', 'Hello via GPT-4o')
+            ->assertSee('Answering with GPT-4o.');
+
+        $this->assertNotEmpty($this->engine->requests);
+        $this->assertSame('openai/gpt-4o', $this->engine->requests[0]->model);
+
+        // Model persisted on the session thread
+        $this->assertSame('openai/gpt-4o', app(SessionChat::class)->threadModel($this->by, $this->session->id));
+    }
+
+    public function test_student_can_tune_tutoring_choices_in_real_time(): void
+    {
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+
+        $chat = $this->chat()
+            ->call('setTutoringChoice', 'check_ins', 'none')
+            ->call('setTutoringChoice', 'method', 'analogy')
+            ->call('setTutoringChoice', 'quiz', 'easy')
+            ->assertDispatched('session-changed');
+
+        $session = app(Sessions::class)->find($this->by, $this->session->id);
+        $this->assertSame('none', $session->tutoring['check_ins']);
+        $this->assertSame('analogy', $session->tutoring['method']);
+        $this->assertSame('easy', $session->tutoring['quiz']);
+
+        // Next turn immediately sends the updated teaching prompt to the engine
+        $this->engine->will(Fake::says('Using analogies!'));
+        $chat->call('send', 'Explain joins to me');
+        $this->assertNotEmpty($this->engine->requests);
+        $system = $this->engine->requests[0]->system;
+        $this->assertStringContainsString('Lead with intuitive real-world analogies', $system);
+        $this->assertStringContainsString('Check questions: none', $system);
+        $this->assertStringContainsString('Student understanding level is beginner: explain concepts simply from first principles', $system);
     }
 }

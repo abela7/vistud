@@ -369,8 +369,8 @@ class StackTest extends TestCase
         foreach (['# Briefing', 'Earlier sessions', 'Due soon', 'Still confusing', 'All topics in this course'] as $heading) {
             $this->assertStringNotContainsString($heading, $built->system);
         }
-        // About 5,600: the rules (2,400), the nineteen tools (2,950) and a few lines. The briefing alone could be 15,000.
-        $this->assertLessThan(6_500, $built->tokens(), 'The standing context before the chat stays small.');
+        // The rules (2,200), the thirty-three tools (~4,900) and a few lines. The briefing alone could be 15,000.
+        $this->assertLessThan(9_500, $built->tokens(), 'The standing context before the chat stays small.');
     }
 
     public function test_tokens_are_counted_by_bytes_on_the_safe_side(): void
