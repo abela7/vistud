@@ -176,6 +176,9 @@ The generated files are checked for freshness in CI: changing a theme without re
 | **ViStud Light** (`vistud-light`) | Light | The default. The brand's deep blue to ocean to teal gradients |
 | **ViStud Dark** (`vistud-dark`) | Dark | The default dark theme. Deep brand gradients, light teal accents, the logo plate |
 | **Ember** (`ember`) | Light | An alternate preset proving the system's flexibility: a plum to berry to amber brand gradient at a different angle and stop positions, and a **solid** primary action. It uses exactly the same components. Kept as the third built-in theme (PM decision) |
+| **Blossom** (`blossom`) | Light | Rose pink (the owner's ask, 2026-10-11): a plum to rose brand gradient, a rose accent (`#c2185b`, 5.9:1 with white) and blush surfaces |
+
+**Choosing the light theme** (2026-10-11): Settings → Appearance lists every light theme under *Light theme* (`<x-theme-picker>`), each with a small preview drawn by its own tokens (`data-theme` on the preview). The choice is kept in this browser (`vistud.theme-light`), applied before the first paint by the inline script, which accepts only a light theme's ID, and put back on each page swapped in. Dark mode always uses ViStud Dark.
 
 Themes are JSON in `resources/themes/`. After editing one, run `php artisan vistud:themes:build`, which validates contrast and regenerates the stylesheet.
 

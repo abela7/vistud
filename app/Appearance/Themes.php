@@ -40,6 +40,17 @@ final class Themes
         return $this->themes;
     }
 
+    /**
+     * The themes of one scheme, for choosing which one light (or dark) mode uses.
+     *
+     * @param  'light'|'dark'  $scheme
+     * @return array<string, Theme> keyed by ID, sorted
+     */
+    public function ofScheme(string $scheme): array
+    {
+        return array_filter($this->all(), fn (Theme $theme) => $theme->scheme === $scheme);
+    }
+
     public function get(string $id): Theme
     {
         return $this->all()[$id] ?? throw new InvalidArgumentException("Unknown theme {$id}.");

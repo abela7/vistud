@@ -103,6 +103,20 @@ class NavigationTest extends TestCase
         $this->get('/ai-engine')->assertStatus(301)->assertRedirect('/settings?part=ai');
     }
 
+    public function test_appearance_offers_each_light_theme_and_the_first_paint_accepts_only_those(): void
+    {
+        $html = $this->get(route('settings', ['part' => 'appearance']))->assertOk()
+            ->assertSeeInOrder(['Light theme', 'Blossom', 'Ember', 'ViStud Light'])
+            ->assertSee('data-light-theme-option', false)
+            ->assertDontSee('value="vistud-dark"', false)
+            ->getContent();
+
+        foreach (['blossom', 'ember', 'vistud-light'] as $id) {
+            $this->assertStringContainsString('value="'.$id.'"', $html);
+        }
+        $this->assertStringContainsString('vistudLightThemes = ["blossom","ember","vistud-light"]', $html);
+    }
+
     public function test_outside_a_course_the_sidebar_has_courses_calendar_and_settings_and_the_journal_is_in_settings(): void
     {
         $html = $this->get('/')->assertOk()->getContent();

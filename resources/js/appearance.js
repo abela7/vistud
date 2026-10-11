@@ -1,5 +1,5 @@
 /*
-| Appearance: system, light or dark (ADR 0003 §6.4, DESIGN.md §3.6).
+| Appearance: system, light or dark, and which theme light mode uses (ADR 0003 §6.4, DESIGN.md §3.6).
 | The inline script in <head> (resources/views/partials/theme-script.blade.php)
 | applies the saved choice before the first paint; this module handles
 | changes. Switching only changes <html data-theme>: every colour and
@@ -10,6 +10,7 @@
 */
 
 const STORAGE_KEY = 'vistud.appearance';
+const LIGHT_THEME_KEY = 'vistud.theme-light';
 const MODES = ['system', 'light', 'dark'];
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 const root = document.documentElement;
@@ -18,6 +19,20 @@ function themeFor(mode) {
     const dark = mode === 'dark' || (mode === 'system' && prefersDark.matches);
 
     return dark ? root.dataset.themeDark : root.dataset.themeLight;
+}
+
+function isLightTheme(id) {
+    return (window.vistudLightThemes ?? []).includes(id);
+}
+
+/** The light theme saved in this browser, put back on <html> (a page swapped in brings the default). */
+function restoreLightTheme() {
+    try {
+        const id = localStorage.getItem(LIGHT_THEME_KEY);
+        if (isLightTheme(id)) root.dataset.themeLight = id;
+    } catch {
+        // Storage unavailable: the page's default light theme stays.
+    }
 }
 
 export function applyAppearance(mode) {
@@ -45,9 +60,23 @@ export function setAppearance(mode) {
     applyAppearance(mode);
 }
 
+export function setLightTheme(id) {
+    if (!isLightTheme(id)) return;
+    try {
+        localStorage.setItem(LIGHT_THEME_KEY, id);
+    } catch {
+        // Storage can be unavailable (private windows); the choice still applies to this page.
+    }
+    root.dataset.themeLight = id;
+    applyAppearance(MODES.includes(root.dataset.appearance) ? root.dataset.appearance : 'system');
+}
+
 function syncControls() {
     for (const input of document.querySelectorAll('input[data-appearance-option]')) {
         input.checked = input.value === root.dataset.appearance;
+    }
+    for (const input of document.querySelectorAll('input[data-light-theme-option]')) {
+        input.checked = input.value === root.dataset.themeLight;
     }
 }
 
@@ -56,13 +85,19 @@ prefersDark.addEventListener('change', () => {
 });
 
 document.addEventListener('change', (event) => {
-    const input = event.target.closest('input[data-appearance-option]');
-    if (input) setAppearance(input.value);
+    const mode = event.target.closest('input[data-appearance-option]');
+    if (mode) setAppearance(mode.value);
+    const theme = event.target.closest('input[data-light-theme-option]');
+    if (theme) setLightTheme(theme.value);
 });
 
-// Another tab changed the appearance.
+// Another tab changed the appearance or the light theme.
 window.addEventListener('storage', (event) => {
     if (event.key === STORAGE_KEY && MODES.includes(event.newValue)) applyAppearance(event.newValue);
+    if (event.key === LIGHT_THEME_KEY && isLightTheme(event.newValue)) {
+        root.dataset.themeLight = event.newValue;
+        applyAppearance(root.dataset.appearance);
+    }
 });
 
 // A page swapped in without reloading (resources/js/page.js) brings its own <html> attributes, the
@@ -76,6 +111,7 @@ document.addEventListener('livewire:navigating', (event) => {
             // Storage unavailable: the page's own choice stays.
             mode = root.dataset.appearance;
         }
+        restoreLightTheme();
         applyAppearance(MODES.includes(mode) ? mode : 'system');
     });
 });
