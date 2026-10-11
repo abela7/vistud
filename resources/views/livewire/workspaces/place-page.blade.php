@@ -749,7 +749,7 @@
                                         </div>
 
                                         @if (! $isModule)
-                                            <button type="button" class="btn btn-ghost btn-xs flex items-center gap-1 text-xs text-accent" wire:click="generateSessionStudyMap" wire:loading.attr="aria-busy" wire:target="generateSessionStudyMap" title="Generate Study Map & Topics with AI">
+                                            <button type="button" class="btn btn-ghost btn-sm flex items-center gap-1 text-xs text-accent" wire:click="generateSessionStudyMap" wire:loading.attr="aria-busy" wire:target="generateSessionStudyMap" title="Generate Study Map & Topics with AI">
                                                 <x-icon name="sparkles" class="size-3.5" />
                                                 <span>AI Study Map</span>
                                             </button>
@@ -1186,7 +1186,7 @@
                             </div>
 
                             @if (! $isModule)
-                                <button type="button" class="btn btn-ghost btn-xs flex items-center gap-1 text-xs text-accent" wire:click="generateSessionStudyMap" wire:loading.attr="aria-busy" wire:target="generateSessionStudyMap" title="Generate Study Map & Topics with AI">
+                                <button type="button" class="btn btn-ghost btn-sm flex items-center gap-1 text-xs text-accent" wire:click="generateSessionStudyMap" wire:loading.attr="aria-busy" wire:target="generateSessionStudyMap" title="Generate Study Map & Topics with AI">
                                     <x-icon name="sparkles" class="size-3.5" />
                                     <span>AI Study Map</span>
                                 </button>

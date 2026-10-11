@@ -24,6 +24,6 @@
         </p>
     </div>
     @if (($isModule ?? false) && ! ($hideStudy ?? false))
-        <x-button size="xs" icon="play" wire:click="studyTopic('{{ $t->id }}')" aria-label="Study {{ $cleanName }}" class="shrink-0">Study</x-button>
+        <x-button size="sm" icon="play" wire:click="studyTopic('{{ $t->id }}')" aria-label="Study {{ $cleanName }}" class="shrink-0">Study</x-button>
     @endif
 </li>

@@ -587,8 +587,8 @@
                                                 <label for="answer-input-{{ $q->id }}" class="block text-[11px] font-semibold text-fg">Write answer / solution:</label>
                                                 <textarea id="answer-input-{{ $q->id }}" class="input w-full text-xs" rows="2" wire:model="answeringText" placeholder="What explains this question?"></textarea>
                                                 <div class="flex items-center justify-end gap-1.5">
-                                                    <x-button size="xs" variant="ghost" wire:click="cancelAnswering">Cancel</x-button>
-                                                    <x-button size="xs" variant="primary" wire:click="saveAnswer('{{ $q->id }}')">Save Answer</x-button>
+                                                    <x-button size="sm" variant="ghost" wire:click="cancelAnswering">Cancel</x-button>
+                                                    <x-button size="sm" variant="primary" wire:click="saveAnswer('{{ $q->id }}')">Save Answer</x-button>
                                                 </div>
                                             </div>
                                         @endif
@@ -663,7 +663,7 @@
                             <div class="flex items-center gap-2">
                                 <input id="topic-file-upload" type="file" wire:model="uploadedFile" class="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-accent file:text-on-accent hover:file:bg-accent-hover cursor-pointer" />
                                 @if ($uploadedFile)
-                                    <x-button size="xs" variant="primary" wire:click="uploadFileToTopic" wire:loading.attr="aria-busy" wire:target="uploadFileToTopic">Save File</x-button>
+                                    <x-button size="sm" variant="primary" wire:click="uploadFileToTopic" wire:loading.attr="aria-busy" wire:target="uploadFileToTopic">Save File</x-button>
                                 @endif
                             </div>
                             @error('uploadedFile') <p class="field-error text-[11px] mt-1">{{ $message }}</p> @enderror
@@ -857,8 +857,8 @@
                         <div class="p-2.5 bg-danger-subtle rounded-lg border border-danger space-y-2">
                             <p class="text-xs text-danger font-medium">Remove {{ $cleanName }}?</p>
                             <div class="flex items-center gap-1.5">
-                                <x-button size="xs" variant="ghost" wire:click="cancelRemove">Keep it</x-button>
-                                <x-button size="xs" variant="danger" icon="trash-2" wire:click="removeTopic" wire:loading.attr="aria-busy" wire:target="removeTopic" busy-label="Removing…">Confirm</x-button>
+                                <x-button size="sm" variant="ghost" wire:click="cancelRemove">Keep it</x-button>
+                                <x-button size="sm" variant="danger" icon="trash-2" wire:click="removeTopic" wire:loading.attr="aria-busy" wire:target="removeTopic" busy-label="Removing…">Confirm</x-button>
                             </div>
                         </div>
                     @else

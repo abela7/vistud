@@ -167,7 +167,7 @@
     }">
 
     {{-- Top bar: navigation & view switch --}}
-    <div class="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-border-subtle">
+    <div class="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-divider">
         <div class="min-w-0">
             <button type="button" class="inline-flex items-center gap-1.5 text-xs text-accent hover:underline font-medium" wire:click="editTeaching">
                 <x-icon name="arrow-left" class="size-3.5" />
@@ -184,12 +184,12 @@
             <button type="button" class="segmented-btn" x-bind:class="{ 'is-active': view === 'do' }" x-on:click="view = 'do'">
                 <span class="inline-block size-1.5 rounded-full bg-success"></span>
                 <span>Do</span>
-                <span class="text-3xs text-fg-subtle" x-text="'(' + countRules(doText) + ')'"></span>
+                <span class="text-xs text-fg-subtle" x-text="'(' + countRules(doText) + ')'"></span>
             </button>
             <button type="button" class="segmented-btn" x-bind:class="{ 'is-active': view === 'dont' }" x-on:click="view = 'dont'">
                 <span class="inline-block size-1.5 rounded-full bg-danger"></span>
                 <span>Don't</span>
-                <span class="text-3xs text-fg-subtle" x-text="'(' + countRules(dontText) + ')'"></span>
+                <span class="text-xs text-fg-subtle" x-text="'(' + countRules(dontText) + ')'"></span>
             </button>
         </div>
     </div>
@@ -203,9 +203,9 @@
                 <div class="flex items-center gap-2 min-w-0">
                     <span class="inline-block size-2 rounded-full bg-success shrink-0"></span>
                     <span class="text-xs font-semibold text-fg uppercase tracking-wider">What to do</span>
-                    <span class="text-3xs px-1.5 py-0.5 rounded-full bg-surface-sunken text-fg-muted font-medium" x-text="countRules(doText) + ' rules'"></span>
+                    <span class="text-xs px-1.5 py-0.5 rounded-full bg-surface-sunken text-fg-muted font-medium" x-text="countRules(doText) + ' rules'"></span>
                 </div>
-                <span class="text-3xs text-fg-subtle" x-text="((doText || '').length) + ' / {{ \App\Study\Tutoring::MAX_CUSTOM }}'"></span>
+                <span class="text-xs text-fg-subtle" x-text="((doText || '').length) + ' / {{ \App\Study\Tutoring::MAX_CUSTOM }}'"></span>
             </div>
 
             {{-- Toolbar --}}
@@ -213,22 +213,22 @@
                 <div class="flex items-center gap-1">
                     <button type="button" class="note-rule-tool-btn" x-on:click="formatNumbered('do')" title="Format all lines as a numbered list (1, 2, 3...)">
                         <span class="font-bold text-xs">1.</span>
-                        <span class="text-3xs">Number</span>
+                        <span class="text-xs">Number</span>
                     </button>
                     <button type="button" class="note-rule-tool-btn" x-on:click="formatBullet('do')" title="Format all lines as bullet points">
                         <span class="font-bold text-xs">•</span>
-                        <span class="text-3xs">Bullet</span>
+                        <span class="text-xs">Bullet</span>
                     </button>
                     <button type="button" class="note-rule-tool-btn" x-on:click="wrapBold('doArea', 'do')" title="Bold selected text (**text**)">
                         <span class="font-bold text-xs">B</span>
                     </button>
                     <button type="button" class="note-rule-tool-btn" x-on:click="addNewLine('do', 'doArea')" title="Add next numbered rule">
                         <x-icon name="plus" class="size-3" />
-                        <span class="text-3xs">Add item</span>
+                        <span class="text-xs">Add item</span>
                     </button>
                 </div>
                 <button type="button" class="note-rule-tool-btn text-fg-subtle hover:text-danger" x-show="(doText || '').trim().length > 0" x-on:click="clear('do')" title="Clear What to do rules">
-                    <span class="text-3xs">Clear</span>
+                    <span class="text-xs">Clear</span>
                 </button>
             </div>
 
@@ -248,7 +248,7 @@
 
             {{-- Preset chips --}}
             <div class="note-rule-chips">
-                <span class="text-3xs text-fg-subtle font-medium mr-1">Suggestions:</span>
+                <span class="text-xs text-fg-subtle font-medium mr-1">Suggestions:</span>
                 <button type="button" class="note-rule-chip" x-on:click="insertRule('do', 'Break concepts down into step-by-step numbered points')">+ Step by step</button>
                 <button type="button" class="note-rule-chip" x-on:click="insertRule('do', 'Lead with concrete real-world analogies before formal terms')">+ Analogies</button>
                 <button type="button" class="note-rule-chip" x-on:click="insertRule('do', 'Always include practical, commented code examples')">+ Code examples</button>
@@ -264,9 +264,9 @@
                 <div class="flex items-center gap-2 min-w-0">
                     <span class="inline-block size-2 rounded-full bg-danger shrink-0"></span>
                     <span class="text-xs font-semibold text-fg uppercase tracking-wider">What NOT to do</span>
-                    <span class="text-3xs px-1.5 py-0.5 rounded-full bg-surface-sunken text-fg-muted font-medium" x-text="countRules(dontText) + ' rules'"></span>
+                    <span class="text-xs px-1.5 py-0.5 rounded-full bg-surface-sunken text-fg-muted font-medium" x-text="countRules(dontText) + ' rules'"></span>
                 </div>
-                <span class="text-3xs text-fg-subtle" x-text="((dontText || '').length) + ' / {{ \App\Study\Tutoring::MAX_CUSTOM }}'"></span>
+                <span class="text-xs text-fg-subtle" x-text="((dontText || '').length) + ' / {{ \App\Study\Tutoring::MAX_CUSTOM }}'"></span>
             </div>
 
             {{-- Toolbar --}}
@@ -274,22 +274,22 @@
                 <div class="flex items-center gap-1">
                     <button type="button" class="note-rule-tool-btn" x-on:click="formatNumbered('dont')" title="Format all lines as a numbered list (1, 2, 3...)">
                         <span class="font-bold text-xs">1.</span>
-                        <span class="text-3xs">Number</span>
+                        <span class="text-xs">Number</span>
                     </button>
                     <button type="button" class="note-rule-tool-btn" x-on:click="formatBullet('dont')" title="Format all lines as bullet points">
                         <span class="font-bold text-xs">•</span>
-                        <span class="text-3xs">Bullet</span>
+                        <span class="text-xs">Bullet</span>
                     </button>
                     <button type="button" class="note-rule-tool-btn" x-on:click="wrapBold('dontArea', 'dont')" title="Bold selected text (**text**)">
                         <span class="font-bold text-xs">B</span>
                     </button>
                     <button type="button" class="note-rule-tool-btn" x-on:click="addNewLine('dont', 'dontArea')" title="Add next numbered rule">
                         <x-icon name="plus" class="size-3" />
-                        <span class="text-3xs">Add item</span>
+                        <span class="text-xs">Add item</span>
                     </button>
                 </div>
                 <button type="button" class="note-rule-tool-btn text-fg-subtle hover:text-danger" x-show="(dontText || '').trim().length > 0" x-on:click="clear('dont')" title="Clear What NOT to do rules">
-                    <span class="text-3xs">Clear</span>
+                    <span class="text-xs">Clear</span>
                 </button>
             </div>
 
@@ -309,7 +309,7 @@
 
             {{-- Preset chips --}}
             <div class="note-rule-chips">
-                <span class="text-3xs text-fg-subtle font-medium mr-1">Suggestions:</span>
+                <span class="text-xs text-fg-subtle font-medium mr-1">Suggestions:</span>
                 <button type="button" class="note-rule-chip" x-on:click="insertRule('dont', 'Never provide direct solutions immediately; guide with hints')">+ No direct answers</button>
                 <button type="button" class="note-rule-chip" x-on:click="insertRule('dont', 'Do not use unexplained technical acronyms or jargon')">+ No jargon</button>
                 <button type="button" class="note-rule-chip" x-on:click="insertRule('dont', 'Avoid dense LaTeX equations; write formulas in plain text')">+ No LaTeX</button>
@@ -321,21 +321,21 @@
     </div>
 
     {{-- Collapsible Live Prompt Preview --}}
-    <div class="rounded-lg border border-border-subtle bg-surface-sunken p-3 text-xs">
+    <div class="rounded-lg border border-divider bg-surface-sunken p-3 text-xs">
         <div class="flex items-center justify-between cursor-pointer select-none" x-on:click="showPreview = ! showPreview">
             <span class="font-medium text-fg flex items-center gap-1.5">
                 <x-icon name="sparkles" class="size-3 text-accent shrink-0" />
                 <span>Preview prompt injected to AI tutor</span>
             </span>
-            <button type="button" class="text-accent hover:underline text-3xs font-medium" x-text="showPreview ? 'Hide preview' : 'Show preview'"></button>
+            <button type="button" class="text-accent hover:underline text-xs font-medium" x-text="showPreview ? 'Hide preview' : 'Show preview'"></button>
         </div>
 
-        <div x-show="showPreview" x-cloak class="mt-2 pt-2 border-t border-border-subtle">
+        <div x-show="showPreview" x-cloak class="mt-2 pt-2 border-t border-divider">
             <template x-if="! (doText || '').trim() && ! (dontText || '').trim()">
                 <p class="text-fg-subtle italic">Both fields are empty: nothing will be added to the AI tutor's prompt.</p>
             </template>
             <template x-if="(doText || '').trim() || (dontText || '').trim()">
-                <div class="space-y-2 font-mono text-3xs text-fg-muted whitespace-pre-wrap leading-relaxed">
+                <div class="space-y-2 font-mono text-xs text-fg-muted whitespace-pre-wrap leading-relaxed">
                     <p class="text-fg font-semibold font-sans text-xs">## Custom instructions</p>
                     <template x-if="(doText || '').trim()">
                         <div class="p-2 rounded bg-surface border border-border">

@@ -31,7 +31,7 @@
         </div>
 
         <div class="selection-bar-trailing">
-            <button type="button" class="btn btn-xs btn-secondary py-1 px-2.5 text-xs" x-on:click="exitMode()">Done</button>
+            <button type="button" class="btn btn-sm btn-secondary py-1 px-2.5 text-xs" x-on:click="exitMode()">Done</button>
         </div>
     </div>
 </div>

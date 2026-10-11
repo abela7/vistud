@@ -106,7 +106,7 @@
                             <span>Sessions: <strong class="text-fg">{{ $sessionCount }}</strong></span>
                         </div>
 
-                        <a href="{{ route('workspaces.topics.show', [$workspaceId, $topic->id]) }}" class="btn btn-primary btn-xs text-[11px] py-1 px-2.5 inline-flex items-center gap-1 shrink-0" style="text-decoration: none !important;">
+                        <a href="{{ route('workspaces.topics.show', [$workspaceId, $topic->id]) }}" class="btn btn-primary btn-sm text-[11px] py-1 px-2.5 inline-flex items-center gap-1 shrink-0" style="text-decoration: none !important;">
                             <x-icon name="sparkles" class="size-3 text-on-primary" />
                             <span>More options & Deep Dive</span>
                             <x-icon name="arrow-right" class="size-3" />
@@ -155,7 +155,7 @@
                                         <input id="topic-sheet-point" class="input text-xs py-1 px-2 w-full" type="text" wire:model="point" maxlength="500" autocomplete="off" placeholder="Add a key point…">
                                         @error('point') <p class="field-error text-[11px] mt-0.5">{{ $message }}</p> @enderror
                                     </div>
-                                    <x-button size="xs" type="submit" wire:loading.attr="aria-busy" wire:target="addPoint" busy-label="Adding…">Add</x-button>
+                                    <x-button size="sm" type="submit" wire:loading.attr="aria-busy" wire:target="addPoint" busy-label="Adding…">Add</x-button>
                                 </form>
                             </section>
 
@@ -167,7 +167,7 @@
                                         <input id="topic-sheet-name" class="input text-xs py-1 px-2 w-full" type="text" wire:model="name" maxlength="120" autocomplete="off" placeholder="Topic name">
                                         @error('name') <p class="field-error text-[11px] mt-0.5">{{ $message }}</p> @enderror
                                     </div>
-                                    <x-button size="xs" type="submit" wire:loading.attr="aria-busy" wire:target="rename" busy-label="Saving…">Rename</x-button>
+                                    <x-button size="sm" type="submit" wire:loading.attr="aria-busy" wire:target="rename" busy-label="Saving…">Rename</x-button>
                                 </form>
 
                                 <div class="flex items-center gap-1.5">
@@ -190,7 +190,7 @@
                                         </select>
                                         @error('place') <p class="field-error text-[11px] mt-0.5">{{ $message }}</p> @enderror
                                     </div>
-                                    <x-button size="xs" wire:click="move" wire:loading.attr="aria-busy" wire:target="move" busy-label="Moving…">Move</x-button>
+                                    <x-button size="sm" wire:click="move" wire:loading.attr="aria-busy" wire:target="move" busy-label="Moving…">Move</x-button>
                                 </div>
                             </div>
                         </div>
@@ -203,16 +203,16 @@
                         <p class="text-xs text-danger font-medium">Remove {{ $cleanName }}? What you did on it stays in your study record.</p>
                     </div>
                     <div class="modal-actions py-2 px-3.5">
-                        <x-button size="xs" wire:click="keep">Keep it</x-button>
-                        <x-button size="xs" variant="danger" icon="trash-2" wire:click="remove" wire:loading.attr="aria-busy" wire:target="remove" busy-label="Removing…">Remove</x-button>
+                        <x-button size="sm" wire:click="keep">Keep it</x-button>
+                        <x-button size="sm" variant="danger" icon="trash-2" wire:click="remove" wire:loading.attr="aria-busy" wire:target="remove" busy-label="Removing…">Remove</x-button>
                     </div>
                 @else
                     <div class="modal-actions py-2 px-3.5 justify-between items-center">
-                        <button type="button" class="btn btn-ghost btn-xs text-danger hover:opacity-80 text-xs py-0.5 px-1.5" wire:click="askRemove">
+                        <button type="button" class="btn btn-ghost btn-sm text-danger hover:opacity-80 text-xs py-0.5 px-1.5" wire:click="askRemove">
                             <x-icon name="trash-2" class="size-3" />
                             <span>Remove topic</span>
                         </button>
-                        <button type="button" class="btn btn-secondary btn-xs py-1 px-2.5 text-xs" x-on:click="$el.closest('dialog').close()">Close</button>
+                        <button type="button" class="btn btn-secondary btn-sm py-1 px-2.5 text-xs" x-on:click="$el.closest('dialog').close()">Close</button>
                         <button type="button" class="sr-only" wire:click="study" aria-hidden="true" tabindex="-1">Study</button>
                     </div>
                 @endif

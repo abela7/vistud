@@ -18,10 +18,10 @@
         @endforeach
     </div>
 
-    <div class="pt-3 border-t border-border-subtle">
+    <div class="pt-3 border-t border-divider">
         <div class="flex items-center justify-between mb-2">
             <span class="field-label mb-0">Subject plugins</span>
-            <span class="text-3xs text-fg-subtle">Optional domain tools &amp; formatting</span>
+            <span class="text-xs text-fg-subtle">Optional domain tools &amp; formatting</span>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
             @foreach (\App\Study\Plugins::all() as $p)
@@ -36,20 +36,20 @@
                         </div>
                         <span class="size-2 rounded-full shrink-0 {{ $isPluginActive ? 'bg-success' : 'bg-fg-subtle opacity-40' }}"></span>
                     </div>
-                    <span class="text-3xs text-fg-subtle mt-1 line-clamp-1">{{ $p->badge }} · {{ $p->description }}</span>
+                    <span class="text-xs text-fg-subtle mt-1 line-clamp-1">{{ $p->badge }} · {{ $p->description }}</span>
                 </button>
             @endforeach
         </div>
     </div>
 
-    <div class="pt-3 border-t border-border-subtle" x-data="{ expanded: false }">
+    <div class="pt-3 border-t border-divider" x-data="{ expanded: false }">
         <div class="flex items-center justify-between gap-3 p-3 rounded-xl border border-border bg-surface">
             <div class="min-w-0 space-y-0.5">
                 <div class="flex items-center gap-1.5">
                     <span class="inline-block size-2 rounded-full {{ (! empty($customDo) || ! empty($customDont)) ? 'bg-success' : 'bg-fg-subtle' }}"></span>
                     <span class="text-xs font-semibold text-fg uppercase tracking-wider">Custom rules (Do &amp; Don't)</span>
                     @if (! empty($customDo) || ! empty($customDont))
-                        <span class="text-3xs px-1.5 py-0.5 rounded-full bg-accent-subtle text-accent font-medium">Active</span>
+                        <span class="text-xs px-1.5 py-0.5 rounded-full bg-accent-subtle text-accent font-medium">Active</span>
                     @endif
                 </div>
                 <p class="text-xs text-fg-muted truncate">

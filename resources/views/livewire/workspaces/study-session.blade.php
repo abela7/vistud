@@ -692,7 +692,7 @@
 
                         {{-- Understanding Level (prominent) --}}
                         <div class="session-tutor-popover-section">
-                            <div class="flex items-center justify-between text-2xs mb-1">
+                            <div class="flex items-center justify-between text-xs mb-1">
                                 <span class="font-semibold text-fg uppercase tracking-wider">My understanding</span>
                                 <span class="text-accent font-semibold">{{ $tutorLevel }}</span>
                             </div>
@@ -702,28 +702,28 @@
                                     wire:click="setTutoringChoice('quiz', 'easy')"
                                     title="Beginner: explain simply from first principles in plain terms with intuitive analogies">
                                     <span class="font-semibold">Beginner</span>
-                                    <span class="text-3xs text-fg-subtle truncate">First principles</span>
+                                    <span class="text-xs text-fg-subtle truncate">First principles</span>
                                 </button>
                                 <button type="button"
                                     class="session-tutor-choice-btn {{ ($tutoring['quiz'] ?? 'normal') === 'normal' ? 'is-active' : '' }}"
                                     wire:click="setTutoringChoice('quiz', 'normal')"
                                     title="Intermediate: balanced depth and terminology with applied examples">
                                     <span class="font-semibold">Intermediate</span>
-                                    <span class="text-3xs text-fg-subtle truncate">Balanced depth</span>
+                                    <span class="text-xs text-fg-subtle truncate">Balanced depth</span>
                                 </button>
                                 <button type="button"
                                     class="session-tutor-choice-btn {{ ($tutoring['quiz'] ?? 'normal') === 'exam' ? 'is-active' : '' }}"
                                     wire:click="setTutoringChoice('quiz', 'exam')"
                                     title="Master: concise, high technical rigor, edge cases and deep problem solving">
                                     <span class="font-semibold">Master</span>
-                                    <span class="text-3xs text-fg-subtle truncate">Deep &amp; concise</span>
+                                    <span class="text-xs text-fg-subtle truncate">Deep &amp; concise</span>
                                 </button>
                             </div>
                         </div>
 
                         {{-- Teaching Style --}}
                         <div class="session-tutor-popover-section">
-                            <div class="flex items-center justify-between text-2xs mb-1">
+                            <div class="flex items-center justify-between text-xs mb-1">
                                 <span class="font-semibold text-fg uppercase tracking-wider">Teaching style</span>
                                 <span class="text-accent font-semibold">{{ $tutoringChoices['method'][$tutoring['method'] ?? 'explain'][0] ?? 'Explain' }}</span>
                             </div>
@@ -757,7 +757,7 @@
 
                         {{-- Check Questions --}}
                         <div class="session-tutor-popover-section">
-                            <div class="flex items-center justify-between text-2xs mb-1">
+                            <div class="flex items-center justify-between text-xs mb-1">
                                 <span class="font-semibold text-fg uppercase tracking-wider">Check questions</span>
                                 <span class="text-accent font-semibold">{{ ($tutoring['check_ins'] ?? 'section') === 'none' ? 'Off' : (($tutoring['check_ins'] ?? 'section') === 'section' ? 'Per section' : 'At end') }}</span>
                             </div>
@@ -785,9 +785,9 @@
 
                         {{-- Study Plugins (Domain tools & formatting) --}}
                         <div class="session-tutor-popover-section">
-                            <div class="flex items-center justify-between text-2xs mb-1">
+                            <div class="flex items-center justify-between text-xs mb-1">
                                 <span class="font-semibold text-fg uppercase tracking-wider">Study plugins</span>
-                                <span class="text-3xs text-fg-subtle">
+                                <span class="text-xs text-fg-subtle">
                                     {{ count($activePlugins) > 0 ? count($activePlugins).' active' : 'Subject tools' }}
                                 </span>
                             </div>
@@ -805,7 +805,7 @@
                                             </div>
                                             <span class="size-1.5 rounded-full shrink-0 {{ $isActive ? 'bg-success' : 'bg-fg-subtle opacity-40' }}"></span>
                                         </div>
-                                        <span class="text-3xs text-fg-subtle truncate text-left w-full mt-0.5">{{ $p->badge }}</span>
+                                        <span class="text-xs text-fg-subtle truncate text-left w-full mt-0.5">{{ $p->badge }}</span>
                                     </button>
                                 @endforeach
                             </div>
@@ -814,9 +814,9 @@
                         {{-- Custom instructions (Do & Don't) preview or shortcut --}}
                         @if (! empty($tutoring['custom_do']) || ! empty($tutoring['custom_dont']))
                             <div class="session-tutor-popover-section session-tutor-popover-custom">
-                                <div class="flex items-center justify-between text-2xs mb-1">
+                                <div class="flex items-center justify-between text-xs mb-1">
                                     <span class="font-semibold text-fg uppercase tracking-wider">Custom rules</span>
-                                    <button type="button" class="text-accent hover:underline text-3xs font-medium" wire:click="editCustomRules" x-on:click="tutorMenuOpen = false">Edit (1, 2, 3…)</button>
+                                    <button type="button" class="text-accent hover:underline text-xs font-medium" wire:click="editCustomRules" x-on:click="tutorMenuOpen = false">Edit (1, 2, 3…)</button>
                                 </div>
                                 <div class="space-y-1">
                                     @if (! empty($tutoring['custom_do']))
@@ -1674,8 +1674,8 @@
                                                 <span x-text="isGenerating ? 'Drafting…' : 'Draft with AI'">Draft with AI</span>
                                             </button>
                                             <div class="flex items-center gap-1">
-                                                <button type="button" class="btn btn-ghost btn-xs" x-on:click="editingAnswer = false">Cancel</button>
-                                                <button type="button" class="btn btn-primary btn-xs" x-on:click="if (answerVal.trim()) { $wire.saveQuickAnswer('{{ $q['id'] }}', answerVal); editingAnswer = false; }">
+                                                <button type="button" class="btn btn-ghost btn-sm" x-on:click="editingAnswer = false">Cancel</button>
+                                                <button type="button" class="btn btn-primary btn-sm" x-on:click="if (answerVal.trim()) { $wire.saveQuickAnswer('{{ $q['id'] }}', answerVal); editingAnswer = false; }">
                                                     <x-icon name="check" class="size-3" />
                                                     <span>Save</span>
                                                 </button>
@@ -1999,10 +1999,10 @@
                                 <div class="text-xs text-fg-muted pt-2 border-t border-border flex items-center justify-between gap-2 flex-wrap">
                                     <span class="min-w-0 flex-1">{{ $latestQuizResult['paceFeedback'] }}</span>
                                     <div class="flex items-center gap-1.5 shrink-0">
-                                        <button type="button" class="btn btn-primary btn-xs" wire:click="openQuizConfigure">
+                                        <button type="button" class="btn btn-primary btn-sm" wire:click="openQuizConfigure">
                                             <span>New Quiz</span>
                                         </button>
-                                        <button type="button" class="btn btn-secondary btn-xs" wire:click="finishQuizReview">
+                                        <button type="button" class="btn btn-secondary btn-sm" wire:click="finishQuizReview">
                                             <span>History</span>
                                         </button>
                                     </div>

@@ -13,7 +13,7 @@
         <p class="text-sm text-fg-muted">
             Pre-made subject plugins give the AI tutor specialized reasoning frameworks, step-by-step formatting (such as KaTeX math formulas), and problem-solving rules.
         </p>
-        <div class="flex items-center gap-2 text-2xs text-fg-subtle">
+        <div class="flex items-center gap-2 text-xs text-fg-subtle">
             <span class="inline-block size-1.5 rounded-full bg-success"></span>
             <span>Zero-overhead: uninstalled plugins add exactly 0 tokens to the prompt.</span>
         </div>
@@ -32,9 +32,9 @@
                             <div class="min-w-0">
                                 <div class="flex items-center gap-1.5 flex-wrap">
                                     <h3 class="text-sm font-semibold text-fg truncate">{{ $p->name }}</h3>
-                                    <span class="text-3xs px-1.5 py-0.5 rounded-full font-medium {{ $isInstalled ? 'bg-accent-subtle text-accent' : 'bg-surface border border-border text-fg-subtle' }}">{{ $p->category }}</span>
+                                    <span class="text-xs px-1.5 py-0.5 rounded-full font-medium {{ $isInstalled ? 'bg-accent-subtle text-accent' : 'bg-surface border border-border text-fg-subtle' }}">{{ $p->category }}</span>
                                 </div>
-                                <p class="text-3xs text-fg-muted font-medium truncate">{{ $p->badge }}</p>
+                                <p class="text-xs text-fg-muted font-medium truncate">{{ $p->badge }}</p>
                             </div>
                         </div>
 
@@ -50,7 +50,7 @@
                         {{ $p->description }}
                     </p>
 
-                    <div class="space-y-1 pt-1 border-t border-border-subtle text-3xs text-fg-subtle">
+                    <div class="space-y-1 pt-1 border-t border-divider text-xs text-fg-subtle">
                         <p class="font-semibold text-fg uppercase tracking-wider">Features &amp; Framework:</p>
                         <ul class="space-y-0.5 pl-3 list-disc marker:text-accent">
                             @foreach ($p->promptInstructions as $rule)
@@ -60,7 +60,7 @@
                     </div>
 
                     @if ($p->toolClasses !== [])
-                        <div class="flex items-center gap-1.5 pt-1 border-t border-border-subtle text-3xs">
+                        <div class="flex items-center gap-1.5 pt-1 border-t border-divider text-xs">
                             <span class="font-semibold text-fg">Tools:</span>
                             <div class="flex flex-wrap gap-1">
                                 @foreach ($p->toolClasses as $toolClass)
@@ -73,11 +73,11 @@
                 </div>
 
                 @if ($p->starterQuestions !== [])
-                    <div class="mt-2.5 pt-2 border-t border-border-subtle">
-                        <span class="text-3xs text-fg-subtle font-medium">Starter prompts:</span>
+                    <div class="mt-2.5 pt-2 border-t border-divider">
+                        <span class="text-xs text-fg-subtle font-medium">Starter prompts:</span>
                         <div class="flex flex-wrap gap-1 mt-1">
                             @foreach ($p->starterQuestions as $q)
-                                <span class="text-3xs px-1.5 py-0.5 rounded-md border border-border bg-surface text-fg-muted">{{ $q }}</span>
+                                <span class="text-xs px-1.5 py-0.5 rounded-md border border-border bg-surface text-fg-muted">{{ $q }}</span>
                             @endforeach
                         </div>
                     </div>
@@ -86,10 +86,10 @@
         @endforeach
     </div>
 
-    <div class="flex items-center justify-between text-2xs p-2.5 rounded-lg border border-border bg-surface-raised">
+    <div class="flex items-center justify-between text-xs p-2.5 rounded-lg border border-border bg-surface-raised">
         <span class="text-fg-muted">
             Installed plugins: <strong class="text-fg">{{ count($activePluginIds) }}</strong> of {{ count($allPlugins) }}
         </span>
-        <span class="text-3xs text-fg-subtle">Saved automatically</span>
+        <span class="text-xs text-fg-subtle">Saved automatically</span>
     </div>
 </div>

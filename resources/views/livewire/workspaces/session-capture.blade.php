@@ -72,9 +72,9 @@
                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                 <p class="text-sm text-fg-muted">Untick what you don't want to keep, or use quick filters:</p>
                                 <div class="flex items-center gap-1.5 shrink-0">
-                                    <button type="button" class="btn btn-secondary btn-xs text-xs" wire:click="setEssentialsOnly" title="Keep only summary and where you stopped">Essentials only</button>
-                                    <button type="button" class="btn btn-secondary btn-xs text-xs" wire:click="toggleAll(false)">Untick all</button>
-                                    <button type="button" class="btn btn-secondary btn-xs text-xs" wire:click="toggleAll(true)">Tick all</button>
+                                    <button type="button" class="btn btn-secondary btn-sm text-xs" wire:click="setEssentialsOnly" title="Keep only summary and where you stopped">Essentials only</button>
+                                    <button type="button" class="btn btn-secondary btn-sm text-xs" wire:click="toggleAll(false)">Untick all</button>
+                                    <button type="button" class="btn btn-secondary btn-sm text-xs" wire:click="toggleAll(true)">Tick all</button>
                                 </div>
                             </div>
                         @endif
@@ -155,7 +155,7 @@
                                                             @if (($item['why'] ?? '') !== '')
                                                                 <p class="text-xs text-fg-muted mt-0.5">{{ $item['why'] }}</p>
                                                             @endif
-                                                            <p class="text-2xs text-fg-muted mt-0.5">Topic mastery will only update if this box is checked.</p>
+                                                            <p class="text-xs text-fg-muted mt-0.5">Topic mastery will only update if this box is checked.</p>
                                                         </div>
                                                     @endif
 

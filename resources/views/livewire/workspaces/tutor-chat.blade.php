@@ -261,7 +261,7 @@
               <div class="chat-tools-section">
                   <div class="flex items-center justify-between px-1.5 py-0.5">
                       <p class="chat-tools-heading p-0">Study plugins</p>
-                      <button type="button" class="text-3xs text-accent hover:underline font-medium cursor-pointer" x-on:click="menu = false; Livewire.dispatch('session-open-plugins')">
+                      <button type="button" class="text-xs text-accent hover:underline font-medium cursor-pointer" x-on:click="menu = false; Livewire.dispatch('session-open-plugins')">
                           Browse all ({{ count($tutoring['plugins'] ?? []) }}/{{ count(\App\Study\Plugins::all()) }})
                       </button>
                   </div>
@@ -284,7 +284,7 @@
 
               <div class="chat-tools-section">
                   <p class="chat-tools-heading">Course actions</p>
-                  <button type="button" class="chat-pick" x-on:click="menu = false; Livewire.dispatch('session-open-plugins')"><x-icon name="puzzle" class="size-4 text-accent" /><span class="truncate flex-1 font-medium">Study plugins library</span><span class="text-3xs px-1.5 py-0.5 rounded-full {{ count($tutoring['plugins'] ?? []) > 0 ? 'bg-accent-subtle text-accent font-semibold' : 'bg-surface text-fg-subtle border border-border' }}">{{ count($tutoring['plugins'] ?? []) > 0 ? count($tutoring['plugins'] ?? []).' installed' : 'Install' }}</span></button>
+                  <button type="button" class="chat-pick" x-on:click="menu = false; Livewire.dispatch('session-open-plugins')"><x-icon name="puzzle" class="size-4 text-accent" /><span class="truncate flex-1 font-medium">Study plugins library</span><span class="text-xs px-1.5 py-0.5 rounded-full {{ count($tutoring['plugins'] ?? []) > 0 ? 'bg-accent-subtle text-accent font-semibold' : 'bg-surface text-fg-subtle border border-border' }}">{{ count($tutoring['plugins'] ?? []) > 0 ? count($tutoring['plugins'] ?? []).' installed' : 'Install' }}</span></button>
                   <button type="button" class="chat-pick" x-on:click="menu = false; $dispatch('session-toggle-note')"><x-icon name="notebook-pen" class="size-4" /><span class="truncate">Open side note</span></button>
                   <button type="button" class="chat-pick" x-on:click="menu = false; Livewire.dispatch('session-new-question')"><x-icon name="circle-help" class="size-4" /><span class="truncate">Ask a question</span></button>
                   <button type="button" class="chat-pick" x-on:click="menu = false; Livewire.dispatch('session-new-card')"><x-icon name="gallery-vertical-end" class="size-4" /><span class="truncate">New flashcard</span></button>
@@ -479,7 +479,7 @@
                             <div class="chat-mention-empty" x-show="filteredMentions.length === 0">
                                 <x-icon name="circle-help" class="size-5 text-fg-subtle mb-1" />
                                 <p class="text-xs font-semibold text-fg">No matches found</p>
-                                <p class="text-3xs text-fg-muted" x-text="'No notes or files match @' + mentionQuery"></p>
+                                <p class="text-xs text-fg-muted" x-text="'No notes or files match @' + mentionQuery"></p>
                             </div>
                         </div>
 

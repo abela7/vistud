@@ -90,12 +90,12 @@
                                     <span>Tracked</span>
                                 </span>
                             @elseif ($matchingSuggestion)
-                                <x-button size="xs" variant="primary" icon="plus" wire:click.stop="addOneSuggested('{{ $matchingSuggestion->id }}')" wire:loading.attr="aria-busy" wire:target="addOneSuggested('{{ $matchingSuggestion->id }}')">
+                                <x-button size="sm" variant="primary" icon="plus" wire:click.stop="addOneSuggested('{{ $matchingSuggestion->id }}')" wire:loading.attr="aria-busy" wire:target="addOneSuggested('{{ $matchingSuggestion->id }}')">
                                     Add
                                 </x-button>
                             @endif
 
-                            <button type="button" class="btn btn-ghost btn-xs p-1" @click.stop="openAccordion = openAccordion === '{{ $stageKey }}' ? null : '{{ $stageKey }}'" aria-label="Toggle details">
+                            <button type="button" class="btn btn-ghost btn-sm p-1" @click.stop="openAccordion = openAccordion === '{{ $stageKey }}' ? null : '{{ $stageKey }}'" aria-label="Toggle details">
                                 <x-icon name="chevron-down" class="size-4 study-map-chevron" ::class="{ 'is-open': openAccordion === '{{ $stageKey }}' }" />
                             </button>
                         </div>
@@ -224,7 +224,7 @@
                         <p class="text-xs text-fg-muted">Ask questions, explore concepts, or ask the AI to modify, split, rename, or adjust topics before accepting.</p>
                     </div>
                 </div>
-                <x-button size="xs" variant="ghost" icon="x" wire:click="toggleStudyMapChat" title="Close chat" aria-label="Close chat" />
+                <x-button size="sm" variant="ghost" icon="x" wire:click="toggleStudyMapChat" title="Close chat" aria-label="Close chat" />
             </div>
 
             {{-- Quick Ask Prompt Chips --}}
