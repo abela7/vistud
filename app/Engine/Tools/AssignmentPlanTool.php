@@ -4,6 +4,7 @@ namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
 use App\Study\Activities;
+use App\Study\ActivityDetails;
 use App\Study\PlanDetails;
 use App\Study\PlanItem;
 use App\Study\Plans;
@@ -38,18 +39,26 @@ final class AssignmentPlanTool implements Tool
         if ($plan->empty()) {
             return "\"{$activity->title}\" has no plan yet. The student can add sections and tasks, use a pre-made plan, or ask you for one.";
         }
+        $out = self::format($plan, $activity);
+
+        return Lookup::json($out);
+    }
+
+    /** @return array<string, mixed> */
+    public static function format(PlanDetails $plan, ActivityDetails $activity): array
+    {
         $progress = $plan->progress();
         $out = ['assignment' => $activity->title, 'due' => $activity->dueOn, 'progress' => "{$progress->done} of {$progress->total} done, {$progress->percent}%", 'sections' => [], 'tasks_outside_sections' => [], 'criteria' => [], 'milestones' => []];
         foreach ($plan->parts() as $part) {
             $out['sections'][] = array_filter([
                 'section' => $part->title,
                 'weight' => $part->weight !== null ? "{$part->weight}%" : null,
-                'state' => $this->state($plan, $part),
+                'state' => self::state($plan, $part),
                 'due' => $part->dueOn,
-                'tasks' => $this->steps($plan, $part->id),
+                'tasks' => self::steps($plan, $part->id),
             ], fn ($v) => $v !== null && $v !== []);
         }
-        $out['tasks_outside_sections'] = $this->steps($plan, null);
+        $out['tasks_outside_sections'] = self::steps($plan, null);
         foreach ($plan->criteria() as $criterion) {
             $out['criteria'][] = array_filter(['criterion' => $criterion->title, 'marks' => $criterion->weight, 'state' => self::words($criterion->state)]);
         }
@@ -57,33 +66,33 @@ final class AssignmentPlanTool implements Tool
             $out['milestones'][] = array_filter(['milestone' => $milestone->title, 'on' => $milestone->dueOn, 'state' => $milestone->state]);
         }
 
-        return Lookup::json(array_filter($out, fn ($v) => $v !== [] && $v !== null));
+        return array_filter($out, fn ($v) => $v !== [] && $v !== null);
     }
 
     /** @return list<array<string, mixed>> */
-    private function steps(PlanDetails $plan, ?string $parentId, int $depth = 0): array
+    public static function steps(PlanDetails $plan, ?string $parentId, int $depth = 0): array
     {
         $rows = [];
         foreach ($plan->steps($parentId) as $step) {
             $rows[] = array_filter([
                 'task' => $step->title,
-                'state' => $this->state($plan, $step),
+                'state' => self::state($plan, $step),
                 'due' => $step->dueOn,
                 'priority' => $step->priority,
-                'sub_tasks' => $depth < 2 ? $this->steps($plan, $step->id, $depth + 1) : [],
+                'sub_tasks' => $depth < 2 ? self::steps($plan, $step->id, $depth + 1) : [],
             ], fn ($v) => $v !== null && $v !== []);
         }
 
         return $rows;
     }
 
-    private function state(PlanDetails $plan, PlanItem $item): string
+    public static function state(PlanDetails $plan, PlanItem $item): string
     {
         return self::words($plan->stateOf($item));
     }
 
     /** The plan's states as the screens say them. */
-    private static function words(string $state): string
+    public static function words(string $state): string
     {
         return ['todo' => 'to do', 'doing' => 'in progress', 'not_yet' => 'not yet'][$state] ?? $state;
     }

@@ -31,6 +31,17 @@ class AssignmentPageController
         return view('workspaces.assignment', ['workspace' => $details, 'assignment' => $found, 'module' => null]);
     }
 
+    /** The assignment companion screen: working on the assignment with the tutor. */
+    public function work(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Activities $activities, string $workspace, string $assignment): View
+    {
+        $by = $principals->fromRequest($request);
+        $details = $workspaces->find($by, $workspace);
+        $found = $activities->find($by, $assignment);
+        $found->workspaceId === $details->id || throw new NotFound;
+
+        return view('workspaces.assignment-work', ['workspace' => $details, 'assignment' => $found]);
+    }
+
     /** A section's own page: its tasks, its files and its notes. */
     public function section(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Activities $activities, Plans $plans, string $workspace, string $assignment, string $plansection): View
     {

@@ -212,6 +212,8 @@ final class AssignmentPage extends Component
     {
         if ($uploaded > 0) {
             $this->notify(($uploaded === 1 ? '1 file' : "{$uploaded} files").' added.');
+            // The full picture says it is out of date, for the student to read again once the files are ready.
+            $this->dispatch('assignment-files-changed');
         }
     }
 

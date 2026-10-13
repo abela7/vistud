@@ -148,7 +148,7 @@ class SessionScreensTest extends TestCase
             ->assertSeeInOrder(['Week 1', 'Keys', 'Other topics', 'Normal forms', 'A new topic'])
             ->set('topicChoice', $keys->id)->call('save')->assertSet('mode', null)->assertDispatched('session-changed')
             // The rail marks it as the one the session is on, and the header's topic names it.
-            ->assertSeeInOrder(['Keys', 'Now']);
+            ->assertSeeInOrder(['Keys', 'Studying this now']);
         $this->assertSame($keys->id, $this->current()->topicId);
 
         // A new one goes in the session's module; a name the course has is that topic.

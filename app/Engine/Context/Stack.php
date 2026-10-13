@@ -2,14 +2,23 @@
 
 namespace App\Engine\Context;
 
+use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Engine\Toolbox;
+use App\Engine\Tools\AssignmentPlanTool;
 use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
+use App\Study\Activities;
+use App\Study\ActivityDetails;
+use App\Study\AssignmentLog;
+use App\Study\AssignmentSources;
+use App\Study\AssignmentUnderstanding;
+use App\Study\AssignmentUnderstandings;
 use App\Study\CourseProfiles;
 use App\Study\CourseTypes;
+use App\Study\FileDetails;
 use App\Study\Files;
 use App\Study\Folders;
 use App\Study\Instructions;
@@ -20,6 +29,7 @@ use App\Study\ModuleParts;
 use App\Study\Modules;
 use App\Study\NoteDoc;
 use App\Study\Notes;
+use App\Study\Plans;
 use App\Study\PluginDetails;
 use App\Study\Plugins;
 use App\Study\SessionDetails;
@@ -50,6 +60,36 @@ final class Stack
     /** Tokens, by layer. A layer left out has no budget of its own (the tools; the folded chat). */
     public const BUDGETS = [0 => 2_500, 2 => 600, 3 => 250, 4 => 700, 5 => 380];
 
+    public const ASSIGNMENT_BUDGET = 4_000;
+
+    /** The understanding's parts as the assignment layer says them, in order: heading, and whether it is always kept. */
+    private const UNDERSTOOD = [
+        'deliverables' => ['What to hand in', true],
+        'requirements' => ['Must do', true],
+        'constraints' => ['Limits', true],
+        'criteria' => ['What it is marked on', true],
+        'teacher_expects' => ['What the teacher wants to see', true],
+        'dates' => ['Dates', true],
+        'questions' => ['Questions for the teacher', true],
+        'gaps' => ['Missing or unclear', true],
+        'topics' => ['Topics it draws on', true],
+        'modules' => ['Modules it draws on', false],
+        'assumptions' => ['How the AI reads it', false],
+        'risks' => ['Risks', false],
+        'best_practices' => ['Good practice', false],
+    ];
+
+    /** The log entries the assignment layer always carries, newest first. */
+    public const LOG_LINES = 15;
+
+    /** What a session is told of the course's open work: how many deadlines, and how many linked assignments in full. */
+    public const ASSIGNMENTS_DUE = 4;
+
+    public const ASSIGNMENTS_LINKED = 2;
+
+    /** The work with a deadline a session hears about: everything but a plain to-do. */
+    private const GRADED_KINDS = ['assignment', 'project', 'quiz', 'exam', 'lab', 'problem_set'];
+
     public const PROMPT = 'resources/prompts/tutor-2.md';
 
     /** The helper's rules and its budget: short enough for the smallest model, which runs the most often. */
@@ -75,12 +115,79 @@ final class Stack
         private Folders $folders,
         private TutorMemories $memories,
         private Sessions $sessions,
+        private Plans $plans,
+        private AssignmentSources $assignmentSources,
+        private AssignmentUnderstandings $assignmentUnderstandings,
+        private AssignmentLog $assignmentLog,
+        private Activities $activities,
     ) {}
 
     /** The tutor's standing context for a session: its system prompt, its tools and the report on its layers. */
     public function build(Principal $by, SessionDetails $session, ?string $folded, bool $withTools): Built
     {
         return $this->compose($this->gather($by, $session, $folded, $withTools), $withTools, $withTools ? $this->toolbox->definitions() : []);
+    }
+
+    /** The tutor's standing context for an assignment: companion rules, course, student, and the assignment layer. */
+    public function forAssignment(Principal $by, ActivityDetails $assignment, ?string $folded, bool $withTools): Built
+    {
+        $workspace = $this->workspaces->find($by, $assignment->workspaceId);
+        $instructions = $this->instructions->forSession($by, $workspace->id, $assignment->moduleId);
+        $choices = $this->settings->get($by);
+        $course = $this->courseProfiles->get($by, $workspace->id);
+        $today = CarbonImmutable::now();
+
+        $facts = new Facts(
+            courseName: $workspace->name,
+            courseLine: $workspace->subtitle() !== '' ? $workspace->subtitle() : null,
+            courseInstructions: $instructions['workspace'],
+            courseAbout: $course->about,
+            courseOutcomes: $course->outcomes,
+            courseAssessment: array_map(fn (array $item) => self::assessment($item, $today), $course->assessment),
+            courseTextbook: $course->textbook,
+            courseKind: CourseTypes::lines($workspace->type, $course),
+            aboutYou: $instructions['me'],
+            preferences: LearnerProfiles::lines($this->learnerProfiles->get($by, $workspace->id)),
+            memories: $choices->tutorRemembers ? array_map(fn (TutorMemory $m) => $m->text.($m->everywhere() ? ' (all courses)' : ''), $this->memories->list($by, $workspace->id)) : [],
+            remembers: $choices->tutorRemembers,
+            language: $choices->language,
+            askTopics: $choices->askTopics,
+            marksTopics: $choices->tutorMarksTopics,
+            withTools: $withTools,
+            folded: $folded,
+        );
+
+        $rulesText = self::rules($withTools)."\n\n".trim((string) file_get_contents(base_path('resources/prompts/assignment-companion.md')));
+        $tools = $withTools ? $this->toolbox->only(SessionChat::ASSIGNMENT_TOOLS)->definitions() : [];
+
+        $assignmentLines = $this->assignment($by, $assignment);
+
+        $layers = [
+            0 => ['Rules', [[$rulesText, true]], 3_500],
+            2 => ['Course', $this->course($facts), self::BUDGETS[2]],
+            3 => ['Student', $this->student($facts, $withTools), self::BUDGETS[3]],
+            4 => ['Assignment', $assignmentLines, self::ASSIGNMENT_BUDGET],
+        ];
+
+        $report = [];
+        $texts = [];
+        foreach ($layers as $number => [$name, $lines, $budget]) {
+            [$text, $cut] = self::fit($lines, $budget);
+            $texts[$number] = $text;
+            $report[] = ['layer' => $number, 'name' => $name, 'tokens' => Tokens::of($text), 'budget' => $budget, 'cut' => $cut];
+        }
+
+        $tooling = $tools === [] ? '' : (string) json_encode($tools, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        array_splice($report, 1, 0, [['layer' => 1, 'name' => 'Tools', 'tokens' => Tokens::of($tooling), 'budget' => null, 'cut' => 0]]);
+
+        $foldedText = $facts->folded !== null && trim($facts->folded) !== ''
+            ? "## Earlier in this chat\n\nThe chat's first part was folded to keep it short. What happened in it:\n\n".trim($facts->folded)
+            : '';
+        $report[] = ['layer' => 6, 'name' => 'Chat so far', 'tokens' => Tokens::of($foldedText), 'budget' => null, 'cut' => 0];
+
+        $stable = self::join([$texts[0], $texts[2], $texts[3]]);
+
+        return new Built(self::join([$stable, $texts[4], $foldedText]), $stable, $tools, $report);
     }
 
     /**
@@ -239,6 +346,7 @@ final class Stack
         $today = CarbonImmutable::now();
 
         [$topicChangedInChat, $topicTakenOff] = $this->topicHistory($by, $session);
+        [$assignmentsDue, $assignmentsLinked] = $this->assignmentsFor($by, $workspace->id, $module, $topic, $topics);
 
         $openedNoteTitle = null;
         try {
@@ -280,6 +388,8 @@ final class Stack
             moduleQuestions: $brief?->questions ?? [],
             moduleKeyPoints: $brief?->keyPoints ?? [],
             moduleLast: $brief?->last,
+            assignmentsDue: $assignmentsDue,
+            assignmentsLinked: $assignmentsLinked,
             folderName: $folderName,
             otherFolders: $otherFolders,
             mode: $session->mode,
@@ -303,6 +413,79 @@ final class Stack
             materialText: $materialText,
             folded: $folded,
         );
+    }
+
+    /**
+     * The course's open graded work, and what the assignments this session feeds ask of it (the owner's ask,
+     * 2026-10-13: the study tutor knows the assignment, and says "on your assignment you are asked…"). A session feeds
+     * an assignment when its understanding names the session's topic, a topic of the session's module, or the module,
+     * or when it is set in the module.
+     *
+     * @param  list<TopicDetails>  $topics
+     * @return array{0: list<string>, 1: list<array{0: string, 1: bool}>}
+     */
+    private function assignmentsFor(Principal $by, string $workspaceId, ?ModuleDetails $module, ?TopicDetails $topic, array $topics): array
+    {
+        $moduleTopics = $module === null ? [] : array_values(array_map(fn (TopicDetails $t) => $t->id, array_filter($topics, fn (TopicDetails $t) => $t->moduleId === $module->id)));
+        $due = [];
+        $linked = [];
+        foreach ($this->activities->list($by, $workspaceId) as $work) {
+            if ($work->status === 'done' || ! in_array($work->kind, self::GRADED_KINDS, true)) {
+                continue;
+            }
+            if (count($due) < self::ASSIGNMENTS_DUE) {
+                $left = $work->timeLeft();
+                $due[] = "{$work->title} ({$work->kindLabel()}): ".($work->dueWords() ?? 'no deadline set').($left !== null ? ", {$left}" : '')."; stage: {$work->stage}";
+            }
+            if (count($linked) < self::ASSIGNMENTS_LINKED && $module !== null) {
+                $lines = self::fed($work, $this->assignmentUnderstandings->latest($by, $work->id), $module, $topic, $moduleTopics);
+                if ($lines !== []) {
+                    $linked[] = $lines;
+                }
+            }
+        }
+
+        return [$due, array_merge(...$linked)];
+    }
+
+    /**
+     * What one assignment asks of this session's study, when the session feeds it; none when it doesn't. Its header
+     * and why are always kept; what it asks can be cut.
+     *
+     * @param  list<string>  $moduleTopics
+     * @return list<array{0: string, 1: bool}>
+     */
+    private static function fed(ActivityDetails $work, ?AssignmentUnderstanding $understanding, ModuleDetails $module, ?TopicDetails $topic, array $moduleTopics): array
+    {
+        $drawsOn = $understanding?->items('topics') ?? [];
+        $onTopic = $topic === null ? null : (array_values(array_filter($drawsOn, fn (array $item) => ($item['id'] ?? null) === $topic->id))[0] ?? null);
+        $inModule = array_column(array_filter($drawsOn, fn (array $item) => in_array($item['id'] ?? null, $moduleTopics, true)), 'topic');
+        $why = match (true) {
+            $onTopic !== null => "it draws on the session's topic, {$topic->name}".(($onTopic['why'] ?? '') !== '' ? ": {$onTopic['why']}" : ''),
+            $inModule !== [] => 'it draws on this module\'s '.implode(', ', array_slice($inModule, 0, 4)),
+            in_array($module->id, array_column($understanding?->items('modules') ?? [], 'id'), true) => 'it draws on this module',
+            $work->moduleId === $module->id => 'it is set in this module',
+            default => null,
+        };
+        if ($why === null) {
+            return [];
+        }
+        $lines = [["{$work->title}, because {$why}.", true]];
+        if ($understanding === null) {
+            $lines[] = ['Not read yet: what the student was given isn\'t on its page. Suggest adding the brief there.', true];
+
+            return $lines;
+        }
+        if ($understanding->text('summary') !== '') {
+            $lines[] = ['What it is'.($understanding->confirmed() ? '' : ' (the student hasn\'t confirmed this reading)').": {$understanding->text('summary')}", true];
+        }
+        foreach (['deliverables' => 'Hand in', 'requirements' => 'Must', 'criteria' => 'Marked on'] as $part => $label) {
+            foreach (array_slice($understanding->items($part), 0, 3) as $item) {
+                $lines[] = ["- {$label}: ".self::understood($part, $item), false];
+            }
+        }
+
+        return $lines;
     }
 
     /** One assessment as a line: "Midterm 30 % (12 Oct)"; the year only when it isn't this one. */
@@ -416,7 +599,7 @@ final class Stack
     private function module(Facts $f, bool $isHelper = false): array
     {
         if ($f->moduleTitle === null && $f->folderName === null) {
-            return [];
+            return self::graded($f);
         }
         $title = $f->moduleTitle !== null ? $f->moduleTitle.($f->moduleDates !== null ? " ({$f->moduleDates})" : '') : null;
         $here = $f->folderName !== null;
@@ -464,6 +647,7 @@ final class Stack
         if ($f->moduleLast !== null) {
             $lines[] = [($here ? 'Last time in this folder: ' : 'Last time: ').$f->moduleLast, true];
         }
+        array_push($lines, ...self::graded($f));
         // What can be fetched with a tool comes after what can't, and goes first when the layer is over its budget.
         foreach ([($here ? 'Files in this folder' : 'Files') => $f->moduleFiles, 'Open questions' => $f->moduleQuestions, 'Key points' => $f->moduleKeyPoints] as $name => $items) {
             if ($items !== []) {
@@ -472,6 +656,32 @@ final class Stack
                     $lines[] = ["- {$item}", false];
                 }
             }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * The course's open graded work, and what the assignments this study feeds ask for: so the tutor ties what it
+     * teaches to what will be marked, and says so.
+     *
+     * @return list<array{0: string, 1: bool}>
+     */
+    private static function graded(Facts $f): array
+    {
+        if ($f->assignmentsDue === [] && $f->assignmentsLinked === []) {
+            return [];
+        }
+        $lines = [['## Assignments and exams', true]];
+        if ($f->assignmentsDue !== []) {
+            $lines[] = ['Open, soonest first:', true];
+            foreach ($f->assignmentsDue as $line) {
+                $lines[] = ["- {$line}", true];
+            }
+        }
+        if ($f->assignmentsLinked !== []) {
+            $lines[] = ['What this study feeds, from each assignment\'s reading ([S1], [F2]: its sources). When what you teach is asked for in one, say so ("On Coursework 1 you are asked to…") and tie it to what is marked. Help them learn it; never write the graded work.', true];
+            array_push($lines, ...$f->assignmentsLinked);
         }
 
         return $lines;
@@ -537,6 +747,154 @@ final class Stack
         }
 
         return $lines;
+    }
+
+    /** @return list<array{0: string, 1: bool}> */
+    private function assignment(Principal $by, ActivityDetails $a): array
+    {
+        $lines = [];
+        $lines[] = ["## The assignment: {$a->title}", true];
+        $lines[] = ["Kind: {$a->kindLabel()}", true];
+        $lines[] = ["Stage: {$a->stage}", true];
+        $lines[] = ["Status: {$a->status}", true];
+        $due = $a->dueOn === null ? 'none given' : $a->dueAt()->format('l j F Y').($a->dueTime !== null ? " at {$a->dueTime}" : '')." ({$a->zone})".($a->timeLeft() !== null ? " — {$a->timeLeft()} left" : '');
+        $lines[] = ["Deadline: {$due}", true];
+
+        if ($a->moduleId !== null) {
+            try {
+                $module = $this->modules->find($by, $a->moduleId);
+                $lines[] = ["Module: {$module->title}", true];
+            } catch (NotFound) {
+                // Gone
+            }
+        }
+
+        // Latest understanding
+        $understanding = $this->assignmentUnderstandings->latest($by, $a->id);
+        if ($understanding === null) {
+            $lines[] = ['Understanding: There is no stored understanding of this assignment yet; ask the student to add the brief and criteria on the assignment page first (you may still help in general terms, marked as such).', true];
+        } else {
+            $confirmed = $understanding->confirmed() ? " (confirmed by the student at {$understanding->confirmedAt})" : ' (not confirmed yet)';
+            $lines[] = ["### The AI's understanding (revision {$understanding->revision}){$confirmed}", true];
+            if ($understanding->text('summary') !== '') {
+                $lines[] = ["Summary: {$understanding->text('summary')}", true];
+            }
+            if ($understanding->text('goal') !== '') {
+                $lines[] = ["Goal: {$understanding->text('goal')}", true];
+            }
+            if ($understanding->text('confidence') !== '') {
+                $lines[] = ["Confidence: {$understanding->text('confidence')}", true];
+            }
+
+            // Every part, every item with all it says and the label of the source it came from. What the work is judged
+            // on is always kept; the rest can be cut when the layer is over its budget (the tutor reads it on the page).
+            // A topic it draws on says where the student stands on it, so the tutor sees what the work needs and they lack.
+            $standing = [];
+            foreach ($this->topics->list($by, $a->workspaceId) as $topic) {
+                $standing[$topic->id] = $topic;
+            }
+            foreach (self::UNDERSTOOD as $part => [$heading, $kept]) {
+                $items = $understanding->items($part);
+                if ($items === []) {
+                    continue;
+                }
+                $lines[] = ["{$heading}:", $kept];
+                foreach ($items as $item) {
+                    $topic = $part === 'topics' ? ($standing[$item['id'] ?? ''] ?? null) : null;
+                    $lines[] = ['- '.self::understood($part, $item).($topic !== null ? ' — where the student stands: '.self::status($topic) : ''), $kept];
+                }
+            }
+
+            // Check if stale
+            if ($this->assignmentSources->outOfDate($by, $a->id, $understanding)) {
+                $lines[] = ["\nNOTE: This understanding is OUT OF DATE (sources have changed since it was built). Suggest 'Read again' on the assignment page.", true];
+            }
+        }
+
+        // The sources, by the labels the understanding cites (a source added since has the next free one, and is said
+        // to be new): read one with assignment_source, a file with read_file.
+        $labelled = $this->assignmentSources->labelled($by, $a->id, $understanding);
+        $lines[] = ["\n### Sources (read one in full with assignment_source; a file with read_file)", true];
+        if ($labelled === []) {
+            $lines[] = ['No sources added yet.', true];
+        }
+        foreach ($labelled as $label => $item) {
+            $new = $understanding !== null && ! isset($understanding->sources[$label]) ? ' (new: not in the understanding yet)' : '';
+            if ($item instanceof FileDetails) {
+                $lines[] = ["- {$label} · file “{$item->fileName()}”{$new}", true];
+
+                continue;
+            }
+            $title = $item->title !== null ? " · “{$item->title}”" : '';
+            $date = $item->receivedOn ?? CarbonImmutable::parse($item->createdAt)->format('Y-m-d');
+            $text = trim((string) preg_replace('/\s+/u', ' ', $item->text));
+            $excerpt = mb_strlen($text) > 100 ? mb_substr($text, 0, 100).'…' : $text;
+            $lines[] = ["- {$label} · {$item->kindLabel()}{$title} ({$date}){$new}: {$excerpt}", true];
+        }
+
+        // Plan summary
+        $plan = $this->plans->get($by, $a->id);
+        $lines[] = ["\n### Plan", true];
+        if ($plan->empty()) {
+            $lines[] = ['No plan yet.', true];
+        } else {
+            $progress = $plan->progress();
+            $health = $plan->health($a);
+            $healthText = $health !== null ? " · Health: {$health['state']}".($health['reasons'] !== [] ? ' ('.implode(', ', $health['reasons']).')' : '') : '';
+            $lines[] = ["Progress: {$progress->done} of {$progress->total} done, {$progress->percent}%{$healthText}", true];
+
+            // The plan's detail can be cut (assignment_plan has it all); its standing above always stays.
+            $parts = $plan->parts();
+            if ($parts !== []) {
+                $lines[] = ['Sections:', false];
+                foreach ($parts as $part) {
+                    $weight = $part->weight !== null ? " ({$part->weight}%)" : '';
+                    $state = AssignmentPlanTool::state($plan, $part);
+                    $lines[] = ["- {$part->title}{$weight}: {$state}", false];
+                }
+            }
+
+            $criteria = $plan->criteria();
+            if ($criteria !== []) {
+                $lines[] = ['Marking criteria in the plan:', false];
+                foreach ($criteria as $criterion) {
+                    $state = AssignmentPlanTool::words($criterion->state);
+                    $marks = $criterion->weight !== null ? " ({$criterion->weight} marks)" : '';
+                    $lines[] = ["- {$criterion->title}{$marks}: {$state}", false];
+                }
+            }
+        }
+
+        // What was decided and done, newest first: always kept (it is how a new model knows where things stand), at
+        // most LOG_LINES of it; the page keeps the rest.
+        $logEntries = $this->assignmentLog->list($by, $a->id, limit: self::LOG_LINES);
+        $lines[] = ["\n### Log, newest first (decisions, progress, advice, feedback, risks)", true];
+        if ($logEntries === []) {
+            $lines[] = ['No entries yet.', true];
+        }
+        foreach ($logEntries as $entry) {
+            $at = CarbonImmutable::parse($entry->createdAt)->format('Y-m-d H:i');
+            $lines[] = ["- [{$at}] [{$entry->stage}] {$entry->kind}: {$entry->text} (by {$entry->by})", true];
+        }
+
+        return $lines;
+    }
+
+    /** One item of the understanding as the tutor reads it: all it says, and where it came from. */
+    private static function understood(string $part, array $item): string
+    {
+        $text = fn (string ...$keys) => (string) (array_values(array_filter(array_map(fn ($key) => $item[$key] ?? null, $keys), fn ($v) => is_string($v) && $v !== ''))[0] ?? '');
+        $weight = $item['weight'] ?? null;
+        $line = match ($part) {
+            'deliverables' => $text('what', 'text').(($more = implode(', ', array_filter([$text('format'), $text('length'), ($item['on'] ?? null) ? "by {$item['on']}" : '']))) !== '' ? " ({$more})" : ''),
+            'criteria' => $text('criterion', 'title', 'text').($weight !== null && $weight !== '' ? ' ('.$weight.(is_int($weight) ? '%' : '').')' : '').($text('looks_like') !== '' ? " — full marks: {$text('looks_like')}" : ''),
+            'dates' => $text('what', 'text').(($item['on'] ?? null) ? ": {$item['on']}" : ''),
+            'modules' => $text('module').($text('why') !== '' ? ": {$text('why')}" : ''),
+            'topics' => $text('topic').($text('why') !== '' ? ": {$text('why')}" : ''),
+            default => $text('text'),
+        };
+
+        return $line.(is_string($item['source'] ?? null) && $item['source'] !== '' ? " [{$item['source']}]" : '');
     }
 
     // ---------- Gathering ----------

@@ -1,0 +1,733 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Parameter \#1 \$array \(list\<int\|string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Brain/Journal/EntryFactory.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: mixed$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Brain/Journal/EntryValidator.php
+
+		-
+			message: '#^Offset ''actor'' on non\-empty\-array on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Brain/Journal/EntryValidator.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: mixed$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Brain/Projection/Replay.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Brain/Writer/JournalWriter.php
+
+		-
+			message: '#^Parameter \#1 \$array \(array\{0\: non\-falsy\-string, 1\?\: mixed\}\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Engine/ChatMarks.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>files" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Context/Stack.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>keyPoints" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Context/Stack.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>questions" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Context/Stack.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: string$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Offset ''bytes'' on array\{name\: string, bytes\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Offset ''content'' on array\{role\: string, content\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Offset ''facts'' on array\{course\?\: array, about\: string, outcomes\: list\<string\>, assessment\: list\<array\>, textbook\: string, modules\: list\<array\>\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Offset ''mime'' on array\{0\: int\<0, max\>, 1\: int\<0, max\>, 2\: int, 3\: string, mime\: string, channels\?\: int, bits\?\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Offset ''name'' on array\{name\: string, bytes\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Offset ''role'' on array\{role\: string, content\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Offset ''tools'' on array\{\} in isset\(\) does not exist\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Offset ''type'' on array\{\} in isset\(\) does not exist\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\{\} and array\{\} will always evaluate to false\.$#'
+			identifier: notIdentical.alwaysFalse
+			count: 1
+			path: app/Engine/CourseGuide.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Helper.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>workspaceId" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Engine/Helper.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Jobs/CardsFrom.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>images" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Jobs/Run.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>tools" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Jobs/Run.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: string$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Engine/Jobs/Runner.php
+
+		-
+			message: '#^Call to function in_array\(\) with arguments ''deg''\|''rad'', array\{''rad'', ''deg''\} and true will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Engine/Maths/Expression.php
+
+		-
+			message: '#^Call to function is_array\(\) with non\-empty\-array\<mixed\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Engine/Maths/Expression.php
+
+		-
+			message: '#^Call to function is_string\(\) with ''deg''\|''rad'' will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Engine/Maths/Expression.php
+
+		-
+			message: '#^Call to function is_string\(\) with non\-empty\-array\<mixed\> will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: app/Engine/Maths/Expression.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: app/Engine/Maths/Expression.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between ''deg''\|''rad'' and '''' will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Engine/Maths/Expression.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between array\<mixed\> and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Engine/Maths/Expression.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between non\-empty\-array\<mixed\> and '''' will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Engine/Maths/Expression.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Engine/Maths/Expression.php
+
+		-
+			message: '#^Call to function array_is_list\(\) with array\<string, mixed\> will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: app/Engine/OpenRouter.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
+			count: 1
+			path: app/Engine/OpenRouter.php
+
+		-
+			message: '#^PHPDoc tag @throws with type App\\Engine\\NotFound\|App\\Platform\\Errors\\Unprocessable is not subtype of Throwable$#'
+			identifier: throws.notThrowable
+			count: 2
+			path: app/Engine/SessionChat.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Engine/Settings.php
+
+		-
+			message: '#^Property App\\Engine\\Settings\:\:\$models is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Engine/Settings.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>ask_topics" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Settings.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>auto_read_files" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Settings.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>consented_at" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Settings.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>copy_paste_ai" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Settings.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>key_provider" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Settings.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>language" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Settings.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>tutor_marks_topics" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Settings.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>tutor_remembers" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Engine/Settings.php
+
+		-
+			message: '#^Call to function is_int\(\) with string will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 3
+			path: app/Engine/Tools/PlotGraphTool.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between numeric\-string and '''' will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Engine/Tools/ReadFileTool.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between string and null will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Engine/Tools/RecordQuizTool.php
+
+		-
+			message: '#^Access to an undefined property App\\Study\\SessionDetails\:\:\$noteId\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Engine/Tools/RenameNoteTool.php
+
+		-
+			message: '#^Property App\\Engine\\Vistud\\Overview\:\:\$topics is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Engine/Vistud/Overview.php
+
+		-
+			message: '#^Property App\\Engine\\Vistud\\Overview\:\:\$workspaces is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Engine/Vistud/Overview.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 1
+			path: app/Http/Controllers/Api/V1/NoteImageController.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between string and false will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Http/Controllers/NoteAiController.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Http/Controllers/NotePageController.php
+
+		-
+			message: '#^Constructor of class App\\Http\\Responses\\NeutralPasswordResetLinkResponse has an unused parameter \$status\.$#'
+			identifier: constructor.unusedParameter
+			count: 1
+			path: app/Http/Responses/NeutralPasswordResetLinkResponse.php
+
+		-
+			message: '#^Cannot call method toIso8601String\(\) on string\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: app/Identity/Accounts.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: string$#'
+			identifier: match.unhandled
+			count: 2
+			path: app/Livewire/Admin/Accounts/Index.php
+
+		-
+			message: '#^Parameter \#1 \$array \(array\{0\: ''reactivate''\|''suspend'', 1\: ''grant\-admin''\|''revoke\-admin'', 2\?\: ''reset\-two\-factor''\}\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Livewire/Admin/Accounts/Index.php
+
+		-
+			message: '#^Offset ''back'' on array\{front\: string, back\: string, topic_id\: string\|null, topic\: string\|null, include\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Livewire/Workspaces/AiAssist.php
+
+		-
+			message: '#^Offset ''front'' on array\{front\: string, back\: string, topic_id\: string\|null, topic\: string\|null, include\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Livewire/Workspaces/AiAssist.php
+
+		-
+			message: '#^Offset ''include'' on array\{front\: string, back\: string, topic_id\: string\|null, topic\: string\|null, include\: bool\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: app/Livewire/Workspaces/AiAssist.php
+
+		-
+			message: '#^Instanceof between Illuminate\\Http\\UploadedFile and Illuminate\\Http\\UploadedFile will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 5
+			path: app/Livewire/Workspaces/Ask.php
+
+		-
+			message: '#^Offset ''mime'' on array\{0\: int\<0, max\>, 1\: int\<0, max\>, 2\: int, 3\: string, mime\: string, channels\?\: int, bits\?\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Livewire/Workspaces/Ask.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Livewire/Workspaces/AssignmentPage.php
+
+		-
+			message: '#^Match arm comparison between ''link'' and ''link'' is always true\.$#'
+			identifier: match.alwaysTrue
+			count: 1
+			path: app/Livewire/Workspaces/Contents.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Livewire/Workspaces/Contents.php
+
+		-
+			message: '#^Offset ''due_on'' on array\{name\: string, kind\: string, weight\: string, due_on\: string, activity_id\: string\|null\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Livewire/Workspaces/CourseSetup.php
+
+		-
+			message: '#^Offset ''name'' on array\{name\: string, kind\: string, weight\: string, due_on\: string, activity_id\: string\|null\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Livewire/Workspaces/CourseSetup.php
+
+		-
+			message: '#^Offset ''weight'' on array\{name\: string, kind\: string, weight\: string, due_on\: string, activity_id\: string\|null\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Livewire/Workspaces/CourseSetup.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\{name\: string, kind\: string, weight\: string, due_on\: string, activity_id\: string\|null\}\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Livewire/Workspaces/CourseSetup.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>topicId" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Livewire/Workspaces/FlashcardReview.php
+
+		-
+			message: '#^Instanceof between Livewire\\Features\\SupportFileUploads\\TemporaryUploadedFile and Livewire\\Features\\SupportFileUploads\\TemporaryUploadedFile will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 4
+			path: app/Livewire/Workspaces/GuideChat.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Livewire/Workspaces/QuestionPage.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>weight" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Livewire/Workspaces/SectionForm.php
+
+		-
+			message: '#^Offset ''role'' on array\{role\: string, text\: string, tools\: list\<string\>, saved\: array\<string, int\>, notes\: list\<array\{id\: string, title\: string\}\>, cost_micros\: int, folded\: bool, at\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Livewire/Workspaces/StudySession.php
+
+		-
+			message: '#^Offset ''text'' on array\{role\: string, text\: string, tools\: list\<string\>, saved\: array\<string, int\>, notes\: list\<array\{id\: string, title\: string\}\>, cost_micros\: int, folded\: bool, at\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Livewire/Workspaces/StudySession.php
+
+		-
+			message: '#^Parameter \#1 \$array \(non\-empty\-list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Livewire/Workspaces/StudySession.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Livewire/Workspaces/StudySession.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 4
+			path: app/Livewire/Workspaces/StudySession.php
+
+		-
+			message: '#^Parameter \#1 \$array \(non\-empty\-list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Livewire/Workspaces/StudyTime.php
+
+		-
+			message: '#^Property App\\Livewire\\Workspaces\\TopicPage\:\:\$helper is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: app/Livewire/Workspaces/TopicPage.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Livewire/Workspaces/TutorChat.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Livewire/Workspaces/TutorChat.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Study/CardMaker.php
+
+		-
+			message: '#^Parameter \#1 \$callback of function array_map expects \(callable\(array\<string, mixed\>\)\: mixed\)\|null, ''strval'' given\.$#'
+			identifier: argument.type
+			count: 4
+			path: app/Study/CourseProfiles.php
+
+		-
+			message: '#^Match arm comparison between true and false is always false\.$#'
+			identifier: match.alwaysFalse
+			count: 2
+			path: app/Study/FilePreviews.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Study/FilePreviews.php
+
+		-
+			message: '#^Offset ''application''\|''author''\|''charts''\|''created''\|''formulas''\|''headings''\|''hidden_slides''\|''last_saved_by''\|''modified''\|''pictures''\|''sheets''\|''sheets_not_read''\|''slides_with_notes''\|''subject''\|''tables''\|''title'' on array\<string, int\|string\> on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Study/FileText.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Study/FileTexts.php
+
+		-
+			message: '#^Result of && is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
+			count: 1
+			path: app/Study/FileTexts.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between null and null will always evaluate to false\.$#'
+			identifier: notIdentical.alwaysFalse
+			count: 1
+			path: app/Study/FileTexts.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between string and false will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 2
+			path: app/Study/FileTexts.php
+
+		-
+			message: '#^Variable \$local on left side of \?\?\= always exists and is always null\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: app/Study/FileTexts.php
+
+		-
+			message: '#^Offset ''mime'' on array\{0\: int\<0, max\>, 1\: int\<0, max\>, 2\: int, 3\: string, mime\: string, channels\?\: int, bits\?\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Study/FileTypes.php
+
+		-
+			message: '#^Call to function array_key_exists\(\) with ''background'' and array\{explain\?\: mixed, pace\?\: mixed, check\?\: mixed, goal\?\: mixed, note\?\: mixed\} will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: app/Study/LearnerProfiles.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Study/Memory.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 1
+			path: app/Study/NoteExports.php
+
+		-
+			message: '#^Anonymous function has an unused use \$chars\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: app/Study/OfficeReader.php
+
+		-
+			message: '#^Anonymous function has an unused use \$chunks\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: app/Study/OfficeReader.php
+
+		-
+			message: '#^Anonymous function has an unused use \$label\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: app/Study/OfficeReader.php
+
+		-
+			message: '#^Anonymous function has an unused use \$note\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: app/Study/OfficeReader.php
+
+		-
+			message: '#^Anonymous function has an unused use \$used\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: app/Study/OfficeReader.php
+
+		-
+			message: '#^Offset null does not exist on array\{\}\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: app/Study/OfficeReader.php
+
+		-
+			message: '#^Parameter \#1 \$p of static method App\\Study\\OfficeReader\:\:drawingParagraph\(\) expects DOMElement, DOMNode given\.$#'
+			identifier: argument.type
+			count: 1
+			path: app/Study/OfficeReader.php
+
+		-
+			message: '#^Static method App\\Study\\OfficeReader\:\:columnLetters\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: app/Study/OfficeReader.php
+
+		-
+			message: '#^Strict comparison using \=\=\= between array\{\} and array\{\} will always evaluate to true\.$#'
+			identifier: identical.alwaysTrue
+			count: 1
+			path: app/Study/OfficeReader.php
+
+		-
+			message: '#^Unreachable statement \- code above always terminates\.$#'
+			identifier: deadCode.unreachable
+			count: 1
+			path: app/Study/OfficeReader.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Study/PlanDetails.php
+
+		-
+			message: '#^Offset ''started_at'' on array\{kind\?\: mixed, topic\?\: mixed, questions\?\: mixed\} on left side of \?\? does not exist\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: app/Study/Quizzes.php
+
+		-
+			message: '#^Offset ''plugins'' on array\{method\: string, check_ins\: string, quiz\: string, pace\: string, custom_do\?\: string, custom_dont\?\: string\} in isset\(\) does not exist\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/Study/Sessions.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between Carbon\\CarbonImmutable\|null and false will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: app/Study/Sessions.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\{file\: string, pages\: string\}\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Study/TopicSuggestions.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<string\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Study/TopicSuggestions.php
+
+		-
+			message: '#^Match expression does not handle remaining value\: string$#'
+			identifier: match.unhandled
+			count: 1
+			path: app/Study/Topics.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<string, mixed\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Study/WriteBack.php
+
+		-
+			message: '#^Class App\\Platform\\Errors\\Unprocessable constructor invoked with 1 parameter, 2\-3 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: app/Study/WriteBack.php
+
+		-
+			message: '#^Method App\\Study\\WriteBack\:\:sessionNote\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: app/Study/WriteBack.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Study/WriteBack.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/Study/WriteBack.php

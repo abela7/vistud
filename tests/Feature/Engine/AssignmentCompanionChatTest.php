@@ -1,0 +1,490 @@
+<?php
+
+namespace Tests\Feature\Engine;
+
+use App\Engine\Context\Stack;
+use App\Engine\Engine;
+use App\Engine\Fake;
+use App\Engine\Request;
+use App\Engine\SessionChat;
+use App\Engine\Settings;
+use App\Engine\Usage;
+use App\Models\User;
+use App\Platform\Access\Guard;
+use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
+use App\Platform\Errors\NotFound;
+use App\Study\Activities;
+use App\Study\ActivityDetails;
+use App\Study\AssignmentLog;
+use App\Study\AssignmentSources;
+use App\Study\AssignmentUnderstandings;
+use App\Study\Modules;
+use App\Study\Plans;
+use App\Study\Sessions;
+use App\Study\Topics;
+use App\Study\Workspaces;
+use Carbon\CarbonImmutable;
+use Tests\Concerns\CreatesAccounts;
+use Tests\Concerns\RefreshesDatabase;
+use Tests\TestCase;
+
+class AssignmentCompanionChatTest extends TestCase
+{
+    use CreatesAccounts, RefreshesDatabase;
+
+    private User $ada;
+
+    private Principal $by;
+
+    private string $workspaceId;
+
+    private string $moduleId;
+
+    private ActivityDetails $assignment;
+
+    private Fake $engine;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->travelTo(CarbonImmutable::parse('2026-10-13 10:00:00', 'UTC'));
+        $this->engine = new Fake;
+        $this->app->instance(Engine::class, $this->engine);
+        $this->ada = $this->student();
+        $this->by = $this->principal($this->ada);
+
+        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        app(Settings::class)->set($this->by, [
+            'tutor_model' => 'fake/tutor',
+            'reader_model' => 'fake/quick',
+            'fallback_model' => 'fake/plain',
+            'consent' => true,
+            'auto_read_files' => false,
+        ]);
+
+        $this->workspaceId = app(Workspaces::class)->create($this->by, ['name' => 'Computer Science'])->id;
+        $this->moduleId = app(Modules::class)->create($this->by, $this->workspaceId, ['title' => 'Databases'])->id;
+        $this->assignment = app(Activities::class)->create($this->by, $this->workspaceId, [
+            'title' => 'Coursework 1: Relational Schema',
+            'kind' => 'assignment',
+            'module_id' => $this->moduleId,
+            'due_on' => '2026-10-25',
+            'due_time' => '17:00',
+        ]);
+    }
+
+    private function chat(): SessionChat
+    {
+        return app(SessionChat::class);
+    }
+
+    public function test_a_turn_sends_companion_prompt_assignment_layer_and_only_assignment_tools(): void
+    {
+        // Add a source
+        app(AssignmentSources::class)->add($this->by, $this->assignment->id, [
+            'kind' => 'brief',
+            'title' => 'Brief doc',
+            'text' => 'Design a 3NF schema for an airline.',
+        ]);
+
+        // Add an understanding
+        app(AssignmentUnderstandings::class)->keep(
+            $this->by,
+            $this->assignment->id,
+            [
+                'summary' => 'Airline schema design in 3NF.',
+                'goal' => 'Create a normalized relational schema.',
+                'confidence' => 'high',
+                'deliverables' => [['text' => 'ER diagram', 'source' => 'S1']],
+                'requirements' => [['text' => 'Must normalize to 3NF', 'source' => 'S1']],
+                'constraints' => [],
+                'criteria' => [['title' => '3NF normalization', 'weight' => '40%', 'source' => 'S1']],
+                'teacher_expects' => [],
+                'dates' => [],
+                'modules' => [],
+                'topics' => [],
+                'best_practices' => [],
+                'assumptions' => [],
+                'risks' => [],
+                'gaps' => [],
+                'questions' => [['text' => 'Do we include views?']],
+            ],
+            changes: null,
+            sources: ['S1' => ['type' => 'brief', 'id' => 'src-1', 'title' => 'Brief doc']],
+            fingerprint: app(AssignmentSources::class)->fingerprint($this->by, $this->assignment->id),
+            model: 'fake/tutor',
+        );
+
+        // Add a plan item
+        app(Plans::class)->addPart($this->by, $this->assignment->id, 'Part 1: Schema Design', marks: 50);
+
+        // Add a log entry
+        app(AssignmentLog::class)->add($this->by, $this->assignment->id, 'understand', 'decision', 'Selected PostgreSQL.', byRole: 'student');
+
+        $this->engine->will(Fake::says('I am ready to help you with your coursework.'));
+
+        $reply = $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Hello companion');
+
+        $this->assertSame('I am ready to help you with your coursework.', $reply->text);
+
+        // Check thread isolation and purpose
+        $thread = LearnerTables::query(Guard::learner($this->by), 'engine_threads')
+            ->where('activity_id', $this->assignment->id)
+            ->first();
+        $this->assertNotNull($thread);
+        $this->assertSame('assignment', $thread->purpose);
+
+        // Check request sent to tutor model
+        $req = $this->engine->last();
+        $this->assertSame('fake/tutor', $req->model);
+
+        // Companion prompt present
+        $this->assertStringContainsStringIgnoringCase('You are the student\'s companion for this assignment', $req->system);
+
+        // Assignment layer present
+        $this->assertStringContainsString('Coursework 1: Relational Schema', $req->system);
+        $this->assertStringContainsString('Stage: understand', $req->system);
+        $this->assertStringContainsString('Airline schema design in 3NF.', $req->system);
+        $this->assertStringContainsString('Do we include views?', $req->system);
+        $this->assertStringContainsString('Part 1: Schema Design', $req->system);
+        $this->assertStringContainsString('Selected PostgreSQL.', $req->system);
+
+        // Tools offered: exactly ASSIGNMENT_TOOLS
+        $toolNames = array_map(fn ($t) => $t['function']['name'], $req->tools);
+        sort($toolNames);
+        $expected = SessionChat::ASSIGNMENT_TOOLS;
+        sort($expected);
+        $this->assertSame($expected, $toolNames);
+    }
+
+    public function test_assignment_source_tool_reads_source_text(): void
+    {
+        $source = app(AssignmentSources::class)->add($this->by, $this->assignment->id, [
+            'kind' => 'brief',
+            'title' => 'Project Brief',
+            'text' => 'Complete parts A and B.',
+        ]);
+
+        $this->engine->will(
+            Fake::calls('assignment_source', ['source' => 'S1'], 'call_src'),
+            function (Request $request) {
+                $toolMsg = $request->messages[array_key_last($request->messages)];
+                $this->assertSame('tool', $toolMsg['role']);
+                $this->assertStringContainsString('Project Brief', $toolMsg['content']);
+                $this->assertStringContainsString('Complete parts A and B.', $toolMsg['content']);
+
+                return Fake::says('The brief says to complete parts A and B.');
+            }
+        );
+
+        $reply = $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'What does source S1 say?');
+        $this->assertStringContainsString('The brief says', $reply->text);
+    }
+
+    public function test_add_assignment_source_tool_requires_agreement_then_adds_source(): void
+    {
+        $this->engine->will(
+            Fake::calls('add_assignment_source', [
+                'kind' => 'feedback',
+                'title' => 'Teacher note on ERD',
+                'text' => 'The teacher said Chen notation is fine.',
+            ], 'call_add_src'),
+            function (Request $request) {
+                $lastMsg = $request->messages[array_key_last($request->messages)];
+                $this->assertSame('tool', $lastMsg['role']);
+                $this->assertStringContainsString('Not done yet', $lastMsg['content']);
+                $this->assertStringContainsString('Keep "Teacher note on ERD" as a source', $lastMsg['content']);
+
+                return Fake::says('Should I keep this note as a source for your assignment?');
+            }
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'The teacher said Chen notation is fine.');
+        $sources = app(AssignmentSources::class)->list($this->by, $this->assignment->id);
+        $this->assertCount(0, $sources);
+
+        // Now student agrees
+        $this->engine->will(
+            Fake::calls('add_assignment_source', [
+                'kind' => 'feedback',
+                'title' => 'Teacher note on ERD',
+                'text' => 'The teacher said Chen notation is fine.',
+            ], 'call_add_src_confirmed'),
+            Fake::says('I have recorded it as a source and started re-reading the assignment.')
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Yes, keep it.');
+        $sources = app(AssignmentSources::class)->list($this->by, $this->assignment->id);
+        $this->assertCount(1, $sources);
+        $this->assertSame('Teacher note on ERD', $sources[0]->title);
+    }
+
+    public function test_log_progress_tool_writes_log_and_reports_effects(): void
+    {
+        $this->engine->will(
+            Fake::calls('log_progress', [
+                'stage' => 'plan',
+                'kind' => 'decision',
+                'text' => 'Selected BCNF over 3NF.',
+            ], 'call_log'),
+            Fake::says('Logged your decision.')
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'We decided to go with BCNF.');
+
+        $logs = app(AssignmentLog::class)->list($this->by, $this->assignment->id);
+        $this->assertCount(1, $logs);
+        $this->assertSame('Selected BCNF over 3NF.', $logs[0]->text);
+        $this->assertSame('tutor', $logs[0]->by);
+
+        // Check effects in transcript
+        $turns = $this->chat()->assignmentTranscript($this->by, $this->assignment->id);
+        $lastTurn = end($turns);
+        $this->assertNotEmpty($lastTurn['log_entries']);
+        $this->assertSame('Selected BCNF over 3NF.', $lastTurn['log_entries'][0]['text']);
+    }
+
+    public function test_set_stage_tool_requires_agreement_then_updates_stage(): void
+    {
+        $this->engine->will(
+            Fake::calls('set_stage', ['stage' => 'plan'], 'call_stage'),
+            function (Request $request) {
+                $lastMsg = $request->messages[array_key_last($request->messages)];
+                $this->assertStringContainsString('Not done yet', $lastMsg['content']);
+                $this->assertStringContainsString('Move the assignment to the "plan" stage?', $lastMsg['content']);
+
+                return Fake::says('Shall we move to the plan stage?');
+            }
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'I understand it now. Let\'s plan.');
+        $this->assertSame('understand', app(Activities::class)->find($this->by, $this->assignment->id)->stage);
+
+        // Student agrees
+        $this->engine->will(
+            Fake::calls('set_stage', ['stage' => 'plan'], 'call_stage_confirmed'),
+            Fake::says('Moved to plan stage.')
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Yes, let\'s move to plan.');
+        $this->assertSame('plan', app(Activities::class)->find($this->by, $this->assignment->id)->stage);
+    }
+
+    public function test_out_of_date_and_no_understanding_cases_inform_tutor(): void
+    {
+        // 1. No understanding
+        $this->engine->will(Fake::says('You have not added what you were given yet.'));
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'What is this assignment?');
+        $this->assertStringContainsString('There is no stored understanding of this assignment yet', $this->engine->last()->system);
+
+        // 2. Out of date understanding
+        app(AssignmentSources::class)->add($this->by, $this->assignment->id, [
+            'kind' => 'brief',
+            'title' => 'Brief v1',
+            'text' => 'Original brief.',
+        ]);
+        app(AssignmentUnderstandings::class)->keep(
+            $this->by,
+            $this->assignment->id,
+            ['summary' => 'V1', 'confidence' => 'low'],
+            changes: null,
+            sources: ['S1' => ['type' => 'brief', 'id' => '1', 'title' => 'Brief v1']],
+            fingerprint: 'old-fingerprint',
+            model: 'fake/tutor',
+        );
+
+        $this->engine->will(Fake::says('The picture is out of date.'));
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Tell me about the brief.');
+        $this->assertStringContainsString('OUT OF DATE', $this->engine->last()->system);
+        $this->assertStringContainsString('Read again', $this->engine->last()->system);
+    }
+
+    public function test_source_labels_stay_the_ones_the_understanding_cites(): void
+    {
+        $sources = app(AssignmentSources::class);
+        $brief = $sources->add($this->by, $this->assignment->id, ['kind' => 'brief', 'title' => 'Brief doc', 'text' => 'Design the schema.']);
+        $rubric = $sources->add($this->by, $this->assignment->id, ['kind' => 'rubric', 'title' => 'Rubric doc', 'text' => 'Normalization is 40 marks.']);
+        // Read when the rubric was the only source: it is S1, the brief (added to the list earlier) came second.
+        app(AssignmentUnderstandings::class)->keep(
+            $this->by,
+            $this->assignment->id,
+            [
+                'summary' => 'A schema.',
+                'confidence' => 'high',
+                'criteria' => [['criterion' => 'Normalization', 'weight' => 40, 'looks_like' => 'Every table in 3NF', 'source' => 'S1']],
+                'dates' => [['what' => 'Draft due', 'on' => '2026-10-20', 'source' => 'S2']],
+            ],
+            changes: null,
+            sources: [
+                'S1' => ['type' => 'source', 'id' => $rubric->id, 'title' => 'Rubric doc'],
+                'S2' => ['type' => 'source', 'id' => $brief->id, 'title' => 'Brief doc'],
+            ],
+            fingerprint: $sources->fingerprint($this->by, $this->assignment->id),
+            model: 'fake/tutor',
+        );
+        $sources->add($this->by, $this->assignment->id, ['kind' => 'email', 'title' => 'Late email', 'text' => 'Use PostgreSQL.']);
+
+        $this->engine->will(
+            Fake::calls('assignment_source', ['source' => 'S1'], 'call_src'),
+            function (Request $request) {
+                $this->assertStringContainsString('Normalization is 40 marks.', $request->messages[array_key_last($request->messages)]['content']);
+
+                return Fake::says('S1 is the rubric.');
+            }
+        );
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'What is S1?');
+
+        $system = $this->engine->last()->system;
+        $this->assertMatchesRegularExpression('/- S1 · [^\n]*“Rubric doc”/', $system);
+        $this->assertMatchesRegularExpression('/- S2 · [^\n]*“Brief doc”/', $system);
+        $this->assertMatchesRegularExpression('/- S3 · [^\n]*“Late email”[^\n]*new: not in the understanding yet/', $system);
+        $this->assertStringContainsString('- Normalization (40%) — full marks: Every table in 3NF [S1]', $system);
+        $this->assertStringContainsString('- Draft due: 2026-10-20 [S2]', $system);
+    }
+
+    public function test_another_student_cannot_access_or_write_assignment_chat(): void
+    {
+        $other = $this->principal($this->student());
+
+        $this->expectException(NotFound::class);
+        $this->chat()->sendOnAssignment($other, $this->assignment->id, 'Hello?');
+    }
+
+    public function test_folding_works_on_long_assignment_chat(): void
+    {
+        config(['vistud.engine.fold_at' => 900, 'vistud.engine.keep_recent' => 2]);
+        $long = str_repeat('Database normalization ensures minimal redundancy. ', 8);
+
+        $this->engine->will(Fake::says($long), Fake::says($long));
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Turn 1');
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Turn 2');
+
+        // Third turn triggers fold with quick model
+        $this->engine->will(
+            Fake::says($long),
+            function (Request $request) {
+                $this->assertSame('fake/quick', $request->model);
+                $this->assertStringContainsString('Student: Turn 1', $request->messages[0]['content']);
+                $this->assertStringContainsString('Student: Turn 2', $request->messages[0]['content']);
+                $this->assertStringNotContainsString('Student: Turn 3', $request->messages[0]['content']);
+
+                return Fake::says('The student and tutor discussed normalization fundamentals.', 200, 'fake/quick');
+            }
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Turn 3');
+
+        $this->engine->will(Fake::says('Turn 4 response.'));
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Turn 4');
+
+        $last = $this->engine->last();
+        $this->assertStringContainsString('## Earlier in this chat', $last->system);
+        $this->assertStringContainsString('discussed normalization fundamentals', $last->system);
+
+        $turns = $this->chat()->assignmentTranscript($this->by, $this->assignment->id);
+        $this->assertTrue($turns[0]['folded']);
+        $this->assertTrue($turns[1]['folded']);
+    }
+
+    public function test_clearing_or_deleting_the_chat_removes_its_turns_but_keeps_what_it_cost(): void
+    {
+        $scope = Guard::learner($this->by);
+        $month = fn () => app(Usage::class)->monthTotal($scope, 'UTC');
+        $this->engine->will(Fake::says('Hi.', 5_000));
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Hello');
+        $spent = $month();
+        $this->assertGreaterThan(0, $spent);
+
+        $this->chat()->clearAssignmentChat($this->by, $this->assignment->id);
+        $this->assertSame([], $this->chat()->assignmentTranscript($this->by, $this->assignment->id));
+        $this->assertSame($spent, $month());
+
+        $this->engine->will(Fake::says('Again.', 5_000));
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Hello again');
+        $spent = $month();
+        app(Activities::class)->delete($this->by, $this->assignment->id);
+        $this->assertSame(0, LearnerTables::query($scope, 'engine_messages')->count());
+        $this->assertSame(0, LearnerTables::query($scope, 'engine_threads')->count());
+        $this->assertSame($spent, $month());
+    }
+
+    public function test_a_file_the_ai_could_not_read_yet_makes_its_understanding_out_of_date_once_it_can_be(): void
+    {
+        $sources = app(AssignmentSources::class);
+        $keep = fn (array $file) => app(AssignmentUnderstandings::class)->keep(
+            $this->by, $this->assignment->id, ['summary' => 'A schema.', 'confidence' => 'low'], null, ['F1' => $file],
+            $sources->fingerprint($this->by, $this->assignment->id), 'fake/tutor',
+        );
+        $file = ['type' => 'file', 'id' => '01a00000-0000-7000-8000-000000000001', 'title' => 'brief.pdf'];
+
+        $this->assertFalse($sources->outOfDate($this->by, $this->assignment->id, $keep($file)));
+        // Unread while converting, and no longer converting (here: gone): read it again.
+        $this->assertTrue($sources->outOfDate($this->by, $this->assignment->id, $keep($file + ['unread' => true])));
+    }
+
+    public function test_a_full_log_keeps_the_newest_entries(): void
+    {
+        $log = app(AssignmentLog::class);
+        for ($i = 1; $i <= AssignmentLog::MAX_ENTRIES + 1; $i++) {
+            $this->travel(1)->seconds();
+            $log->add($this->by, $this->assignment->id, 'do', 'progress', "Entry {$i}");
+        }
+
+        $this->assertCount(AssignmentLog::MAX_ENTRIES, $log->ids($this->by, $this->assignment->id));
+        $newest = $log->list($this->by, $this->assignment->id, limit: AssignmentLog::MAX_ENTRIES);
+        $this->assertSame('Entry '.(AssignmentLog::MAX_ENTRIES + 1), $newest[0]->text);
+        $this->assertSame('Entry 2', end($newest)->text);
+    }
+
+    public function test_the_tutor_logs_in_the_current_stage_when_it_names_none(): void
+    {
+        app(Activities::class)->setStage($this->by, $this->assignment->id, 'plan');
+        $this->engine->will(Fake::calls('log_progress', ['kind' => 'decision', 'text' => 'Chose PostgreSQL.']), Fake::says('Logged.'));
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'We go with PostgreSQL.');
+
+        $this->assertSame('plan', app(AssignmentLog::class)->list($this->by, $this->assignment->id)[0]->stage);
+    }
+
+    public function test_a_study_session_on_a_linked_topic_hears_what_the_assignment_asks(): void
+    {
+        $topic = app(Topics::class)->create($this->by, $this->workspaceId, 'Normalization', $this->moduleId);
+        app(AssignmentUnderstandings::class)->keep(
+            $this->by,
+            $this->assignment->id,
+            [
+                'summary' => 'Design an airline schema in 3NF.',
+                'confidence' => 'high',
+                'requirements' => [['text' => 'Normalize every table to 3NF', 'source' => 'S1']],
+                'criteria' => [['criterion' => 'Normalization', 'weight' => 40, 'source' => 'S1']],
+                'topics' => [['topic' => 'Normalization', 'id' => $topic->id, 'why' => 'Part 2 is graded on 3NF', 'source' => 'S1']],
+            ],
+            changes: null,
+            sources: [],
+            fingerprint: 'any',
+            model: 'fake/tutor',
+        );
+        $session = app(Sessions::class)->start($this->by, $this->workspaceId, $topic->id, $this->moduleId);
+
+        $system = app(Stack::class)->build($this->by, $session, null, true)->system;
+
+        $this->assertStringContainsString('## Assignments and exams', $system);
+        $this->assertStringContainsString('- Coursework 1: Relational Schema (Assignment): Due 25 Oct, 17:00, 12 days left; stage: understand', $system);
+        $this->assertStringContainsString("Coursework 1: Relational Schema, because it draws on the session's topic, Normalization: Part 2 is graded on 3NF.", $system);
+        $this->assertStringContainsString('- Must: Normalize every table to 3NF [S1]', $system);
+        $this->assertStringContainsString('- Marked on: Normalization (40%) [S1]', $system);
+        $this->assertStringContainsString('On Coursework 1 you are asked to', $system);
+    }
+
+    public function test_a_session_unrelated_to_an_assignment_hears_only_its_deadline(): void
+    {
+        $other = app(Modules::class)->create($this->by, $this->workspaceId, ['title' => 'Networks'])->id;
+        $session = app(Sessions::class)->start($this->by, $this->workspaceId, null, $other);
+
+        $system = app(Stack::class)->build($this->by, $session, null, true)->system;
+
+        $this->assertStringContainsString('- Coursework 1: Relational Schema (Assignment):', $system);
+        $this->assertStringNotContainsString('What this study feeds', $system);
+    }
+}

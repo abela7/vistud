@@ -37,13 +37,16 @@
             <a href="{{ route('settings', ['part' => 'ai']) }}" class="btn btn-primary"><x-icon name="brain" class="size-4" />AI settings</a>
         </div>
     @else
-        @if ($turns === [] && (($onTopic ?? null) || $vistud))
-            {{-- A topic's empty chat, or ViStud AI's: what it is about, and four ways in as cards (two by two from a tablet up). --}}
+        @if ($turns === [] && (($onTopic ?? null) || $vistud || ($activity ?? null)))
+            {{-- A topic's empty chat, ViStud AI's, or an assignment companion's: what it is about, and ways in as cards. --}}
             <div class="chat-empty chat-empty-topic" x-show="! live">
                 <span class="chat-empty-badge" aria-hidden="true"><x-icon name="sparkles" class="size-5" /></span>
                 @if ($vistud)
                     <p class="chat-empty-title">Ask me anything about your study</p>
                     <p class="chat-empty-hint">I see all your courses, deadlines and sessions, and what your tutors remember about you.</p>
+                @elseif ($activity ?? null)
+                    <p class="chat-empty-title">{{ $activity->title }}</p>
+                    <p class="chat-empty-hint">{{ ($assignmentGoal ?? '') !== '' ? $assignmentGoal : 'Work through your assignment with your companion tutor.' }}</p>
                 @else
                     <p class="chat-empty-title">Ask anything about {{ $onTopic }}</p>
                     <p class="chat-empty-hint">Taught from this topic's notes, files and key points, at your level.</p>
@@ -212,6 +215,22 @@
                                         @else
                                             <span class="chat-file"><x-icon name="undo-2" class="size-4" /><span class="truncate">{{ $mark['topic'] }}: {{ $mark['words'] }}, undone</span></span>
                                         @endif
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                        @if ((($turn['sources_kept'] ?? []) !== []) || (($turn['stages_changed'] ?? []) !== []) || (($turn['log_entries'] ?? []) !== []))
+                            <ul class="chat-files chat-did" role="list" aria-label="Assignment progress">
+                                @foreach ($turn['sources_kept'] ?? [] as $source)
+                                    <li><span class="chat-file"><x-icon name="file-text" class="size-4" /><span class="truncate">Saved source: {{ $source['title'] }}</span></span></li>
+                                @endforeach
+                                @foreach ($turn['stages_changed'] ?? [] as $stage)
+                                    <li><span class="chat-file"><x-icon name="arrow-right-circle" class="size-4" /><span class="truncate">Moved to stage: {{ ucfirst($stage['stage']) }}</span></span></li>
+                                @endforeach
+                                @foreach ($turn['log_entries'] ?? [] as $log)
+                                    <li class="chat-mark" wire:key="log-{{ $i }}-{{ $log['id'] }}">
+                                        <span class="chat-file"><x-icon name="clipboard-list" class="size-4" /><span class="truncate">Logged {{ $log['kind'] }}: {{ $log['text'] }}</span></span>
+                                        <button type="button" class="chat-file-action" wire:click="undoLog('{{ $log['id'] }}')">Undo<span class="sr-only"> log entry</span></button>
                                     </li>
                                 @endforeach
                             </ul>

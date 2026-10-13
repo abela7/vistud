@@ -43,6 +43,9 @@ final class LearnerTables
         'activities',
         'activity_items',
         'activity_members',
+        'activity_sources',
+        'activity_understandings',
+        'activity_log',
         'instructions',
         'study_sessions',
         'session_segments',
@@ -59,6 +62,11 @@ final class LearnerTables
         'folder_briefs',
         'quizzes',
         'tutor_memories',
+        'class_sessions',
+        'class_recordings',
+        'class_transcripts',
+        'class_materials',
+        'class_reviews',
     ];
 
     /** `$connection`: another than the default, such as the owner's for what the runtime user may not do (journal rebuilds). */

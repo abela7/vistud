@@ -69,7 +69,7 @@ final class ProfileCourse extends Job
      */
     public static function parse(string $answer): array
     {
-        $reading = self::clean(self::object($answer));
+        $reading = self::clean(JsonAnswer::object($answer));
         if ($reading['about'] === '' && $reading['outcomes'] === [] && $reading['assessment'] === [] && $reading['modules'] === [] && $reading['textbook'] === '') {
             throw new EngineFailed('engine_unreadable', 'The AI found nothing in it. Check that it is the syllabus, or try again.');
         }
@@ -156,19 +156,6 @@ final class ProfileCourse extends Job
             'textbook' => $clean($data['textbook'] ?? null, CourseProfiles::MAX_TEXTBOOK),
             'modules' => $modules,
         ];
-    }
-
-    /** The JSON object in an answer, even inside a code fence or after a word of introduction. */
-    private static function object(string $answer): array
-    {
-        $start = strpos($answer, '{');
-        $end = strrpos($answer, '}');
-        $data = $start === false || $end === false || $end < $start ? null : json_decode(substr($answer, $start, $end - $start + 1), true);
-        if (! is_array($data) || array_is_list($data)) {
-            throw new EngineFailed('engine_unreadable', 'The AI\'s answer couldn\'t be read. Try again.');
-        }
-
-        return $data;
     }
 
     /** What the syllabus says, as one text of at most CourseProfiles::MAX_SYLLABUS characters; empty when it has no words. */

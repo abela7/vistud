@@ -4,6 +4,7 @@ namespace App\Study;
 
 use App\Appearance\CourseColour;
 use App\Brain\Writer\JournalWriter;
+use App\Engine\Spent;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
@@ -226,11 +227,18 @@ final class Workspaces
             LearnerTables::query($scope, 'links')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'activity_items')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'activity_members')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'activity_sources')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'activity_understandings')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'activity_log')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'activities')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'instructions')->where('scope', "workspace:{$id}")->delete();
             CourseProfiles::forget($scope, $id);
             LearnerProfiles::forget($scope, $id);
-            LearnerTables::query($scope, 'engine_jobs')->where('workspace_id', $id)->delete();
+            // Its chats and AI runs go; what they cost stays in the month's usage.
+            $threads = LearnerTables::query($scope, 'engine_threads')->where('workspace_id', $id);
+            Spent::forgetMessages($scope, (clone $threads)->pluck('id')->all());
+            $threads->delete();
+            Spent::forgetJobs($scope, $id);
 
             // Delete course
             LearnerTables::query($scope, 'workspaces')->where('id', $id)->delete();

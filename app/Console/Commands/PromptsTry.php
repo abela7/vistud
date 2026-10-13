@@ -233,8 +233,8 @@ class PromptsTry extends Command
         ];
         $course = ['courseName' => 'Operating Systems', 'courseLine' => 'CS301 · Autumn 2026', 'courseInstructions' => 'The lecturer uses C examples.', 'aboutYou' => 'Second year. I get lost when there are many new words at once.'];
         $module = ['moduleTitle' => 'Week 3: Process management', 'moduleDates' => '19 Oct – 25 Oct', 'topics' => [['name' => 'Processes', 'status' => 'understood'], ['name' => 'Threads', 'status' => 'understood']]];
-        $none = new Facts(...$course, ...$module, topicNow: null, teaching: $teaching);
-        $scheduling = new Facts(...$course, ...$module, topicNow: 'Round robin', topicPractice: 'the student says not started; practice: no contact yet', teaching: $teaching, studied: '12 minutes');
+        $none = new Facts(...[...$course, ...$module, 'topicNow' => null, 'teaching' => $teaching]);
+        $scheduling = new Facts(...[...$course, ...$module, 'topicNow' => 'Round robin', 'topicPractice' => 'the student says not started; practice: no contact yet', 'teaching' => $teaching, 'studied' => '12 minutes']);
         $user = fn (string $text) => ['role' => 'user', 'content' => $text];
         $tutor = fn (string $text) => ['role' => 'assistant', 'content' => $text];
 

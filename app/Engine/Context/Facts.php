@@ -60,6 +60,13 @@ final readonly class Facts
         public array $moduleQuestions = [],
         public array $moduleKeyPoints = [],
         public ?string $moduleLast = null,
+        /** The course's open assignments, soonest due first, a line each: what, when, its stage. */
+        public array $assignmentsDue = [],
+        /**
+         * What the assignments the session's topic or module feeds ask for, from their understanding, as lines with
+         * whether each is always kept (list<array{0: string, 1: bool}>).
+         */
+        public array $assignmentsLinked = [],
         // 4 · the folder the session studies in, when it has one: the files, topics, questions, key points and last stop
         // above are then the folder's
         public ?string $folderName = null,

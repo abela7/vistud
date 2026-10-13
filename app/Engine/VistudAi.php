@@ -142,7 +142,7 @@ final class VistudAi
         $scope = Guard::learner($by);
         $thread = $this->thread($scope, $id);
         DB::transaction(function () use ($scope, $thread) {
-            LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->delete();
+            Spent::forgetMessages($scope, [$thread->id]);
             LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->delete();
         });
     }

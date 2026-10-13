@@ -42,6 +42,7 @@
                     <button type="button" @class(['segmented-option', 'is-current' => $status === $key]) wire:click="$set('status', '{{ $key }}')" aria-pressed="{{ $status === $key ? 'true' : 'false' }}">{{ $word }}</button>
                 @endforeach
             </div>
+            <a href="{{ route('workspaces.assignments.work', [$workspace->id, $assignment->id]) }}" class="btn btn-primary btn-sm"><x-icon name="sparkles" class="size-4" />Work on it with the tutor</a>
             <button type="button" class="btn btn-ghost btn-sm" x-on:click="edit = ! edit" x-bind:aria-expanded="edit.toString()" aria-controls="assignment-details"><x-icon name="pencil" class="size-4" />Edit details</button>
         @endunless
     </x-workspace.section-header>
@@ -104,6 +105,8 @@
     </form>
 
     @unless ($new)
+        {{-- First the full picture (what it is, from everything the student was given), then the plan to do it. --}}
+        <livewire:workspaces.assignment-picture :workspace-id="$workspace->id" :activity-id="$assignment->id" :key="'picture-'.$assignment->id" />
         <livewire:workspaces.assignment-plan :workspace-id="$workspace->id" :activity-id="$assignment->id" :key="'plan-'.$assignment->id" />
     @endunless
 

@@ -2,10 +2,12 @@
 
 namespace App\Engine;
 
+use App\Engine\Tools\AddAssignmentSourceTool;
 use App\Engine\Tools\AddQuestionsTool;
 use App\Engine\Tools\AddTopicsTool;
 use App\Engine\Tools\AnswerQuestionTool;
 use App\Engine\Tools\AssignmentPlanTool;
+use App\Engine\Tools\AssignmentSourceTool;
 use App\Engine\Tools\AssignmentsTool;
 use App\Engine\Tools\CalculateTool;
 use App\Engine\Tools\CalendarTool;
@@ -17,6 +19,7 @@ use App\Engine\Tools\EarlierSessionsTool;
 use App\Engine\Tools\EditNoteTool;
 use App\Engine\Tools\FilesTool;
 use App\Engine\Tools\FindingsTool;
+use App\Engine\Tools\LogProgressTool;
 use App\Engine\Tools\MakeFlashcardsTool;
 use App\Engine\Tools\ModuleFilesTool;
 use App\Engine\Tools\NotesTool;
@@ -33,6 +36,7 @@ use App\Engine\Tools\RenameNoteTool;
 use App\Engine\Tools\RenameTopicTool;
 use App\Engine\Tools\SaveKeyPointsTool;
 use App\Engine\Tools\SearchNotesTool;
+use App\Engine\Tools\SetStageTool;
 use App\Engine\Tools\SetTopicStatusTool;
 use App\Engine\Tools\SetTopicTool;
 use App\Engine\Tools\Tool;
@@ -61,6 +65,10 @@ final class Toolbox
         FindingsTool::class,
         AssignmentsTool::class,
         AssignmentPlanTool::class,
+        AssignmentSourceTool::class,
+        AddAssignmentSourceTool::class,
+        LogProgressTool::class,
+        SetStageTool::class,
         CalendarTool::class,
         NotesTool::class,
         ReadNoteTool::class,
@@ -121,7 +129,7 @@ final class Toolbox
     /** What each look-up reads, as the chat tells the student ("Looking up your notes…", "Looked up: your notes"). */
     public const WORDS = [
         'course_overview' => 'the course', 'topics' => 'your topics', 'questions' => 'your questions', 'findings' => 'your key points',
-        'assignments' => 'your assignments', 'assignment_plan' => 'an assignment plan', 'calendar' => 'your calendar', 'notes' => 'your notes',
+        'assignments' => 'your assignments', 'assignment_plan' => 'an assignment plan', 'assignment_source' => 'an assignment source', 'calendar' => 'your calendar', 'notes' => 'your notes',
         'read_note' => 'a note', 'search_notes' => 'your notes', 'files' => 'your files', 'read_file' => 'a file', 'earlier_sessions' => 'earlier sessions',
         'plot_graph' => 'a function graph', 'calculate' => 'a calculation', 'create_snippet' => 'a copyable snippet',
         // ViStud AI's (App\Engine\Vistud\VistudToolbox).
@@ -133,6 +141,7 @@ final class Toolbox
         'set_topic' => 'Setting the topic', 'set_topic_status' => 'Marking a topic', 'record_quiz' => 'Recording the quiz', 'remember' => 'Remembering', 'forget_memory' => 'Forgetting', 'add_topics' => 'Adding topics', 'make_flashcards' => 'Saving flashcards', 'save_key_points' => 'Saving key points', 'add_questions' => 'Adding questions', 'answer_question' => 'Answering question', 'write_note' => 'Writing in your note',
         'rename_topic' => 'Renaming topic', 'delete_topic' => 'Removing topic', 'rename_folder' => 'Renaming folder', 'rename_course' => 'Renaming course', 'rename_module' => 'Renaming module', 'rename_note' => 'Renaming note',
         'plot_graph' => 'Plotting function graph', 'calculate' => 'Calculating', 'create_snippet' => 'Creating copyable snippet',
+        'add_assignment_source' => 'Adding assignment source', 'log_progress' => 'Logging progress', 'set_stage' => 'Updating assignment stage',
     ];
 
     public static function words(string $tool): string

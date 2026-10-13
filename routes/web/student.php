@@ -146,6 +146,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/courses/{workspace}/assignments/{assignment}', [AssignmentPageController::class, 'show'])
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'assignment' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.assignments.show');
+    Route::get('/courses/{workspace}/assignments/{assignment}/work', [AssignmentPageController::class, 'work'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'assignment' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.assignments.work');
 
     // A section of an assignment's plan: a new one, its own page (its tasks, files and notes), and changing it.
     Route::get('/courses/{workspace}/assignments/{assignment}/sections/new', [AssignmentPageController::class, 'createSection'])

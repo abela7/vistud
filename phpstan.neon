@@ -1,0 +1,13 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    # What was already there when Larastan came in: new code must be clean,
+    # this list only ever shrinks (regenerate it after fixing some).
+    - phpstan-baseline.neon
+
+parameters:
+    level: 5
+    paths:
+        - app
+        - database
+        - routes
+    tmpDir: storage/framework/cache/phpstan

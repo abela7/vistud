@@ -2283,7 +2283,7 @@
         width: 2.5rem;
         height: 2.5rem;
         border-radius: var(--radius-lg);
-        background-color: color-mix(in oklab, var(--tone) 16%, transparent);
+        background-color: var(--tone-subtle, var(--surface-sunken));
         color: var(--tone);
     }
 
@@ -2344,10 +2344,10 @@
     }
 
     /* The status of each choice, and of the head's icon, by one variable. */
-    :is(.tsheet, .tsheet-tones) .is-not_started { --tone: var(--text-muted); }
-    :is(.tsheet, .tsheet-tones) .is-covered { --tone: var(--accent); }
-    :is(.tsheet, .tsheet-tones) .is-confused { --tone: var(--warning); }
-    :is(.tsheet, .tsheet-tones) .is-understood { --tone: var(--success); }
+    :is(.tsheet, .tsheet-tones) .is-not_started { --tone: var(--text-muted); --tone-subtle: var(--surface-sunken); }
+    :is(.tsheet, .tsheet-tones) .is-covered { --tone: var(--accent); --tone-subtle: var(--accent-subtle); }
+    :is(.tsheet, .tsheet-tones) .is-confused { --tone: var(--warning); --tone-subtle: var(--warning-subtle); }
+    :is(.tsheet, .tsheet-tones) .is-understood { --tone: var(--success); --tone-subtle: var(--success-subtle); }
 
     .tsheet-choices {
         display: grid;
@@ -2387,7 +2387,7 @@
 
     .tsheet-choice.is-active {
         border-color: var(--tone);
-        background-color: color-mix(in oklab, var(--tone) 12%, var(--surface));
+        background-color: var(--tone-subtle, var(--surface-sunken));
         box-shadow: inset 0 0 0 1px var(--tone);
     }
 
@@ -3646,6 +3646,244 @@
         color: var(--ws, var(--accent));
     }
 
+    /* ---------- An assignment's full picture (livewire/workspaces/assignment-picture) ---------- */
+
+    .picture {
+        display: grid;
+        gap: 1.25rem;
+    }
+
+    .picture-block {
+        display: grid;
+        gap: 0.75rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--divider);
+    }
+
+    .picture-block-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .picture-block-title {
+        font-size: 0.9375rem;
+        font-weight: 600;
+    }
+
+    .picture-empty {
+        display: grid;
+        gap: 0.625rem;
+        justify-items: start;
+    }
+
+    .picture-sources {
+        display: grid;
+        gap: 0.375rem;
+    }
+
+    .picture-source {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem 0.625rem;
+        min-height: 2.5rem;
+        padding: 0.375rem 0.625rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background-color: var(--surface);
+    }
+
+    .picture-kind {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.0625rem 0.5rem;
+        border-radius: 9999px;
+        background-color: var(--accent-subtle);
+        color: var(--accent-contrast);
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .picture-source-name {
+        flex: 1 1 10rem;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        font-size: 0.875rem;
+    }
+
+    .picture-source-meta {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .picture-source-actions {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.375rem;
+        margin-left: auto;
+    }
+
+    .picture-form {
+        display: grid;
+        gap: 0.75rem;
+        padding: 0.875rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+    }
+
+    .picture-form-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+        gap: 0.75rem;
+    }
+
+    .picture-reading,
+    .picture-status {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.375rem 0.75rem;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .picture-confidence {
+        padding: 0.0625rem 0.5rem;
+        border-radius: 9999px;
+        font-weight: 600;
+    }
+
+    .picture-confidence.is-high {
+        background-color: var(--success-subtle);
+        color: var(--success);
+    }
+
+    .picture-confidence.is-medium {
+        background-color: var(--info-subtle);
+        color: var(--info);
+    }
+
+    .picture-confidence.is-low {
+        background-color: var(--warning-subtle);
+        color: var(--warning);
+    }
+
+    .picture-stale,
+    .picture-confirmed {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-weight: 600;
+    }
+
+    .picture-stale {
+        color: var(--warning);
+    }
+
+    .picture-confirmed {
+        color: var(--success);
+    }
+
+    .picture-summary {
+        font-size: 0.9375rem;
+        line-height: 1.55;
+    }
+
+    .picture-changes {
+        padding: 0.5rem 0.75rem;
+        border-left: 3px solid var(--accent);
+        border-radius: var(--radius-sm);
+        background-color: var(--accent-subtle);
+        font-size: 0.8125rem;
+    }
+
+    /* The questions to ask the teacher come first: they are what the student can act on today. */
+    .picture-questions {
+        display: grid;
+        gap: 0.5rem;
+        padding: 0.75rem 0.875rem;
+        border: 1px solid var(--warning);
+        border-radius: var(--radius-lg);
+        background-color: var(--warning-subtle);
+    }
+
+    .picture-questions ul {
+        display: grid;
+        gap: 0.25rem;
+        padding-left: 1.25rem;
+        list-style: disc;
+        font-size: 0.875rem;
+    }
+
+    .picture-parts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+        gap: 1rem 1.5rem;
+        align-items: start;
+    }
+
+    .picture-part {
+        display: grid;
+        gap: 0.375rem;
+    }
+
+    .picture-part-title {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .picture-part ul {
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    .picture-item {
+        display: grid;
+        gap: 0.125rem;
+        padding-left: 0.75rem;
+        border-left: 2px solid var(--divider);
+        font-size: 0.875rem;
+        overflow-wrap: anywhere;
+    }
+
+    .picture-item-more {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .picture-weight {
+        margin-left: 0.25rem;
+        color: var(--accent-contrast);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Where each point came from: a source the student gave, or, said plainly, the AI's own reading. */
+    .picture-from {
+        color: var(--text-subtle);
+        font-size: 0.75rem;
+    }
+
+    .picture-from.is-inferred {
+        font-style: italic;
+    }
+
+    .picture-history {
+        display: grid;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+    }
+
     /* Its details: the name across, then kind, module, day and time side by side as the width allows. */
     .asg-details {
         display: grid;
@@ -4310,15 +4548,18 @@
     }
 
     :is(.page-tabs, .cal-filters, .session-pane-switcher, .guide-steps-list)[data-more='end'] {
-        mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+        -webkit-mask-image: var(--grad-fade-end);
+        mask-image: var(--grad-fade-end);
     }
 
     :is(.page-tabs, .cal-filters, .session-pane-switcher, .guide-steps-list)[data-more='start'] {
-        mask-image: linear-gradient(to left, #000 calc(100% - 1.75rem), transparent);
+        -webkit-mask-image: var(--grad-fade-start);
+        mask-image: var(--grad-fade-start);
     }
 
     :is(.page-tabs, .cal-filters, .session-pane-switcher, .guide-steps-list)[data-more='both'] {
-        mask-image: linear-gradient(to right, transparent, #000 1.75rem, #000 calc(100% - 1.75rem), transparent);
+        -webkit-mask-image: var(--grad-fade-both);
+        mask-image: var(--grad-fade-both);
     }
 
     :is(.page-tabs, .cal-filters, .session-pane-switcher, .guide-steps-list).is-dragging {
@@ -5478,7 +5719,7 @@
 
     .chat-compose:has(.chat-box.is-dictating) {
         border-color: var(--accent);
-        box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
+        box-shadow: 0 0 0 3px var(--accent-subtle);
     }
 
     /* A phone: no keyboard hints, bigger buttons to tap, and Done keeps only its tick on the narrowest screens. */
@@ -7387,7 +7628,7 @@
         display: block;
         height: 100%;
         border-radius: inherit;
-        background: linear-gradient(90deg, var(--ws, var(--accent)), color-mix(in oklab, var(--ws, var(--accent)) 60%, var(--accent)));
+        background: var(--ws, var(--accent));
         transition: width 0.3s ease;
     }
 
@@ -7429,11 +7670,9 @@
         gap: 0.75rem;
         padding: 1.125rem 1.25rem 1.25rem;
         overflow: hidden;
-        border: 1px solid color-mix(in oklab, var(--ws, var(--accent)) 28%, var(--border));
+        border: 1px solid var(--border);
         border-radius: inherit;
-        background:
-            radial-gradient(120% 70% at 100% 0%, color-mix(in oklab, var(--ws, var(--accent)) 16%, transparent), transparent 60%),
-            var(--surface-raised);
+        background: var(--surface-raised);
         box-shadow: var(--elevation-md, var(--elevation-lg));
         backface-visibility: hidden;
         -webkit-backface-visibility: hidden;
@@ -7445,15 +7684,11 @@
         position: absolute;
         inset: 0 0 auto;
         height: 0.3125rem;
-        background: linear-gradient(90deg, var(--ws, var(--accent)), color-mix(in oklab, var(--ws, var(--accent)) 55%, var(--accent)));
+        background: var(--ws, var(--accent));
     }
 
     .study-card-back {
         transform: rotateY(180deg);
-        border-color: color-mix(in oklab, var(--ws, var(--accent)) 50%, var(--border));
-        background:
-            radial-gradient(120% 80% at 0% 100%, color-mix(in oklab, var(--ws, var(--accent)) 20%, transparent), transparent 65%),
-            var(--surface-raised);
     }
 
     .study-card-top {
@@ -7626,7 +7861,6 @@
     }
 
     .study-rate-btn.is-again {
-        border-color: color-mix(in oklab, var(--danger) 35%, var(--border));
         background-color: var(--danger-subtle);
     }
 
@@ -7635,7 +7869,6 @@
     }
 
     .study-rate-btn.is-hard {
-        border-color: color-mix(in oklab, var(--warning) 35%, var(--border));
         background-color: var(--warning-subtle);
     }
 
@@ -7644,7 +7877,6 @@
     }
 
     .study-rate-btn.is-good {
-        border-color: color-mix(in oklab, var(--success) 35%, var(--border));
         background-color: var(--success-subtle);
     }
 

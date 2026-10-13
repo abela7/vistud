@@ -3,6 +3,7 @@
 namespace App\Study;
 
 use App\Brain\Journal\Vocabulary;
+use App\Engine\Spent;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
@@ -31,6 +32,8 @@ final class Activities
     public const MAX_TITLE = 200;
 
     public const STATUSES = ['todo', 'doing', 'done'];
+
+    public const STAGES = ['understand', 'plan', 'do', 'review', 'submit'];
 
     /** The kinds a student picks from, in plain words; lectures come with the calendar. */
     public const KINDS = [
@@ -149,6 +152,20 @@ final class Activities
         });
     }
 
+    /** The study companion stage: understand, plan, do, review, submit (never written to journal). */
+    public function setStage(Principal $by, string $id, string $stage): void
+    {
+        $scope = Guard::learner($by);
+        Input::refuse(in_array($stage, self::STAGES, true) ? [] : ['stage' => 'Unknown stage.']);
+
+        DB::transaction(function () use ($scope, $id, $stage) {
+            $row = $this->row($scope, $id, lock: true);
+            if (($row->stage ?? 'understand') !== $stage) {
+                LearnerTables::query($scope, 'activities')->where('id', $id)->update(['stage' => $stage, 'updated_at' => now()]);
+            }
+        });
+    }
+
     public function delete(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
@@ -157,6 +174,12 @@ final class Activities
             $row = $this->row($scope, $id, lock: true);
             LearnerTables::query($scope, 'activity_items')->where('activity_id', $id)->delete();
             LearnerTables::query($scope, 'activity_members')->where('activity_id', $id)->delete();
+            LearnerTables::query($scope, 'activity_sources')->where('activity_id', $id)->delete();
+            LearnerTables::query($scope, 'activity_understandings')->where('activity_id', $id)->delete();
+            LearnerTables::query($scope, 'activity_log')->where('activity_id', $id)->delete();
+            $threads = LearnerTables::query($scope, 'engine_threads')->where('activity_id', $id);
+            Spent::forgetMessages($scope, (clone $threads)->pluck('id')->all());
+            $threads->delete();
             LearnerTables::query($scope, 'activities')->where('id', $id)->delete();
             $row->revision++;
             $this->record($scope, $by, $row, deleted: true);
@@ -273,6 +296,7 @@ final class Activities
             dueTime: $row->due_time === null ? null : substr((string) $row->due_time, 0, 5),
             folderId: $row->folder_id,
             zone: $zone,
+            stage: $row->stage ?? 'understand',
         );
     }
 }

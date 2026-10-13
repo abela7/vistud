@@ -93,6 +93,9 @@
   --grad-primary-hover: linear-gradient(120deg, #00346f 0%, #005d7c 100%);
   --grad-primary-active: linear-gradient(120deg, #002a5c 0%, #004e68 100%);
   --grad-selected: linear-gradient(90deg, #dbe9f7 0%, #d6efef 100%);
+  --grad-fade-start: linear-gradient(90deg, #00000000 0%, #000000 10%, #000000 100%);
+  --grad-fade-end: linear-gradient(90deg, #000000 0%, #000000 90%, #00000000 100%);
+  --grad-fade-both: linear-gradient(90deg, #00000000 0%, #000000 10%, #000000 90%, #00000000 100%);
 }
 
 [data-theme="blossom"] {
@@ -184,6 +187,9 @@
   --grad-primary-hover: linear-gradient(120deg, #94114b 0%, #a8144f 100%);
   --grad-primary-active: linear-gradient(120deg, #7b0e3e 0%, #8e1043 100%);
   --grad-selected: linear-gradient(90deg, #fbe0eb 0%, #f6e3f3 100%);
+  --grad-fade-start: linear-gradient(90deg, #00000000 0%, #000000 10%, #000000 100%);
+  --grad-fade-end: linear-gradient(90deg, #000000 0%, #000000 90%, #00000000 100%);
+  --grad-fade-both: linear-gradient(90deg, #00000000 0%, #000000 10%, #000000 90%, #00000000 100%);
 }
 
 [data-theme="blossom-dark"] {
@@ -275,6 +281,9 @@
   --grad-primary-hover: linear-gradient(120deg, #a82a60 0%, #c43d76 100%);
   --grad-primary-active: linear-gradient(120deg, #86204b 0%, #a52b5d 100%);
   --grad-selected: linear-gradient(90deg, #3d1730 0%, #3a1a38 100%);
+  --grad-fade-start: linear-gradient(90deg, #00000000 0%, #000000 10%, #000000 100%);
+  --grad-fade-end: linear-gradient(90deg, #000000 0%, #000000 90%, #00000000 100%);
+  --grad-fade-both: linear-gradient(90deg, #00000000 0%, #000000 10%, #000000 90%, #00000000 100%);
 }
 
 [data-theme="ember"] {
@@ -366,6 +375,9 @@
   --grad-primary-hover: linear-gradient(#8c2143, #8c2143);
   --grad-primary-active: linear-gradient(#751a38, #751a38);
   --grad-selected: linear-gradient(90deg, #f9e1e9 0%, #fbe9df 100%);
+  --grad-fade-start: linear-gradient(90deg, #00000000 0%, #000000 10%, #000000 100%);
+  --grad-fade-end: linear-gradient(90deg, #000000 0%, #000000 90%, #00000000 100%);
+  --grad-fade-both: linear-gradient(90deg, #00000000 0%, #000000 10%, #000000 90%, #00000000 100%);
 }
 
 [data-theme="vistud-dark"] {
@@ -457,4 +469,7 @@
   --grad-primary-hover: linear-gradient(120deg, #1e5fa6 0%, #127d80 100%);
   --grad-primary-active: linear-gradient(120deg, #164a84 0%, #0c6669 100%);
   --grad-selected: linear-gradient(90deg, #173a63 0%, #11474f 100%);
+  --grad-fade-start: linear-gradient(90deg, #00000000 0%, #000000 10%, #000000 100%);
+  --grad-fade-end: linear-gradient(90deg, #000000 0%, #000000 90%, #00000000 100%);
+  --grad-fade-both: linear-gradient(90deg, #00000000 0%, #000000 10%, #000000 90%, #00000000 100%);
 }

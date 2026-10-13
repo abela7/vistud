@@ -25,6 +25,7 @@ final readonly class ActivityDetails
         public ?string $dueTime = null,
         public ?string $folderId = null,
         public string $zone = 'UTC',
+        public string $stage = 'understand',
     ) {}
 
     public function kindLabel(): string

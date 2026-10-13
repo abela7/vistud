@@ -35,6 +35,15 @@ final class Effects
     /** @var list<string> the changes that can't be undone the student was asked to agree to (Agreement) */
     private array $asked = [];
 
+    /** @var list<array{title: string}> */
+    private array $sourcesKept = [];
+
+    /** @var list<array{id: string, stage: string, kind: string, text: string}> */
+    private array $logEntries = [];
+
+    /** @var list<array{from: string, to: string}> */
+    private array $stagesChanged = [];
+
     /** @param list<string> $ids what was made, one id each */
     public function saved(string $kind, int $count, array $ids = []): void
     {
@@ -86,15 +95,43 @@ final class Effects
         $this->asked[] = $change;
     }
 
+    public function sourceKept(string $title): void
+    {
+        $this->sourcesKept[] = ['title' => $title];
+    }
+
+    public function logEntry(string $id, string $stage, string $kind, string $text): void
+    {
+        $this->logEntries[] = ['id' => $id, 'stage' => $stage, 'kind' => $kind, 'text' => $text];
+    }
+
+    public function stageChanged(string $from, string $to): void
+    {
+        $this->stagesChanged[] = ['from' => $from, 'to' => $to];
+    }
+
     /**
      * What was done since the last take, and nothing after.
      *
-     * @return array{saved?: array<string, int>, saved_ids?: array<string, list<string>>, notes?: list<array{id: string, title: string, version: int}>, topic?: string, topic_id?: string, statuses?: list<array<string, mixed>>, quizzes?: list<array<string, mixed>>, remembered?: list<array<string, mixed>>, asked?: list<string>}
+     * @return array{saved?: array<string, int>, saved_ids?: array<string, list<string>>, notes?: list<array{id: string, title: string, version: int}>, topic?: string, topic_id?: string, statuses?: list<array<string, mixed>>, quizzes?: list<array<string, mixed>>, remembered?: list<array<string, mixed>>, asked?: list<string>, sources_kept?: list<array{title: string}>, log_entries?: list<array{id: string, stage: string, kind: string, text: string}>, stages_changed?: list<array{from: string, to: string}>}
      */
     public function take(): array
     {
-        $taken = array_filter(['saved' => $this->saved, 'saved_ids' => $this->savedIds, 'notes' => array_values($this->notes), 'topic' => $this->topic, 'topic_id' => $this->topicId, 'statuses' => $this->statuses, 'quizzes' => $this->quizzes, 'remembered' => $this->remembered, 'asked' => $this->asked]);
-        [$this->saved, $this->savedIds, $this->notes, $this->topic, $this->topicId, $this->statuses, $this->quizzes, $this->remembered, $this->asked] = [[], [], [], null, null, [], [], [], []];
+        $taken = array_filter([
+            'saved' => $this->saved,
+            'saved_ids' => $this->savedIds,
+            'notes' => array_values($this->notes),
+            'topic' => $this->topic,
+            'topic_id' => $this->topicId,
+            'statuses' => $this->statuses,
+            'quizzes' => $this->quizzes,
+            'remembered' => $this->remembered,
+            'asked' => $this->asked,
+            'sources_kept' => $this->sourcesKept,
+            'log_entries' => $this->logEntries,
+            'stages_changed' => $this->stagesChanged,
+        ]);
+        [$this->saved, $this->savedIds, $this->notes, $this->topic, $this->topicId, $this->statuses, $this->quizzes, $this->remembered, $this->asked, $this->sourcesKept, $this->logEntries, $this->stagesChanged] = [[], [], [], null, null, [], [], [], [], [], [], []];
 
         return $taken;
     }

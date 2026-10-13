@@ -25,7 +25,7 @@ final class Folders
     public const MAX_NAME = 120;
 
     /** What can be in a folder besides its notes, files and links: what was studied in it (Phase 9). */
-    public const STUDIED = ['topics', 'questions', 'flashcards', 'quizzes', 'study_sessions', 'topic_suggestions'];
+    public const STUDIED = ['topics', 'questions', 'flashcards', 'quizzes', 'study_sessions', 'topic_suggestions', 'class_sessions'];
 
     /**
      * Every folder in the workspace: parents before their children, siblings

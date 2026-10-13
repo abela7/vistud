@@ -13,12 +13,12 @@ use App\Engine\Context\Stack;
  */
 final readonly class Context
 {
-    public function __construct(public string $workspaceId, public ?string $moduleId, public ?string $sessionId, public string $zone, public Effects $effects = new Effects, public ?string $folderId = null, public ?string $threadId = null, public ?string $model = null) {}
+    public function __construct(public string $workspaceId, public ?string $moduleId, public ?string $sessionId, public string $zone, public Effects $effects = new Effects, public ?string $folderId = null, public ?string $threadId = null, public ?string $model = null, public ?string $activityId = null) {}
 
     /** The same chat, for a call made by `$model` (a fallback may answer instead of the chosen one); the effects are shared. */
     public function by(string $model): self
     {
-        return new self($this->workspaceId, $this->moduleId, $this->sessionId, $this->zone, $this->effects, $this->folderId, $this->threadId, $model);
+        return new self($this->workspaceId, $this->moduleId, $this->sessionId, $this->zone, $this->effects, $this->folderId, $this->threadId, $model, $this->activityId);
     }
 
     /**

@@ -66,11 +66,17 @@ final readonly class Theme
     /** The colours a student can give a workspace. Each has `category-{name}` and `category-{name}-subtle`. */
     public const CATEGORIES = ['blue', 'teal', 'green', 'amber', 'orange', 'red', 'pink', 'purple'];
 
+    /** Mask gradients: used for alpha masking (e.g. edge-fading scrollable strips). */
+    public const MASK_GRADIENTS = [
+        'fade-start', 'fade-end', 'fade-both',
+    ];
+
     /** Gradient tokens: an angle and 2–6 opaque stops, or a solid fill. */
     public const GRADIENTS = [
         'brand', 'header', 'featured', 'surface',
         'primary', 'primary-hover', 'primary-active',
         'selected',
+        'fade-start', 'fade-end', 'fade-both',
     ];
 
     public const SCHEMES = ['light', 'dark'];
@@ -112,11 +118,13 @@ final readonly class Theme
         $parsedGradients = [];
         foreach (self::GRADIENTS as $token) {
             $gradient = self::parse($id, $token, fn () => Gradient::fromData((array) $gradients[$token]));
-            foreach ($gradient->stops as [$color]) {
-                if ($color->alpha < 1.0) {
-                    // Opaque stops keep the contrast check exact: what's
-                    // behind a gradient never shows through it.
-                    throw new InvalidArgumentException("Theme {$id}: gradient {$token} has a translucent stop.");
+            if (! in_array($token, self::MASK_GRADIENTS, true)) {
+                foreach ($gradient->stops as [$color]) {
+                    if ($color->alpha < 1.0) {
+                        // Opaque stops keep the contrast check exact: what's
+                        // behind a gradient never shows through it.
+                        throw new InvalidArgumentException("Theme {$id}: gradient {$token} has a translucent stop.");
+                    }
                 }
             }
             $parsedGradients[$token] = $gradient;

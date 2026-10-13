@@ -91,6 +91,9 @@
         "primary": { "solid": "#a3294f" },
         "primary-hover": { "solid": "#8c2143" },
         "primary-active": { "solid": "#751a38" },
-        "selected": { "angle": 90, "stops": [["#f9e1e9", 0], ["#fbe9df", 100]] }
+        "selected": { "angle": 90, "stops": [["#f9e1e9", 0], ["#fbe9df", 100]] },
+        "fade-start": { "angle": 90, "stops": [["#00000000", 0], ["#000000", 10], ["#000000", 100]] },
+        "fade-end": { "angle": 90, "stops": [["#000000", 0], ["#000000", 90], ["#00000000", 100]] },
+        "fade-both": { "angle": 90, "stops": [["#00000000", 0], ["#000000", 10], ["#000000", 90], ["#00000000", 100]] }
     }
 }

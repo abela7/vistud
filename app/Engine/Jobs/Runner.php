@@ -133,6 +133,18 @@ final class Runner
         ];
     }
 
+    /**
+     * The run of this kind on this target that is still queued or running, if one is: a screen that comes back to it
+     * waits for it rather than starting another.
+     */
+    public function pending(Principal $by, string $kind, string $targetType, string $targetId): ?string
+    {
+        $id = LearnerTables::query(Guard::learner($by), 'engine_jobs')->where('kind', $kind)->where('target_type', $targetType)->where('target_id', $targetId)
+            ->whereIn('status', ['queued', 'running'])->orderByDesc('created_at')->value('id');
+
+        return $id === null ? null : (string) $id;
+    }
+
     // ---------- Inside ----------
 
     private function perform(Principal $by, string $id, Role $role, Closure $work, bool $swallow, ?string $modelOverride = null): mixed
