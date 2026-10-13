@@ -10,9 +10,12 @@ use App\Livewire\Workspaces\StudySession;
 use App\Livewire\Workspaces\TutorChat;
 use App\Models\User;
 use App\Platform\Access\Principal;
+use App\Study\Findings;
+use App\Study\Flashcards;
 use App\Study\Instructions;
 use App\Study\Modules;
 use App\Study\Questions;
+use App\Study\Quizzes;
 use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\Workspaces;
@@ -122,6 +125,11 @@ class SessionChatFirstTest extends TestCase
         $chat->call('say', TutorChat::ACTIONS['cards'][2])->assertSee('Make flashcards of what we just covered.')->assertSee('Here you go.');
         $chat->call('say', 'Delete everything.')->assertDontSee('Delete everything.');
 
+        // Plotting a graph is offered only to a subject that has graphs: with the Math & Physics plugin on.
+        $chat->assertDontSee('Plot graph');
+        $chat->call('togglePlugin', 'math_physics')->assertSee('Plot graph');
+        $chat->call('togglePlugin', 'math_physics')->assertDontSee('Plot graph');
+
         // An ended session only reads: no chips, no box.
         app(Sessions::class)->end($this->by, $session->id);
         $this->chat($session->id)->assertDontSee('Quiz me')->assertDontSee('Write to your tutor');
@@ -133,17 +141,49 @@ class SessionChatFirstTest extends TestCase
         $this->engine->will(Fake::calls('make_flashcards', ['cards' => [['front' => 'A?', 'back' => 'B.'], ['front' => 'C?', 'back' => 'D.']]], 'c1'), Fake::calls('save_key_points', ['points' => [['text' => 'An outer join keeps unmatched rows.']]], 'c2'), Fake::says('Saved.'));
         app(SessionChat::class)->send($this->by, $session->id, 'Make cards and keep a point.');
 
-        $page = $this->page($session->id)->assertSeeInOrder(['Topics in Week 2: SQL joins', 'Joins', 'Now', 'Keys', 'This session', '2 flashcards, 1 key point']);
+        $page = $this->page($session->id)->assertSeeInOrder(['Topics in Week 2: SQL joins', 'Joins', 'this session is on it', 'Keys', 'This session', '2 flashcards, 1 key point'])
+            ->assertSeeHtml('wire:click="clearTopic"');
         $this->assertSame($this->joins, app(Sessions::class)->find($this->by, $session->id)->topicId);
 
-        // Tapping a topic makes the session about it; a topic that isn't there (or isn't theirs) is only said so.
-        $page->call('switchTopic', $this->keys)->assertSee('Now on Keys.')->assertDispatched('session-changed');
+        // What it says the session saved is what is still there: a card and the key point deleted, and it counts less.
+        $page->call('deleteCard', app(Flashcards::class)->list($this->by, $this->workspace)[0]->id)->assertSee('1 flashcard, 1 key point');
+        app(Findings::class)->delete($this->by, app(Findings::class)->byTopic($this->by, $this->workspace)[$this->joins][0]->id);
+        $this->assertSame(['flashcard' => 1], app(SessionChat::class)->activity($this->by, $session->id)['saved']);
+        // The chips under the tutor's replies say the same: what is still there, not what was once saved.
+        $reply = array_values(array_filter(app(SessionChat::class)->transcript($this->by, $session->id), fn ($turn) => $turn['role'] === 'assistant'))[0];
+        $this->assertSame(['flashcard' => 1], $reply['saved']);
+
+        // Tapping a topic makes the session about it, and the chat shows where; a topic that isn't there (or isn't
+        // theirs) is only said so.
+        $this->travel(1)->minutes();
+        $page->call('switchTopic', $this->keys)->assertSee('Now on Keys.')->assertDispatched('session-changed')->assertDispatched('session-topic-changed');
         $this->assertSame($this->keys, app(Sessions::class)->find($this->by, $session->id)->topicId);
+        $this->chat($session->id)->assertSee('You moved the session to Keys');
         $page->call('switchTopic', 'not-a-topic')->assertSee('That topic no longer exists.');
         $other = $this->principal($this->student());
         $theirs = app(Topics::class)->create($other, app(Workspaces::class)->create($other, ['name' => 'Theirs'])->id, 'Secret');
         $page->call('switchTopic', $theirs->id)->assertSee('That topic no longer exists.');
         $this->assertSame($this->keys, app(Sessions::class)->find($this->by, $session->id)->topicId);
+
+        // The ticked topic, tapped again: the session has no topic, and no row is ticked.
+        $page->call('clearTopic')->assertSee('The session has no topic now.')->assertDispatched('session-changed')
+            ->assertDispatched('session-topic-changed')->assertDontSeeHtml('wire:click="clearTopic"');
+        $this->assertNull(app(Sessions::class)->find($this->by, $session->id)->topicId);
+        $this->chat($session->id)->assertSee('You took the topic off the session')->assertDontSee('You moved the session to Keys');
+    }
+
+    public function test_the_rail_counts_the_quizzes_that_are_still_there_and_one_can_be_deleted_from_the_session(): void
+    {
+        $session = $this->start($this->joins);
+        $this->engine->will(Fake::calls('record_quiz', ['kind' => 'quiz', 'questions' => [['asked' => 'What is a key?', 'answer' => 'A column.', 'result' => 'correct']]], 'c1'), Fake::says('Recorded.'));
+        app(SessionChat::class)->send($this->by, $session->id, 'Quiz me.');
+        $this->assertSame(1, app(SessionChat::class)->activity($this->by, $session->id)['quizzes']);
+
+        $quiz = app(Quizzes::class)->forSession($this->by, $session->id)[0];
+        $this->page($session->id)->call('deleteQuiz', $quiz->id)->assertSee('Quiz deleted.')->assertDispatched('quizzes-changed')
+            ->call('deleteQuiz', $quiz->id)->assertHasNoErrors();
+        $this->assertSame([], app(Quizzes::class)->forSession($this->by, $session->id));
+        $this->assertSame(0, app(SessionChat::class)->activity($this->by, $session->id)['quizzes']);
     }
 
     public function test_the_tutors_status_is_a_chip_that_can_be_undone_and_a_suggestion_a_chip_that_can_be_accepted(): void
@@ -164,9 +204,9 @@ class SessionChatFirstTest extends TestCase
         // With "Let the tutor mark topics" off, it is only a suggestion with a tap.
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true, 'tutor_marks_topics' => false]);
         $this->engine->will(Fake::calls('set_topic_status', ['topic' => 'Keys', 'status' => 'confusing', 'reason' => 'Mixed up two keys.'], 'c2'), Fake::says('Keys are worth another look.'));
-        $chat->set('text', 'Next.')->call('send')->assertSee('Keys: still confusing?')->assertSee('Mark it');
+        $chat->set('text', 'Next.')->call('send')->assertSee('Keys: not understood?')->assertSee('Mark it');
         $this->assertNull($topics->find($this->by, $this->keys)->status);
-        $chat->call('applyStatus', $this->keys, 'confused')->assertSee('Keys: still confusing')->assertDontSee('Mark it');
+        $chat->call('applyStatus', $this->keys, 'confused')->assertSee('Keys: not understood')->assertDontSee('Mark it');
         $mine = $topics->find($this->by, $this->keys);
         $this->assertSame(['confused', 'student'], [$mine->status, $mine->statusBy]);
         // Only the three statuses can be applied.
@@ -187,7 +227,7 @@ class SessionChatFirstTest extends TestCase
         );
         $this->chat($session->id)->set('text', 'That was the last one.')->call('send')
             ->assertSee('Test kept: 33 % over 3 questions')
-            ->assertSee('Joins: understood, marked by the tutor')->assertSee('Keys: still confusing, marked by the tutor');
+            ->assertSee('Joins: understood, marked by the tutor')->assertSee('Keys: not understood, marked by the tutor');
         $this->assertSame(['understood', 'confused'], [app(Topics::class)->find($this->by, $this->joins)->status, app(Topics::class)->find($this->by, $this->keys)->status]);
         // The end screen offers both, starting on them.
         $this->page($session->id)->call('confirmEnd')->assertSet('statuses', [$this->joins => 'understood', $this->keys => 'confused']);
@@ -209,7 +249,7 @@ class SessionChatFirstTest extends TestCase
 
         $page = $this->page($session->id)->call('confirmEnd')->assertSet('mode', 'end')
             ->assertSet('statuses', [$this->joins => 'understood', $this->keys => 'covered'])
-            ->assertSeeInOrder(['Where you stand', 'Joins', 'The tutor marked it Understood: Right first time.', 'Keys', 'The tutor suggests Covered: We went over it.']);
+            ->assertSeeInOrder(['Where you stand', 'Joins', 'The tutor marked it Understood: Right first time.', 'Keys', 'The tutor suggests Studying: We went over it.']);
 
         // The student keeps Joins as the tutor said and changes their mind about Keys; ending makes both their word.
         $page->set('statuses.'.$this->keys, '')->call('save')->assertSet('mode', 'done')->assertSee('Session ended');

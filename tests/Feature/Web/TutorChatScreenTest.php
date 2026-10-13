@@ -171,6 +171,9 @@ class TutorChatScreenTest extends TestCase
             ->assertSee("The tutor hasn't answered your last message.", false)->assertSee('Try again')
             ->assertDispatched('chat-done', restore: null);
 
+        // Why, kept past the page: a reload still says it, with the way to try the models.
+        $this->chat()->assertSee("The tutor hasn't answered your last message.", false)->assertSee('The engine is busy right now.')->assertSee('Try your models');
+
         $this->engine->will(Fake::says('A join combines rows.', 20_000));
         $chat->call('retry')->assertSet('error', null)->assertSee('A join combines rows.')->assertDontSee('Try again')->assertDispatched('chat-turn');
 

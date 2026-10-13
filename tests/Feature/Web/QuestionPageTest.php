@@ -120,6 +120,57 @@ class QuestionPageTest extends TestCase
         $this->assertNotNull($mine);
     }
 
+    public function test_a_new_question_is_all_or_nothing_and_keeps_to_its_modules_topics(): void
+    {
+        $by = $this->principal($this->ada);
+        $joins = app(Topics::class)->create($by, $this->databases->id, 'Joins', $this->week1->id);
+
+        // An answer refused leaves nothing made, so Save again can't make it twice.
+        $page = $this->page(['aboutTopic' => $joins->id])->set('question', 'Why a left join?')->set('answer', str_repeat('x', Questions::MAX_ANSWER + 1))
+            ->call('save')->assertHasErrors('answer');
+        $this->assertSame([], app(Questions::class)->list($by, $this->databases->id));
+
+        // Another module: the topic chosen in the first isn't kept with it.
+        $page->set('moduleId', $this->week2->id)->assertSet('topicId', '')->set('answer', '')->call('save')->assertHasNoErrors();
+        $this->assertCount(1, app(Questions::class)->list($by, $this->databases->id));
+    }
+
+    public function test_an_existing_question_can_be_given_another_topic_on_its_page(): void
+    {
+        $by = $this->principal($this->ada);
+        $questions = app(Questions::class);
+        $joins = app(Topics::class)->create($by, $this->databases->id, 'Joins', $this->week1->id);
+        $asked = $questions->ask($by, $this->databases->id, 'Why is a key never empty?');
+
+        // A question with no topic gets one, and with it its module; the form says what was kept.
+        $page = $this->page(['questionId' => $asked->id])->assertSet('topicId', '')->assertSet('moduleId', '')
+            ->set('topicId', $joins->id)->call('save')->assertHasNoErrors()
+            ->assertSet('moduleId', $this->week1->id)->assertSet('topicId', $joins->id);
+        $saved = $questions->find($by, $asked->id);
+        $this->assertSame([$joins->id, $this->week1->id], [$saved->topicId, $saved->moduleId]);
+
+        // Another module: a topic that isn't in it is dropped, so a question isn't kept in one module about another's topic.
+        $page->set('moduleId', $this->week2->id)->assertSet('topicId', '')->call('save')->assertHasNoErrors();
+        $saved = $questions->find($by, $asked->id);
+        $this->assertSame([null, $this->week2->id], [$saved->topicId, $saved->moduleId]);
+    }
+
+    public function test_an_answer_the_ai_wrote_counts_as_understood_only_once_the_student_says_so(): void
+    {
+        $by = $this->principal($this->ada);
+        $questions = app(Questions::class);
+        $asked = $questions->ask($by, $this->databases->id, 'Why is a key never empty?', null, $this->week1->id);
+        $questions->setStatus($by, $asked->id, 'answered', 'Every row needs a value that names it.', theirWord: false);
+
+        // New words alone leave it the AI's.
+        $page = $this->page(['questionId' => $asked->id])->assertSee('The AI wrote this answer.')
+            ->set('question', 'Why can a key never be empty?')->call('save')->assertHasNoErrors();
+        $this->assertSame(['ai', 'open'], [$questions->find($by, $asked->id)->answeredBy, $questions->find($by, $asked->id)->shown()]);
+
+        $page->call('confirmAnswer')->assertSee('Marked as understood.')->assertDontSee('The AI wrote this answer.');
+        $this->assertSame(['student', 'understood'], [$questions->find($by, $asked->id)->answeredBy, $questions->find($by, $asked->id)->shown()]);
+    }
+
     private function page(array $params = [])
     {
         $this->actingAs($this->ada);

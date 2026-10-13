@@ -84,6 +84,8 @@ final class LearnerProfiles
 
         // The order the options are listed in, whatever order they were picked in.
         $explain = array_values(array_intersect(array_keys(self::EXPLAIN), $explain));
+        // Where they start from is asked on its own (setBackground): kept unless given.
+        $single['background'] = array_key_exists('background', $input) ? self::background($input['background']) : $this->get($by, $workspaceId)->background;
         $values = ['preferences' => json_encode(['explain' => $explain] + $single), 'note' => $note];
         $query = LearnerTables::query($scope, 'learner_profiles')->where('workspace_id', $workspaceId);
         if ($query->exists()) {
@@ -95,6 +97,35 @@ final class LearnerProfiles
         return $this->get($by, $workspaceId);
     }
 
+    /** Where the student starts from in this course (CourseTypes::BACKGROUNDS), or null to say nothing; the rest stays. */
+    public function setBackground(Principal $by, string $workspaceId, ?string $background): LearnerProfileDetails
+    {
+        $scope = Guard::learner($by);
+        Input::workspace($scope, $workspaceId);
+        $background = self::background($background);
+        $row = $this->row($scope, $workspaceId);
+        $stored = json_decode((string) ($row?->preferences), true);
+        $preferences = json_encode(['background' => $background] + (is_array($stored) ? $stored : []));
+        if ($row !== null) {
+            LearnerTables::query($scope, 'learner_profiles')->where('id', $row->id)->update(['preferences' => $preferences, 'updated_at' => now()]);
+        } else {
+            LearnerTables::insert($scope, 'learner_profiles', ['id' => Ids::new(), 'workspace_id' => $workspaceId, 'preferences' => $preferences, 'created_at' => now(), 'updated_at' => now()]);
+        }
+
+        return $this->get($by, $workspaceId);
+    }
+
+    /** A background key, checked; null for none. */
+    private static function background(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        Input::refuse(is_string($value) && isset(CourseTypes::BACKGROUNDS[$value]) ? [] : ['background' => 'Choose one of the options.']);
+
+        return $value;
+    }
+
     /**
      * What the tutor is told, one short line each: "Likes: examples first, diagrams", "Pace: small steps"…, and what
      * the student added in their own words.
@@ -104,6 +135,7 @@ final class LearnerProfiles
     public static function lines(LearnerProfileDetails $profile): array
     {
         return array_values(array_filter([
+            $profile->background === null ? null : 'Starting point: '.CourseTypes::BACKGROUNDS[$profile->background][1],
             $profile->explain === [] ? null : 'Likes: '.implode(', ', array_map(fn (string $key) => self::EXPLAIN[$key][1], $profile->explain)),
             $profile->pace === null ? null : 'Pace: '.self::PACE[$profile->pace][1],
             $profile->check === null ? null : 'Check: '.self::CHECK[$profile->check][1],
@@ -164,6 +196,7 @@ final class LearnerProfiles
             goal: $one('goal', self::GOAL),
             note: (string) $row->note,
             updatedAt: $row->updated_at,
+            background: $one('background', CourseTypes::BACKGROUNDS),
         );
     }
 }

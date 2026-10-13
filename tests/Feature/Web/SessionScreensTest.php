@@ -95,7 +95,7 @@ class SessionScreensTest extends TestCase
 
         // One screen: the time, where the student stands on each topic touched (a choice for each), then, once ended, how it went.
         $page->call('confirmEnd')->assertDispatched('session-dialog-open')->assertSee('End this session?')->assertSee('You studied 45 min, with 10 min of breaks.')
-            ->assertSee('Where you stand')->assertSeeInOrder(['Joins', 'No status yet.', 'Leave it', 'Covered', 'Understood', 'Still confusing'])
+            ->assertSee('Where you stand')->assertSeeInOrder(['Joins', 'No status yet.', 'Leave it', 'Studying', 'Understood', 'Not understood'])
             ->assertSet('statuses', [$joins->id => ''])
             ->set('statuses.'.$joins->id, 'understood')->call('save')
             ->assertSet('mode', 'done')->assertSee('Session ended')->assertSee('You studied 45 min, with 10 min of breaks.')
@@ -366,8 +366,11 @@ class SessionScreensTest extends TestCase
             ->assertSee('Explain')
             ->assertSee('Analogies')
             ->assertSee('Check questions')
+            ->assertSee('Balanced depth with real, applied examples.')
+            ->assertSeeHtml('aria-pressed="true"')
             ->call('setTutoringChoice', 'quiz', 'easy')
-            ->assertDispatched('session-changed');
+            ->assertDispatched('session-changed')
+            ->assertSee('Plain words, built up from first principles.');
 
         $reloaded = app(Sessions::class)->find($this->principal($this->ada), $session->id);
         $this->assertSame('easy', $reloaded->tutoring['quiz']);
@@ -431,6 +434,18 @@ class SessionScreensTest extends TestCase
 
         $this->assertNotNull(app(Notes::class)->find($by, $note->id)->trashedAt);
         $this->assertFalse(app(Sessions::class)->find($by, $session->id)->uses('note:'.$note->id));
+    }
+
+    public function test_deleting_from_the_session_asks_in_the_page_not_the_browser(): void
+    {
+        $by = $this->principal($this->ada);
+        $session = app(Sessions::class)->start($by, $this->databases->id);
+
+        $this->page($session->id)
+            ->assertSeeHtml('id="session-confirm-dialog"')
+            ->assertSee('Move this note to trash?')
+            ->assertSee('Delete this file?')
+            ->assertDontSeeHtml("confirm('");
     }
 
     private function current()

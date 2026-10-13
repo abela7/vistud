@@ -1,7 +1,8 @@
 {{--
     Setting a course up (App\Livewire\Workspaces\CourseSetup): What is this course? (a syllabus the reader turns into
-    the course's profile and a list of modules to tick, or written by hand) and How do you like to learn? (four
-    short questions). Each step can be skipped.
+    the course's profile and a list of modules to tick, or written by hand, with its kind, level, language, tools, exams
+    and the study plugins new sessions start with) and How do you like to learn? (where they start from and four short
+    questions). Each step can be skipped.
 --}}
 @php
     $ticked = count(array_filter($moduleTicks));
@@ -77,6 +78,44 @@
                             @error('outcomes') <p class="field-error">{{ $message }}</p> @enderror
                         </div>
                         <x-field name="textbook" label="Textbook" wire:model="textbook" maxlength="200" autocomplete="off" />
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="field">
+                                <label for="course-kind" class="field-label">Kind of course</label>
+                                <select id="course-kind" class="input" wire:model.live="kind">
+                                    <option value="">Not chosen</option>
+                                    @foreach ($types as $value => [$label])
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                @error('type') <p class="field-error">{{ $message }}</p> @enderror
+                            </div>
+                            <div class="field">
+                                <label for="course-level" class="field-label">Level</label>
+                                <select id="course-level" class="input" wire:model="level">
+                                    <option value="">Not chosen</option>
+                                    @foreach ($levels as $value => [$label])
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                                @error('level') <p class="field-error">{{ $message }}</p> @enderror
+                            </div>
+                            <x-field name="language" label="Taught in" wire:model="language" maxlength="40" autocomplete="off" hint="Like English or Amharic." />
+                            <x-field name="tools" label="Tools and notation" wire:model="tools" autocomplete="off" hint="Like Python, SQL. Commas between." />
+                        </div>
+                        <x-field name="exam_format" label="How the exams go" wire:model="examFormat" maxlength="300" autocomplete="off" hint="Like closed book, 2 hours, multiple choice." />
+
+                        <fieldset class="space-y-2">
+                            <legend class="field-label">Study plugins in new sessions</legend>
+                            <div class="segmented">
+                                @foreach ($allPlugins as $plugin)
+                                    <label class="segmented-option">
+                                        <input type="checkbox" class="sr-only" value="{{ $plugin->id }}" wire:model="plugins">
+                                        <span>{{ $plugin->name }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </fieldset>
 
                         <fieldset class="space-y-2">
                             <legend class="field-label">How it is assessed</legend>
@@ -163,6 +202,18 @@
                                 </label>
                             @endforeach
                         </div>
+                    </fieldset>
+                    <fieldset class="space-y-2">
+                        <legend class="field-label">Where you start from</legend>
+                        <div class="segmented">
+                            @foreach ($backgrounds as $value => [$label])
+                                <label class="segmented-option">
+                                    <input type="radio" class="sr-only" name="learn-background" value="{{ $value }}" wire:model="background">
+                                    <span>{{ $label }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                        @error('background') <p class="field-error">{{ $message }}</p> @enderror
                     </fieldset>
                     @foreach (['pace' => 'Pace', 'check' => 'Check me', 'goal' => 'My goal'] as $key => $legend)
                         <fieldset class="space-y-2">

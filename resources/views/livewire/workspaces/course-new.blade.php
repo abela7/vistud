@@ -1,9 +1,11 @@
 {{--
-    The New course page (App\Livewire\Workspaces\CourseNew): the name, how the course looks (with a live preview), a few
+    The New course page (App\Livewire\Workspaces\CourseNew): the name, how the course looks (with a live preview), what kind
+    of course it is (optional: the guide asks when it isn't picked, and it turns on the study plugins that suit it), a few
     details to fill in or leave, and how to set it up: the AI's guide asks and adds what is approved, or the student fills
-    the course in on its own page. Picking a colour or an icon changes the preview in the browser, without a request.
+    the course in on its own page. Picking a colour, an icon or a kind changes the preview in the browser, without a request;
+    a kind also picks its icon until the student picks one.
 --}}
-<form wire:submit="create" novalidate class="course-new" x-data="{ name: $wire.entangle('name'), colour: $wire.entangle('colour'), icon: $wire.entangle('icon'), code: $wire.entangle('code'), term: $wire.entangle('term') }">
+<form wire:submit="create" novalidate class="course-new" x-on:course-icon-picked="iconPicked = true" x-data="{ name: $wire.entangle('name'), colour: $wire.entangle('colour'), icon: $wire.entangle('icon'), code: $wire.entangle('code'), term: $wire.entangle('term'), type: $wire.entangle('type'), iconPicked: false, kinds: @js(collect(\App\Study\CourseTypes::TYPES)->map(fn ($t) => ['label' => $t[0], 'icon' => $t[1]])) }">
     <div class="course-new-main space-y-5">
         <section class="question-panel space-y-5" aria-labelledby="new-course-name">
             <div class="panel-head">
@@ -16,33 +18,28 @@
 
             <x-field name="name" label="Name" wire:model="name" maxlength="80" autocomplete="off" hint="Like Operating Systems, Biology or Spanish." autofocus />
 
-            <fieldset class="space-y-2">
-                <legend class="field-label">Colour</legend>
-                <div class="flex flex-wrap gap-2.5">
-                    @foreach ($colours as $option)
-                        <label class="swatch ws-colour-{{ $option }}" title="{{ ucfirst($option) }}">
-                            <input type="radio" class="sr-only" name="colour" value="{{ $option }}" wire:model="colour">
-                            <x-icon name="check" class="size-4" />
-                            <span class="sr-only">{{ ucfirst($option) }}</span>
-                        </label>
-                    @endforeach
-                </div>
-                @error('colour')<p class="field-error">{{ $message }}</p>@enderror
-            </fieldset>
+            <x-workspace.look :colour="$colour" :icon="$icon" />
+        </section>
 
-            <fieldset class="space-y-2">
-                <legend class="field-label">Icon</legend>
-                <div class="flex flex-wrap gap-2" :class="'ws-colour-' + colour">
-                    @foreach ($icons as $option)
-                        <label class="icon-option" title="{{ ucfirst(str_replace('-', ' ', $option)) }}">
-                            <input type="radio" class="sr-only" name="icon" value="{{ $option }}" wire:model="icon">
-                            <x-icon :name="$option" class="size-5" />
-                            <span class="sr-only">{{ ucfirst(str_replace('-', ' ', $option)) }}</span>
-                        </label>
-                    @endforeach
+        <section class="question-panel space-y-4" aria-labelledby="new-course-kind">
+            <div class="panel-head">
+                <span class="item-icon" aria-hidden="true"><x-icon name="layout-grid" class="size-5" /></span>
+                <div class="panel-head-text">
+                    <h2 id="new-course-kind" class="panel-title">What kind of course?</h2>
+                    <p class="panel-hint">It switches on the right study tools. Optional.</p>
                 </div>
-                @error('icon')<p class="field-error">{{ $message }}</p>@enderror
-            </fieldset>
+            </div>
+            <div class="kind-grid" role="radiogroup" aria-labelledby="new-course-kind">
+                @foreach (\App\Study\CourseTypes::TYPES as $key => [$label, $kindIcon])
+                    <label class="kind-option">
+                        <input type="radio" class="sr-only" name="type" value="{{ $key }}" wire:model="type" x-on:change="if (! iconPicked) icon = '{{ $kindIcon }}'">
+                        <x-icon :name="$kindIcon" class="size-5" />
+                        <span class="min-w-0">{{ $label }}</span>
+                    </label>
+                @endforeach
+            </div>
+            <button type="button" class="quiet-link text-sm" x-show="type !== ''" x-cloak x-on:click="type = ''">Leave it for the AI to ask</button>
+            @error('type')<p class="field-error">{{ $message }}</p>@enderror
         </section>
 
         <details class="question-panel course-new-more" @if ($errors->hasAny(['code', 'term', 'startsOn', 'endsOn'])) open @endif>
@@ -85,7 +82,7 @@
 
     <aside class="course-new-side" aria-label="How it will look">
         <p class="field-label">How it will look</p>
-        <div class="workspace-card" :class="'ws-colour-' + colour">
+        <div class="workspace-card {{ \App\Appearance\CourseColour::classFor($colour) }}" @if (\App\Appearance\CourseColour::isCustom($colour)) style="{{ \App\Appearance\CourseColour::style($colour) }}" @endif>
             <div class="flex min-w-0 items-start gap-3">
                 <span class="ws-chip size-11" aria-hidden="true">
                     @foreach ($icons as $option)
@@ -94,7 +91,7 @@
                 </span>
                 <div class="min-w-0">
                     <p class="font-semibold tracking-tight break-words" x-text="name.trim() || 'Your course'">Your course</p>
-                    <p class="item-meta break-words" x-show="code.trim() || term.trim()" x-text="[code.trim(), term.trim()].filter(Boolean).join(' · ')" x-cloak></p>
+                    <p class="item-meta break-words" x-show="code.trim() || term.trim() || type" x-text="[kinds[type]?.label, code.trim(), term.trim()].filter(Boolean).join(' · ')" x-cloak></p>
                 </div>
             </div>
             <div class="mt-auto border-t border-divider pt-3 text-xs text-fg-subtle">Empty course</div>

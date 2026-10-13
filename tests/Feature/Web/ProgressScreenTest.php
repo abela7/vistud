@@ -6,6 +6,7 @@ use App\Livewire\Workspaces\Progress;
 use App\Livewire\Workspaces\TopicSheet;
 use App\Models\User;
 use App\Study\Flashcards;
+use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Questions;
 use App\Study\Sessions;
@@ -60,6 +61,21 @@ class ProgressScreenTest extends TestCase
             ->assertDontSee('Why does a left join keep unmatched rows?');
     }
 
+    public function test_a_modules_topics_are_counted_under_their_folders_and_its_own_under_a_heading(): void
+    {
+        $by = $this->principal($this->ada);
+        $week1 = app(Modules::class)->create($by, $this->databases->id, ['title' => 'Week 1']);
+        $lecture = app(Folders::class)->create($by, 'module', $week1->id, 'Lecture', 'lecture');
+        $lab = app(Folders::class)->create($by, 'module', $week1->id, 'Lab', 'lab');
+        app(Topics::class)->create($by, $this->databases->id, 'Stable marriage', $week1->id);
+        app(Topics::class)->create($by, $this->databases->id, 'Keys', $week1->id, $lecture->id);
+        app(Topics::class)->create($by, $this->databases->id, 'Joins', $week1->id, $lecture->id);
+        app(Topics::class)->create($by, $this->databases->id, 'Lab joins', $week1->id, $lab->id);
+
+        // 1 + 2 + 1: the module's four topics add up from its headings, the one in no folder named as such.
+        $this->page()
+            ->assertSeeInOrder(['Week 1', '0/4', 'In the module, not in a folder', '1', 'Stable marriage', 'Lecture', '2', 'Keys', 'Joins', 'Lab', '1', 'Lab joins']);
+    }
     public function test_the_module_the_student_is_in_is_open_and_the_others_are_folded(): void
     {
         $by = $this->principal($this->ada);
@@ -90,7 +106,7 @@ class ProgressScreenTest extends TestCase
         // Confusing for a week or more needs attention; confusing since today does not.
         $this->page()->assertSet('filter', 'all')->assertSee('Needs attention')
             ->call('showOnly', 'attention')->assertSet('filter', 'attention')->assertSee('Deadlocks')->assertDontSee('Paging')->assertDontSee('Segments')
-            ->assertSee('Still confusing')
+            ->assertSee('Not understood')
             ->call('showOnly', 'not_started')->assertSee('Segments')->assertDontSee('Deadlocks')
             ->call('showOnly', 'mastered')->assertSee('Nothing is mastered yet.')
             ->call('showOnly', 'nonsense')->assertSet('filter', 'all')->assertSee('Deadlocks')->assertSee('Paging');

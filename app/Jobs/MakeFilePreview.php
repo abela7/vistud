@@ -9,7 +9,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
 /**
- * Makes the PDF that shows a Word, PowerPoint or Excel file in the browser (App\Study\FilePreviews), on the queue's
+ * Makes the PDF that shows a Word, PowerPoint or Excel file in the browser, and for an old kind of file (.doc,
+ * .ppt, .xls, OpenDocument) the modern copy the tutor reads (App\Study\FilePreviews), on the queue's
  * worker and never inside a request (Gemini's report, 2026-10-03: a deck being converted held the only PHP process,
  * and Back waited). Queued when such a file is uploaded, and when its page asks for a preview that isn't made yet;
  * one job for a file at a time. When every conversion slot is taken, or LibreOffice can't be run at all, it comes

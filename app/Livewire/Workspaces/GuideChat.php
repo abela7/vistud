@@ -11,6 +11,8 @@ use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\AppError;
 use App\Study\CourseProfiles;
+use App\Study\MarkdownPreview;
+use App\Study\Plugins;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Validator;
@@ -46,11 +48,15 @@ final class GuideChat extends Component
     #[Locked]
     public string $workspaceId;
 
-    /** Why the guide was opened: `modules` (add some weeks) or nothing (set the course up). */
+    /** Why the guide was opened: `modules` (add some modules) or nothing (set the course up). */
     #[Locked]
     public string $for = '';
 
-    /** @var list<array{from: string, text: string, pictures?: int}> from is you, guide or done; pictures is how many went with a message of yours */
+    /**
+     * @var list<array{from: string, text: string, pictures?: int, ask?: string}> from is you, guide or done; pictures is how many
+     *                                                                            went with a message of yours; ask is the question a
+     *                                                                            line of the guide's asks (CourseProfiles::QUESTIONS)
+     */
     #[Locked]
     public array $talk = [];
 
@@ -90,9 +96,11 @@ final class GuideChat extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(CourseGuide $guide, Settings $settings, Workspaces $workspaces, CourseProfiles $profiles, PrincipalFactory $principals): void
+    private ChatStream $stream;
+
+    public function boot(CourseGuide $guide, Settings $settings, Workspaces $workspaces, CourseProfiles $profiles, PrincipalFactory $principals, ChatStream $stream): void
     {
-        [$this->guide, $this->settings, $this->workspaces, $this->profiles, $this->principals] = [$guide, $settings, $workspaces, $profiles, $principals];
+        [$this->guide, $this->settings, $this->workspaces, $this->profiles, $this->principals, $this->stream] = [$guide, $settings, $workspaces, $profiles, $principals, $stream];
     }
 
     public function mount(string $workspaceId, string $for = ''): void
@@ -105,16 +113,21 @@ final class GuideChat extends Component
             $this->proposal = $kept['proposal'] ?? null;
             $this->ticks = $kept['ticks'] ?? [];
         } else {
-            $this->talk = [['from' => 'guide', 'text' => $this->opening()]];
+            $this->talk = $this->opening();
         }
         $this->problem = $this->notReady();
     }
 
     /** Sends what the student wrote to the guide and adds its answer to the talk. */
-    public function send(): void
+    /**
+     * Sends a message. The page clears the box the moment it is sent and passes the words here (resources/js/guide-chat.js),
+     * so they don't sit in the box while the answer streams in; if the message can't go, they are put back in the box.
+     */
+    public function send(?string $message = null): void
     {
         $this->resetErrorBag();
-        $words = trim($this->text);
+        $words = trim($message ?? $this->text);
+        $this->text = $words;
         $files = array_values(array_filter($this->pictures, fn ($file) => $file instanceof TemporaryUploadedFile));
         if ($words === '' && $files === []) {
             $this->addError('text', 'Write something first, or attach a picture.');
@@ -129,7 +142,10 @@ final class GuideChat extends Component
 
         try {
             $pictures = array_map(fn (TemporaryUploadedFile $file) => ['name' => $file->getClientOriginalName(), 'bytes' => (string) file_get_contents($file->getRealPath())], $files);
-            $answer = $this->guide->turn($this->principal(), $this->workspaceId, $this->history(), $words, $this->for, $pictures);
+            // The reply streams in as it is written, as the tutor's does.
+            @set_time_limit(120);
+            $answer = $this->guide->turn($this->principal(), $this->workspaceId, $this->history(), $words, $this->for, $pictures,
+                fn (string $reply) => $this->stream->push($this, 'guide-answer', MarkdownPreview::html($reply)));
         } catch (AppError $e) {
             $this->problem($e);
 
@@ -208,12 +224,16 @@ final class GuideChat extends Component
         }
         $ticked = [
             'course' => (bool) ($this->ticks['course'] ?? false),
+            'facts' => array_keys(array_filter(is_array($this->ticks['facts'] ?? null) ? $this->ticks['facts'] : [])),
             'about' => (bool) ($this->ticks['about'] ?? false),
             'outcomes' => (bool) ($this->ticks['outcomes'] ?? false),
             'textbook' => (bool) ($this->ticks['textbook'] ?? false),
             'assessment' => self::picked($this->ticks['assessment'] ?? []),
             'assignments' => self::picked($this->ticks['assignments'] ?? []),
             'modules' => self::picked($this->ticks['modules'] ?? []),
+            // Inside each module, the topics and parts left ticked: module number => their numbers.
+            'topics' => self::pickedInside($this->ticks['topics'] ?? []),
+            'parts' => self::pickedInside($this->ticks['parts'] ?? []),
         ];
         $by = $this->principal();
         $done = $this->guide->apply($by, $this->workspaceId, $this->proposal, $ticked);
@@ -227,7 +247,7 @@ final class GuideChat extends Component
         $this->proposal = null;
         $this->ticks = [];
         $this->talk[] = ['from' => 'done', 'text' => "Added: {$said}."];
-        $this->talk[] = ['from' => 'guide', 'text' => $this->next()];
+        $this->talk[] = $this->next();
         $this->keep();
         $this->dispatch('guide-added');
     }
@@ -247,11 +267,57 @@ final class GuideChat extends Component
         $this->ticks['modules'] = array_fill_keys(array_keys($this->proposal['modules'] ?? []), $on);
     }
 
+    /**
+     * The student's pick for a question asked with buttons (the kind of course, its level, where they start from):
+     * written at once, with no AI asked, and the next question follows.
+     */
+    public function choose(string $question, string $value): void
+    {
+        try {
+            $this->guide->choose($this->principal(), $this->workspaceId, $question, $value);
+        } catch (AppError $e) {
+            $this->notify($e->getMessage(), 'warning');
+
+            return;
+        }
+        $label = collect(CourseGuide::choices($question))->firstWhere('value', $value)['label'] ?? $value;
+        $this->talk[] = ['from' => 'you', 'text' => $label];
+        $this->talk[] = $this->next();
+        $this->keep();
+        $this->dispatch('guide-added');
+    }
+
+    /** The student would rather not answer this one: it is never asked again, and the next question follows. */
+    public function skip(string $question): void
+    {
+        try {
+            $this->guide->skip($this->principal(), $this->workspaceId, $question);
+        } catch (AppError $e) {
+            $this->notify($e->getMessage(), 'warning');
+
+            return;
+        }
+        $this->talk[] = ['from' => 'you', 'text' => 'Skip'];
+        $this->talk[] = $this->next();
+        $this->keep();
+    }
+
+    /** Asks a question again (from the list of what the AI knows): to answer one skipped, or change an answer. */
+    public function askAgain(string $question): void
+    {
+        if ($this->for !== '' || ! in_array($question, CourseProfiles::QUESTIONS, true)) {
+            return;
+        }
+        $this->guide->reopen($this->principal(), $this->workspaceId, $question);
+        $this->talk[] = $this->asking($question);
+        $this->keep();
+    }
+
     /** Starts the talk again; nothing already added is touched. */
     #[On('guide-start-over')]
     public function startOver(): void
     {
-        $this->talk = [['from' => 'guide', 'text' => $this->opening()]];
+        $this->talk = $this->opening();
         $this->proposal = null;
         $this->ticks = [];
         $this->text = '';
@@ -261,47 +327,69 @@ final class GuideChat extends Component
 
     public function render(): View
     {
+        $by = $this->principal();
+        $workspace = $this->workspaces->find($by, $this->workspaceId);
+        $last = $this->talk === [] ? null : $this->talk[array_key_last($this->talk)];
+        $profile = $this->profiles->get($by, $this->workspaceId);
+
         return view('livewire.workspaces.guide-chat', [
-            'workspace' => $this->workspaces->find($this->principal(), $this->workspaceId),
-            // Once the course has its About text, the weeks are the next step: a way there sits beside "I'm done for now".
-            'toModules' => $this->for === '' && $this->profiles->get($this->principal(), $this->workspaceId)->about !== '',
+            'workspace' => $workspace,
+            // Once the course has its About text, its modules are the next step: a way there sits beside "I'm done for now".
+            'toModules' => $this->for === '' && $profile->about !== '',
+            // What the AI knows about the course, question by question (setting it up only).
+            'questions' => $this->for === '' ? $this->guide->questions($by, $this->workspaceId) : [],
+            // The question the guide's last line asks, answered with its buttons or in words, with Skip either way.
+            'asking' => $last !== null && $last['from'] === 'guide' && isset($last['ask']) ? $last['ask'] : null,
+            'plugins' => $this->for === '' ? array_map(fn (string $id) => Plugins::find($id)?->name, $this->profiles->plugins($by, $this->workspaceId)) : [],
         ]);
     }
 
     // ---------- Inside ----------
 
-    /** What the guide says first, without asking the model. */
-    private function opening(): string
+    /**
+     * What the guide says first, without asking the model: for setting the course up, what it is for and the first
+     * question still open.
+     *
+     * @return list<array{from: string, text: string, ask?: string}>
+     */
+    private function opening(): array
     {
         $by = $this->principal();
         $name = $this->workspaces->find($by, $this->workspaceId)->name;
         $about = $this->profiles->get($by, $this->workspaceId)->about !== '';
 
         if ($this->for === 'modules') {
-            return $about
-                ? "I have read what {$name} is about. Which weeks or chapters do you want to add now? Paste the timetable, tell me the weeks, or ask me to suggest some. The rest can come later."
-                : "Which weeks or chapters of {$name} do you want to add now? Paste the timetable or tell me the weeks. The rest can come later.";
+            return [['from' => 'guide', 'text' => $about
+                ? "I have read what {$name} is about. Which modules do you want to add now: weeks, chapters, units, whatever the course is split into? Paste the timetable or syllabus, tell me, or ask me to suggest some. I set each one up with its topics and parts, and you tick what to keep."
+                : "Which modules of {$name} do you want to add now: weeks, chapters, units, whatever the course is split into? Paste the timetable or syllabus, or tell me. The rest can come later."]];
+        }
+        if ($this->guide->next($by, $this->workspaceId) === null) {
+            return [$this->next()];
         }
 
-        return $about
-            ? $this->next()
-            : "Let's set up {$name}. Tell me what it is about in your own words, or paste its page from your university (the About text is enough). I'll ask for what is missing, and add only what you tick.";
+        return [
+            ['from' => 'guide', 'text' => "Let's set up **{$name}**, so every AI that teaches you knows it. A few quick questions: answer what you know, and skip the rest. I add only what you tick."],
+            $this->next(),
+        ];
     }
 
-    /** What to say after something was added: the first thing still missing. */
-    private function next(): string
+    /** What the guide says next, without asking the model: the first question still open, or that the course is ready. */
+    private function next(): array
     {
         if ($this->for === 'modules') {
-            return 'Tell me the next weeks whenever you like. They can wait until you need them.';
+            return ['from' => 'guide', 'text' => 'Tell me the next modules whenever you like. They can wait until you need them.'];
         }
+        $question = $this->guide->next($this->principal(), $this->workspaceId);
 
-        $profile = $this->profiles->get($this->principal(), $this->workspaceId);
+        return $question !== null
+            ? $this->asking($question)
+            : ['from' => 'guide', 'text' => 'That is everything I need: every AI that teaches you will know this course. Next are its modules: open **Modules**, and the AI there reads all this and helps you set them up.'];
+    }
 
-        return match (true) {
-            $profile->about === '' => 'What is the course about? A few words will do.',
-            $profile->assessment === [] => 'How is it assessed, and when are the deadlines?',
-            default => 'The course is set up. Next are its modules: open Modules, and the AI there reads this and helps you add the weeks.',
-        };
+    /** The guide's line that asks one question. */
+    private function asking(string $question): array
+    {
+        return ['from' => 'guide', 'text' => CourseGuide::ask($question, $this->workspaces->find($this->principal(), $this->workspaceId)->type), 'ask' => $question];
     }
 
     /** The talk as the model's turns. */
@@ -377,12 +465,15 @@ final class GuideChat extends Component
 
         return [
             'course' => ($proposal['course'] ?? []) !== [],
+            'facts' => array_fill_keys(array_keys($proposal['facts'] ?? []), true),
             'about' => $proposal['about'] !== '',
             'outcomes' => $proposal['outcomes'] !== [],
             'textbook' => $proposal['textbook'] !== '',
             'assessment' => array_fill_keys($assessment, true),
             'assignments' => array_fill_keys($dated, true),
             'modules' => array_fill_keys(array_keys($proposal['modules'] ?? []), true),
+            'topics' => array_map(fn (array $module) => array_fill_keys(array_keys($module['topics'] ?? []), true), $proposal['modules'] ?? []),
+            'parts' => array_map(fn (array $module) => array_fill_keys(array_keys($module['parts'] ?? []), true), $proposal['modules'] ?? []),
         ];
     }
 
@@ -392,16 +483,34 @@ final class GuideChat extends Component
         return is_array($ticks) ? array_map('intval', array_keys(array_filter($ticks))) : [];
     }
 
+    /**
+     * The topics or parts ticked inside each module: module number => the numbers ticked.
+     *
+     * @return array<int, list<int>>
+     */
+    private static function pickedInside(mixed $ticks): array
+    {
+        $out = [];
+        foreach (is_array($ticks) ? $ticks : [] as $module => $items) {
+            $out[(int) $module] = self::picked($items);
+        }
+
+        return $out;
+    }
+
     /** What was added, in words ("3 modules and the About text"). */
     private static function said(array $done): string
     {
         $parts = array_filter([
             $done['modules'] > 0 ? $done['modules'].($done['modules'] === 1 ? ' module' : ' modules') : null,
+            ($done['topics'] ?? 0) > 0 ? $done['topics'].($done['topics'] === 1 ? ' topic' : ' topics') : null,
+            ($done['parts'] ?? 0) > 0 ? $done['parts'].($done['parts'] === 1 ? ' part' : ' parts') : null,
             $done['about'] ? 'the About text' : null,
             $done['outcomes'] > 0 ? 'what it should teach' : null,
             $done['assessment'] > 0 ? $done['assessment'].($done['assessment'] === 1 ? ' assessment' : ' assessments') : null,
             $done['assignments'] > 0 ? $done['assignments'].($done['assignments'] === 1 ? ' assignment' : ' assignments') : null,
             $done['textbook'] ? 'the textbook' : null,
+            ($done['facts'] ?? 0) > 0 ? 'what kind of course it is' : null,
             $done['course'] ? 'the course details' : null,
         ]);
 

@@ -54,6 +54,13 @@ Route::middleware('auth')->group(function () {
         return view('journal.index', ['entries' => array_reverse($entries)]);
     })->name('journal.index');
 
+    // ViStud AI: the student's assistant above all their courses (App\Engine\VistudAi), on the main dashboard only.
+    Route::get('/ai', function (Request $request, PrincipalFactory $principals) {
+        Guard::learner($principals->fromRequest($request));
+
+        return view('vistud-ai');
+    })->name('vistud-ai');
+
     // The calendar of every workspace; each workspace's own is its Calendar section.
     Route::get('/calendar', function (Request $request, PrincipalFactory $principals) {
         Guard::learner($principals->fromRequest($request));

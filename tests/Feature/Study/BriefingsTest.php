@@ -152,7 +152,7 @@ class BriefingsTest extends TestCase
             '## Due soon', '- ER diagram (assignment; Week 1: Relational model): due Wed 7 Oct',
             '## Earlier sessions', '- Sun 4 Oct: Normalisation, 1 h 30 min',
             '## Material for this session', '- The student\'s note "Lecture 3: joins": its text follows.',
-            '## All topics in this course', '### Week 1: Relational model', '- Joins: understood (evidence: no contact yet · not practised yet)', '### Not in a module', '- Normalisation: not started',
+            '## All topics in this course', '### Week 1: Relational model', '- Joins: understood (evidence: no contact yet · not practised yet)', '### Not in a module', '- Normalisation: covered (evidence: seen, not practised)',
             '## Other things the student has recorded', '- Normalisation: 3NF: no non-key column depends on another non-key column.',
             '## The student\'s note: Lecture 3: joins', '## Left join', 'Keeps every row of the **left** table.', '- Unmatched rows get NULLs',
         ];

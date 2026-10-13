@@ -12,6 +12,7 @@ use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\CreatesAccounts;
+use Tests\Concerns\MakesOfficeFiles;
 use Tests\Concerns\MakesStudyFiles;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
@@ -19,7 +20,7 @@ use Tests\TestCase;
 /** What a file says, page by page, for the tutor (docs/specs/study-memory.md §6). */
 class FileTextsTest extends TestCase
 {
-    use CreatesAccounts, MakesStudyFiles, RefreshesDatabase;
+    use CreatesAccounts, MakesOfficeFiles, MakesStudyFiles, RefreshesDatabase;
 
     private Principal $by;
 
@@ -92,11 +93,71 @@ class FileTextsTest extends TestCase
         $this->assertSame([FileText::READY, ["Line one\n\nLine two"]], [$notes->state, $notes->pages]);
     }
 
+    public function test_an_excel_workbook_is_read_by_sheet_without_libreoffice_and_says_what_it_is_and_about_itself(): void
+    {
+        $book = $this->xlsxBytes([
+            'Budget' => [['Item', 'Cost'], ['Rent', ['formula' => 'SUM(B2:B2)', 'value' => 500]]],
+            'Notes' => [['Remember the deposit']],
+        ], core: ['title' => 'Term budget', 'creator' => 'Ada Lovelace', 'lastModifiedBy' => 'Alan', 'modified' => '2026-10-01T16:40:00Z']);
+        $file = $this->upload('Budget.xlsx', $book);
+
+        $text = $this->read($file);
+        $this->assertSame([FileText::READY, 'sheet', 2, 'Sheet 2 of 2'], [$text->state, $text->unit, $text->count(), $text->label(2)]);
+        $this->assertSame('Sheet “Budget”, rows 1–2 (used range A1:B2)', $text->caption(1));
+        $this->assertStringContainsString('2 | Rent | 500 [=SUM(B2:B2)]', $text->pages[0]);
+
+        $profile = $text->profile();
+        $this->assertStringStartsWith('File “Budget.xlsx”: Excel, ', $profile);
+        $this->assertMatchesRegularExpression('/; uploaded \d{4}-\d{2}-\d{2}\./', $profile);
+        foreach (['2 sheets', 'title “Term budget”', 'author Ada Lovelace', 'last saved by Alan', 'last saved 2026-10-01 16:40', 'made with Microsoft Excel', '1 formula', 'sheets: Budget (A1:B2), Notes (A1:A1)'] as $expected) {
+            $this->assertStringContainsString($expected, $profile);
+        }
+
+        // Kept beside the file, with what it said about itself, and read back the same.
+        $again = $this->read($file);
+        $this->assertSame([$text->pages, $text->captions, $text->facts], [$again->pages, $again->captions, $again->facts]);
+    }
+
+    public function test_an_old_excel_file_is_read_through_its_modern_copy_which_goes_with_the_file(): void
+    {
+        $file = $this->upload('Marks.xls', $this->ole());
+        // What LibreOffice makes beside the preview (App\Study\FilePreviews::make), there already.
+        $copy = 'learners/'.$this->by->learnerId."/previews/{$file->id}.xlsx";
+        Storage::disk('local')->put($copy, $this->xlsxBytes(['Marks' => [['Name', 'Mark'], ['Ada', 91]]], core: ['creator' => 'Ada']));
+
+        $text = $this->read($file);
+        $this->assertSame([FileText::READY, 'sheet', 'Sheet “Marks”, rows 1–2 (used range A1:B2)'], [$text->state, $text->unit, $text->caption(1)]);
+        $this->assertSame("Row | A | B\n1 | Name | Mark\n2 | Ada | 91", $text->pages[0]);
+        // The student's file is an Excel file, whoever made the copy.
+        $this->assertStringStartsWith('File “Marks.xls”: Excel, ', $text->profile());
+        $this->assertStringContainsString('author Ada', $text->profile());
+        $this->assertArrayNotHasKey('application', $text->facts);
+
+        app(Files::class)->trash($this->by, $file->id);
+        app(Files::class)->destroy($this->by, $file->id);
+        Storage::disk('local')->assertMissing($copy);
+    }
+
+    public function test_a_word_document_says_its_pages_and_a_pdf_its_title_and_author(): void
+    {
+        $essay = $this->docxBytes($this->wPara('Why cells divide', 'Heading1').$this->wPara('Cells divide to grow and repair.'), ['creator' => 'Ada'], pages: 2);
+        $word = $this->read($this->upload('Essay.docx', $essay));
+        $this->assertSame('part', $word->unit);
+        $this->assertStringContainsString('2 pages, read in 1 part', $word->profile());
+        $this->assertStringContainsString('9 words', $word->profile());
+        $this->assertStringContainsString('1 heading', $word->profile());
+        $this->assertStringNotContainsString('1 headings', $word->profile());
+
+        $pdf = $this->read($this->upload('Lecture 2.pdf', (string) file_get_contents(base_path('tests/Browser/fixtures/files/Lecture 2 - cell division.pdf'))));
+        $this->assertStringStartsWith('File “Lecture 2.pdf”: PDF, ', $pdf->profile());
+        $this->assertStringContainsString('1 page', $pdf->profile());
+    }
+
     public function test_a_picture_is_seen_not_read_and_a_kind_without_a_reader_says_so(): void
     {
         $this->assertSame(FileText::PICTURE, $this->read($this->upload('Onion cells.png', $this->image()))->state);
-        // An Excel file needs LibreOffice's PDF, and there is none here.
-        $this->assertSame(FileText::NONE, $this->read($this->upload('Marks.xlsx', $this->ooxml('xl/workbook.xml')))->state);
+        // An old Excel file (.xls) needs LibreOffice's PDF, and there is none here.
+        $this->assertSame(FileText::NONE, $this->read($this->upload('Marks.xls', $this->ole()))->state);
         // A PDF with no pages to read.
         $empty = $this->read($this->upload('Scan.pdf', $this->pdf()));
         $this->assertFalse($empty->state === FileText::READY && $empty->hasWords());

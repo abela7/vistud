@@ -10,6 +10,7 @@
 @php
     use App\Appearance\Theme;
     use App\Study\Folders;
+    use App\Study\ModuleParts;
     use Illuminate\Support\Carbon;
 
     $isModule = $view === 'module';
@@ -18,7 +19,8 @@
         ? trim(($place->startsOn ? Carbon::parse($place->startsOn)->format('j M') : '').' – '.($place->endsOn ? Carbon::parse($place->endsOn)->format('j M') : ''), ' –')
         : null;
     $understood = count(array_filter($placeTopics, fn ($t) => in_array($t->shown(), ['understood', 'mastered'], true)));
-    $context = $studyPlace ? implode(' · ', array_filter([$dates, $placeTopics !== [] ? "{$understood} of ".count($placeTopics).' understood' : null])) : null;
+    // A module's line of what it is about comes first: a lab week reads as one.
+    $context = $studyPlace ? implode(' · ', array_filter([$isModule ? $place->about : null, $dates,$placeTopics !== [] ? "{$understood} of ".count($placeTopics).' understood' : null])) : null;
     $tabCounts = match (true) {
         $isModule => [
             'folders' => count($moduleFolders ?? []),
@@ -39,8 +41,8 @@
         default => [],
     };
     $show = ! $studyPlace ? 'all' : ($tab === 'files' ? 'files' : ($tab === 'notes' ? 'notes' : null));
-    $statusWords = ['not_started' => 'Not started', 'covered' => 'Studying', 'understood' => 'Understood', 'confused' => 'Not understand', 'mastered' => 'Mastered'];
-    $statusIcons = ['not_started' => 'circle-dot', 'covered' => 'check', 'understood' => 'circle-check', 'confused' => 'circle-alert', 'mastered' => 'shield-check'];
+    $statusWords = \App\Study\TopicDetails::STATUS_WORDS;
+    $statusIcons = \App\Study\TopicDetails::STATUS_ICONS;
     $fileColours = ['pdf' => 'red', 'document' => 'blue', 'slides' => 'orange', 'spreadsheet' => 'green', 'text' => 'pink', 'image' => 'purple'];
     $moduleId = $placeModule?->id;
     // A module's Topics tab is grouped by folder once the module has one.
@@ -149,8 +151,11 @@
                             <div class="flex items-center gap-2.5 min-w-0">
                                 <x-selection-check key="folder:{{ $folder->id }}" label="Select {{ $folder->name }}" />
                                 <span class="folder-card-icon" aria-hidden="true">
-                                    <x-icon name="folder" class="size-4.5" />
+                                    <x-icon :name="ModuleParts::icon($folder->kind)" class="size-4.5" />
                                 </span>
+                                @if (ModuleParts::known($folder->kind))
+                                    <span class="badge text-xs font-medium shrink-0">{{ ModuleParts::label($folder->kind) }}</span>
+                                @endif
                                 <span class="badge badge-neutral text-xs font-medium shrink-0">
                                     {{ $inside === 0 ? 'Empty' : ($inside === 1 ? '1 item' : $inside.' items') }}
                                 </span>
@@ -480,27 +485,8 @@
                 </a>
             </div>
 
-            {{-- Session Study Map & Concise Topic Roadmap --}}
-            @if (! empty($sessionStudyMap))
-                @include('livewire.workspaces.partials.session-study-map')
-            @else
-                <div class="session-study-map-prompt" aria-label="Create session study map">
-                    <div class="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-                        <span class="session-kpi-icon ws-colour-purple shrink-0" aria-hidden="true">
-                            <x-icon name="sparkles" class="size-4" />
-                        </span>
-                        <div class="min-w-0 flex-1 space-y-0.5">
-                            <h3 class="text-sm font-semibold text-fg">✦ AI Study Map & Concise Topics</h3>
-                            <p class="text-xs text-fg-muted">
-                                Let AI analyze your session files and notes to synthesize a structured learning roadmap and suggest 3–5 concise, trackable core topics.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="shrink-0">
-                        <x-button size="sm" variant="primary" icon="sparkles" wire:click="generateSessionStudyMap" wire:loading.attr="aria-busy" wire:target="generateSessionStudyMap" busy-label="Analyzing materials…">Generate Study Map</x-button>
-                    </div>
-                </div>
-            @endif
+            {{-- The main topics the AI chose from this part's files, to review before they are tracked. --}}
+            @include('livewire.workspaces.partials.topic-review')
 
             {{-- Main Dashboard Layout: 2 Columns on Desktop, Stack on Mobile/Tablet --}}
             <div class="session-layout-grid">
@@ -522,49 +508,17 @@
                             </div>
                         </div>
 
-                        {{-- Suggestions Bar if files yielded suggested topics --}}
-                        @if ($suggestions !== [])
-                            <div class="suggestion-bar">
-                                <x-icon name="sparkles" class="size-5 shrink-0" />
-                                <p><span class="font-semibold">{{ count($suggestions) }} new {{ count($suggestions) === 1 ? 'topic' : 'topics' }} found</span>{{ $suggestions[0]->sourceName !== null ? ' in '.$suggestions[0]->sourceName : '' }}: {{ implode(', ', array_map(fn ($s) => $s->name, array_slice($suggestions, 0, 4))) }}{{ count($suggestions) > 4 ? '…' : '' }}</p>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <x-button size="sm" variant="primary" wire:click="addSuggested" wire:loading.attr="aria-busy" wire:target="addSuggested" busy-label="Adding…">Add all</x-button>
-                                    <x-button size="sm" wire:click="pickSuggested" aria-expanded="{{ $picking ? 'true' : 'false' }}">Pick</x-button>
-                                    <x-button size="sm" variant="ghost" wire:click="dismissSuggested">Not these</x-button>
-                                </div>
-                            </div>
-                            @if ($picking)
-                                <ul class="item-list" role="list">
-                                    @foreach ($suggestions as $suggestion)
-                                        <li class="item-row" wire:key="dash-suggestion-{{ $suggestion->id }}">
-                                            <span class="min-w-0 flex-1 font-medium break-words">{{ $suggestion->name }}</span>
-                                            <x-button size="sm" icon="plus" wire:click="addOneSuggested('{{ $suggestion->id }}')" aria-label="Add {{ $suggestion->name }}">Add</x-button>
-                                            <button type="button" class="topbar-button" wire:click="dismissOneSuggested('{{ $suggestion->id }}')" aria-label="Not {{ $suggestion->name }}"><x-icon name="x" class="size-4" /></button>
-                                        </li>
-                                    @endforeach
-                                </ul>
-                            @endif
-                        @endif
-
                         {{-- Topics List or Empty State --}}
                         @if ($placeTopics === [])
                             @if ($suggestions !== [])
-                                <div class="empty-place py-6 border-dashed border-accent bg-accent-subtle">
-                                    <span class="item-icon ws-colour-purple" aria-hidden="true"><x-icon name="sparkles" class="size-5" /></span>
-                                    <p class="font-semibold text-base">{{ count($suggestions) }} Suggested {{ count($suggestions) === 1 ? 'Topic' : 'Topics' }} Ready</p>
-                                    <p class="text-xs text-fg-muted max-w-sm text-center">AI generated concise topics for your session materials. Add them to track your progress.</p>
-                                    <div class="flex flex-wrap items-center justify-center gap-2 mt-2">
-                                        <x-button size="sm" variant="primary" icon="plus" wire:click="addSuggested" wire:loading.attr="aria-busy" wire:target="addSuggested" busy-label="Adding…">Add All Suggested Topics ({{ count($suggestions) }})</x-button>
-                                        <x-button size="sm" variant="secondary" wire:click="pickSuggested">Pick Topics</x-button>
-                                    </div>
-                                </div>
+                                <p class="text-sm text-fg-muted">No topics yet: accept the main topics above to start tracking them.</p>
                             @else
                                 <div class="empty-place py-6">
                                     <span class="item-icon" aria-hidden="true"><x-icon name="list-checks" class="size-5" /></span>
                                     <p class="font-medium">No topics yet</p>
-                                    <p class="text-sm text-fg-muted">Put the lecture and its lab in Files: the AI reads them and finds the topics. Or add one below.</p>
+                                    <p class="text-sm text-fg-muted">Put this part's files in Files: the AI reads them all and suggests the main topics. Or add one below.</p>
                                     <div class="flex flex-wrap items-center justify-center gap-2 mt-2">
-                                        <x-button size="sm" variant="primary" icon="sparkles" wire:click="generateSessionStudyMap" wire:loading.attr="aria-busy" wire:target="generateSessionStudyMap" busy-label="Analyzing…">Generate Study Map & Topics</x-button>
+                                        <x-button size="sm" variant="primary" icon="sparkles" wire:click="openChooseAgain" wire:loading.attr="aria-busy" wire:target="openChooseAgain" busy-label="Starting…">Find the main topics</x-button>
                                         <a href="{{ route('workspaces.folders.show', [$workspaceId, $place->id, 'tab' => 'files']) }}" class="btn btn-secondary btn-sm no-underline">
                                             <x-icon name="upload" class="size-4" />Go to Files
                                         </a>
@@ -749,9 +703,9 @@
                                         </div>
 
                                         @if (! $isModule)
-                                            <button type="button" class="btn btn-ghost btn-sm flex items-center gap-1 text-xs text-accent" wire:click="generateSessionStudyMap" wire:loading.attr="aria-busy" wire:target="generateSessionStudyMap" title="Generate Study Map & Topics with AI">
+                                            <button type="button" class="btn btn-ghost btn-sm flex items-center gap-1 text-xs text-accent" wire:click="openChooseAgain" wire:loading.attr="aria-busy" wire:target="openChooseAgain" title="The AI reads all the files and suggests the main topics">
                                                 <x-icon name="sparkles" class="size-3.5" />
-                                                <span>AI Study Map</span>
+                                                <span>Find main topics</span>
                                             </button>
                                         @endif
                                     </div>
@@ -918,38 +872,10 @@
             </div>
         </div>
     @elseif ($studyPlace && $tab === 'topics')
-        {{-- Session Study Map for session folder if generated --}}
-        @if (! $isModule && ! empty($sessionStudyMap))
-            <div class="mb-5">
-                @include('livewire.workspaces.partials.session-study-map')
-            </div>
-        @endif
-
-        {{-- What the reader found in the module's files, until the student adds or dismisses it. --}}
-        @if ($suggestions !== [])
-            <section class="space-y-2" aria-label="New topics found">
-                <div class="suggestion-bar">
-                    <x-icon name="sparkles" class="size-5 shrink-0" />
-                    <p><span class="font-semibold">{{ count($suggestions) }} new {{ count($suggestions) === 1 ? 'topic' : 'topics' }} found</span>{{ $suggestions[0]->sourceName !== null ? ' in '.$suggestions[0]->sourceName : '' }}: {{ implode(', ', array_map(fn ($s) => $s->name, array_slice($suggestions, 0, 4))) }}{{ count($suggestions) > 4 ? '…' : '' }}</p>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <x-button size="sm" variant="primary" wire:click="addSuggested" wire:loading.attr="aria-busy" wire:target="addSuggested" busy-label="Adding…">Add all</x-button>
-                        <x-button size="sm" wire:click="pickSuggested" aria-expanded="{{ $picking ? 'true' : 'false' }}">Pick</x-button>
-                        <x-button size="sm" variant="ghost" wire:click="dismissSuggested">Not these</x-button>
-                    </div>
-                </div>
-                @if ($picking)
-                    <ul class="item-list" role="list">
-                        @foreach ($suggestions as $suggestion)
-                            <li class="item-row" wire:key="suggestion-{{ $suggestion->id }}">
-                                <span class="min-w-0 flex-1 font-medium break-words">{{ $suggestion->name }}</span>
-                                <x-button size="sm" icon="plus" wire:click="addOneSuggested('{{ $suggestion->id }}')" aria-label="Add {{ $suggestion->name }}">Add</x-button>
-                                <button type="button" class="topbar-button" wire:click="dismissOneSuggested('{{ $suggestion->id }}')" aria-label="Not {{ $suggestion->name }}"><x-icon name="x" class="size-4" /></button>
-                            </li>
-                        @endforeach
-                    </ul>
-                @endif
-            </section>
-        @endif
+        {{-- The main topics the AI chose from the files, to review before they are tracked. --}}
+        <div class="mb-5">
+            @include('livewire.workspaces.partials.topic-review')
+        </div>
 
         {{-- The place's topics: the parts it is made of, each with how it stands; a module's under its folders. --}}
         <section class="module-topics" aria-labelledby="module-topics-heading">
@@ -963,7 +889,7 @@
                     <section class="topic-group" wire:key="topic-group-{{ $folder?->id ?? 'module' }}" aria-label="{{ $folder?->name ?? 'In the module' }}">
                         <div class="topic-group-head">
                             @if ($folder)
-                                <span class="item-icon ws-colour-amber shrink-0" aria-hidden="true"><x-icon name="folder" class="size-5" /></span>
+                                <span class="item-icon ws-colour-amber shrink-0" aria-hidden="true"><x-icon :name="ModuleParts::icon($folder->kind)" class="size-5" /></span>
                                 <div class="topic-group-text">
                                     <h3 class="topic-group-title"><a href="{{ route('workspaces.folders.show', [$workspaceId, $folder->id]) }}">{{ $folder->name }}</a></h3>
                                     <p class="text-sm text-fg-muted">{{ $group['topics'] === [] ? 'No topics yet' : "{$done} of ".count($group['topics']).' understood' }}</p>
@@ -999,10 +925,10 @@
                     <div class="empty-place">
                         <span class="item-icon" aria-hidden="true"><x-icon name="list-checks" class="size-5" /></span>
                         <p class="font-medium">No topics yet</p>
-                        <p class="text-sm text-fg-muted">Put the lecture and its lab in Files: the AI reads them and finds the topics. Or add one below.</p>
+                        <p class="text-sm text-fg-muted">Put this part's files in Files: the AI reads them all and suggests the main topics. Or add one below.</p>
                         <div class="flex flex-wrap items-center justify-center gap-2 mt-2">
                             @if (! $isModule)
-                                <x-button size="sm" variant="primary" icon="sparkles" wire:click="generateSessionStudyMap" wire:loading.attr="aria-busy" wire:target="generateSessionStudyMap" busy-label="Analyzing…">Generate Study Map & Topics</x-button>
+                                <x-button size="sm" variant="primary" icon="sparkles" wire:click="openChooseAgain" wire:loading.attr="aria-busy" wire:target="openChooseAgain" busy-label="Starting…">Find the main topics</x-button>
                                 <a href="{{ route('workspaces.folders.show', [$workspaceId, $place->id, 'tab' => 'files']) }}" class="btn btn-secondary btn-sm no-underline"><x-icon name="upload" class="size-4" />Go to Files</a>
                             @else
                                 <a href="{{ route('workspaces.modules.show', [$workspaceId, $place->id, 'tab' => 'files']) }}" class="btn btn-secondary btn-sm no-underline"><x-icon name="upload" class="size-4" />Go to Files</a>
@@ -1186,9 +1112,9 @@
                             </div>
 
                             @if (! $isModule)
-                                <button type="button" class="btn btn-ghost btn-sm flex items-center gap-1 text-xs text-accent" wire:click="generateSessionStudyMap" wire:loading.attr="aria-busy" wire:target="generateSessionStudyMap" title="Generate Study Map & Topics with AI">
+                                <button type="button" class="btn btn-ghost btn-sm flex items-center gap-1 text-xs text-accent" wire:click="openChooseAgain" wire:loading.attr="aria-busy" wire:target="openChooseAgain" title="The AI reads all the files and suggests the main topics">
                                     <x-icon name="sparkles" class="size-3.5" />
-                                    <span>AI Study Map</span>
+                                    <span>Find main topics</span>
                                 </button>
                             @endif
                         </div>

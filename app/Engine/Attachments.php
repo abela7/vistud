@@ -10,10 +10,10 @@ use App\Study\FileTexts;
 use App\Study\Input;
 use App\Study\NoteDoc;
 use App\Study\Notes;
+use App\Study\OfficeReader;
 use App\Study\SessionDetails;
 use Smalot\PdfParser\Parser;
 use Throwable;
-use ZipArchive;
 
 /**
  * What the student attaches to a message in the chat (docs/specs/study-memory.md §6): their notes and files, from
@@ -144,7 +144,8 @@ final class Attachments
         $shown = min(self::FIRST_PAGES, $read->count());
         $blocks = [];
         for ($i = 1; $i <= $shown; $i++) {
-            $blocks[] = '--- '.$read->label($i)." ---\n".(trim($read->pages[$i - 1]) !== '' ? trim($read->pages[$i - 1]) : "(no text on this {$read->unit})");
+            $caption = $read->caption($i);
+            $blocks[] = '--- '.$read->label($i).($caption !== '' && ! str_starts_with(trim($read->pages[$i - 1]), $caption) ? ': '.$caption : '')." ---\n".(trim($read->pages[$i - 1]) !== '' ? trim($read->pages[$i - 1]) : "(no text on this {$read->unit})");
         }
         $body = implode("\n\n", $blocks);
         if (mb_strlen($body) > self::FIRST_CHARS) {
@@ -152,7 +153,7 @@ final class Attachments
         }
         $rest = $read->count() > $shown ? " The first {$shown} are below; read the rest with read_file, a few {$read->unit}s at a time." : ' All of it is below.';
 
-        return "[Attached: the file \"{$name}\" ({$read->file->typeLabel()}, {$read->size()}).{$rest}]\n{$body}";
+        return "[Attached: the file \"{$name}\" ({$read->file->typeLabel()}, {$read->size()}).{$rest}]\n{$read->profile()}\n\n{$body}";
     }
 
     /** A picture of a file as a data URL the model can see, no bigger than it needs; null when it can't be read or sent. */
@@ -214,27 +215,8 @@ final class Attachments
             }
         }
 
-        if ($ext === 'docx') {
-            try {
-                $temp = tempnam(sys_get_temp_dir(), 'vistud-doc-');
-                if ($temp !== false) {
-                    file_put_contents($temp, $bytes);
-                    $zip = new ZipArchive;
-                    if ($zip->open($temp) === true) {
-                        $xml = $zip->getFromName('word/document.xml');
-                        $zip->close();
-                        @unlink($temp);
-                        if ($xml !== false) {
-                            $clean = strip_tags(str_replace(['</w:p>', '<w:tab/>'], ["\n", "\t"], $xml));
-
-                            return mb_substr(trim((string) preg_replace("/\n{3,}/", "\n\n", $clean)), 0, $maxChars);
-                        }
-                    }
-                    @unlink($temp);
-                }
-            } catch (Throwable) {
-                return '';
-            }
+        if (in_array($ext, ['docx', 'pptx', 'xlsx'], true)) {
+            return self::officeText($bytes, $ext, $maxChars);
         }
 
         if (in_array($ext, ['txt', 'md', 'markdown', 'csv', 'json', 'log', 'html', 'htm', 'xml', 'yaml', 'yml'], true)) {
@@ -242,6 +224,37 @@ final class Attachments
         }
 
         return '';
+    }
+
+    /**
+     * A Word, PowerPoint or Excel file's bytes as text (App\Study\OfficeReader): each page, slide or chunk of a sheet
+     * headed with what it is, up to $maxChars characters. '' when it can't be read.
+     */
+    private static function officeText(string $bytes, string $extension, int $maxChars): string
+    {
+        $temp = tempnam(sys_get_temp_dir(), 'vistud-office-');
+        if ($temp === false) {
+            return '';
+        }
+        try {
+            file_put_contents($temp, $bytes);
+            $read = match ($extension) {
+                'docx' => OfficeReader::docx($temp),
+                'pptx' => OfficeReader::pptx($temp),
+                default => OfficeReader::xlsx($temp),
+            };
+        } catch (Throwable) {
+            return '';
+        } finally {
+            @unlink($temp);
+        }
+        $blocks = [];
+        foreach ($read->pages as $i => $page) {
+            $caption = $read->captions[$i] ?? '';
+            $blocks[] = '--- '.ucfirst($read->unit).' '.($i + 1).' of '.count($read->pages).($caption !== '' ? ': '.$caption : '')." ---\n".trim($page);
+        }
+
+        return mb_substr(trim(implode("\n\n", $blocks)), 0, $maxChars);
     }
 
     private static function sameCourse(string $workspaceId, SessionDetails $session): void

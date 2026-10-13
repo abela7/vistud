@@ -262,6 +262,18 @@ final class JournalWriter
     }
 
     /**
+     * The [role, ref] pairs an entry puts in the reference index, from what is stored of it (its kind, links and
+     * body): what the index is rebuilt from (App\Brain\Store\Rebuild).
+     *
+     * @param  array{kind: string, links?: list<array<string, mixed>>, body?: array<string, mixed>}  $spec
+     * @return list<array{0: string, 1: string}>
+     */
+    public static function refsOf(array $spec): array
+    {
+        return self::indexRefs($spec, EntryValidator::references($spec))[0];
+    }
+
+    /**
      * The rows for the reference index, and the entities this entry introduces.
      *
      * @return array{0: list<array{0: string, 1: string}>, 1: list<string>}

@@ -23,6 +23,8 @@ final readonly class NextStepModule
         /** The first topic not yet understood, in order. */
         public ?string $nextTopicId = null,
         public ?string $nextTopicName = null,
+        /** The folder that topic is in (docs/specs/vistud-2-blueprint.md, Phase 9), when it is in one: studying it studies there. */
+        public ?string $nextFolderName = null,
     ) {}
 
     public function done(): bool

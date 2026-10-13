@@ -3,11 +3,13 @@
 namespace App\Study;
 
 use App\Platform\Access\Guard;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Platform\Ids;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Quizzes and tests as readable records (docs/specs/vistud-2-blueprint.md §3.7, §3.9): the tutor records one when it has
@@ -27,16 +29,18 @@ final class Quizzes
 
     public const CONFUSING_UP_TO = 50;
 
-    public function __construct(private Sessions $sessions, private Topics $topics, private WriteBack $writeBack) {}
+    public function __construct(private Sessions $sessions, private Topics $topics, private WriteBack $writeBack, private Memory $memory) {}
 
     /**
      * Keeps a quiz or test of the session. Each question names the topic it was about, or takes the quiz's (or the
      * session's); the answers of those with a topic go to the journal as attempts. The score is worked out from the
-     * results: a correct answer counts one, a partial one half.
+     * results: a correct answer counts one, a partial one half. An answer that couldn't be marked (`unjudged`) is kept
+     * as such, and counts neither way. $judge is the AI that marked the answers (WriteBack::apply).
      *
      * @param  array{kind?: mixed, topic?: mixed, questions?: mixed}  $input
+     * @param  ?array{model: string, prompt: string, via: string}  $judge
      */
-    public function record(Principal $by, string $sessionId, array $input): QuizDetails
+    public function record(Principal $by, string $sessionId, array $input, ?array $judge = null): QuizDetails
     {
         $scope = Guard::learner($by);
         $session = $this->sessions->find($by, $sessionId);
@@ -62,7 +66,7 @@ final class Quizzes
             Input::refuse(array_filter([
                 "questions.{$index}" => match (true) {
                     $asked === '' => 'Say what was asked in question '.($index + 1).'.',
-                    ! in_array($result, Capture::RESULTS, true) => 'Say how question '.($index + 1).' went: correct, partial or incorrect.',
+                    ! in_array($result, [...Capture::RESULTS, 'unjudged'], true) => 'Say how question '.($index + 1).' went: correct, partial or incorrect.',
                     default => null,
                 },
             ]));
@@ -82,14 +86,6 @@ final class Quizzes
         $now = CarbonImmutable::now('UTC');
         $since = LearnerTables::query($scope, 'quizzes')->where('session_id', $sessionId)->max('finished_at');
         $id = Ids::new();
-        LearnerTables::insert($scope, 'quizzes', [
-            'id' => $id, 'workspace_id' => $session->workspaceId, 'session_id' => $sessionId, 'module_id' => $moduleId,
-            // A quiz in a folder's session is the folder's (docs/specs/vistud-2-blueprint.md, Phase 9).
-            'folder_id' => $session->moduleId !== null && $session->moduleId === $moduleId ? $session->folderId : null, 'topic_id' => $quizTopic?->id,
-            'kind' => $kind, 'questions' => json_encode($questions), 'score' => self::score($questions), 'asked' => count($questions),
-            'started_at' => CarbonImmutable::parse($input['started_at'] ?? ($since ?? $session->startedAt), 'UTC'), 'finished_at' => $now,
-        ]);
-
         // What mastery counts: each answer, as an attempt on its topic.
         $attempts = [];
         foreach ($questions as $q) {
@@ -97,11 +93,88 @@ final class Quizzes
                 $attempts[] = ['include' => true, 'kind' => 'attempt', 'topic_id' => $q['topic_id'], 'asked' => $q['asked'], 'answer' => $q['answer'], 'result' => $q['result'], 'right' => $q['right'], 'fix' => $q['fix'], 'form' => 'recall', 'support' => 'unaided'];
             }
         }
-        if ($attempts !== []) {
-            $this->writeBack->apply($by, $sessionId, $attempts, note: false);
-        }
+
+        // The quiz and its attempts are kept together, and the quiz says which attempts are its (so deleting it can take
+        // exactly those back): one made without the other would leave answers counting for a quiz that isn't there.
+        DB::transaction(function () use ($scope, $by, $session, $sessionId, $moduleId, $quizTopic, $kind, $questions, $input, $since, $now, $id, $attempts, $judge) {
+            LearnerTables::insert($scope, 'quizzes', [
+                'id' => $id, 'workspace_id' => $session->workspaceId, 'session_id' => $sessionId, 'module_id' => $moduleId,
+                // A quiz in a folder's session is the folder's (docs/specs/vistud-2-blueprint.md, Phase 9).
+                'folder_id' => $session->moduleId !== null && $session->moduleId === $moduleId ? $session->folderId : null, 'topic_id' => $quizTopic?->id,
+                'kind' => $kind, 'questions' => json_encode($questions), 'attempt_ids' => json_encode([]), 'score' => self::score($questions), 'asked' => count($questions),
+                'started_at' => CarbonImmutable::parse($input['started_at'] ?? ($since ?? $session->startedAt), 'UTC'), 'finished_at' => $now,
+            ]);
+            if ($attempts !== []) {
+                $result = $this->writeBack->apply($by, $sessionId, $attempts, note: false, judge: $judge);
+                LearnerTables::query($scope, 'quizzes')->where('id', $id)->update(['attempt_ids' => json_encode($result['ids']['attempt'] ?? [])]);
+            }
+        });
 
         return $this->find($by, $id);
+    }
+
+    /**
+     * Deletes a quiz or test for good: its row goes, and the answers it wrote to the journal are retracted, so they stop
+     * counting for the topics they were about (Replay: a retracted attempt is as if never made). The journal is append-only:
+     * the answers and the correction both stay there as what happened. What the quiz marked on a topic (a test proposes or
+     * sets a status) is the student's word on the topic and stays; it can be changed from the topic.
+     */
+    public function delete(Principal $by, string $id): void
+    {
+        $scope = Guard::learner($by);
+
+        DB::transaction(function () use ($scope, $by, $id) {
+            $row = LearnerTables::query($scope, 'quizzes')->where('id', $id)->lockForUpdate()->first() ?? throw new NotFound;
+            $attempts = $this->attemptsOf($scope, $row);
+            if ($attempts !== []) {
+                $this->memory->append($scope, [Memory::retract($scope, $by, $attempts)]);
+            }
+            LearnerTables::query($scope, 'quizzes')->where('id', $id)->delete();
+        });
+    }
+
+    /**
+     * The journal entries a quiz wrote. Those it names; for a quiz made before it did, the attempts the write-back made
+     * for its questions in its session, within a minute of when it was recorded, by the question's task and outcome (each
+     * attempt matched to one question, so a quiz never takes back another's answer to the same question).
+     *
+     * @return list<string>
+     */
+    private function attemptsOf(LearnerScope $scope, object $row): array
+    {
+        if ($row->attempt_ids !== null) {
+            $ids = is_string($row->attempt_ids) ? json_decode($row->attempt_ids, true) : $row->attempt_ids;
+
+            return array_values(array_filter(is_array($ids) ? $ids : [], 'is_string'));
+        }
+
+        $wanted = [];
+        foreach (is_string($row->questions) ? (json_decode($row->questions, true) ?: []) : [] as $q) {
+            if (is_array($q) && ($q['topic_id'] ?? null) !== null) {
+                $wanted[WriteBack::taskIdFor((string) $row->workspace_id, (string) ($q['asked'] ?? ''))][] = (string) ($q['result'] ?? '');
+            }
+        }
+        if ($wanted === []) {
+            return [];
+        }
+        $recorded = CarbonImmutable::parse($row->finished_at, 'UTC');
+        $entries = LearnerTables::query($scope, 'journal_entries')->where('kind', 'attempt')
+            ->where('occurred_at', '>=', $recorded->format('Y-m-d H:i:s.u'))->where('occurred_at', '<=', $recorded->addMinute()->format('Y-m-d H:i:s.u'))
+            ->when($row->session_id !== null, fn ($query) => $query->where('session_id', $row->session_id))
+            ->orderBy('position')->get(['id', 'body']);
+
+        $found = [];
+        foreach ($entries as $entry) {
+            $body = is_string($entry->body) ? (json_decode($entry->body, true) ?: []) : (array) $entry->body;
+            $task = (string) ($body['task'] ?? '');
+            $at = array_search((string) ($body['outcome'] ?? ''), $wanted[$task] ?? [], true);
+            if (($body['setting'] ?? null) === 'chat' && $at !== false) {
+                unset($wanted[$task][$at]);
+                $found[] = (string) $entry->id;
+            }
+        }
+
+        return $found;
     }
 
     public function find(Principal $by, string $id): QuizDetails
@@ -139,12 +212,14 @@ final class Quizzes
     }
 
     /**
-     * The score of these questions, 0 to 100: a correct answer counts one, a partial one half.
+     * The score of these questions, 0 to 100: a correct answer counts one, a partial one half. Those that couldn't be
+     * marked are left out.
      *
      * @param  list<array{result: string}>  $questions
      */
     public static function score(array $questions): int
     {
+        $questions = array_values(array_filter($questions, fn (array $q) => $q['result'] !== 'unjudged'));
         if ($questions === []) {
             return 0;
         }

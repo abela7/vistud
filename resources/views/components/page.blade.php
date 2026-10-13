@@ -7,7 +7,7 @@
     that holds the page's top draws it again).
 --}}
 @props(['title', 'backHref' => null, 'backTo' => null, 'eyebrow' => null, 'context' => null])
-<div {{ $attributes->class('section-header') }}>
+<div {{ $attributes->class(['section-header', 'is-page']) }}>
     @if ($backHref !== null)
         <x-back :href="$backHref" :to="$backTo" compact />
     @endif

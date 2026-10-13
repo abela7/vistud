@@ -1,93 +1,266 @@
 {{--
-    A student's AI settings (App\Livewire\Study\EngineSettings): their own key (pasted once, tried at once, shown
-    again only by its last four characters), a model for each of the three roles with its price or what it does, what
-    the month has cost by role, how the tutor works (language and the trust toggles), limits and consent. Hints are one
-    line (DESIGN.md §5.4).
+    A student's AI settings (App\Livewire\Study\EngineSettings), as folded panels, each with one line of where it
+    stands: their key (pasted once, tried at once, shown again only by its last four characters), the models worth
+    paying for, trying the models, what the month has cost, a model for each of the three roles, how the tutor works
+    and the limits. Nothing is cut short: long words wrap. Hints are one line (DESIGN.md §5.4).
 --}}
 @php
     use Illuminate\Support\Carbon;
+    $own = \App\Engine\Providers::name($choices->provider ?? 'openrouter');
 @endphp
-<div class="space-y-8">
+<div class="engine-page">
     <div role="status" aria-live="polite" class="empty:hidden">
         <x-toast :message="$notice" :tone="$noticeTone" />
     </div>
 
-    <section class="question-panel space-y-4" aria-labelledby="engine-key-heading">
-        <div class="panel-head">
-            <span class="item-icon" aria-hidden="true"><x-icon name="key-round" class="size-5" /></span>
-            <div class="panel-head-text">
-                <h2 id="engine-key-heading" class="panel-title">
-                    Your key
-                    @if ($keyState === 'own')
-                        <span class="badge badge-success"><x-icon name="circle-check" class="size-3.5" />Set</span>
-                    @elseif ($keyState === 'shared')
-                        <span class="badge"><x-icon name="users" class="size-3.5" />Using the owner's</span>
-                    @else
-                        <span class="badge badge-warning"><x-icon name="triangle-alert" class="size-3.5" />Not set up</span>
-                    @endif
-                </h2>
-                <p class="panel-hint">
-                    @if ($keyState === 'own')
-                        Your key ending {{ $choices->ownKeyHint }} · saved {{ Carbon::parse($choices->keyUpdatedAt)->diffForHumans() }}
-                    @elseif ($keyState === 'shared')
-                        The owner's key is in use. Paste your own to pay yourself.
-                    @else
-                        No key yet. Three steps, a few minutes.
-                    @endif
-                </p>
-            </div>
-            @if ($keyState !== 'none')
-                <div class="panel-head-actions">
-                    <x-button size="sm" icon="play" wire:click="test" wire:loading.attr="aria-busy" wire:target="test" busy-label="Trying…">Try it</x-button>
-                    @if ($keyState === 'own')
-                        <x-button size="sm" variant="danger" icon="trash-2" wire:click="askRemove">Remove</x-button>
-                    @endif
-                </div>
+    @include('livewire.study.partials.recommended-models')
+
+    <x-panel id="key" title="Your key" icon="key-round">
+        <x-slot:status>
+            @if ($keyState === 'own')
+                <span class="badge badge-success"><x-icon name="circle-check" class="size-3.5" />Set</span> {{ $own }} key ending {{ $choices->ownKeyHint }}
+            @elseif ($keyState === 'shared')
+                <span class="badge"><x-icon name="users" class="size-3.5" />Using the owner's</span>
+            @else
+                <span class="badge badge-warning"><x-icon name="triangle-alert" class="size-3.5" />Not set up</span>
             @endif
-        </div>
+        </x-slot:status>
+
+        @if ($keyState === 'shared')
+            <p class="acc-note">The owner's key is in use. Paste your own to pay yourself.</p>
+        @endif
         @if ($result)
             <x-alert :tone="$result['ok'] ? 'success' : 'danger'" :title="$result['ok'] ? 'It works' : 'It doesn\'t work yet'">{{ $result['message'] }}</x-alert>
         @endif
         @if ($confirmingRemoval)
             <div class="plan-confirm" role="alert">
-                <p class="font-medium">Remove your key? {{ $setupUrl !== null || $keyState === 'own' ? 'Your chats stop answering unless the owner set up a key for everyone.' : '' }}</p>
+                <p class="font-medium">Remove your key? {{ $setupUrl !== null || $keyState === 'own' ? 'Chats stop answering unless the owner set up a key for everyone.' : '' }}</p>
                 <div class="flex flex-wrap gap-2">
                     <x-button variant="danger" size="sm" wire:click="removeKey">Remove it</x-button>
                     <x-button size="sm" wire:click="keepKey">Keep it</x-button>
                 </div>
             </div>
         @endif
-        @if ($keyState !== 'own')
-        <ol class="list-decimal space-y-1 pl-5 text-sm text-fg-muted">
-            <li>Make an account at <a href="https://openrouter.ai" class="text-link" target="_blank" rel="noopener">openrouter.ai</a> and add a little credit. A study session usually costs a few cents, so a few dollars goes a long way.</li>
-            <li>Open <strong>Keys</strong> in its settings, press <strong>Create key</strong>, and copy the key. It starts with <code>sk-or-</code>.</li>
-            <li>Paste it below and press <strong>Save and try</strong>. Never paste it anywhere else, and never into a chat with an AI.</li>
-        </ol>
+
+        <fieldset class="space-y-2">
+            <legend class="sr-only">Where is your key from?</legend>
+            <div class="choice-grid">
+                <label class="choice-card">
+                    <input type="radio" class="sr-only" name="key-source" value="openrouter" wire:model.live="source">
+                    <span class="item-icon" aria-hidden="true"><x-icon name="network" class="size-5" /></span>
+                    <span class="choice-text">
+                        <span class="choice-title">OpenRouter</span>
+                        <span class="choice-hint">One key for every model</span>
+                    </span>
+                    <x-icon name="circle-check" class="choice-mark size-5" />
+                </label>
+                <label class="choice-card">
+                    <input type="radio" class="sr-only" name="key-source" value="own" wire:model.live="source">
+                    <span class="item-icon" aria-hidden="true"><x-icon name="key" class="size-5" /></span>
+                    <span class="choice-text">
+                        <span class="choice-title">A provider's own key</span>
+                        <span class="choice-hint">OpenAI, Anthropic, Google and more</span>
+                    </span>
+                    <x-icon name="circle-check" class="choice-mark size-5" />
+                </label>
+            </div>
+        </fieldset>
+
+        @if ($source === 'openrouter' && $keyState !== 'own')
+            <p class="acc-note">Get a key at <a href="https://openrouter.ai" class="text-link" target="_blank" rel="noopener">openrouter.ai</a> (add a few dollars of credit), paste it, and press <strong>Save and try</strong>.</p>
         @endif
+
         <form wire:submit="saveKey" novalidate class="space-y-4">
-            <x-field name="key" :label="$keyState === 'own' ? 'Replace your key' : 'Your key'" type="password" wire:model="key" autocomplete="off" :revealable="true" placeholder="sk-or-…" hint="Kept encrypted. Only its last four characters are ever shown again." />
-            <x-button type="submit" variant="primary" icon="check" wire:loading.attr="aria-busy" wire:target="saveKey" busy-label="Saving and trying…">Save and try</x-button>
+            <div class="key-fields">
+                @if ($source === 'own')
+                    <div class="field">
+                        <label for="key-provider" class="field-label">Provider</label>
+                        <select id="key-provider" class="input" wire:model="provider">
+                            <option value="own">Find out for me</option>
+                            @foreach ($providers as $id => $name)
+                                <option value="{{ $id }}">{{ $name }}</option>
+                            @endforeach
+                        </select>
+                        @error('provider') <p class="field-error">{{ $message }}</p> @enderror
+                    </div>
+                @endif
+                <x-field name="key" :label="$keyState === 'own' ? 'Replace your key' : 'Your key'" type="password" wire:model="key" autocomplete="off" :revealable="true" :placeholder="$source === 'own' ? 'Paste it here' : 'sk-or-…'" hint="Kept encrypted." />
+            </div>
+            <div class="acc-actions">
+                <x-button type="submit" variant="primary" icon="check" wire:loading.attr="aria-busy" wire:target="saveKey" busy-label="Checking…">Save and try</x-button>
+                @if ($keyState !== 'none')
+                    <x-button icon="play" wire:click="test" wire:loading.attr="aria-busy" wire:target="test" busy-label="Trying…">Try it</x-button>
+                @endif
+                @if ($keyState === 'own')
+                    <x-button variant="danger" icon="trash-2" wire:click="askRemove">Remove</x-button>
+                @endif
+            </div>
         </form>
         @if ($keyState === 'none' && $setupUrl)
-            <p class="text-sm text-fg-muted">As an admin you can also set up <a href="{{ $setupUrl }}" class="text-link">one key for everyone</a>.</p>
+            <p class="acc-note">Admin: <a href="{{ $setupUrl }}" class="text-link">set up one key for everyone</a>.</p>
         @endif
-    </section>
+    </x-panel>
 
-    <section class="question-panel space-y-4" aria-labelledby="engine-usage-heading">
-        <div class="panel-head">
-            <span class="item-icon" aria-hidden="true"><x-icon name="trending-up" class="size-5" /></span>
-            <div class="panel-head-text">
-                <h2 id="engine-usage-heading" class="panel-title">Usage this month</h2>
-                <p class="panel-hint">
-                    @if ($choices->monthCapMicros > 0)
-                        {{ $choices->spent($usage['total']) }} of {{ $choices::dollars($choices->monthCapMicros) }}, all three together
-                    @else
-                        No monthly limit
+    @if ($keyState === 'own' || $trouble)
+        <x-panel id="try-models" title="Try your models" icon="flask-conical">
+            <x-slot:status>
+                @if ($trouble)
+                    <span class="badge badge-warning"><x-icon name="triangle-alert" class="size-3.5" />Last problem</span>
+                @else
+                    Check that each model answers
+                @endif
+            </x-slot:status>
+
+            @if ($trouble)
+                <x-alert tone="warning" :title="'Last problem · '.ucfirst($trouble['role']).($trouble['model'] !== '' ? ' · '.$trouble['model'] : '').' · '.Carbon::parse($trouble['at'])->diffForHumans()">{{ $trouble['message'] }}</x-alert>
+            @endif
+
+            @if ($keyState === 'own')
+                <div class="acc-actions">
+                    <x-button icon="play" wire:click="checkModels" wire:loading.attr="aria-busy" wire:target="checkModels" busy-label="Trying each…">Try all my models</x-button>
+                </div>
+            @endif
+
+            @if ($checks)
+                <ul class="model-checks" role="list" aria-label="Your models, tried">
+                    @foreach ($checks as $label => $check)
+                        <li class="model-check" data-ok="{{ $check['ok'] ? 'yes' : 'no' }}">
+                            <x-icon :name="$check['ok'] ? 'circle-check' : 'circle-alert'" class="model-check-mark size-5" />
+                            <div class="min-w-0 flex-1">
+                                <p class="model-check-head"><span class="font-medium text-fg">{{ $label }}</span> <code>{{ $check['model'] }}</code>
+                                    @if ($check['ms'] > 0) <span class="text-fg-muted">· {{ number_format($check['ms'] / 1000, 1) }} s</span> @endif
+                                </p>
+                                <p class="model-check-said">{{ $check['ok'] ? ($check['reply'] !== '' ? 'Answered: “'.$check['reply'].'”' : $check['message']) : $check['message'] }}</p>
+                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+
+            @if ($keyState === 'own')
+                <div class="try-chat">
+                    @if ($trial !== [])
+                        <div class="try-chat-log" role="log" aria-label="Your tries">
+                            @foreach ($trial as $turn)
+                                <p class="try-chat-you">{{ $turn['you'] }}</p>
+                                <div class="try-chat-reply" data-ok="{{ $turn['ok'] ? 'yes' : 'no' }}">
+                                    <p class="try-chat-meta"><code>{{ $turn['model'] }}</code>@if ($turn['ms'] > 0) · {{ number_format($turn['ms'] / 1000, 1) }} s @endif @if ($turn['cost'] !== null) · {{ $choices::dollars($turn['cost']) }} @endif</p>
+                                    <p class="whitespace-pre-line">{{ $turn['ok'] && $turn['reply'] !== '' ? $turn['reply'] : $turn['message'] }}</p>
+                                </div>
+                            @endforeach
+                        </div>
                     @endif
-                </p>
+                    <form wire:submit="sendTry" novalidate class="try-chat-form">
+                        <label for="try-model" class="sr-only">Model to try</label>
+                        <input id="try-model" type="text" class="input try-chat-model" wire:model="tryModel" list="engine-models" autocomplete="off" placeholder="{{ $choices->tutorModel !== '' ? $choices->tutorModel : 'Model' }}">
+                        <label for="try-text" class="sr-only">Message</label>
+                        <input id="try-text" type="text" class="input try-chat-text" wire:model="tryText" maxlength="500" autocomplete="off" placeholder="Say hello">
+                        <x-button type="submit" variant="primary" icon="arrow-up" wire:loading.attr="aria-busy" wire:target="sendTry" busy-label="Asking…">Send</x-button>
+                        @if ($trial !== [])
+                            <x-button variant="ghost" icon="x" wire:click="clearTry">Clear</x-button>
+                        @endif
+                    </form>
+                </div>
+            @endif
+        </x-panel>
+    @endif
+
+
+    <form wire:submit="save" novalidate class="engine-form-stack">
+        <datalist id="engine-models">
+            @foreach ($models as $model)
+                <option value="{{ $model->id }}">{{ $model->name }} · {{ $model->priceWords() }}</option>
+            @endforeach
+        </datalist>
+
+        <x-panel id="models" title="Your models" icon="brain">
+            <x-slot:status>{{ $tutorModel !== '' ? 'Tutor: '.$tutorModel : 'Choose a tutor' }}</x-slot:status>
+            @if ($keyState !== 'none' && $models === [])
+                <p class="acc-note">The list didn't load. Type a model's id, or press <em>Try it</em> to see why.</p>
+            @endif
+            <div class="model-fields">
+                <x-field name="tutorModel" label="Tutor" wire:model.live.debounce.500ms="tutorModel" list="engine-models" autocomplete="off" placeholder="openai/gpt-4.1-mini" :hint="$tutorWords ?? $roles[0]->does()" />
+                <x-field name="readerModel" label="Reader (optional)" wire:model.live.debounce.500ms="readerModel" list="engine-models" autocomplete="off" placeholder="google/gemini-2.5-flash" :hint="$readerWords ?? $roles[1]->does()" />
+                <x-field name="helperModel" label="Helper (optional)" wire:model.live.debounce.500ms="helperModel" list="engine-models" autocomplete="off" placeholder="google/gemini-2.5-flash-lite" :hint="$helperWords ?? $roles[2]->does()" />
+                <x-field name="fallbackModel" label="If the tutor fails (optional)" wire:model.live.debounce.500ms="fallbackModel" list="engine-models" autocomplete="off" placeholder="anthropic/claude-haiku-4.5" :hint="$fallbackWords ?? 'Tried when the tutor is down.'" />
             </div>
+
+            <div class="fav-block">
+                <h3 class="fav-title">Favorite models in chat</h3>
+                @if ($favDetails !== [])
+                    <ul class="fav-list" role="list">
+                        @foreach ($favDetails as $fav)
+                            <li class="fav-item">
+                                <div class="fav-text">
+                                    <span class="fav-name">{{ $fav['name'] }}</span>
+                                    <span class="fav-id">{{ $fav['id'] }} @if ($fav['price']) · {{ $fav['price'] }} @endif</span>
+                                </div>
+                                <x-button size="sm" variant="danger" icon="trash-2" wire:click="removeFavoriteModel('{{ $fav['id'] }}')" aria-label="Remove {{ $fav['name'] }}">Remove</x-button>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+                <div class="fav-add">
+                    <label for="new-fav-model" class="sr-only">Add model id</label>
+                    <input id="new-fav-model" type="text" class="input" wire:model="newFavoriteModel" list="engine-models" placeholder="Model id" autocomplete="off">
+                    <x-button icon="plus" wire:click="addFavoriteModel" wire:loading.attr="aria-busy" wire:target="addFavoriteModel">Add to chat</x-button>
+                </div>
+                <div class="fav-suggest">
+                    <span class="fav-suggest-label">Popular recommendations:</span>
+                    @foreach ($suggested as $sugId => $sugName)
+                        @if (! in_array($sugId, $favoriteModels, true))
+                            <button type="button" class="badge fav-chip" wire:click="addFavoriteModel('{{ $sugId }}')">
+                                <x-icon name="plus" class="size-3 text-accent" />
+                                <span>{{ $sugName }}</span>
+                            </button>
+                        @endif
+                    @endforeach
+                </div>
+            </div>
+        </x-panel>
+
+        <x-panel id="tutor" title="How the tutor works" icon="languages">
+            <x-slot:status>Your language and what it may do</x-slot:status>
+            <datalist id="engine-languages">
+                @foreach (['English', 'Amharic', 'Afaan Oromo', 'Tigrinya', 'Somali', 'Arabic', 'French', 'Spanish', 'Portuguese', 'Swahili', 'Hindi', 'Chinese'] as $name)
+                    <option value="{{ $name }}"></option>
+                @endforeach
+            </datalist>
+            <x-field name="language" label="Teach me in (optional)" wire:model="language" list="engine-languages" autocomplete="off" placeholder="Amharic" hint="Empty: the language you write in." />
+            <x-checkbox name="askTopics" label="Ask me before adding or switching topics" hint="Off: the tutor keeps them and says so." wire:model="askTopics" />
+            <x-checkbox name="tutorMarksTopics" label="Let the tutor mark topics" hint="It marks what you've covered. You can undo it." wire:model="tutorMarksTopics" />
+            <div class="memory-setting">
+                <x-checkbox name="tutorRemembers" label="Let the tutor remember things about you" hint="Short notes, like what you find hard. You see and change them." wire:model="tutorRemembers" />
+                <x-button size="sm" icon="brain" x-on:click="Livewire.dispatch('memories-open')">See what it remembers</x-button>
+            </div>
+            <x-checkbox name="autoReadFiles" label="Read my files automatically" hint="Each new file is read once." wire:model="autoReadFiles" />
+            <x-checkbox name="copyPasteAi" label="I use another AI by copy-paste" hint="Shows the copy and paste tools." wire:model="copyPasteAi" />
+        </x-panel>
+
+        <x-panel id="limits" title="Limits and privacy" icon="shield-check">
+            <x-slot:status>{{ $choices->sessionCapMicros > 0 ? $choices::dollars($choices->sessionCapMicros).' a session' : 'No session limit' }} · {{ $choices->monthCapMicros > 0 ? $choices::dollars($choices->monthCapMicros).' a month' : 'no monthly limit' }}</x-slot:status>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <x-field name="sessionCap" label="Most a session may cost ($)" type="text" inputmode="decimal" wire:model="sessionCap" hint="0 for no limit." />
+                <x-field name="monthCap" label="Most a month may cost ($)" type="text" inputmode="decimal" wire:model="monthCap" hint="0 for no limit." />
+            </div>
+            <x-checkbox name="noTraining" label="Keep my words out of model training" hint="Only providers that promise this are used." wire:model="noTraining" />
+            <x-checkbox name="consent" label="Send my study material to the model's provider" hint="Only when I use the AI." wire:model="consent" />
+        </x-panel>
+
+        <div class="acc-actions">
+            <x-button type="submit" variant="primary" icon="check" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">Save</x-button>
         </div>
-        <dl class="grid gap-3 sm:grid-cols-3" data-usage>
+    </form>
+
+    <x-panel id="usage" title="Usage this month" icon="trending-up">
+        <x-slot:status>
+            @if ($choices->monthCapMicros > 0)
+                {{ $choices->spent($usage['total']) }} of {{ $choices::dollars($choices->monthCapMicros) }}, all three together
+            @else
+                No monthly limit
+            @endif
+        </x-slot:status>
+        <dl class="grid grid-cols-3 gap-2 sm:gap-3" data-usage>
             @foreach ($roles as $role)
                 <div class="usage-tile">
                     <dt>{{ $role->label() }}</dt>
@@ -95,112 +268,5 @@
                 </div>
             @endforeach
         </dl>
-    </section>
-
-    <form wire:submit="save" novalidate class="space-y-8">
-        <section class="question-panel space-y-4" aria-labelledby="engine-models-heading">
-            <div class="panel-head">
-                <span class="item-icon" aria-hidden="true"><x-icon name="brain" class="size-5" /></span>
-                <div class="panel-head-text">
-                    <h2 id="engine-models-heading" class="panel-title">Your models</h2>
-                    <p class="panel-hint">Any model the service offers, by its id.</p>
-                </div>
-            </div>
-            @if ($keyState !== 'none' && $models === [])
-                <p class="text-sm text-fg-muted">The list of models didn't load. Type an id as the service names it; <em>Try it</em> says what's wrong.</p>
-            @endif
-            <datalist id="engine-models">
-                @foreach ($models as $model)
-                    <option value="{{ $model->id }}">{{ $model->name }} · {{ $model->priceWords() }}</option>
-                @endforeach
-            </datalist>
-            <x-field name="tutorModel" label="Tutor" wire:model.live.debounce.500ms="tutorModel" list="engine-models" autocomplete="off" placeholder="openai/gpt-4.1-mini" :hint="$tutorWords ?? $roles[0]->does()" />
-            <x-field name="readerModel" label="Reader (optional)" wire:model.live.debounce.500ms="readerModel" list="engine-models" autocomplete="off" placeholder="google/gemini-2.5-flash" :hint="$readerWords ?? $roles[1]->does()" />
-            <x-field name="helperModel" label="Helper (optional)" wire:model.live.debounce.500ms="helperModel" list="engine-models" autocomplete="off" placeholder="google/gemini-2.5-flash-lite" :hint="$helperWords ?? $roles[2]->does()" />
-            <x-field name="fallbackModel" label="If the tutor fails (optional)" wire:model.live.debounce.500ms="fallbackModel" list="engine-models" autocomplete="off" placeholder="anthropic/claude-haiku-4.5" :hint="$fallbackWords ?? 'Tried when the tutor is down or busy.'" />
-            <p class="text-sm text-fg-muted">Empty roles use the one above: the helper the reader, the reader the tutor.</p>
-
-            <div class="pt-4 border-t border-divider space-y-3">
-                <div>
-                    <h3 class="text-sm font-semibold text-fg">Favorite models in chat</h3>
-                    <p class="text-xs text-fg-muted">Choose models you love so they appear in your tutor chat, letting you switch mid-conversation like in Cursor.</p>
-                </div>
-
-                @if ($favDetails !== [])
-                    <ul class="space-y-2" role="list">
-                        @foreach ($favDetails as $fav)
-                            <li class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-border bg-surface-sunken">
-                                <div class="min-w-0">
-                                    <div class="text-sm font-medium text-fg truncate">{{ $fav['name'] }}</div>
-                                    <div class="text-xs text-fg-muted font-mono truncate">{{ $fav['id'] }} @if ($fav['price']) · {{ $fav['price'] }} @endif</div>
-                                </div>
-                                <x-button size="sm" variant="danger" icon="trash-2" wire:click="removeFavoriteModel('{{ $fav['id'] }}')" aria-label="Remove {{ $fav['name'] }}">Remove</x-button>
-                            </li>
-                        @endforeach
-                    </ul>
-                @else
-                    <p class="text-xs text-fg-muted">No custom favorites selected yet. A default set (including your tutor model) is available in chat.</p>
-                @endif
-
-                <div class="flex flex-col sm:flex-row gap-2 pt-1">
-                    <div class="flex-1">
-                        <label for="new-fav-model" class="sr-only">Add model id</label>
-                        <input id="new-fav-model" type="text" class="input w-full" wire:model="newFavoriteModel" list="engine-models" placeholder="Add model id (e.g. anthropic/claude-3.5-sonnet)" autocomplete="off">
-                    </div>
-                    <x-button size="sm" icon="plus" wire:click="addFavoriteModel" wire:loading.attr="aria-busy" wire:target="addFavoriteModel">Add to chat</x-button>
-                </div>
-
-                <div class="space-y-1.5 pt-1">
-                    <span class="text-xs font-medium text-fg-muted">Popular recommendations:</span>
-                    <div class="flex flex-wrap gap-1.5">
-                        @foreach ($suggested as $sugId => $sugName)
-                            @if (! in_array($sugId, $favoriteModels, true))
-                                <button type="button" class="badge hover:border-accent cursor-pointer transition-colors" wire:click="addFavoriteModel('{{ $sugId }}')">
-                                    <x-icon name="plus" class="size-3 text-accent" />
-                                    <span>{{ $sugName }}</span>
-                                </button>
-                            @endif
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="question-panel space-y-2" aria-labelledby="engine-tutor-heading">
-            <div class="panel-head">
-                <span class="item-icon" aria-hidden="true"><x-icon name="languages" class="size-5" /></span>
-                <div class="panel-head-text">
-                    <h2 id="engine-tutor-heading" class="panel-title">How the tutor works</h2>
-                    <p class="panel-hint">Your language, and what it may do without asking.</p>
-                </div>
-            </div>
-            <datalist id="engine-languages">
-                @foreach (['English', 'Amharic', 'Afaan Oromo', 'Tigrinya', 'Somali', 'Arabic', 'French', 'Spanish', 'Portuguese', 'Swahili', 'Hindi', 'Chinese'] as $name)
-                    <option value="{{ $name }}"></option>
-                @endforeach
-            </datalist>
-            <x-field name="language" label="Teach me in (optional)" wire:model="language" list="engine-languages" autocomplete="off" placeholder="Amharic" hint="Empty: the language you write in." />
-            <x-checkbox name="askTopics" label="Ask me before adding or switching topics" hint="Off: the tutor keeps them and says so in a line." wire:model="askTopics" />
-            <x-checkbox name="tutorMarksTopics" label="Let the tutor mark topics" hint="It marks what you've covered. You can undo it." wire:model="tutorMarksTopics" />
-            <x-checkbox name="autoReadFiles" label="Read my files automatically" hint="Each file you add is read once, for its topics." wire:model="autoReadFiles" />
-            <x-checkbox name="copyPasteAi" label="I use another AI by copy-paste" hint="Shows the copy and paste tools for it." wire:model="copyPasteAi" />
-        </section>
-
-        <section class="question-panel space-y-4" aria-labelledby="engine-limits-heading">
-            <div class="panel-head">
-                <span class="item-icon" aria-hidden="true"><x-icon name="shield-check" class="size-5" /></span>
-                <div class="panel-head-text">
-                    <h2 id="engine-limits-heading" class="panel-title">Limits and privacy</h2>
-                    <p class="panel-hint">The AI stops at a limit and says so.</p>
-                </div>
-            </div>
-            <div class="grid gap-4 sm:grid-cols-2">
-                <x-field name="sessionCap" label="Most a session may cost ($)" type="text" inputmode="decimal" wire:model="sessionCap" hint="0 for no limit." />
-                <x-field name="monthCap" label="Most a month may cost ($)" type="text" inputmode="decimal" wire:model="monthCap" hint="0 for no limit." />
-            </div>
-            <x-checkbox name="noTraining" label="Keep my words out of model training" hint="Only providers that promise this are used." wire:model="noTraining" />
-            <x-checkbox name="consent" label="Send my study material to the model's provider" hint="Only when I use the AI. Nothing is sent before." wire:model="consent" />
-            <x-button type="submit" variant="primary" icon="check" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">Save</x-button>
-        </section>
-    </form>
+    </x-panel>
 </div>

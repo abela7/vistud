@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Workspaces;
 
-use App\Appearance\Theme;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Unprocessable;
@@ -140,8 +139,6 @@ final class Form extends Component
     public function render(): View
     {
         return view('livewire.workspaces.form', [
-            'colours' => Theme::CATEGORIES,
-            'icons' => Workspaces::ICONS,
             'archived' => $this->workspaceId !== null && $this->workspaces->find($this->principal(), $this->workspaceId)->archived(),
         ]);
     }

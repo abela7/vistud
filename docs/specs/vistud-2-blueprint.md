@@ -418,7 +418,7 @@ The `instructions` rows map without loss: `me` stays "About you"; `workspace:{id
 
 ### 3.8 Statuses and how progress rolls up
 
-- **A topic's status:** `not_started` · `covered` (seen or taught) · `understood` · `confusing` · `mastered` (earned by evidence only). The student's word always wins over the tutor's; the tutor's word is shown as such and can be undone.
+- **A topic's status:** `not_started` · `covered` (seen or taught) · `understood` · `confusing` · `mastered` (earned by evidence only). The newest word holds until newer evidence (2026-10-12): "not started" until the topic is studied again, "confusing" until it is got right again, both over mastery earned before (`TopicDetails::shown`). The student's word said in a session wins over the tutor's; one said before the session the tutor may update, shown as its own and undoable. Studying a topic in a session for two minutes or more is contact with it (`Sessions::contact`); a session with no topic is contact with none.
 - **A module's progress:** understood + mastered, out of its topics. Shown as a bar and "4 of 7".
 - **A course's progress:** the sum over modules, weighted by topic count (so a 2-topic module doesn't count like a 10-topic one). Topics with no module count in a "No module" group.
 - **Needs attention:** topics confusing for 7+ days; questions stuck; a test under 50 %; cards overdue by 7+ days. This feeds "Next" and the Progress filter.

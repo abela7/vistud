@@ -3,10 +3,12 @@
     content. Back is a round button (to the course's Home), the workspace's name sits small above the section's,
     an optional count follows the title, and the section's own actions go on the right. A page inside a
     section (a module's questions, a question) says where Back goes (`back-href`, `back-to`) and what
-    sits above its title (`eyebrow`, the workspace's name by default).
+    sits above its title (`eyebrow`, the workspace's name by default). With `stack`, a phone gives the actions a row of
+    their own under the title (for several or wide ones: a list of buttons, a status switch); without it they sit beside
+    the title when they fit, as one small menu does.
 --}}
-@props(['workspace', 'title', 'count' => null, 'countLabel' => null, 'backHref' => null, 'backTo' => 'Home', 'eyebrow' => null])
-<div {{ $attributes->class('section-header') }}>
+@props(['workspace', 'title', 'count' => null, 'countLabel' => null, 'backHref' => null, 'backTo' => 'Home', 'eyebrow' => null, 'stack' => false])
+<div {{ $attributes->class(['section-header', 'is-stacked' => $stack]) }}>
     <x-back :href="$backHref ?? route('workspaces.show', $workspace->id)" :to="$backTo" compact />
     <div class="section-header-text">
         <p class="section-header-eyebrow">{{ $eyebrow ?? $workspace->name }}</p>

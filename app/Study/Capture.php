@@ -11,7 +11,7 @@ namespace App\Study;
  */
 final class Capture
 {
-    public const KINDS = ['finding', 'question', 'flashcard', 'attempt', 'checkpoint', 'summary', 'status'];
+    public const KINDS = ['finding', 'question', 'flashcard', 'attempt', 'checkpoint', 'summary', 'status', 'remember'];
 
     /** The longest each field may be, in characters; longer text is cut. */
     public const LIMITS = [
@@ -27,6 +27,7 @@ final class Capture
         'summary' => 2000,
         'why' => 500,
         'topic' => Topics::MAX_NAME,
+        'remember' => TutorMemories::MAX_TEXT,
     ];
 
     public const RESULTS = ['correct', 'partial', 'incorrect'];
@@ -170,9 +171,16 @@ final class Capture
                 ];
             case 'status':
                 $proposed = strtolower($attributes['proposed'] ?? '');
+                $proposed = $proposed === 'confusing' ? 'confused' : $proposed;
 
                 return $topic === null || ! in_array($proposed, self::STATUSES, true) ? null
                     : ['kind' => $kind, 'topic' => $topic, 'proposed' => $proposed, 'why' => self::clean($inner, 'why')];
+            case 'remember':
+                // Something lasting about the student, for them to approve (App\Study\TutorMemories): for this course,
+                // or for every course with for="all".
+                $text = self::clean($inner, 'remember');
+
+                return $text === '' ? null : ['kind' => $kind, 'topic' => null, 'text' => $text, 'everywhere' => in_array(strtolower($attributes['for'] ?? ''), ['all', 'all courses', 'everywhere'], true)];
         }
 
         return null;

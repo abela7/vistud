@@ -13,6 +13,7 @@ use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Rollups;
 use App\Study\Sessions;
+use App\Study\TopicDetails;
 use App\Study\TopicRoll;
 use App\Study\Topics;
 use Illuminate\Contracts\View\View;
@@ -171,11 +172,7 @@ final class Progress extends Component
                     // Ignored
                 }
             }
-            $word = match ($status) {
-                'understood' => 'Understood',
-                'confused' => 'Confused',
-                default => 'Covered',
-            };
+            $word = TopicDetails::STATUS_WORDS[$status] ?? TopicDetails::STATUS_WORDS['covered'];
             $this->notify($done === 1 ? "1 topic marked {$word}." : "{$done} topics marked {$word}.");
             $this->dispatch('selection-clear');
 

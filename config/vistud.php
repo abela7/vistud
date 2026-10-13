@@ -18,8 +18,14 @@ return [
         // The connection that owns the schema and runs migrations.
         'owner_connection' => 'mysql_owner',
 
-        // Tables the runtime user may only read and insert into (ADR 0003 §10.4).
-        'append_only_tables' => ['audit_log'],
+        // Tables the runtime user may only read and insert into (ADR 0003 §10.4): the audit log, and the journal, whose
+        // entries are never changed, only followed by others (ADR 0002). Rebuilding journal_refs, and erasing a
+        // learner, run as the owner.
+        'append_only_tables' => ['audit_log', 'journal_entries', 'journal_refs', 'journal_blocks'],
+
+        // Tables the runtime user may read, insert into and delete from, but never update: a journal entry's text and
+        // mentions, which a redaction deletes (ADR 0002 §10) and nothing rewrites.
+        'no_update_tables' => ['journal_content', 'journal_mentions'],
 
         // Tables the runtime user may only read.
         'read_only_tables' => ['migrations'],

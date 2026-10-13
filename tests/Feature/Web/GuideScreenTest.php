@@ -85,9 +85,11 @@ class GuideScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.guide', $this->os->id))
             ->assertOk()->assertSee('<title>Set up · Operating Systems', false)->assertSeeLivewire(GuideChat::class)
             ->assertSee('Set up with the AI')->assertSee('Set the course up myself')->assertSee('Go to Modules')->assertDontSee('Add modules myself')
-            ->assertSee('Let&#039;s set up Operating Systems', false)->assertSee('Nothing is added until you tick it');
+            ->assertSee("Let's set up <strong>Operating Systems</strong>", false)->assertSee('Nothing is added until you tick it')
+            // The first question is the kind of course, with a button for each and Skip.
+            ->assertSee('What kind of course is it?')->assertSee('Computing &amp; IT', false)->assertSee('I don&#039;t know, skip', false)->assertSee('What the AI knows');
         // The weeks are the Modules page's: its own talk, which opens from Modules and goes back there.
-        $this->actingAs($this->ada)->get(route('workspaces.guide', [$this->os->id, 'for' => 'modules']))->assertOk()->assertSee('Add modules')->assertSee('Which weeks or chapters of Operating Systems')
+        $this->actingAs($this->ada)->get(route('workspaces.guide', [$this->os->id, 'for' => 'modules']))->assertOk()->assertSee('Add modules')->assertSee('Which modules of Operating Systems')
             ->assertSee('Add modules myself')->assertDontSee('Set the course up myself')->assertSee(route('workspaces.show', [$this->os->id, 'modules']), false);
         $this->assertSame([], $this->engine->requests);
     }
@@ -106,11 +108,28 @@ class GuideScreenTest extends TestCase
         // The course details are not wanted, and the coursework is only noted, not an assignment.
         $page->set('ticks.course', false)->set('ticks.assignments.0', false)->assertSee('Add what is ticked (2)')->call('add')
             ->assertSet('proposal', null)->assertSee('Added: the About text and 1 assessment.')->assertDontSee('I would add')
-            ->assertSee('The course is set up.')->assertSee('open Modules')->assertSee('Go to Modules');
+            ->assertSee('What kind of course is it?')->assertSee('Go to Modules');
         $this->assertSame([], app(Modules::class)->list($this->principal($this->ada), $this->os->id));
         $this->assertSame([], app(Activities::class)->list($this->principal($this->ada), $this->os->id));
         $this->assertSame('Coursework 1', app(CourseProfiles::class)->get($this->principal($this->ada), $this->os->id)->assessment[0]['name']);
         $this->assertNull(app(Workspaces::class)->find($this->principal($this->ada), $this->os->id)->code);
+    }
+
+    public function test_a_proposed_module_shows_its_line_topics_and_parts_and_a_chip_tapped_is_left_out(): void
+    {
+        $this->says(['reply' => 'Here is the lab week.', 'proposal' => ['modules' => [[
+            'title' => 'Lab block 2', 'about' => 'Titrations, in the lab and written up.',
+            'topics' => ['Acid-base titration', 'Indicators'], 'parts' => [['title' => 'Lab session', 'kind' => 'lab'], ['title' => 'Lab report', 'kind' => 'assessment']],
+        ]]]]);
+
+        $page = $this->guide('modules')->set('text', 'Set up lab block 2')->call('send')
+            ->assertSee('Lab block 2')->assertSee('Titrations, in the lab and written up.')->assertSee('Tap a topic or part to leave it out.')
+            ->assertSee('Acid-base titration')->assertSee('Lab session')->assertSee('Lab session')
+            ->assertSet('ticks.topics.0', [0 => true, 1 => true])->assertSet('ticks.parts.0', [0 => true, 1 => true]);
+
+        $page->set('ticks.topics.0.1', false)->set('ticks.parts.0.1', false)->call('add')->assertSee('Added: 1 module, 1 topic and 1 part.');
+        $module = collect(app(Modules::class)->list($this->principal($this->ada), $this->os->id))->firstWhere('title', 'Lab block 2');
+        $this->assertSame('Titrations, in the lab and written up.', $module->about);
     }
 
     public function test_the_modules_can_be_added_one_week_at_a_time_and_the_ones_there_are_not_added_twice(): void
@@ -119,12 +138,12 @@ class GuideScreenTest extends TestCase
         app(Modules::class)->create($this->principal($this->ada), $this->os->id, ['title' => 'Week 1: OS Structure | Processes & Threads']);
         app(CourseProfiles::class)->save($this->principal($this->ada), $this->os->id, ['about' => 'Operating systems and virtualisation.']);
 
-        $page = $this->guide('modules')->assertSee('I have read what Operating Systems is about')->assertSee('Which weeks or chapters do you want to add now?')
+        $page = $this->guide('modules')->assertSee('I have read what Operating Systems is about')->assertSee('Which modules do you want to add now')
             ->set('text', 'Add week 3: Virtual Memory | Storage & IO')->call('send')->assertSee('Week 3: Virtual Memory');
         $system = $this->engine->requests[0]->system;
         $this->assertStringContainsString('Modules: Week 1: OS Structure | Processes & Threads', $system);
         $this->assertStringContainsString('About: Operating systems and virtualisation.', $system);
-        $page->call('add')->assertSee('Added: 1 module.')->assertSee('Tell me the next weeks whenever you like.')->assertDontSee('Go to Modules');
+        $page->call('add')->assertSee('Added: 1 module.')->assertSee('Tell me the next modules whenever you like.')->assertDontSee('Go to Modules');
 
         $this->says(['reply' => 'Again?', 'proposal' => ['modules' => [['title' => 'week 3: virtual memory | storage & io']]]]);
         $page->set('text', 'Add week 3 again')->call('send')->call('add')->assertSee('Tick what you want to add first.');
@@ -202,7 +221,7 @@ class GuideScreenTest extends TestCase
 
         $this->guide()->set('text', 'It is about operating systems.')->call('send');
         $this->guide()->assertSee('It is about operating systems.')->assertSee('What is it assessed on?')
-            ->call('startOver')->assertDontSee('It is about operating systems.')->assertSee('Let&#039;s set up Operating Systems', false);
+            ->call('startOver')->assertDontSee('It is about operating systems.')->assertSee("Let's set up <strong>Operating Systems</strong>", false);
         $this->guide()->assertDontSee('It is about operating systems.');
     }
 
@@ -211,11 +230,11 @@ class GuideScreenTest extends TestCase
         $this->says(['reply' => 'What is it assessed on?', 'proposal' => null]);
         $this->guide()->set('text', 'It is about operating systems.')->call('send');
 
-        $this->guide('modules')->assertDontSee('It is about operating systems.')->assertSee('Which weeks or chapters of Operating Systems');
+        $this->guide('modules')->assertDontSee('It is about operating systems.')->assertSee('Which modules of Operating Systems');
         $this->guide()->assertSee('It is about operating systems.');
 
         $this->travel(3)->hours();
-        $this->guide()->assertDontSee('It is about operating systems.')->assertSee('Let&#039;s set up Operating Systems', false);
+        $this->guide()->assertDontSee('It is about operating systems.')->assertSee("Let's set up <strong>Operating Systems</strong>", false);
     }
 
     public function test_an_empty_message_a_failed_answer_and_a_missing_key_say_what_to_do_and_keep_what_was_written(): void

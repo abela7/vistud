@@ -40,6 +40,9 @@ final class Briefings
         private Notes $notes,
         private Files $files,
         private Links $links,
+        private CourseProfiles $courseProfiles,
+        private LearnerProfiles $learnerProfiles,
+        private TutorMemories $memories,
     ) {}
 
     public function forSession(Principal $by, string $sessionId): Briefing
@@ -73,10 +76,19 @@ final class Briefings
 
         // Always whole: the prompt, the instructions, the session.
         $add(0, 0, null, [Tutoring::prompt($session->tutoring), "---\n\n# Briefing"], whole: true);
-        $add(10, 0, 'About the student', [$instructions['me'] !== '' ? $instructions['me'] : 'Nothing written yet.'], whole: true);
+        // In their words, then what their tutors remember about them (kept short, so never cut).
+        $remembered = $this->memories->lines($by, $workspace->id);
+        $add(10, 0, 'About the student', [$instructions['me'] !== '' ? $instructions['me'] : 'Nothing written yet.', ...($remembered === [] ? [] : ['### What their tutors remember about them', ...array_map(fn (string $line) => "- {$line}", $remembered)])], whole: true);
         $course = implode(' · ', array_filter([$workspace->code ? "Course code {$workspace->code}" : null, $workspace->term ? "Term: {$workspace->term}" : null]));
+        // What the course is (its kind, level, language, tools, exams, what it is about, its textbook) and where the student
+        // starts from in it: the same for every AI, so another model picks up where the last one stopped.
+        $profile = $this->courseProfiles->get($by, $workspace->id);
         $add(20, 0, "The course: {$workspace->name}", array_values(array_filter([
             $course !== '' ? $course : null,
+            ...CourseTypes::lines($workspace->type, $profile),
+            $profile->about !== '' ? "About: {$profile->about}" : null,
+            $profile->textbook !== '' ? "Textbook: {$profile->textbook}" : null,
+            ...array_map(fn (string $line) => "The student: {$line}", LearnerProfiles::lines($this->learnerProfiles->get($by, $workspace->id))),
             $instructions['workspace'] !== '' ? $instructions['workspace'] : 'No instructions for this course yet.',
         ])), whole: true);
         if ($moduleId !== null) {
@@ -217,7 +229,7 @@ final class Briefings
                 if (mb_strlen($text) > self::NOTE_LIMIT) {
                     $text = rtrim(mb_substr($text, 0, self::NOTE_LIMIT))."\n\n(The rest of this note is left out.)";
                 }
-                $blocks[] = "## The student's note: {$note->displayTitle()}\n\n".($text !== '' ? $text : '(Empty.)');
+                $blocks[] = "## The student's note: {$note->displayTitle()}\n\n".NoteDoc::fenced($text !== '' ? $text : '(Empty.)');
             }
         }
 

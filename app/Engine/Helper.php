@@ -117,7 +117,7 @@ final class Helper
                 if (! $reply->wantsTools() || $context === null) {
                     return self::said($reply->text);
                 }
-                $calls = array_map(fn (ToolCall $c) => ['id' => $c->id, 'type' => 'function', 'function' => ['name' => $c->name, 'arguments' => (string) json_encode($c->arguments === [] ? new \stdClass : $c->arguments)]], $reply->toolCalls);
+                $calls = array_map(fn (ToolCall $c) => $c->wire(), $reply->toolCalls);
                 $messages[] = array_filter(['role' => 'assistant', 'content' => $reply->text !== '' ? $reply->text : null, 'tool_calls' => $calls, 'reasoning_details' => $reply->reasoning !== [] ? $reply->reasoning : null], fn ($v) => $v !== null);
                 foreach ($reply->toolCalls as $call) {
                     $messages[] = ['role' => 'tool', 'tool_call_id' => $call->id, 'content' => $toolbox->run($by, $context, $call->name, $call->arguments)];

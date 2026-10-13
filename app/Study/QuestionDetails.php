@@ -21,12 +21,20 @@ final readonly class QuestionDetails
         public ?string $sessionId = null,
         /** The folder it is in (docs/specs/vistud-2-blueprint.md, Phase 9), or null. */
         public ?string $folderId = null,
+        /** Who said it is answered: student, or ai while the student hasn't said it clicked; null when it isn't. */
+        public ?string $answeredBy = null,
     ) {}
 
-    /** open or understood, as the Progress page groups them. */
+    /** open or understood, as the Progress page groups them: an answer the AI wrote isn't understanding yet. */
     public function shown(): string
     {
-        return $this->status === 'answered' ? 'understood' : 'open';
+        return $this->status === 'answered' && ! $this->answeredByAi() ? 'understood' : 'open';
+    }
+
+    /** Answered by the AI, and the student hasn't said yet that it clicked. */
+    public function answeredByAi(): bool
+    {
+        return $this->status === 'answered' && $this->answeredBy === 'ai';
     }
 
     public function statusLabel(): string

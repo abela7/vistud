@@ -24,7 +24,7 @@ final class Topics
 
     public const STATUSES = ['covered', 'understood', 'confused', 'not_started'];
 
-    public function __construct(private Memory $memory) {}
+    public function __construct(private Memory $memory, private Flashcards $flashcards, private Sessions $sessions) {}
 
     /**
      * @param  ?array  $snapshot  the derived state, when the caller has taken it already (Memory::snapshot): reading the journal is the costly part
@@ -73,17 +73,51 @@ final class Topics
                 'position' => (int) LearnerTables::query($scope, 'topics')->where('workspace_id', $workspaceId)->max('position') + 1,
                 'created_at' => now(), 'updated_at' => now(),
             ]);
+            // However it is made (accepted, added by hand, by the tutor), a topic the AI suggested and still waits is
+            // the same topic: it no longer waits (TopicSuggestions::core: case, plurals and "the" aside).
+            if ($moduleId !== null) {
+                $core = TopicSuggestions::core($name);
+                $twins = LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('status', 'suggested')->get(['id', 'name'])
+                    ->filter(fn (object $s) => TopicSuggestions::core($s->name) === $core)->pluck('id')->all();
+                if ($twins !== []) {
+                    LearnerTables::query($scope, 'topic_suggestions')->whereIn('id', $twins)->update(['status' => 'added']);
+                }
+            }
         });
 
         return $this->find($by, $id);
     }
 
+    /** Renames the topic, and says so in the journal, which names it by its label (as a question's new words are). */
     public function rename(Principal $by, string $id, mixed $name): void
     {
         $scope = Guard::learner($by);
         $name = self::validatedName($name);
-        $this->row($scope, $id);
-        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['name' => $name, 'updated_at' => now()]);
+
+        DB::transaction(function () use ($scope, $by, $id, $name) {
+            $row = $this->row($scope, $id, lock: true);
+            if ($row->name === $name) {
+                return;
+            }
+            $this->memory->append($scope, [
+                Memory::claim($scope, $by, 'defines', ["topic:{$id}"], ['entity_type' => 'topic', 'status' => 'active', 'kind' => 'concept', 'aliases' => []], ['label' => $name]),
+            ], $row->workspace_id);
+            LearnerTables::query($scope, 'topics')->where('id', $id)->update(['name' => $name, 'updated_at' => now()]);
+        });
+    }
+
+    /**
+     * Whether a word on a topic said at $at was said in the session that began at $since (or after): then the student's
+     * word stands over the tutor's; said before, what the tutor saw since is newer. With no session, it always stands.
+     */
+    public static function saidSince(?string $at, ?string $since): bool
+    {
+        if ($since === null || $at === null) {
+            return true;
+        }
+        $utc = fn (string $t) => strtotime($t.(preg_match('/[zZ]|[+-]\d\d:?\d\d$/', $t) === 1 ? '' : ' UTC'));
+
+        return $utc($at) >= $utc($since);
     }
 
     /** Puts the topic in a module of its workspace, or (null) in none; and in one of the module's folders, or none. */
@@ -127,7 +161,8 @@ final class Topics
         $row = $this->row($scope, $id);
 
         if ($status === 'not_started') {
-            LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => null, 'status_by' => null, 'status_at' => null, 'updated_at' => now()]);
+            // Kept as the student's word, so it holds over what was met before (TopicDetails::shown) until it is studied again.
+            LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => 'not_started', 'status_by' => 'student', 'status_at' => now(), 'updated_at' => now()]);
 
             return;
         }
@@ -142,19 +177,23 @@ final class Topics
     }
 
     /**
-     * The tutor's word on a topic (docs/specs/vistud-2-blueprint.md §3.8): shown as the tutor's, and never over the
-     * student's own, which always wins. Only the row changes: the journal holds what the student reported and did, so
-     * a status the tutor set is not evidence. Returns what it was before (for undo), or null when nothing changed: the
-     * student's word stood, or the topic already had that status.
+     * The tutor's word on a topic (docs/specs/vistud-2-blueprint.md §3.8): shown as the tutor's, and never over a word
+     * the student said in this session ($since, its start): one they said before it is older than what the tutor saw
+     * now, and is updated, to undo (the owner's ask, 2026-10-12). Only the row changes: the journal holds what the student
+     * reported and did, so a status the tutor set is not evidence. Returns what it was before (for undo), or null when
+     * nothing changed: the student's word stood, or the topic already had that status.
      *
      * @return ?array{status: ?string, by: ?string, at: ?string}
      */
-    public function mark(Principal $by, string $id, string $status): ?array
+    public function mark(Principal $by, string $id, string $status, ?string $since = null): ?array
     {
         $scope = Guard::learner($by);
         Input::refuse(in_array($status, self::STATUSES, true) ? [] : ['status' => 'Unknown status.']);
         $row = $this->row($scope, $id);
-        if ($row->status === $status || ($row->status !== null && $row->status_by !== 'tutor')) {
+        // The student's own word stands, unless they said it before $since (the session's start): what the tutor saw in
+        // this session is newer, and it is shown as the tutor's, to undo.
+        $older = $since !== null && $row->status_at !== null && ! self::saidSince((string) $row->status_at, $since);
+        if ($row->status === $status || ($row->status !== null && $row->status_by !== 'tutor' && ! $older)) {
             return null;
         }
         $before = ['status' => $row->status, 'by' => $row->status_by, 'at' => $row->status_at];
@@ -179,8 +218,13 @@ final class Topics
         LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $before['status'], 'status_by' => $before['status'] === null ? null : $before['by'], 'status_at' => $before['status'] === null ? null : $before['at'], 'updated_at' => now()]);
     }
 
-    /** Retires the topic: it leaves the screens, and its evidence stays in the journal. */
-    public function retire(Principal $by, string $id): void
+    /**
+     * Retires the topic: it leaves the screens, and its evidence stays in the journal. Nothing is left pointing at it:
+     * its questions, quizzes and cards stay with no topic (the cards no longer count for it), its key points go with it,
+     * and an open session on it has no topic now (Sessions::setTopic, so the tutor is told). `$who` took it out: student
+     * or tutor.
+     */
+    public function retire(Principal $by, string $id, string $who = 'student'): void
     {
         $scope = Guard::learner($by);
 
@@ -192,7 +236,14 @@ final class Topics
             LearnerTables::query($scope, 'topics')->where('id', $id)->update(['retired_at' => now(), 'updated_at' => now()]);
             LearnerTables::query($scope, 'questions')->where('topic_id', $id)->update(['topic_id' => null]);
             LearnerTables::query($scope, 'quizzes')->where('topic_id', $id)->update(['topic_id' => null]);
+            $this->flashcards->leaveTopic($scope, $by, $id);
+            LearnerTables::query($scope, 'findings')->where('topic_id', $id)->delete();
         });
+
+        $open = LearnerTables::query($scope, 'study_sessions')->where('topic_id', $id)->where('state', '!=', 'ended')->pluck('id');
+        foreach ($open as $sessionId) {
+            $this->sessions->setTopic($by, (string) $sessionId, null, $who);
+        }
     }
 
     /**
@@ -262,6 +313,7 @@ final class Topics
             $derived['label'] ?? 'not_started', $derived['flags'] ?? [], $derived['facts']['last_contact'] ?? null,
             $row->status === null ? null : ($row->status_by ?? 'student'), $row->status === null || $row->status_at === null ? null : (string) $row->status_at,
             $row->folder_id ?? null,
+            $derived['facts']['last_success'] ?? null,
         );
     }
 }

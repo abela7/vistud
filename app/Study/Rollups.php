@@ -40,12 +40,13 @@ final class Rollups
         private TopicSuggestions $suggestions,
     ) {}
 
-    public function for(Principal $by, string $workspaceId): CourseRoll
+    /** `$snapshot`: the journal as read once already, when one page or one AI call adds up many courses (App\Engine\Vistud\Overview). */
+    public function for(Principal $by, string $workspaceId, ?array $snapshot = null): CourseRoll
     {
         $scope = Guard::learner($by);
         $modules = $this->modules->list($by, $workspaceId);
         // The journal is read once for the topics and the questions both.
-        $snapshot = $this->memory->snapshot($scope);
+        $snapshot ??= $this->memory->snapshot($scope);
         $topics = $this->topics->list($by, $workspaceId, $snapshot);
         $zone = $this->sessions->timezone($by);
         $today = CarbonImmutable::now($zone)->toDateString();

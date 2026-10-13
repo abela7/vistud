@@ -94,6 +94,7 @@ test("a module's Topics tab shows its folders, each with its own Study, and a to
 
     // A topic is put in another folder from its sheet, and is shown there.
     await first.getByRole('button', { name: 'System calls', exact: true }).click();
+    await page.locator('#topic-sheet').getByText('Rename or move').click();
     const place = page.locator('#topic-sheet').getByLabel('Module or folder');
     await expect(place).toBeVisible();
     await place.selectOption({ label: 'Lecture 2 + Lab 2' });

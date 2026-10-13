@@ -137,12 +137,21 @@ final class JournalStore
             $entry->mentions,
         ));
 
-        LearnerTables::insert($scope, 'journal_refs', array_map(function (array $pair) use ($entry) {
-            [$role, $ref] = $pair;
-            [$type, $id] = Ref::parse($ref);
+        LearnerTables::insert($scope, 'journal_refs', array_map(fn (array $pair) => self::refRow($entry->id, $pair), $refs));
+    }
 
-            return ['entry_id' => $entry->id, 'role' => $role, 'ref_type' => $type, 'ref_id' => $id, 'locator' => Ref::locator($ref)];
-        }, $refs));
+    /**
+     * A reference index row for an entry's [role, ref] pair.
+     *
+     * @param  array{0: string, 1: string}  $pair
+     * @return array{entry_id: string, role: string, ref_type: string, ref_id: string, locator: ?string}
+     */
+    public static function refRow(string $entryId, array $pair): array
+    {
+        [$role, $ref] = $pair;
+        [$type, $id] = Ref::parse($ref);
+
+        return ['entry_id' => $entryId, 'role' => $role, 'ref_type' => $type, 'ref_id' => $id, 'locator' => Ref::locator($ref)];
     }
 
     /** @return list<JournalEntry> in position order */

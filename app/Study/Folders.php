@@ -101,20 +101,21 @@ final class Folders
     }
 
     /** A new folder at the end of a workspace's top level (`workspace`), a module (`module`) or another folder (`folder`). */
-    public function create(Principal $by, string $parentType, string $parentId, mixed $name): FolderDetails
+    public function create(Principal $by, string $parentType, string $parentId, mixed $name, ?string $kind = null): FolderDetails
     {
         $scope = Guard::learner($by);
         $name = self::validatedName($name);
+        Input::refuse($kind === null || ModuleParts::known($kind) ? [] : ['kind' => 'Choose a kind of part from the list.']);
         $id = Ids::new();
 
-        DB::transaction(function () use ($scope, $parentType, $parentId, $name, $id) {
+        DB::transaction(function () use ($scope, $parentType, $parentId, $name, $kind, $id) {
             [$workspaceId, $moduleId, $parentFolder, $depth] = Input::place($scope, $parentType, $parentId);
             if ($depth > self::MAX_DEPTH) {
                 throw new Conflict('too_deep', 'Folders go at most '.self::MAX_DEPTH.' levels deep.');
             }
             LearnerTables::insert($scope, 'folders', [
                 'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'parent_id' => $parentFolder,
-                'name' => $name, 'depth' => $depth, 'position' => $this->nextPosition($scope, $workspaceId, $moduleId, $parentFolder),
+                'name' => $name, 'kind' => $kind, 'depth' => $depth, 'position' => $this->nextPosition($scope, $workspaceId, $moduleId, $parentFolder),
                 'created_at' => now(), 'updated_at' => now(),
             ]);
         });
@@ -342,6 +343,6 @@ final class Folders
 
     private static function details(object $row): FolderDetails
     {
-        return new FolderDetails($row->id, $row->workspace_id, $row->module_id, $row->parent_id, $row->name, (int) $row->depth, (int) $row->position);
+        return new FolderDetails($row->id, $row->workspace_id, $row->module_id, $row->parent_id, $row->name, (int) $row->depth, (int) $row->position, $row->kind ?? null);
     }
 }

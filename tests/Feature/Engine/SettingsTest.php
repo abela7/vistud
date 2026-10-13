@@ -63,7 +63,7 @@ class SettingsTest extends TestCase
         // The row made for the key carries the defaults, so the rest can be chosen later.
         $this->assertSame([Settings::DEFAULT_SESSION_CAP, true], [$choices->sessionCapMicros, $choices->noTraining]);
 
-        $this->assertSame(['ok' => true, 'message' => 'It works: the service offers 3 models.', 'models' => 3], $settings->test($by));
+        $this->assertSame(['ok' => true, 'message' => 'It works: OpenRouter offers 3 models.', 'models' => 3], $settings->test($by));
 
         // Another student has none, and sees none of it.
         $other = $this->principal($this->student());
@@ -72,7 +72,7 @@ class SettingsTest extends TestCase
         $this->assertNull($settings->removeKey($by)->ownKeyHint);
         config(['vistud.engine.key' => '']);
         $this->assertFalse($settings->keyAvailable($by));
-        $this->assertSame('No key yet. Paste your OpenRouter key above.', $settings->test($by)['message']);
+        $this->assertSame('No key yet. Paste your key above.', $settings->test($by)['message']);
         try {
             $settings->setKey($by, 'short');
             $this->fail('Should refuse.');

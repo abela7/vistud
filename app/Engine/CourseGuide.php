@@ -11,11 +11,16 @@ use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
 use App\Study\CourseProfileDetails;
 use App\Study\CourseProfiles;
+use App\Study\CourseTypes;
+use App\Study\Folders;
 use App\Study\Input;
+use App\Study\LearnerProfiles;
 use App\Study\Modules;
+use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
+use Closure;
 use DateTimeImmutable;
 
 /**
@@ -25,7 +30,7 @@ use DateTimeImmutable;
  *   university; the guide asks what is missing, one thing at a time, and proposes the course's details, what it is about,
  *   what it should teach, how it is assessed and the textbook. It never proposes modules: they are the Modules page's job.
  * - **Adding modules** (`$for` = `modules`): the guide has read what the course is about, teaches and is assessed on, asks
- *   which weeks or chapters to add now (a timetable pasted, the weeks told, or some suggested from the About text), and
+ *   which modules (weeks, chapters, units, whatever the course is split into) to add now (a timetable pasted, the weeks told, or some suggested from the About text), and
  *   proposes only modules. They can be added a few at a time, whenever.
  *
  * Nothing is written by a talk: the proposal is shown with ticks, and `apply()` writes only what the student ticked, never
@@ -47,7 +52,10 @@ final class CourseGuide
 
     public const MAX_TOKENS = 2_000;
 
-    public function __construct(private Runner $runner, private Workspaces $workspaces, private CourseProfiles $profiles, private Modules $modules, private Activities $activities, private Settings $settings, private Models $models) {}
+    /** Adding modules: up to six modules with their lines, topics and parts, and room for a model that thinks first. */
+    public const MAX_TOKENS_MODULES = 6_000;
+
+    public function __construct(private Runner $runner, private Workspaces $workspaces, private CourseProfiles $profiles, private Modules $modules, private Activities $activities, private Settings $settings, private Models $models, private LearnerProfiles $learner, private Topics $topics, private Folders $folders) {}
 
     /** The guide's rules for one of its jobs (`modules`, or the course's setup when empty), without the file's opening comment (for people). */
     public static function rules(string $for = ''): string
@@ -62,13 +70,14 @@ final class CourseGuide
      * @param  string  $for  `modules` for the talk that adds modules, empty for the one that sets the course up
      * @param  list<array{name: string, bytes: string}>  $pictures  pictures of the course's page or timetable, shown to the
      *                                                              model with this message only and not kept anywhere
+     * @param  (Closure(string): void)|null  $onReply  given, the answer is streamed: it hears the reply so far, as it is written
      * @return array{reply: string, proposal: ?array}
      *
      * @throws Unprocessable an empty or too long message; too many or unreadable pictures, or a model that can't see them; over the month's limit; not set up
      * @throws NotFound another student's course
      * @throws EngineFailed the service can't answer, or answered with nothing
      */
-    public function turn(Principal $by, string $workspaceId, array $history, string $message, string $for = '', array $pictures = []): array
+    public function turn(Principal $by, string $workspaceId, array $history, string $message, string $for = '', array $pictures = [], ?Closure $onReply = null): array
     {
         $message = trim(str_replace("\r\n", "\n", $message));
         Input::refuse(match (true) {
@@ -82,9 +91,153 @@ final class CourseGuide
         $messages = self::remembered($history);
         $messages[] = ['role' => 'user', 'content' => self::said($message, $shown)];
 
-        $answer = $this->runner->run($by, Role::Tutor, $for === 'modules' ? 'module_guide' : 'setup_guide', $workspaceId, 'workspace', $workspaceId, fn (Run $run) => $run->ask($system, $messages, self::MAX_TOKENS)->text);
+        $limit = $for === 'modules' ? self::MAX_TOKENS_MODULES : self::MAX_TOKENS;
+        $answer = $this->runner->run($by, Role::Tutor, $for === 'modules' ? 'module_guide' : 'setup_guide', $workspaceId, 'workspace', $workspaceId, function (Run $run) use ($system, $messages, $onReply, $limit) {
+            if ($onReply === null) {
+                return $run->ask($system, $messages, $limit)->text;
+            }
+            $written = '';
+
+            return $run->stream($system, $messages, function (string $words) use (&$written, $onReply) {
+                $written .= $words;
+                $onReply(self::replySoFar($written));
+            }, $limit)->text;
+        });
 
         return self::parse($answer, $for);
+    }
+
+    /** What the guide asks for each question, and (for the talked-through ones) what the model is told to ask about. */
+    public const ASKS = [
+        'type' => 'What kind of course is it?',
+        'level' => 'What level is it taught at?',
+        'background' => 'Where are you starting from in it?',
+        'about' => 'What is the course about? A few words will do, or paste its page or syllabus.',
+        'assessment' => 'How is it assessed, and when are the deadlines? Say what the exams are like, if you know.',
+        'textbook' => 'Is there a textbook or main reading?',
+        'tools' => 'Does it use any software, tools or notation?',
+    ];
+
+    /** The questions asked with buttons; the others are talked through. */
+    public const PICKED = ['type', 'level', 'background'];
+
+    /**
+     * Where each of the guide's questions about the course stands: answered (`done`), `skipped`, or still `open`, in the
+     * order they are asked (CourseProfiles::QUESTIONS).
+     *
+     * @return array<string, string>
+     */
+    public function questions(Principal $by, string $workspaceId): array
+    {
+        $workspace = $this->workspaces->find($by, $workspaceId);
+        $profile = $this->profiles->get($by, $workspaceId);
+        $answered = [
+            'type' => CourseTypes::chosen($workspace->type),
+            'level' => $profile->level !== null,
+            'background' => $this->learner->get($by, $workspaceId)->background !== null,
+            'about' => $profile->about !== '',
+            'assessment' => $profile->assessment !== [] || $profile->examFormat !== null,
+            'textbook' => $profile->textbook !== '',
+            'tools' => $profile->tools !== [],
+        ];
+        $states = [];
+        foreach (CourseProfiles::QUESTIONS as $question) {
+            $states[$question] = $answered[$question] ? 'done' : ($profile->skipped($question) ? 'skipped' : 'open');
+        }
+
+        return $states;
+    }
+
+    /** The first question still open (of those given, else all), or null when each is answered or skipped. */
+    public function next(Principal $by, string $workspaceId, ?array $of = null): ?string
+    {
+        foreach ($this->questions($by, $workspaceId) as $question => $state) {
+            if ($state === 'open' && ($of === null || in_array($question, $of, true))) {
+                return $question;
+            }
+        }
+
+        return null;
+    }
+
+    /** How the guide asks a question, in words that suit the kind of course. */
+    public static function ask(string $question, ?string $type = null): string
+    {
+        if ($question === 'tools') {
+            return match ($type) {
+                'computing' => 'Which languages or tools does it use? Like Python, SQL or Git.',
+                'mathematics', 'physics_engineering', 'chemistry' => 'Does it use any software or notation? Like a graphing calculator, MATLAB or R.',
+                'languages' => 'Is there a course book or app it uses, or a level it aims at, like B1?',
+                default => self::ASKS['tools'],
+            };
+        }
+
+        return self::ASKS[$question] ?? '';
+    }
+
+    /**
+     * The buttons for a question asked with them: value, label and an icon (the kinds of course have one).
+     *
+     * @return list<array{value: string, label: string, icon: ?string}>
+     */
+    public static function choices(string $question): array
+    {
+        $list = match ($question) {
+            'type' => array_map(fn (array $type) => [$type[0], $type[1]], CourseTypes::TYPES),
+            'level' => array_map(fn (array $level) => [$level[0], null], CourseTypes::LEVELS),
+            'background' => array_map(fn (array $background) => [$background[0], null], CourseTypes::BACKGROUNDS),
+            default => [],
+        };
+
+        return array_map(fn (string $value, array $choice) => ['value' => $value, 'label' => $choice[0], 'icon' => $choice[1]], array_keys($list), array_values($list));
+    }
+
+    /**
+     * The student's pick for a question asked with buttons: written at once, as their own answer (no AI is asked).
+     *
+     * @throws Unprocessable a question answered in words, or a choice that isn't one of its buttons
+     */
+    public function choose(Principal $by, string $workspaceId, string $question, string $value): void
+    {
+        Input::refuse(in_array($question, self::PICKED, true) && in_array($value, array_column(self::choices($question), 'value'), true) ? [] : ['choice' => 'Pick one of the options.']);
+        match ($question) {
+            'type' => $this->workspaces->setType($by, $workspaceId, $value),
+            'level' => $this->profiles->saveFacts($by, $workspaceId, ['level' => $value]),
+            'background' => $this->learner->setBackground($by, $workspaceId, $value),
+        };
+    }
+
+    /** The student would rather not answer: no AI asks it again, unless they open it again (ask()). */
+    public function skip(Principal $by, string $workspaceId, string $question): void
+    {
+        $this->profiles->skip($by, $workspaceId, $question);
+    }
+
+    /** A question skipped earlier is open again. */
+    public function reopen(Principal $by, string $workspaceId, string $question): void
+    {
+        $this->profiles->unskip($by, $workspaceId, $question);
+    }
+
+    /**
+     * The reply so far, from an answer still being written: what stands in its "reply" so far, a half-written escape
+     * held back. An answer that isn't the shape asked for is shown as it is.
+     */
+    public static function replySoFar(string $written): string
+    {
+        $start = ltrim($written);
+        if ($start === '') {
+            return '';
+        }
+        if (! str_starts_with($start, '{') && ! str_starts_with($start, '```')) {
+            return $start;
+        }
+        if (preg_match('/"reply"\s*:\s*"((?:[^"\\\\]|\\\\.)*)/su', $written, $match) !== 1) {
+            return '';
+        }
+        $text = json_decode('"'.preg_replace('/\\\\(u[0-9a-fA-F]{0,3})?$/', '', $match[1]).'"');
+
+        return is_string($text) ? $text : '';
     }
 
     /**
@@ -178,12 +331,12 @@ final class CourseGuide
      * are added to, a module that exists is skipped.
      *
      * @param  array{course?: array, about: string, outcomes: list<string>, assessment: list<array>, textbook: string, modules: list<array>}  $proposal
-     * @param  array{course?: bool, about?: bool, outcomes?: bool, textbook?: bool, assessment?: list<int>, assignments?: list<int>, modules?: list<int>}  $ticked
-     * @return array{course: bool, about: bool, outcomes: int, textbook: bool, assessment: int, assignments: int, modules: int}
+     * @param  array{course?: bool, facts?: list<string>, about?: bool, outcomes?: bool, textbook?: bool, assessment?: list<int>, assignments?: list<int>, modules?: list<int>, topics?: array<int, list<int>>, parts?: array<int, list<int>>}  $ticked
+     * @return array{course: bool, facts: int, about: bool, outcomes: int, textbook: bool, assessment: int, assignments: int, modules: int, topics: int, parts: int}
      */
     public function apply(Principal $by, string $workspaceId, array $proposal, array $ticked): array
     {
-        $done = ['course' => false, 'about' => false, 'outcomes' => 0, 'textbook' => false, 'assessment' => 0, 'assignments' => 0, 'modules' => 0];
+        $done = ['course' => false, 'facts' => 0, 'about' => false, 'outcomes' => 0, 'textbook' => false, 'assessment' => 0, 'assignments' => 0, 'modules' => 0, 'topics' => 0, 'parts' => 0];
         $workspace = $this->workspaces->find($by, $workspaceId);
 
         $details = $proposal['course'] ?? [];
@@ -201,6 +354,21 @@ final class CourseGuide
         }
 
         $profile = $this->profiles->get($by, $workspaceId);
+
+        // The facts the student ticked (the kind of course, its level, language, tools, exams); tools are added to.
+        $facts = array_intersect_key($proposal['facts'] ?? [], array_flip(array_filter((array) ($ticked['facts'] ?? []), 'is_string')));
+        if (isset($facts['type'])) {
+            $this->workspaces->setType($by, $workspaceId, $facts['type']);
+        }
+        if (isset($facts['tools'])) {
+            $facts['tools'] = array_slice(CourseProfiles::tags([...$profile->tools, ...$facts['tools']]), 0, CourseProfiles::MAX_TOOLS);
+        }
+        $rest = array_intersect_key($facts, array_flip(['level', 'language', 'tools', 'exam_format']));
+        if ($rest !== []) {
+            $this->profiles->saveFacts($by, $workspaceId, $rest);
+        }
+        $done['facts'] = count($facts);
+
         $about = $profile->about;
         $textbook = $profile->textbook;
         $outcomes = $profile->outcomes;
@@ -258,12 +426,40 @@ final class CourseGuide
             if ($module === null || in_array(self::same($module['title']), $titles, true)) {
                 continue;
             }
-            $this->modules->create($by, $workspaceId, $module);
+            $made = $this->modules->create($by, $workspaceId, ['title' => $module['title'], 'about' => ($module['about'] ?? '') !== '' ? $module['about'] : null, 'starts_on' => $module['starts_on'], 'ends_on' => $module['ends_on']]);
             $titles[] = self::same($module['title']);
             $done['modules']++;
+            // Inside it, the topics and parts the student left ticked (all of them unless they unticked some).
+            foreach (self::inside($ticked['topics'] ?? null, $index, $module['topics'] ?? []) as $name) {
+                $this->topics->create($by, $workspaceId, $name, $made->id);
+                $done['topics']++;
+            }
+            foreach (self::inside($ticked['parts'] ?? null, $index, $module['parts'] ?? []) as $part) {
+                $this->folders->create($by, 'module', $made->id, $part['title'], $part['kind'] ?? null);
+                $done['parts']++;
+            }
         }
 
         return $done;
+    }
+
+    /**
+     * The items of a proposed module's topics or parts the student kept: those ticked, or all of them when the ticks
+     * don't say (an older screen, a test).
+     *
+     * @template T
+     *
+     * @param  list<T>  $items
+     * @return list<T>
+     */
+    private static function inside(mixed $ticks, int $index, array $items): array
+    {
+        if (! is_array($ticks) || ! array_key_exists($index, $ticks)) {
+            return $items;
+        }
+        $kept = array_map('intval', (array) $ticks[$index]);
+
+        return array_values(array_filter($items, fn ($item, $i) => in_array($i, $kept, true), ARRAY_FILTER_USE_BOTH));
     }
 
     /**
@@ -288,6 +484,13 @@ final class CourseGuide
             $workspace->endsOn !== null ? "ends {$workspace->endsOn}" : null,
         ]);
         $lines[] = 'Details: '.($facts === [] ? 'none yet' : implode(', ', $facts));
+        $background = $this->learner->get($by, $workspaceId)->background;
+        $lines[] = 'Kind: '.(CourseTypes::label($workspace->type) ?? 'not chosen');
+        $lines[] = 'Level: '.($profile->level !== null ? CourseTypes::LEVELS[$profile->level][0] : 'not chosen');
+        $lines[] = 'Taught in: '.($profile->language ?? 'not known');
+        $lines[] = 'The student starts: '.($background !== null ? CourseTypes::BACKGROUNDS[$background][0] : 'not said');
+        $lines[] = 'Tools and notation: '.($profile->tools === [] ? 'none yet' : implode(', ', $profile->tools));
+        $lines[] = 'Exams: '.($profile->examFormat ?? 'not known');
         $lines[] = 'About: '.($profile->about !== '' ? mb_substr($profile->about, 0, 300) : 'not written yet');
         $lines[] = 'What it should teach: '.($profile->outcomes === [] ? 'not written yet' : count($profile->outcomes).' lines');
         if ($profile->assessment === []) {
@@ -299,6 +502,12 @@ final class CourseGuide
             }
         }
         $lines[] = 'Textbook: '.($profile->textbook !== '' ? $profile->textbook : 'none yet');
+        $states = $this->questions($by, $workspaceId);
+        $skipped = array_keys(array_filter($states, fn (string $state) => $state === 'skipped'));
+        $lines[] = 'Skipped, never ask: '.($skipped === [] ? 'nothing' : implode(', ', $skipped));
+        // The questions with buttons are the app's; the model asks the first one talked through.
+        $next = $this->next($by, $workspaceId, array_diff(CourseProfiles::QUESTIONS, self::PICKED));
+        $lines[] = 'Ask next: '.($next === null ? 'nothing: say the course is ready and its modules come next, from Modules' : self::ask($next, $workspace->type));
 
         return implode("\n", $lines);
     }
@@ -312,6 +521,8 @@ final class CourseGuide
         if ($dates !== []) {
             $lines[] = 'Dates: '.implode(', ', $dates);
         }
+        // What kind of course and at what level, so the parts it suggests fit (labs in chemistry, readings in law).
+        $lines[] = 'Kind: '.(CourseTypes::label($workspace->type) ?? 'not chosen').'; level: '.($profile->level !== null ? CourseTypes::LEVELS[$profile->level][0] : 'not chosen');
         $lines[] = 'About: '.($profile->about !== '' ? mb_substr($profile->about, 0, 1500) : 'not written yet');
         if ($profile->outcomes !== []) {
             $lines[] = 'What it should teach:';
@@ -357,23 +568,46 @@ final class CourseGuide
     /**
      * A proposal as the app knows it, or null when it holds nothing.
      *
-     * @return ?array{course: array, about: string, outcomes: list<string>, assessment: list<array>, textbook: string, modules: list<array>}
+     * @return ?array{course: array, facts: array, about: string, outcomes: list<string>, assessment: list<array>, textbook: string, modules: list<array>}
      */
     private static function proposal(mixed $raw, string $for): ?array
     {
         if (! is_array($raw) || array_is_list($raw)) {
             return null;
         }
-        $proposal = ProfileCourse::clean($raw) + ['course' => self::course($raw['course'] ?? null)];
+        $proposal = ProfileCourse::clean($raw) + ['course' => self::course($raw['course'] ?? null), 'facts' => self::facts($raw['facts'] ?? null)];
         // Each talk has one job; whatever the model offers beyond it is dropped here, not left to the prompt alone.
         if ($for === 'modules') {
-            $proposal = ['course' => [], 'about' => '', 'outcomes' => [], 'assessment' => [], 'textbook' => '', 'modules' => $proposal['modules']];
+            $proposal = ['course' => [], 'facts' => [], 'about' => '', 'outcomes' => [], 'assessment' => [], 'textbook' => '', 'modules' => $proposal['modules']];
         } else {
             $proposal['modules'] = [];
         }
-        $holds = $proposal['about'] !== '' || $proposal['outcomes'] !== [] || $proposal['assessment'] !== [] || $proposal['textbook'] !== '' || $proposal['modules'] !== [] || $proposal['course'] !== [];
+        $holds = $proposal['about'] !== '' || $proposal['outcomes'] !== [] || $proposal['assessment'] !== [] || $proposal['textbook'] !== '' || $proposal['modules'] !== [] || $proposal['course'] !== [] || $proposal['facts'] !== [];
 
         return $holds ? $proposal : null;
+    }
+
+    /**
+     * The kind of course, its level, language, tools and exams the model suggests, cleaned to the app's lists and limits:
+     * only what is there.
+     *
+     * @return array{type?: string, level?: string, language?: string, tools?: list<string>, exam_format?: string}
+     */
+    private static function facts(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+        $text = fn (mixed $value, int $limit) => is_string($value) ? mb_substr(trim((string) preg_replace('/\s+/u', ' ', $value)), 0, $limit) : '';
+        $tools = array_slice(array_values(array_filter(CourseProfiles::tags($raw['tools'] ?? []), fn (string $tool) => mb_strlen($tool) <= CourseProfiles::MAX_TOOL)), 0, CourseProfiles::MAX_TOOLS);
+
+        return array_filter([
+            'type' => is_string($raw['type'] ?? null) && CourseTypes::chosen($raw['type']) ? $raw['type'] : null,
+            'level' => is_string($raw['level'] ?? null) && isset(CourseTypes::LEVELS[$raw['level']]) ? $raw['level'] : null,
+            'language' => $text($raw['language'] ?? null, CourseProfiles::MAX_LANGUAGE) ?: null,
+            'tools' => $tools ?: null,
+            'exam_format' => $text($raw['exam_format'] ?? null, CourseProfiles::MAX_EXAM_FORMAT) ?: null,
+        ], fn (mixed $value) => $value !== null);
     }
 
     /** @return array{code?: string, term?: string, starts_on?: string, ends_on?: string} only what is there */

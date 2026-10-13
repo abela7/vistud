@@ -31,16 +31,31 @@ final readonly class Facts
         public array $courseOutcomes = [],
         public array $courseAssessment = [],
         public string $courseTextbook = '',
+        /** @var list<string> the kind of course, its level, language, tools and exams (CourseTypes::lines) */
+        public array $courseKind = [],
         // 3 · the student
         public string $aboutYou = '',
         public array $preferences = [],
+        /** What the tutor remembers about the student (App\Study\TutorMemories), in its numbered order, each with " (all courses)" when it is for every course. */
+        public array $memories = [],
+        /** Whether the student lets the tutor remember things about them. */
+        public bool $remembers = true,
         public ?string $language = null,
         public bool $askTopics = false,
+        /** Whether what the tutor sets with set_topic_status is applied at once (else only proposed). */
+        public bool $marksTopics = true,
+        /** Whether the model has tools (the session layer names them only then). */
+        public bool $withTools = true,
         // 4 · the module
         public ?string $moduleTitle = null,
         public ?string $moduleDates = null,
+        // What the module is about, and its parts with their kinds ("Lab session (lab)"): the owner's ask, 2026-10-12.
+        public ?string $moduleAbout = null,
+        public array $moduleParts = [],
         public string $moduleInstructions = '',
         public array $topics = [],
+        /** In a folder's session, the module's topics in no folder, with where each stands. */
+        public array $moduleOwnTopics = [],
         public array $moduleFiles = [],
         public array $moduleQuestions = [],
         public array $moduleKeyPoints = [],
@@ -53,6 +68,9 @@ final readonly class Facts
         public string $mode = 'topic',
         public ?string $topicNow = null,
         public ?string $topicPractice = null,
+        /** Whether the topic now was chosen after the chat's first turn, and whether the student took the topic off. */
+        public bool $topicChangedInChat = false,
+        public bool $topicTakenOff = false,
         public string $clock = 'free: the student pauses and takes breaks when they like',
         public array $teaching = [],
         public array $material = [],
@@ -64,4 +82,14 @@ final readonly class Facts
         // 6 · the chat so far, when its oldest turns were folded
         public ?string $folded = null,
     ) {}
+
+    /**
+     * The same facts with what the tutor remembers about the student.
+     *
+     * @param  list<string>  $memories
+     */
+    public function withMemories(array $memories): self
+    {
+        return new self(...[...get_object_vars($this), 'memories' => $memories]);
+    }
 }

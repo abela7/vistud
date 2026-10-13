@@ -1,221 +1,202 @@
 {{--
-    One topic on a sheet (App\Livewire\Workspaces\TopicSheet):
-    Compact, calm, simple popup with prominent "Not understand" button,
-    unmistakable active status design, and a direct Deep Dive Topic Page link.
+    One topic on a sheet (App\Livewire\Workspaces\TopicSheet): a bottom sheet on a phone, a side panel from 640 px.
+    Top to bottom, the order a student needs it: which topic and where it lives; where they stand (the same status its
+    row shows, so the two never disagree); its numbers; Study and its page; open questions and key points; renaming
+    and moving folded away; removing it at the foot.
 --}}
 @php
     $cleanName = \App\Study\Topics::cleanMarkdown($topic?->name ?? '');
-    $statusLabels = [
-        'not_started' => ['label' => 'Not started', 'hint' => 'no contact yet'],
-        'covered' => ['label' => 'Studying', 'hint' => 'Covered'],
-        'confused' => ['label' => 'Not understand', 'hint' => 'Still confusing · Not understood'],
-        'understood' => ['label' => 'Understood', 'hint' => ''],
+    $choices = [
+        'not_started' => ['Not started', 'circle-dashed', 'No contact yet'],
+        'covered' => ['Studying', 'book-open', 'Working on it'],
+        'confused' => ['Not understood', 'circle-alert', 'Still confusing'],
+        'understood' => ['Understood', 'circle-check', 'I can explain it'],
     ];
-    $statusIcons = [
-        'not_started' => 'circle',
-        'covered' => 'book-open',
-        'confused' => 'circle-alert',
-        'understood' => 'circle-check',
-    ];
-    $statusColours = [
-        'not_started' => 'purple',
-        'covered' => 'blue',
-        'confused' => 'amber',
-        'understood' => 'green',
-    ];
+    $shown = $topic?->shown() ?? 'not_started';
+    $current = $shown === 'mastered' ? 'understood' : $shown;
+    $placeName = null;
+    if ($topic) {
+        foreach ($modules as $mod) {
+            if ($mod->id === $topic->moduleId) {
+                $placeName = $mod->title;
+                foreach ($folders[$mod->id] ?? [] as $fld) {
+                    if ($fld['id'] === $topic->folderId) {
+                        $placeName = $fld['name'];
+                    }
+                }
+            }
+        }
+    }
 @endphp
 <div>
-    <dialog id="topic-sheet" class="modal topic-sheet-modal" aria-labelledby="topic-sheet-title"
+    <dialog id="topic-sheet" class="modal tsheet" aria-labelledby="topic-sheet-title"
         wire:ignore.self
         x-data
         x-on:topic-sheet-dialog-open.window="$el.open || $el.showModal()"
         x-on:topic-sheet-dialog-close.window="$el.open && $el.close()"
         x-on:close="$wire.close()"
         x-on:click="$event.target === $el && $el.close()">
-        <div class="modal-panel w-full">
+        <div class="modal-panel tsheet-panel">
             @if ($topic)
-                {{-- Compact Header: full width for title, no squished status chip --}}
-                <div class="modal-head py-2.5 px-3.5 items-center">
+                <header class="tsheet-head">
+                    <span @class(['tsheet-icon', "is-{$current}"]) aria-hidden="true"><x-icon :name="$choices[$current][1]" class="size-5" /></span>
                     <div class="min-w-0 flex-1">
-                        <h2 id="topic-sheet-title" class="text-sm font-semibold leading-snug break-words text-fg">{{ $cleanName }}</h2>
+                        <p class="tsheet-eyebrow">Topic{{ $placeName ? ' · in '.$placeName : '' }}</p>
+                        <h2 id="topic-sheet-title" class="tsheet-title">{{ $cleanName }}</h2>
                     </div>
-                    <div class="flex items-center gap-1 shrink-0">
-                        <x-ai-menu kind="topic" :id="$topic->id" :label="$cleanName" />
-                        <button type="button" class="topbar-button shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
-                            <x-icon name="x" class="size-4" />
-                        </button>
-                    </div>
-                </div>
+                    <x-ai-menu kind="topic" :id="$topic->id" :label="$cleanName" />
+                    <button type="button" class="topbar-button shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
+                        <x-icon name="x" class="size-5" />
+                    </button>
+                </header>
 
-                <div class="space-y-2.5 px-3.5 py-2.5">
-                    @if ($notice)
-                        <p class="text-xs text-fg-muted bg-surface-sunken px-2.5 py-1 rounded-md border border-border/60" role="status">{{ $notice }}</p>
-                    @endif
-
-                    {{-- Status Choice Pills --}}
-                    <fieldset class="space-y-1">
-                        <div class="flex items-center justify-between gap-2">
-                            <legend class="field-label text-[11px] uppercase tracking-wider text-fg-muted m-0">Where you stand</legend>
-                            <span class="text-[11px] text-fg-muted">{{ $topic->evidence() }}</span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-1.5" role="radiogroup">
-                            @foreach ($statusLabels as $value => $meta)
-                                @php
-                                    $isChecked = ($value === 'not_started' && ($topic->status === null || $topic->status === 'not_started')) || $topic->status === $value;
-                                    $isConfused = $value === 'confused';
-                                @endphp
-                                <label @class([
-                                    'topic-choice status-choice cursor-pointer',
-                                    'ws-colour-'.$statusColours[$value],
-                                    'is-active' => $isChecked,
-                                    'is-confused' => $isConfused,
-                                ])>
-                                    <input type="radio" name="topic-sheet-status" value="{{ $value }}" wire:click="report('{{ $value }}')" @checked($isChecked) class="sr-only">
-                                    <x-icon :name="$statusIcons[$value]" class="size-3.5 shrink-0" />
-                                    <span class="truncate font-semibold">{{ $meta['label'] }}@if ($meta['hint'] !== '') <span class="sr-only">({{ $meta['hint'] }})</span>@endif</span>
-                                    @if ($isChecked)
-                                        <span class="topic-choice-check" title="Current status">
-                                            <x-icon name="check" class="size-2 text-surface-raised" />
-                                        </span>
-                                    @endif
+                <div class="tsheet-body">
+                    <fieldset class="tsheet-section">
+                        <legend class="tsheet-label">Where you stand</legend>
+                        <div class="tsheet-choices" role="radiogroup" aria-label="Where you stand on {{ $cleanName }}">
+                            @foreach ($choices as $value => [$label, $icon, $hint])
+                                <label @class(['tsheet-choice', "is-{$value}", 'is-active' => $value === $current]) wire:key="tsheet-choice-{{ $value }}">
+                                    <input type="radio" class="sr-only" name="topic-sheet-status" value="{{ $value }}" wire:click="report('{{ $value }}')" @checked($value === $current)>
+                                    <x-icon :name="$icon" class="size-4 shrink-0" />
+                                    <span class="min-w-0">
+                                        <span class="tsheet-choice-label">{{ $label }}</span>
+                                        <span class="tsheet-choice-hint">{{ $hint }}</span>
+                                    </span>
+                                    <x-icon name="check" class="tsheet-choice-mark size-4" />
                                 </label>
                             @endforeach
                         </div>
-                        @if ($topic->byTutor())
-                            <p class="text-[11px] text-fg-muted mt-1 leading-tight">Set by the tutor{{ $topic->statusAt !== null ? ', '.\Illuminate\Support\Carbon::parse($topic->statusAt, 'UTC')->format('j M') : '' }}. Pick another to change it.</p>
-                        @endif
-                        @error('status') <p class="field-error text-[11px]">{{ $message }}</p> @enderror
+                        <div class="tsheet-meta" role="status" aria-live="polite">
+                            @if ($notice)
+                                <span class="tsheet-saved"><x-icon name="circle-check" class="size-3.5" />{{ $notice }}</span>
+                            @endif
+                            @if ($shown === 'mastered')
+                                <span><x-icon name="shield-check" class="size-3.5" />Mastered: your reviews show it has stuck.</span>
+                            @endif
+                            <span>From your studying: {{ $topic->evidence() }}</span>
+                            @if ($topic->byTutor())
+                                <span>Set by the tutor{{ $topic->statusAt !== null ? ', '.\Illuminate\Support\Carbon::parse($topic->statusAt, 'UTC')->format('j M') : '' }}. Pick another to change it.</span>
+                            @endif
+                        </div>
+                        @error('status') <p class="field-error">{{ $message }}</p> @enderror
                     </fieldset>
 
-                    {{-- Compact Combined Stats + Deep Dive Bar --}}
-                    <div class="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-surface-sunken text-[11px] text-fg-muted border border-border/60">
-                        <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            <span>
-                                Cards:
-                                @if ($cards['total'] > 0)
-                                    <a href="{{ route('workspaces.show', [$workspaceId, 'flashcards', 'topic' => $topic->id]) }}" class="font-semibold text-accent" style="text-decoration: none !important;">
-                                        {{ $cards['total'] }}{{ $cards['due'] > 0 ? ' ('.$cards['due'].' due)' : '' }}
-                                    </a>
-                                @else
-                                    <strong class="text-fg">0</strong>
-                                @endif
-                            </span>
-                            <span class="text-border" aria-hidden="true">·</span>
-                            <span>Questions: <strong class="text-fg">{{ count($open) }} open</strong></span>
-                            <span class="text-border" aria-hidden="true">·</span>
-                            <span>Sessions: <strong class="text-fg">{{ $sessionCount }}</strong></span>
-                        </div>
+                    <ul class="tsheet-stats" role="list">
+                        <li>
+                            @if ($cards['total'] > 0)
+                                <a href="{{ route('workspaces.show', [$workspaceId, 'flashcards', 'topic' => $topic->id]) }}" class="tsheet-stat is-link">
+                                    <span class="tsheet-stat-value">{{ $cards['total'] }}</span>
+                                    <span class="tsheet-stat-label">{{ \Illuminate\Support\Str::plural('card', $cards['total']) }}@if ($cards['due'] > 0) · <span class="text-warning">{{ $cards['due'] }} due</span>@endif</span>
+                                </a>
+                            @else
+                                <span class="tsheet-stat"><span class="tsheet-stat-value">0</span><span class="tsheet-stat-label">cards</span></span>
+                            @endif
+                        </li>
+                        <li><span class="tsheet-stat"><span class="tsheet-stat-value">{{ count($open) }}</span><span class="tsheet-stat-label">open {{ \Illuminate\Support\Str::plural('question', count($open)) }}</span></span></li>
+                        <li><span class="tsheet-stat"><span class="tsheet-stat-value">{{ $sessionCount }}</span><span class="tsheet-stat-label">{{ \Illuminate\Support\Str::plural('session', $sessionCount) }}</span></span></li>
+                    </ul>
 
-                        <a href="{{ route('workspaces.topics.show', [$workspaceId, $topic->id]) }}" class="btn btn-primary btn-sm text-[11px] py-1 px-2.5 inline-flex items-center gap-1 shrink-0" style="text-decoration: none !important;">
-                            <x-icon name="sparkles" class="size-3 text-on-primary" />
-                            <span>More options & Deep Dive</span>
-                            <x-icon name="arrow-right" class="size-3" />
-                        </a>
+                    <div class="tsheet-actions">
+                        @if ($topic->moduleId !== null)
+                            <x-button variant="primary" icon="play" wire:click="study" wire:loading.attr="aria-busy" wire:target="study" busy-label="Starting…">Study this topic</x-button>
+                        @endif
+                        <a href="{{ route('workspaces.topics.show', [$workspaceId, $topic->id]) }}" class="btn btn-secondary">Open topic page<x-icon name="arrow-right" class="size-4" /></a>
                     </div>
 
-                    {{-- Open questions preview (if any) --}}
                     @if ($open !== [])
-                        <section class="space-y-1" aria-labelledby="topic-sheet-questions">
-                            <h3 id="topic-sheet-questions" class="text-[11px] font-semibold text-fg-muted uppercase tracking-wider">Open questions</h3>
-                            <ul class="grid gap-1 text-xs" role="list">
-                                @foreach (array_slice($open, 0, 2) as $question)
-                                    <li class="p-1.5 rounded-md bg-surface-sunken border border-border/50 flex items-center justify-between gap-1 text-xs">
-                                        <a href="{{ route('workspaces.questions.show', [$workspaceId, $question->id]) }}" class="item-link truncate" style="text-decoration: none !important;">{{ $question->text }}</a>
-                                        @if ($question->status === 'stuck') <span class="text-warning font-semibold shrink-0">· stuck</span>@endif
+                        <section class="tsheet-section" aria-labelledby="topic-sheet-questions">
+                            <h3 id="topic-sheet-questions" class="tsheet-label">Open questions</h3>
+                            <ul class="tsheet-list" role="list">
+                                @foreach (array_slice($open, 0, 3) as $question)
+                                    <li>
+                                        <x-icon name="circle-help" class="size-4 shrink-0 text-fg-subtle" />
+                                        <a href="{{ route('workspaces.questions.show', [$workspaceId, $question->id]) }}" class="tsheet-list-text item-link">{{ $question->text }}</a>
+                                        @if ($question->status === 'stuck') <span class="badge badge-warning shrink-0">Stuck</span>@endif
                                     </li>
                                 @endforeach
                             </ul>
                         </section>
                     @endif
 
-                    {{-- Key points, rename & move (open by default so there's zero dead space and quick access) --}}
-                    <details open class="group rounded-lg border border-border/60 bg-surface-sunken overflow-hidden text-xs">
-                        <summary class="cursor-pointer px-2.5 py-1.5 text-[11px] font-semibold text-fg-muted hover:text-fg flex items-center justify-between select-none">
-                            <span>Key points, rename & move</span>
-                            <x-icon name="chevron-down" class="size-3 transition-transform group-open:rotate-180" />
+                    <section class="tsheet-section" aria-labelledby="topic-sheet-points">
+                        <h3 id="topic-sheet-points" class="tsheet-label">Key points @if ($points !== [])<span class="tsheet-count">{{ count($points) }}</span>@endif</h3>
+                        @if ($points !== [])
+                            <ul class="tsheet-list" role="list">
+                                @foreach ($points as $keyPoint)
+                                    <li wire:key="point-{{ $keyPoint->id }}">
+                                        <span class="tsheet-dot" aria-hidden="true"></span>
+                                        <span class="tsheet-list-text">{{ $keyPoint->text }}@if ($keyPoint->sourceName !== null)<span class="text-fg-muted"> · from {{ $keyPoint->sourceName }}{{ $keyPoint->locator ? ', '.$keyPoint->locator : '' }}</span>@endif</span>
+                                        <button type="button" class="topbar-button tsheet-remove" wire:click="removePoint('{{ $keyPoint->id }}')" aria-label="Remove key point: {{ \Illuminate\Support\Str::limit($keyPoint->text, 40) }}"><x-icon name="x" class="size-4" /></button>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @else
+                            <p class="tsheet-empty">The one-line facts worth remembering. Add your own, or the tutor adds them as you study.</p>
+                        @endif
+                        <form wire:submit="addPoint" novalidate class="tsheet-inline-form">
+                            <label for="topic-sheet-point" class="sr-only">New key point</label>
+                            <input id="topic-sheet-point" class="input" type="text" wire:model="point" maxlength="500" autocomplete="off" placeholder="Add a key point…">
+                            <x-button type="submit" icon="plus" wire:loading.attr="aria-busy" wire:target="addPoint" busy-label="Adding…">Add</x-button>
+                        </form>
+                        @error('point') <p class="field-error">{{ $message }}</p> @enderror
+                    </section>
+
+                    <details class="tsheet-more" @if ($errors->hasAny(['name', 'place'])) open @endif>
+                        <summary>
+                            <x-icon name="pencil" class="size-4" />
+                            <span class="flex-1">Rename or move</span>
+                            <x-icon name="chevron-down" class="tsheet-more-chevron size-4" />
                         </summary>
-
-                        <div class="p-2.5 pt-2 space-y-2 border-t border-border/40 bg-surface-raised">
-                            {{-- Key Points --}}
-                            <section class="space-y-1" aria-labelledby="topic-sheet-points">
-                                <h3 id="topic-sheet-points" class="field-label text-[11px] m-0">Key points</h3>
-                                @if ($points !== [])
-                                    <ul class="grid gap-1 text-xs" role="list">
-                                        @foreach ($points as $keyPoint)
-                                            <li class="flex items-start gap-1.5 px-2 py-1 rounded bg-surface-sunken border border-border/50 text-xs" wire:key="point-{{ $keyPoint->id }}">
-                                                <span class="min-w-0 flex-1 break-words">{{ $keyPoint->text }}@if ($keyPoint->sourceName !== null)<span class="text-fg-muted"> · from {{ $keyPoint->sourceName }}{{ $keyPoint->locator ? ', '.$keyPoint->locator : '' }}</span>@endif</span>
-                                                <button type="button" class="topbar-button -my-1 shrink-0" wire:click="removePoint('{{ $keyPoint->id }}')" aria-label="Remove key point: {{ \Illuminate\Support\Str::limit($keyPoint->text, 40) }}"><x-icon name="x" class="size-3" /></button>
-                                            </li>
-                                        @endforeach
-                                    </ul>
-                                @endif
-                                <form wire:submit="addPoint" novalidate class="flex items-center gap-1.5">
-                                    <div class="min-w-0 flex-1">
-                                        <label for="topic-sheet-point" class="sr-only">New key point</label>
-                                        <input id="topic-sheet-point" class="input text-xs py-1 px-2 w-full" type="text" wire:model="point" maxlength="500" autocomplete="off" placeholder="Add a key point…">
-                                        @error('point') <p class="field-error text-[11px] mt-0.5">{{ $message }}</p> @enderror
-                                    </div>
-                                    <x-button size="sm" type="submit" wire:loading.attr="aria-busy" wire:target="addPoint" busy-label="Adding…">Add</x-button>
-                                </form>
-                            </section>
-
-                            {{-- Rename & Move --}}
-                            <div class="grid grid-cols-1 gap-1.5 pt-1.5 border-t border-border/40">
-                                <form wire:submit="rename" novalidate class="flex items-center gap-1.5">
-                                    <div class="min-w-0 flex-1">
-                                        <label for="topic-sheet-name" class="sr-only">Name</label>
-                                        <input id="topic-sheet-name" class="input text-xs py-1 px-2 w-full" type="text" wire:model="name" maxlength="120" autocomplete="off" placeholder="Topic name">
-                                        @error('name') <p class="field-error text-[11px] mt-0.5">{{ $message }}</p> @enderror
-                                    </div>
-                                    <x-button size="sm" type="submit" wire:loading.attr="aria-busy" wire:target="rename" busy-label="Saving…">Rename</x-button>
-                                </form>
-
-                                <div class="flex items-center gap-1.5">
-                                    <div class="min-w-0 flex-1">
-                                        <label for="topic-sheet-place" class="sr-only">Module or folder</label>
-                                        <select id="topic-sheet-place" class="input text-xs py-1 px-2 w-full" wire:model="place">
-                                            <option value="">No module</option>
-                                            @foreach ($modules as $mod)
-                                                @if (($folders[$mod->id] ?? []) === [])
-                                                    <option value="module:{{ $mod->id }}">{{ $mod->title }}</option>
-                                                @else
-                                                    <optgroup label="{{ $mod->title }}">
-                                                        <option value="module:{{ $mod->id }}">In the module</option>
-                                                        @foreach ($folders[$mod->id] as $fld)
-                                                            <option value="folder:{{ $fld['id'] }}">{{ $fld['name'] }}</option>
-                                                        @endforeach
-                                                    </optgroup>
-                                                @endif
-                                            @endforeach
-                                        </select>
-                                        @error('place') <p class="field-error text-[11px] mt-0.5">{{ $message }}</p> @enderror
-                                    </div>
-                                    <x-button size="sm" wire:click="move" wire:loading.attr="aria-busy" wire:target="move" busy-label="Moving…">Move</x-button>
+                        <div class="tsheet-more-body">
+                            <form wire:submit="rename" novalidate class="space-y-1.5">
+                                <label for="topic-sheet-name" class="field-label">Name</label>
+                                <div class="tsheet-inline-form">
+                                    <input id="topic-sheet-name" class="input" type="text" wire:model="name" maxlength="120" autocomplete="off" placeholder="Topic name">
+                                    <x-button type="submit" wire:loading.attr="aria-busy" wire:target="rename" busy-label="Saving…">Rename</x-button>
                                 </div>
+                                @error('name') <p class="field-error">{{ $message }}</p> @enderror
+                            </form>
+                            <div class="space-y-1.5">
+                                <label for="topic-sheet-place" class="field-label">Module or folder</label>
+                                <div class="tsheet-inline-form">
+                                    <select id="topic-sheet-place" class="input" wire:model="place">
+                                        <option value="">No module</option>
+                                        @foreach ($modules as $mod)
+                                            @if (($folders[$mod->id] ?? []) === [])
+                                                <option value="module:{{ $mod->id }}">{{ $mod->title }}</option>
+                                            @else
+                                                <optgroup label="{{ $mod->title }}">
+                                                    <option value="module:{{ $mod->id }}">In the module</option>
+                                                    @foreach ($folders[$mod->id] as $fld)
+                                                        <option value="folder:{{ $fld['id'] }}">{{ $fld['name'] }}</option>
+                                                    @endforeach
+                                                </optgroup>
+                                            @endif
+                                        @endforeach
+                                    </select>
+                                    <x-button wire:click="move" wire:loading.attr="aria-busy" wire:target="move" busy-label="Moving…">Move</x-button>
+                                </div>
+                                @error('place') <p class="field-error">{{ $message }}</p> @enderror
                             </div>
                         </div>
                     </details>
                 </div>
 
-                {{-- Modal Footer --}}
-                @if ($confirmingRemove)
-                    <div class="px-3.5 pt-1.5">
-                        <p class="text-xs text-danger font-medium">Remove {{ $cleanName }}? What you did on it stays in your study record.</p>
-                    </div>
-                    <div class="modal-actions py-2 px-3.5">
-                        <x-button size="sm" wire:click="keep">Keep it</x-button>
-                        <x-button size="sm" variant="danger" icon="trash-2" wire:click="remove" wire:loading.attr="aria-busy" wire:target="remove" busy-label="Removing…">Remove</x-button>
-                    </div>
-                @else
-                    <div class="modal-actions py-2 px-3.5 justify-between items-center">
-                        <button type="button" class="btn btn-ghost btn-sm text-danger hover:opacity-80 text-xs py-0.5 px-1.5" wire:click="askRemove">
-                            <x-icon name="trash-2" class="size-3" />
-                            <span>Remove topic</span>
+                <footer class="tsheet-foot">
+                    @if ($confirmingRemove)
+                        <div class="tsheet-confirm" role="alert">
+                            <p>Remove {{ $cleanName }}? What you did on it stays in your study record.</p>
+                            <div class="tsheet-confirm-actions">
+                                <x-button size="sm" wire:click="keep">Keep it</x-button>
+                                <x-button size="sm" variant="danger" icon="trash-2" wire:click="remove" wire:loading.attr="aria-busy" wire:target="remove" busy-label="Removing…">Remove</x-button>
+                            </div>
+                        </div>
+                    @else
+                        <button type="button" class="btn btn-ghost btn-sm tsheet-danger" wire:click="askRemove">
+                            <x-icon name="trash-2" class="size-4" />Remove topic
                         </button>
-                        <button type="button" class="btn btn-secondary btn-sm py-1 px-2.5 text-xs" x-on:click="$el.closest('dialog').close()">Close</button>
-                        <button type="button" class="sr-only" wire:click="study" aria-hidden="true" tabindex="-1">Study</button>
-                    </div>
-                @endif
+                    @endif
+                </footer>
             @endif
         </div>
     </dialog>

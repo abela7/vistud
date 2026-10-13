@@ -156,12 +156,24 @@ class JournalWriterTest extends TestCase
         $this->assertRefused(fn () => $this->writer->append($this->scope, $spec), 'invalid_entry', ['field' => 'actor.id']);
     }
 
+    public function test_an_ai_judged_attempt_says_which_ai_under_which_prompt_and_how_it_came(): void
+    {
+        $this->writer->appendBatch($this->scope, $this->setupEntries());
+        $ai = fn (mixed $judge) => $this->attempt($this->scope, 'E1', 'TK-1', 'correct', '2026-10-15T14:12:00+01:00', ['body' => ['judged_by' => 'ai', 'checker' => null, 'judge' => $judge]]);
+
+        $this->assertRefused(fn () => $this->writer->append($this->scope, $ai(null)), 'invalid_entry', ['field' => 'body.judge']);
+        $this->assertRefused(fn () => $this->writer->append($this->scope, $ai(['model' => '', 'prompt' => 'p', 'via' => 'chat'])), 'invalid_entry', ['field' => 'body.judge.model']);
+        $this->assertRefused(fn () => $this->writer->append($this->scope, $ai(['model' => 'm', 'prompt' => 'p', 'via' => 'email'])), 'invalid_entry', ['field' => 'body.judge.via']);
+
+        $this->assertSame(AppendResult::RECORDED, $this->writer->append($this->scope, $ai(['model' => 'anthropic/claude', 'prompt' => 'tutor-2@abc', 'via' => 'chat']))->status);
+    }
+
     public function test_the_learner_cannot_reject_a_verdict_on_their_own_work_but_can_dispute_it(): void
     {
         // ADR 0002 §6 and golden replay edge case D1.
         $this->writer->appendBatch($this->scope, [
             ...$this->setupEntries(),
-            $this->attempt($this->scope, 'E1', 'TK-1', 'correct', '2026-10-15T14:12:00+01:00', ['body' => ['judged_by' => 'ai', 'checker' => null]]),
+            $this->attempt($this->scope, 'E1', 'TK-1', 'correct', '2026-10-15T14:12:00+01:00', ['body' => ['judged_by' => 'ai', 'checker' => null, 'judge' => ['model' => 'fake/tutor', 'prompt' => 'tutor-2@1', 'via' => 'chat']]]),
             $this->interpreterJudges('C1', 'E1', ['overall' => 'incorrect'], '2026-10-15T14:50:00+01:00'),
         ]);
 

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Engine;
 
 use App\Engine\Attachments;
+use App\Engine\Context\Stack;
 use App\Engine\CourseGuide;
 use App\Engine\Engine;
 use App\Engine\EngineFailed;
@@ -18,7 +19,10 @@ use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
 use App\Study\CourseProfiles;
 use App\Study\Files;
+use App\Study\Folders;
 use App\Study\Modules;
+use App\Study\Sessions;
+use App\Study\Topics;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
 use Tests\Concerns\CreatesAccounts;
@@ -208,7 +212,7 @@ class CourseGuideTest extends TestCase
 
         $this->assertSame('Week 2: Concurrency & Scheduling | Memory Management', $result['proposal']['modules'][0]['title']);
         $request = $this->engine->requests[0];
-        $this->assertStringStartsWith('# You add modules to a course with a student', $request->system);
+        $this->assertStringStartsWith("# You set up a course's modules with a student", $request->system);
         foreach (['Course: Operating Systems', 'About: Operating systems and the technologies under them', 'What it should teach:', '- Explain how an OS schedules processes', 'Assessment: Coursework 1 (due 2026-11-20); Exam', 'Modules: Week 1: OS Structure | Processes & Threads'] as $part) {
             $this->assertStringContainsString($part, $request->system);
         }
@@ -248,7 +252,7 @@ class CourseGuideTest extends TestCase
 
         $this->says(['reply' => 'Weeks.', 'proposal' => ['modules' => [['title' => 'Week 1'], ['title' => ''], 'nonsense']]]);
         $weeks = $this->guide()->turn($this->by, $this->workspace, [], 'Week 1', 'modules')['proposal'];
-        $this->assertSame([['title' => 'Week 1', 'starts_on' => null, 'ends_on' => null]], $weeks['modules']);
+        $this->assertSame([['title' => 'Week 1', 'starts_on' => null, 'ends_on' => null, 'about' => '', 'topics' => [], 'parts' => []]], $weeks['modules']);
     }
 
     public function test_the_talk_sent_to_the_model_starts_with_the_students_turn(): void
@@ -265,7 +269,7 @@ class CourseGuideTest extends TestCase
         $this->engine->will(Fake::says('Sure! Tell me what the course is about.'));
 
         $this->assertSame(['reply' => 'Sure! Tell me what the course is about.', 'proposal' => null], $this->guide()->turn($this->by, $this->workspace, [], 'Hello'));
-        $this->assertEquals(['reply' => 'Here is what I would add.', 'proposal' => ['course' => [], 'about' => 'A course.', 'outcomes' => [], 'assessment' => [], 'textbook' => '', 'modules' => []]], CourseGuide::parse('{"proposal": {"about": "A course."}}'));
+        $this->assertEquals(['reply' => 'Here is what I would add.', 'proposal' => ['course' => [], 'facts' => [], 'about' => 'A course.', 'outcomes' => [], 'assessment' => [], 'textbook' => '', 'modules' => []]], CourseGuide::parse('{"proposal": {"about": "A course."}}'));
         $this->assertNull(CourseGuide::parse('```json'."\n".'{"reply": "Okay.", "proposal": {"about": ""}}'."\n```")['proposal']);
 
         $this->expectException(EngineFailed::class);
@@ -295,7 +299,7 @@ class CourseGuideTest extends TestCase
 
         $done = $this->guide()->apply($this->by, $this->workspace, $proposal, ['about' => true, 'modules' => [0, 1], 'assessment' => [0], 'assignments' => [0]]);
 
-        $this->assertSame(['course' => false, 'about' => true, 'outcomes' => 0, 'textbook' => false, 'assessment' => 1, 'assignments' => 1, 'modules' => 2], $done);
+        $this->assertSame(['course' => false, 'facts' => 0, 'about' => true, 'outcomes' => 0, 'textbook' => false, 'assessment' => 1, 'assignments' => 1, 'modules' => 2, 'topics' => 0, 'parts' => 0], $done);
         $this->assertSame(['Week 1: OS Structure | Processes & Threads', 'Week 2: Concurrency & Scheduling | Memory Management'], array_map(fn ($m) => $m->title, app(Modules::class)->list($this->by, $this->workspace)));
         $profile = app(CourseProfiles::class)->get($this->by, $this->workspace);
         $this->assertSame([self::PROPOSAL['about'], [], ''], [$profile->about, $profile->outcomes, $profile->textbook]);
@@ -311,7 +315,7 @@ class CourseGuideTest extends TestCase
     {
         $done = $this->guide()->apply($this->by, $this->workspace, $this->proposal(), ['course' => true, 'outcomes' => true, 'textbook' => true]);
 
-        $this->assertSame(['course' => true, 'about' => false, 'outcomes' => 2, 'textbook' => true, 'assessment' => 0, 'assignments' => 0, 'modules' => 0], $done);
+        $this->assertSame(['course' => true, 'facts' => 0, 'about' => false, 'outcomes' => 2, 'textbook' => true, 'assessment' => 0, 'assignments' => 0, 'modules' => 0, 'topics' => 0, 'parts' => 0], $done);
         $workspace = app(Workspaces::class)->find($this->by, $this->workspace);
         $this->assertSame(['Operating Systems', 'CMP4001', 'Autumn 2026', '2026-09-14', '2026-12-18'], [$workspace->name, $workspace->code, $workspace->term, $workspace->startsOn, $workspace->endsOn]);
         $profile = app(CourseProfiles::class)->get($this->by, $this->workspace);
@@ -334,6 +338,37 @@ class CourseGuideTest extends TestCase
         $next = CourseGuide::parse((string) json_encode(['reply' => 'x', 'proposal' => ['modules' => [['title' => 'week 3:  virtual memory | storage & io'], ['title' => 'Week 4: File Systems | Access Control & Security']]]]), 'modules')['proposal'];
         $this->assertSame(1, $this->guide()->apply($this->by, $this->workspace, $next, ['modules' => [0, 1]])['modules']);
         $this->assertCount(4, app(Modules::class)->list($this->by, $this->workspace));
+    }
+
+    public function test_a_module_comes_set_up_with_its_line_topics_and_parts_and_only_what_is_kept_is_added(): void
+    {
+        $raw = ['reply' => 'x', 'proposal' => ['modules' => [[
+            'title' => 'Week 5: Joins', 'about' => 'Lab week: writing joins in SQL.',
+            'topics' => ['Inner joins', 'Outer joins', 'inner joins', '', 'Self joins', 'Anti joins', 'Semi joins', 'Cross joins', 'Natural joins'],
+            'parts' => [['title' => 'Lecture', 'kind' => 'lecture'], ['title' => 'Lab session', 'kind' => 'LAB'], ['title' => 'Write-up', 'kind' => 'essay'], ['title' => '']],
+        ]]]];
+        $proposal = CourseGuide::parse((string) json_encode($raw), 'modules')['proposal'];
+        $module = $proposal['modules'][0];
+        $this->assertSame('Lab week: writing joins in SQL.', $module['about']);
+        // Six at most, no repeats, no empty ones; a kind the app doesn't know is just a folder.
+        $this->assertSame(['Inner joins', 'Outer joins', 'Self joins', 'Anti joins', 'Semi joins', 'Cross joins'], $module['topics']);
+        $this->assertSame([['title' => 'Lecture', 'kind' => 'lecture'], ['title' => 'Lab session', 'kind' => 'lab'], ['title' => 'Write-up', 'kind' => null]], $module['parts']);
+
+        // The student left out four topics and the lecture.
+        $done = $this->guide()->apply($this->by, $this->workspace, $proposal, ['modules' => [0], 'topics' => [0 => [0, 1]], 'parts' => [0 => [1, 2]]]);
+        $this->assertSame([1, 2, 2], [$done['modules'], $done['topics'], $done['parts']]);
+        $made = collect(app(Modules::class)->list($this->by, $this->workspace))->firstWhere('title', 'Week 5: Joins');
+        $this->assertSame('Lab week: writing joins in SQL.', $made->about);
+        $this->assertSame(['Inner joins', 'Outer joins'], array_values(array_map(fn ($t) => $t->name, array_filter(app(Topics::class)->list($this->by, $this->workspace), fn ($t) => $t->moduleId === $made->id))));
+        $parts = array_values(array_filter(app(Folders::class)->tree($this->by, $this->workspace), fn ($f) => $f->moduleId === $made->id));
+        $this->assertSame([['Lab session', 'lab'], ['Write-up', null]], array_map(fn ($f) => [$f->name, $f->kind], $parts));
+        $this->assertThrows(fn () => app(Folders::class)->create($this->by, 'module', $made->id, 'Odd', 'nonsense'), Unprocessable::class);
+
+        // The tutor in a session on it is told what the module is and what it holds.
+        $session = app(Sessions::class)->start($this->by, $this->workspace, null, $made->id);
+        $system = app(Stack::class)->build($this->by, $session, null, true)->system;
+        $this->assertStringContainsString('About this module: Lab week: writing joins in SQL.', $system);
+        $this->assertStringContainsString('Its parts: Lab session · Write-up.', $system);
     }
 
     public function test_the_guide_is_told_what_is_already_set_up_so_it_asks_only_for_the_rest(): void

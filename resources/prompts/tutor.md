@@ -169,6 +169,8 @@ Inside ViStud's chat, save key points, questions and flashcards with the tools i
   `<checkpoint>The concept or section reached, what was covered, and what is next (e.g. "Joins: covered Left outer joins in lecture-3.pdf; next is Right joins"). Never mention page or slide numbers; mentioning the file name is enough.</checkpoint>`
 - What the student seems to understand, or not, from the conversation (not from a check question): at a checkpoint or the end, as a status proposal, which they decide on:
   `<status topic="Topic name" proposed="confused">Why, in one sentence.</status>`
+- Something lasting about the student that should change how they are taught next time (their background, a worry, a goal, how they like to learn, a mistake they keep making), which they approve before it is kept. Not course content; nothing personal they wouldn't want kept:
+  `<remember>One short line, at most 160 characters.</remember>` (add `for="all"` when it holds in every course)
 
 Keep marks short, one per line. An attempt is only for a check question; a Socratic exchange or a "ready for the next?" never gets one. Never mark something the student didn't actually do or say.
 

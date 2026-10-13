@@ -132,7 +132,7 @@ final class QuestionBoard extends Component
     /** Changes a question's status from its row, in one click. */
     public function mark(string $id, string $status): void
     {
-        if ($this->find($id) === null) {
+        if (! isset(Questions::STATUSES[$status]) || $this->find($id) === null) {
             return;
         }
         $this->questions->setStatus($this->principal(), $id, $status);
@@ -165,6 +165,9 @@ final class QuestionBoard extends Component
 
         if ($action === 'status') {
             $status = (string) ($payload['status'] ?? 'pending');
+            if (! isset(Questions::STATUSES[$status])) {
+                return;
+            }
             foreach ($items as [$type, $id]) {
                 try {
                     $this->questions->setStatus($by, $id, $status);
@@ -188,7 +191,7 @@ final class QuestionBoard extends Component
         if (in_array($action, ['remove', 'delete'], true)) {
             foreach ($items as [$type, $id]) {
                 try {
-                    $this->questions->retire($by, $id);
+                    $this->questions->delete($by, $id);
                     $done++;
                 } catch (NotFound) {
                     // Ignored

@@ -15,7 +15,10 @@ use App\Platform\Ids;
 use App\Study\Input;
 use App\Study\SessionDetails;
 use App\Study\Sessions;
+use App\Study\TopicDetails;
+use App\Study\Topics;
 use App\Study\WriteBack;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Support\Facades\DB;
 
@@ -44,6 +47,14 @@ final class SessionChat
 
     public const WRAP_INPUT_CHARS = 40_000;
 
+    /** The table each kind the tools save is kept in, and whether a deleted one can be left marked so (retired_at). */
+    private const SAVED_IN = [
+        'flashcard' => ['flashcards', true],
+        'finding' => ['findings', false],
+        'question' => ['questions', true],
+        'topic' => ['topics', true],
+    ];
+
     public function __construct(
         private Engine $engine,
         private Sessions $sessions,
@@ -55,6 +66,7 @@ final class SessionChat
         private Attachments $attachments,
         private Runner $runner,
         private Usage $usage,
+        private Topics $topics,
     ) {}
 
     /**
@@ -136,6 +148,152 @@ final class SessionChat
         return $thread?->model;
     }
 
+    /**
+     * The tools a topic's chat may use (the owner's ask, 2026-10-12): looking things up in the course, working things
+     * out, answering a question and saying where the student stands on the topic. Saving cards, key points and
+     * questions belongs to a study session's write-back (the topic's page has its own); renaming, deleting and moving
+     * topics, the session's topic and its note are a session's or the page's.
+     */
+    public const TOPIC_TOOLS = ['notes', 'read_note', 'search_notes', 'files', 'read_file', 'module_files', 'findings', 'questions', 'topics', 'earlier_sessions', 'calculate', 'plot_graph', 'answer_question', 'set_topic_status', 'remember'];
+
+    /**
+     * The chat on a topic's own page (the owner's ask, 2026-10-12): the same tutor, model, look-ups, history and stream as a
+     * study session's chat, about this one topic, with no session (no clock; its time is not studying it). Its
+     * thread is the topic's; the tutor is told the course, the module, the student and the topic as in a session, and a
+     * section of its own: keep to the topic, teach from the student's material, depth from where they stand.
+     *
+     * @param  (Closure(string, string): void)|null  $onEvent
+     *
+     * @throws Unprocessable not set up, over the month's limit, an empty message
+     * @throws NotFound another student's topic
+     */
+    public function sendOnTopic(Principal $by, string $topicId, mixed $text, ?Closure $onEvent = null, mixed $attach = [], ?string $model = null): Reply
+    {
+        $scope = Guard::learner($by);
+        $topic = $this->topics->find($by, $topicId);
+        [$choices, $key] = $this->settings->ready($by, Role::Tutor);
+        $activeModel = $model && trim($model) !== '' ? trim($model) : $choices->tutorModel;
+        $session = self::topicSession($topic);
+        $text = is_string($text) ? trim(str_replace("\r\n", "\n", $text)) : '';
+        $items = $this->attachments->resolve($by, $session, $attach, $this->models->find($activeModel, $key));
+        Input::refuse(match (true) {
+            $text === '' && $items === [] => ['text' => 'Write something first.'],
+            mb_strlen($text) > self::MAX_TEXT => ['text' => 'Keep a message to '.self::MAX_TEXT.' characters.'],
+            default => [],
+        });
+        $thread = $this->topicThread($scope, $topic, $activeModel);
+        $this->usage->refuseOverMonthCap($scope, $choices, $this->sessions->timezone($by), chat: true);
+        $position = (int) LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->max('position');
+        $this->keep($scope, $thread->id, ++$position, ['role' => 'user', 'content' => $text, 'attachments' => $items === [] ? null : json_encode($items)]);
+
+        return $this->answer($by, $session, $thread, $choices, $key, $position, $onEvent, $activeModel, $topic);
+    }
+
+    /** Answers a topic chat's last words again, after the engine failed on them. */
+    public function retryOnTopic(Principal $by, string $topicId, ?Closure $onEvent = null): Reply
+    {
+        $scope = Guard::learner($by);
+        $topic = $this->topics->find($by, $topicId);
+        [$choices, $key] = $this->settings->ready($by, Role::Tutor);
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('topic_id', $topic->id)->first();
+        if ($thread === null || ! $this->unanswered($scope, $thread->id)) {
+            throw new Unprocessable('nothing_to_retry', 'There is nothing to try again: the tutor has answered.');
+        }
+        $this->usage->refuseOverMonthCap($scope, $choices, $this->sessions->timezone($by), chat: true);
+        $position = (int) LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->max('position');
+
+        return $this->answer($by, self::topicSession($topic), $thread, $choices, $key, $position, $onEvent, $thread->model ?: $choices->tutorModel, $topic);
+    }
+
+    /** @return list<array<string, mixed>> a topic chat's turns, as a session's */
+    public function topicTranscript(Principal $by, string $topicId): array
+    {
+        $topic = $this->topics->find($by, $topicId);
+
+        return $this->turnsOf($by, LearnerTables::query(Guard::learner($by), 'engine_threads')->where('topic_id', $topic->id)->first());
+    }
+
+    public function topicWaiting(Principal $by, string $topicId): bool
+    {
+        $scope = Guard::learner($by);
+        $topic = $this->topics->find($by, $topicId);
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('topic_id', $topic->id)->first();
+
+        return $thread !== null && $this->unanswered($scope, $thread->id);
+    }
+
+    public function topicThreadModel(Principal $by, string $topicId): ?string
+    {
+        $topic = $this->topics->find($by, $topicId);
+
+        return LearnerTables::query(Guard::learner($by), 'engine_threads')->where('topic_id', $topic->id)->value('model');
+    }
+
+    public function setTopicModel(Principal $by, string $topicId, string $model): void
+    {
+        $topic = $this->topics->find($by, $topicId);
+        if (trim($model) !== '') {
+            LearnerTables::query(Guard::learner($by), 'engine_threads')->where('topic_id', $topic->id)->update(['model' => trim($model), 'updated_at' => now()]);
+        }
+    }
+
+    /** Starts a topic's chat afresh: its turns go (what they cost stays counted). */
+    public function clearTopicChat(Principal $by, string $topicId): void
+    {
+        $scope = Guard::learner($by);
+        $topic = $this->topics->find($by, $topicId);
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('topic_id', $topic->id)->first();
+        if ($thread !== null) {
+            LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->delete();
+            LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update(['summary' => null, 'folded_through' => 0, 'turns' => 0, 'updated_at' => now()]);
+        }
+    }
+
+    /**
+     * The topic as a session for the tutor's context (App\Engine\Context\Stack): its course, module, folder and itself,
+     * in free mode, with no clock. Never kept: a topic's chat is not a study session.
+     */
+    public static function topicSession(TopicDetails $topic): SessionDetails
+    {
+        $now = now()->toIso8601String();
+
+        return new SessionDetails('topic-chat-'.$topic->id, $topic->workspaceId, $topic->moduleId, $topic->id, 'running', null, false, $now, null, $now, 0, 0, null, null,
+            mode: 'free', folderId: $topic->folderId);
+    }
+
+    private function topicThread(LearnerScope $scope, TopicDetails $topic, string $model): object
+    {
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('topic_id', $topic->id)->first();
+        if ($thread !== null) {
+            if ($model !== '' && $thread->model !== $model) {
+                LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update(['model' => $model, 'updated_at' => now()]);
+                $thread->model = $model;
+            }
+
+            return $thread;
+        }
+        $id = Ids::new();
+        LearnerTables::insert($scope, 'engine_threads', ['id' => $id, 'workspace_id' => $topic->workspaceId, 'session_id' => null, 'topic_id' => $topic->id, 'model' => $model, 'created_at' => now(), 'updated_at' => now()]);
+
+        return LearnerTables::query($scope, 'engine_threads')->where('id', $id)->first();
+    }
+
+    /** What the tutor is told of a topic's chat, after everything a session's chat is told. */
+    private static function topicChat(TopicDetails $topic): string
+    {
+        $name = Topics::cleanMarkdown($topic->name);
+
+        return implode("\n", [
+            '## This chat',
+            "This is the chat on the page of the topic \"{$name}\": the student opened this one topic to understand it. It is not a timed study session: there is no clock, and nothing here is saved to a session.",
+            "- Keep to \"{$name}\" and what it needs underneath it. Asked about something else, answer in a line and bring it back, or say which topic covers it.",
+            '- Teach from their material first: look up the topic\'s notes, files and key points before you explain, and say where an idea comes from. Fill gaps from what you know, and say so.',
+            '- When they ask: the core concepts in the order to learn them; real-world examples that fit this course and its level; the common pitfalls and misconceptions, each with how to avoid it; practice questions at their level, one at a time, checked before the next.',
+            '- Where they stand on it (above) sets the depth: not started, build from the ground up; confusing, find what is unclear first; understood, test and stretch it.',
+            "- To say where they stand now, use set_topic_status with the topic \"{$name}\". Cards, key points and questions are saved from a study session, or on this page's tabs: say so if they ask.",
+        ]);
+    }
+
     /** Whether the chat's last words are the student's (or a look-up's) with no answer after them. */
     public function waiting(Principal $by, string $sessionId): bool
     {
@@ -177,7 +335,7 @@ final class SessionChat
      *
      * @param  (Closure(string, string): void)|null  $onEvent
      */
-    private function answer(Principal $by, SessionDetails $session, object $thread, Choices $choices, ?string $key, int $position, ?Closure $onEvent, ?string $overrideModel = null): Reply
+    private function answer(Principal $by, SessionDetails $session, object $thread, Choices $choices, ?string $key, int $position, ?Closure $onEvent, ?string $overrideModel = null, ?TopicDetails $onTopic = null): Reply
     {
         $activeModel = $overrideModel && trim($overrideModel) !== '' ? trim($overrideModel) : $choices->tutorModel;
         $scope = Guard::learner($by);
@@ -185,8 +343,14 @@ final class SessionChat
         $withTools = $model === null || $model->tools;
         $built = $this->stack->build($by, $session, $thread->summary, $withTools);
         [$system, $tools] = [$built->system, $built->tools];
+        $toolbox = $this->toolbox;
+        if ($onTopic !== null) {
+            $system .= "\n\n".self::topicChat($onTopic);
+            $tools = array_values(array_filter($tools, fn (array $tool) => in_array($tool['function']['name'] ?? '', self::TOPIC_TOOLS, true)));
+            $toolbox = $this->toolbox->only(self::TOPIC_TOOLS);
+        }
         $messages = $this->messagesOf($by, $thread, $model === null || $model->images, $activeModel);
-        $context = new Context($session->workspaceId, $session->moduleId, $session->id, $this->sessions->timezone($by), folderId: $session->folderId);
+        $context = new Context($session->workspaceId, $session->moduleId, $onTopic === null ? $session->id : null, $this->sessions->timezone($by), folderId: $session->folderId, threadId: $thread->id);
         $fallbacks = $choices->fallbackModel !== '' ? [$choices->fallbackModel] : [];
         $rounds = max(0, (int) config('vistud.engine.tool_rounds'));
         $reply = null;
@@ -195,8 +359,8 @@ final class SessionChat
             // Room for a model that thinks before it answers: its thinking counts against the limit.
             $request = new Request($activeModel, $system, $messages, $round < $rounds ? $tools : [], $fallbacks, maxTokens: 8000, noTraining: $choices->noTraining, key: $key);
             $reply = $onEvent === null ? $this->engine->reply($request) : $this->engine->stream($request, fn (string $words) => $onEvent('text', $words));
-            // A call's arguments are always an object, even with none: a service refuses a list there.
-            $calls = array_map(fn (ToolCall $c) => ['id' => $c->id, 'type' => 'function', 'function' => ['name' => $c->name, 'arguments' => (string) json_encode($c->arguments === [] ? new \stdClass : $c->arguments)]], $reply->toolCalls);
+            // As the service sent them, with anything it wants back (App\Engine\ToolCall::wire); kept so a later turn sends it too.
+            $calls = array_map(fn (ToolCall $c) => $c->wire(), $reply->toolCalls);
             $this->keep($scope, $thread->id, ++$position, [
                 'role' => 'assistant', 'content' => $reply->text, 'tool_calls' => $calls === [] ? null : json_encode($calls), 'model' => $reply->model,
                 'reasoning' => $reply->reasoning === [] ? null : json_encode($reply->reasoning),
@@ -204,7 +368,7 @@ final class SessionChat
             ]);
             // Counted round by round, so a turn the engine fails on later still counts what it cost.
             LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update(['spent_micros' => DB::raw('spent_micros + '.(int) ($reply->costMicros ?? 0)), 'updated_at' => now()]);
-            $messages[] = array_filter(['role' => 'assistant', 'content' => $reply->text !== '' ? $reply->text : null, 'tool_calls' => $calls ?: null, 'reasoning_details' => $reply->reasoning !== [] && $reply->model === $choices->tutorModel ? $reply->reasoning : null], fn ($v) => $v !== null);
+            $messages[] = array_filter(['role' => 'assistant', 'content' => $reply->text !== '' ? $reply->text : null, 'tool_calls' => $calls ?: null, 'reasoning_details' => $reply->reasoning !== [] && self::sameModel($reply->model, $activeModel) ? $reply->reasoning : null], fn ($v) => $v !== null);
             if (! $reply->wantsTools()) {
                 break;
             }
@@ -212,7 +376,7 @@ final class SessionChat
                 if ($onEvent !== null) {
                     $onEvent('looking', $call->name);
                 }
-                $out = $this->toolbox->run($by, $context, $call->name, $call->arguments);
+                $out = $toolbox->run($by, $context->by($reply->model), $call->name, $call->arguments);
                 // What the tool did in the course, kept with its result and told to the page as it happens.
                 $effects = $context->effects->take();
                 $this->keep($scope, $thread->id, ++$position, ['role' => 'tool', 'content' => $out, 'tool_call_id' => $call->id, 'tool_name' => $call->name, 'effects' => $effects === [] ? null : json_encode($effects)]);
@@ -241,7 +405,18 @@ final class SessionChat
     {
         $scope = Guard::learner($by);
         $this->sessions->find($by, $sessionId);
-        $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first();
+
+        return $this->turnsOf($by, LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first());
+    }
+
+    /**
+     * A thread's turns as the student reads them (a session's chat, or a topic's).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function turnsOf(Principal $by, ?object $thread): array
+    {
+        $scope = Guard::learner($by);
         if ($thread === null) {
             return [];
         }
@@ -255,11 +430,20 @@ final class SessionChat
         $pendingTopic = null;
         $pendingStatuses = [];
         $pendingQuizzes = [];
-        foreach ($this->rows($scope, $thread->id) as $row) {
+        $pendingRemembered = [];
+        $rows = $this->rows($scope, $thread->id);
+        $changes = $this->topicChangesBefore($by, $thread, $rows);
+        foreach ($rows as $row) {
             if ($row->role === 'tool') {
                 $effects = isset($row->effects) && is_string($row->effects) ? (json_decode($row->effects, true) ?: []) : [];
+                // What the tutor saved is said as what is still there: a card deleted since is no longer "saved" (an older
+                // turn named no ids, so its count stands).
+                $ids = is_array($effects['saved_ids'] ?? null) ? $effects['saved_ids'] : [];
                 foreach (is_array($effects['saved'] ?? null) ? $effects['saved'] : [] as $kind => $count) {
-                    $pendingSaved[$kind] = ($pendingSaved[$kind] ?? 0) + (int) $count;
+                    $count = is_array($ids[$kind] ?? null) ? $this->stillThere($scope, (string) $kind, array_values(array_unique(array_map('strval', $ids[$kind])))) : (int) $count;
+                    if ($count > 0) {
+                        $pendingSaved[$kind] = ($pendingSaved[$kind] ?? 0) + $count;
+                    }
                 }
                 foreach (is_array($effects['notes'] ?? null) ? $effects['notes'] : [] as $note) {
                     $pendingNotes[(string) $note['id']] = ['id' => (string) $note['id'], 'title' => (string) $note['title']];
@@ -267,6 +451,7 @@ final class SessionChat
                 $pendingTopic = is_string($effects['topic'] ?? null) ? $effects['topic'] : $pendingTopic;
                 array_push($pendingStatuses, ...array_values(array_filter(is_array($effects['statuses'] ?? null) ? $effects['statuses'] : [], 'is_array')));
                 array_push($pendingQuizzes, ...array_values(array_filter(is_array($effects['quizzes'] ?? null) ? $effects['quizzes'] : [], 'is_array')));
+                array_push($pendingRemembered, ...array_values(array_filter(is_array($effects['remembered'] ?? null) ? $effects['remembered'] : [], 'is_array')));
 
                 continue;
             }
@@ -287,17 +472,20 @@ final class SessionChat
                 'topic' => $row->role === 'assistant' ? $pendingTopic : null,
                 'statuses' => $row->role === 'assistant' ? $pendingStatuses : [],
                 'quizzes' => $row->role === 'assistant' ? $pendingQuizzes : [],
+                'remembered' => $row->role === 'assistant' ? $pendingRemembered : [],
+                // The student's own topic change on the session page, just before these words of theirs.
+                'topicChange' => $changes[(int) $row->position] ?? null,
                 'cost_micros' => (int) $row->cost_micros + ($row->role === 'assistant' ? $pendingCost : 0),
                 'folded' => (int) $row->position <= (int) $thread->folded_through,
                 'at' => (string) $row->created_at,
             ];
             if ($row->role === 'assistant') {
-                [$pendingTools, $pendingCost, $pendingSaved, $pendingNotes, $pendingTopic, $pendingStatuses, $pendingQuizzes] = [[], 0, [], [], null, [], []];
+                [$pendingTools, $pendingCost, $pendingSaved, $pendingNotes, $pendingTopic, $pendingStatuses, $pendingQuizzes, $pendingRemembered] = [[], 0, [], [], null, [], [], []];
             }
         }
         if ($pendingTools !== []) {
             // A turn that ended in look-ups without an answer (the engine failed after them).
-            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'saved' => $pendingSaved, 'notes' => array_values($pendingNotes), 'topic' => $pendingTopic, 'statuses' => $pendingStatuses, 'quizzes' => $pendingQuizzes, 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
+            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'saved' => $pendingSaved, 'notes' => array_values($pendingNotes), 'topic' => $pendingTopic, 'statuses' => $pendingStatuses, 'quizzes' => $pendingQuizzes, 'remembered' => $pendingRemembered, 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
         }
 
         return $turns;
@@ -312,20 +500,50 @@ final class SessionChat
      */
     public function activity(Principal $by, string $sessionId): array
     {
-        $scope = Guard::learner($by);
         $this->sessions->find($by, $sessionId);
-        $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first();
+
+        return $this->activityOf($by, LearnerTables::query(Guard::learner($by), 'engine_threads')->where('session_id', $sessionId)->first());
+    }
+
+    /** What a topic's chat did in the course (as activity() says it for a session's). */
+    public function topicActivity(Principal $by, string $topicId): array
+    {
+        $topic = $this->topics->find($by, $topicId);
+
+        return $this->activityOf($by, LearnerTables::query(Guard::learner($by), 'engine_threads')->where('topic_id', $topic->id)->first());
+    }
+
+    /** What a topic's chat has cost, all together. */
+    public function topicSpent(Principal $by, string $topicId): int
+    {
+        $topic = $this->topics->find($by, $topicId);
+
+        return (int) LearnerTables::query(Guard::learner($by), 'engine_threads')->where('topic_id', $topic->id)->value('spent_micros');
+    }
+
+    private function activityOf(Principal $by, ?object $thread): array
+    {
+        $scope = Guard::learner($by);
         $out = ['saved' => [], 'topics' => [], 'statuses' => [], 'quizzes' => 0];
         if ($thread === null) {
             return $out;
         }
+        // What was made is counted while it is still there: by id, from what the tools named; an older turn named no
+        // ids, so its count stands.
+        $made = [];
+        $quizIds = [];
         foreach ($this->rows($scope, $thread->id) as $row) {
             if ($row->role !== 'tool' || ! isset($row->effects) || ! is_string($row->effects)) {
                 continue;
             }
             $effects = json_decode($row->effects, true) ?: [];
+            $ids = is_array($effects['saved_ids'] ?? null) ? $effects['saved_ids'] : [];
             foreach (is_array($effects['saved'] ?? null) ? $effects['saved'] : [] as $kind => $count) {
-                $out['saved'][$kind] = ($out['saved'][$kind] ?? 0) + (int) $count;
+                if (is_array($ids[$kind] ?? null)) {
+                    $made[$kind] = [...$made[$kind] ?? [], ...array_map('strval', $ids[$kind])];
+                } else {
+                    $out['saved'][$kind] = ($out['saved'][$kind] ?? 0) + (int) $count;
+                }
             }
             if (is_string($effects['topic_id'] ?? null)) {
                 $out['topics'][] = $effects['topic_id'];
@@ -336,11 +554,47 @@ final class SessionChat
                     $out['statuses'][$status['topic_id']] = $status;
                 }
             }
-            $out['quizzes'] += count(is_array($effects['quizzes'] ?? null) ? $effects['quizzes'] : []);
+            // A quiz or test is counted while it is still there (each record names it by id).
+            foreach (is_array($effects['quizzes'] ?? null) ? $effects['quizzes'] : [] as $quiz) {
+                is_array($quiz) && is_string($quiz['id'] ?? null) ? $quizIds[] = $quiz['id'] : $out['quizzes']++;
+            }
+        }
+        if ($quizIds !== []) {
+            $out['quizzes'] += LearnerTables::query($scope, 'quizzes')->whereIn('id', array_values(array_unique($quizIds)))->count();
+        }
+        foreach ($made as $kind => $ids) {
+            $live = $this->stillThere($scope, $kind, array_values(array_unique($ids)));
+            if ($live > 0) {
+                $out['saved'][$kind] = ($out['saved'][$kind] ?? 0) + $live;
+            }
+        }
+        // A session's cards say which session and author made them: counted from the deck, older turns included.
+        if (($thread->session_id ?? null) !== null) {
+            $cards = LearnerTables::query($scope, 'flashcards')->where('session_id', $thread->session_id)->where('author', 'ai')->whereNull('retired_at')->count();
+            unset($out['saved']['flashcard']);
+            if ($cards > 0) {
+                $out['saved']['flashcard'] = $cards;
+            }
         }
         $out['topics'] = array_values(array_unique($out['topics']));
 
         return $out;
+    }
+
+    /**
+     * How many of these are still there (not deleted since).
+     *
+     * @param  list<string>  $ids
+     */
+    private function stillThere(LearnerScope $scope, string $kind, array $ids): int
+    {
+        [$table, $marked] = self::SAVED_IN[$kind] ?? [null, false];
+        if ($table === null || $ids === []) {
+            return 0;
+        }
+        $query = LearnerTables::query($scope, $table)->whereIn('id', $ids);
+
+        return ($marked ? $query->whereNull('retired_at') : $query)->count();
     }
 
     /**
@@ -545,16 +799,18 @@ final class SessionChat
         foreach ($rows as $row) {
             $lastAsked = $row->role === 'user' ? (int) $row->position : $lastAsked;
         }
+        $changes = $this->topicChangesBefore($by, $thread, $rows);
         $messages = [];
         foreach ($rows as $row) {
             if ((int) $row->position <= (int) $thread->folded_through) {
                 continue;
             }
+            $row = self::withTopicNote($row, $changes);
             $attached = self::attached($row);
             if ($row->role === 'assistant' && trim((string) $row->content) === '' && ! is_string($row->tool_calls)) {
                 continue;
             }
-            $reasoning = isset($row->reasoning) && is_string($row->reasoning) && (string) $row->model === $model ? json_decode($row->reasoning, true) : null;
+            $reasoning = isset($row->reasoning) && is_string($row->reasoning) && self::sameModel((string) $row->model, $model) ? json_decode($row->reasoning, true) : null;
             $messages[] = match ($row->role) {
                 'tool' => ['role' => 'tool', 'tool_call_id' => (string) $row->tool_call_id, 'content' => (string) $row->content],
                 'assistant' => array_filter(['role' => 'assistant', 'content' => (string) $row->content !== '' ? (string) $row->content : null, 'tool_calls' => is_string($row->tool_calls) ? self::objectArguments(json_decode($row->tool_calls, true) ?: []) : null, 'reasoning_details' => is_array($reasoning) && $reasoning !== [] ? $reasoning : null], fn ($v) => $v !== null),
@@ -566,12 +822,107 @@ final class SessionChat
     }
 
     /**
+     * The topic changes the student made on the session page (the tutor's own are in the chat as its set_topic calls),
+     * each under the first message of theirs after it, by its position: the last change before that message, when
+     * there were several. Changes before the chat's first message only set it up (the standing context says the topic
+     * now); a topic's chat has none.
+     *
+     * @param  list<object>  $rows
+     * @return array<int, array{topic: ?string, name: ?string, by: string, at: string}>
+     */
+    private function topicChangesBefore(Principal $by, object $thread, array $rows): array
+    {
+        if (($thread->session_id ?? null) === null) {
+            return [];
+        }
+        $log = $this->studentTopicChanges($by, (string) $thread->session_id);
+        $under = [];
+        $next = 0;
+        $first = true;
+        foreach ($rows as $row) {
+            if ($row->role !== 'user') {
+                continue;
+            }
+            $asked = CarbonImmutable::parse((string) $row->created_at, 'UTC');
+            while ($next < count($log) && CarbonImmutable::parse($log[$next]['at'])->lessThanOrEqualTo($asked)) {
+                if (! $first) {
+                    $under[(int) $row->position] = $log[$next];
+                }
+                $next++;
+            }
+            $first = false;
+        }
+
+        return $under;
+    }
+
+    /** @return list<array{topic: ?string, name: ?string, by: string, at: string}> */
+    private function studentTopicChanges(Principal $by, string $sessionId): array
+    {
+        return array_values(array_filter($this->sessions->topicLog($by, $sessionId), fn (array $change) => $change['by'] === 'student'));
+    }
+
+    /**
+     * The student's topic change since their last message (null when there is none, or the chat hasn't begun), for
+     * the chat to show after it until they write again.
+     *
+     * @return array{topic: ?string, name: ?string, by: string, at: string}|null
+     */
+    public function topicChangeSinceLastMessage(Principal $by, string $sessionId): ?array
+    {
+        $scope = Guard::learner($by);
+        $log = $this->studentTopicChanges($by, $sessionId);
+        if ($log === []) {
+            return null;
+        }
+        $last = $log[array_key_last($log)];
+        $thread = LearnerTables::query($scope, 'engine_threads')->where('session_id', $sessionId)->first();
+        $asked = $thread === null ? null : LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->where('role', 'user')->max('created_at');
+
+        return $asked !== null && CarbonImmutable::parse($last['at'])->greaterThan(CarbonImmutable::parse((string) $asked, 'UTC')) ? $last : null;
+    }
+
+    /**
+     * The student's message with what the app tells the tutor before their words, when they changed the topic on the
+     * session page just before it (a copy; the kept message stays as they wrote it).
+     *
+     * @param  array<int, array{topic: ?string, name: ?string, by: string, at: string}>  $changes
+     */
+    private static function withTopicNote(object $row, array $changes): object
+    {
+        $change = $changes[(int) $row->position] ?? null;
+        if ($change === null) {
+            return $row;
+        }
+        $note = $change['topic'] === null
+            ? '(From the app, not the student\'s words: on the session page the student took the topic off this session, so it has none now.)'
+            : "(From the app, not the student's words: on the session page the student moved this session to the topic \"{$change['name']}\". Teach that topic from here.)";
+        $row = clone $row;
+        $row->content = trim($note."\n\n".$row->content);
+
+        return $row;
+    }
+
+    /**
      * Kept tool calls with their arguments as an object, even with none (older rows kept an empty list, which a
      * service refuses).
      *
      * @param  list<array<string, mixed>>  $calls
      * @return list<array<string, mixed>>
      */
+    /**
+     * Whether the model that answered is the one asked: a service may name it a little differently ("models/…", a
+     * dated version, or with its maker in front), and reasoning goes back only to the model that wrote it.
+     */
+    private static function sameModel(string $said, string $asked): bool
+    {
+        $bare = fn (string $id) => strtolower((string) preg_replace('#^models/#', '', $id));
+        [$said, $asked] = [$bare($said), $bare($asked)];
+
+        return $said === $asked || str_ends_with($said, '/'.$asked) || str_ends_with($asked, '/'.$said)
+            || ($asked !== '' && str_starts_with($said, $asked.'-') && preg_match('/-\d{4}-?\d{2}-?\d{2}$|-\d{4}$/', $said) === 1);
+    }
+
     private static function objectArguments(array $calls): array
     {
         foreach ($calls as &$call) {
@@ -612,7 +963,8 @@ final class SessionChat
             return;
         }
         $folded = array_slice($rows, 0, $cut);
-        $transcript = $this->asText($folded);
+        $changes = $this->topicChangesBefore($by, $thread, $this->rows($scope, $threadId));
+        $transcript = $this->asText(array_map(fn (object $row) => self::withTopicNote($row, $changes), $folded));
         $earlier = $thread->summary !== null && trim((string) $thread->summary) !== '' ? "What was already folded:\n".trim((string) $thread->summary)."\n\n---\n\n" : '';
 
         try {

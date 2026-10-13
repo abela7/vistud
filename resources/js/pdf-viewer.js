@@ -65,7 +65,12 @@ export async function drawPdf(frame) {
             const native = document.createElement('iframe');
             native.className = view.className.replace('pdf-view', '').trim();
             native.title = frame.title;
-            native.src = url;
+            // The browser's viewer takes its zoom from the address (#zoom=150), so a new zoom opens it again at it.
+            const startZoom = Number(getComputedStyle(view).getPropertyValue('--doc-zoom')) || 1;
+            native.src = `${url}#zoom=${Math.round(startZoom * 100)}`;
+            window.addEventListener('file-zoom', (event) => {
+                if (native.isConnected) native.src = `${url}#zoom=${Math.round(event.detail.zoom * 100)}`;
+            });
             native.dataset.shown = '';
             view.replaceWith(native);
             native.dispatchEvent(new CustomEvent('pdf-shown', { bubbles: true }));
@@ -171,6 +176,10 @@ export async function drawPdf(frame) {
         }, { passive: true });
     }
 
+    // The zoom of the file's page (--doc-zoom on .file-pane-doc, set by its zoom bar): the pages are that much
+    // wider than the frame, so they are drawn sharper too, up to twice the usual limit.
+    const zoomNow = () => Number(getComputedStyle(view).getPropertyValue('--doc-zoom')) || 1;
+
     async function draw(holder) {
         const width = holder.clientWidth;
         if (!width || holder.dataset.drawnAt === String(width)) return;
@@ -178,7 +187,8 @@ export async function drawPdf(frame) {
         const page = await pdf.getPage(Number(holder.dataset.page));
         const base = page.getViewport({ scale: 1 });
         holder.style.aspectRatio = `${base.width} / ${base.height}`;
-        const viewport = page.getViewport({ scale: Math.min(MAX_SCALE, (width * (window.devicePixelRatio || 1)) / base.width) });
+        const limit = MAX_SCALE * Math.min(2, Math.max(1, zoomNow()));
+        const viewport = page.getViewport({ scale: Math.min(limit, (width * (window.devicePixelRatio || 1)) / base.width) });
         const canvas = document.createElement('canvas');
         canvas.width = Math.floor(viewport.width);
         canvas.height = Math.floor(viewport.height);
@@ -213,5 +223,20 @@ export async function drawPdf(frame) {
             observer.observe(holder);
         }), 200);
     }).observe(view);
+
+    // A new zoom: the same spot stays in the middle of the frame, and the pages near it are drawn at the new width.
+    window.addEventListener('file-zoom', () => {
+        if (!view.isConnected) return;
+        const middleY = (view.scrollTop + view.clientHeight / 2) / (view.scrollHeight || 1);
+        const middleX = (view.scrollLeft + view.clientWidth / 2) / (view.scrollWidth || 1);
+        requestAnimationFrame(() => {
+            view.scrollTop = middleY * view.scrollHeight - view.clientHeight / 2;
+            view.scrollLeft = middleX * view.scrollWidth - view.clientWidth / 2;
+            holders.forEach((holder) => {
+                observer.unobserve(holder);
+                observer.observe(holder);
+            });
+        });
+    });
     shown();
 }

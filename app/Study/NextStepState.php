@@ -11,7 +11,7 @@ final readonly class NextStepState
     /**
      * @param  list<NextStepModule>  $modules  in order
      * @param  ?array{topic: ?string, url: string}  $openSession  the student's open session, when there is one
-     * @param  list<array{topicId: string, topic: string, moduleId: ?string}>  $attention  topics that need another look, most urgent first
+     * @param  list<array{topicId: string, topic: string, moduleId: ?string, folder?: ?string}>  $attention  topics that need another look, most urgent first, with the folder each is in when it is in one
      * @param  list<array{title: string, dueOn: string, hoursLeft: int, url: string}>  $deadlines  what is still open and has a day, soonest first
      */
     public function __construct(

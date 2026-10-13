@@ -9,6 +9,8 @@ use App\Study\Activities;
 use App\Study\CourseProfiles;
 use App\Study\FileText;
 use App\Study\FileTexts;
+use App\Study\ModuleParts;
+use App\Study\Modules;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
 
@@ -21,6 +23,11 @@ use DateTimeImmutable;
  */
 final class ProfileCourse extends Job
 {
+    /** The most topics and parts the guide may propose for one module. */
+    public const MODULE_TOPICS = 6;
+
+    public const MODULE_PARTS = 6;
+
     public const PROMPT = 'resources/prompts/reader-course.md';
 
     public function __construct(string $workspaceId)
@@ -76,7 +83,7 @@ final class ProfileCourse extends Job
      * out what it can't use and never throws; an empty course comes back empty.
      *
      * @param  array<string, mixed>  $data
-     * @return array{about: string, outcomes: list<string>, assessment: list<array{name: string, kind: string, weight: ?int, due_on: ?string}>, textbook: string, modules: list<array{title: string, starts_on: ?string, ends_on: ?string}>}
+     * @return array{about: string, outcomes: list<string>, assessment: list<array{name: string, kind: string, weight: ?int, due_on: ?string}>, textbook: string, modules: list<array{title: string, starts_on: ?string, ends_on: ?string, about: string, topics: list<string>, parts: list<array{title: string, kind: ?string}>}>}
      */
     public static function clean(array $data): array
     {
@@ -119,7 +126,27 @@ final class ProfileCourse extends Job
             }
             $starts = $date($item['starts_on'] ?? null);
             $ends = $date($item['ends_on'] ?? null);
-            $modules[] = ['title' => $title, 'starts_on' => $starts, 'ends_on' => $ends !== null && $starts !== null && $ends < $starts ? null : $ends];
+            // What the module guide adds inside a module (the owner's ask, 2026-10-12): a line of what it is about, its
+            // topics and its parts (folders of a kind: AppStudyModuleParts). A part of no known kind is just a folder.
+            $topics = [];
+            foreach (is_array($item['topics'] ?? null) ? $item['topics'] : [] as $topic) {
+                $name = $clean($topic, CourseProfiles::MAX_NAME);
+                if ($name !== '' && count($topics) < self::MODULE_TOPICS && ! in_array(mb_strtolower($name), array_map('mb_strtolower', $topics), true)) {
+                    $topics[] = $name;
+                }
+            }
+            $parts = [];
+            foreach (is_array($item['parts'] ?? null) ? $item['parts'] : [] as $part) {
+                $name = is_array($part) ? $clean($part['title'] ?? null, CourseProfiles::MAX_NAME) : '';
+                if ($name !== '' && count($parts) < self::MODULE_PARTS) {
+                    $kind = is_string($part['kind'] ?? null) ? strtolower(trim($part['kind'])) : null;
+                    $parts[] = ['title' => $name, 'kind' => ModuleParts::known($kind) ? $kind : null];
+                }
+            }
+            $modules[] = [
+                'title' => $title, 'starts_on' => $starts, 'ends_on' => $ends !== null && $starts !== null && $ends < $starts ? null : $ends,
+                'about' => $clean($item['about'] ?? null, Modules::MAX_ABOUT), 'topics' => $topics, 'parts' => $parts,
+            ];
         }
 
         return [

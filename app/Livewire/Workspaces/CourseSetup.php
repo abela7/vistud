@@ -14,8 +14,11 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
 use App\Study\CourseProfiles;
+use App\Study\CourseTypes;
 use App\Study\Files;
 use App\Study\LearnerProfiles;
+use App\Study\Plugins;
+use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -92,7 +95,26 @@ final class CourseSetup extends Component
 
     public string $note = '';
 
+    /** What kind of course it is, its level, the language it is taught in, its tools, its exams (App\Study\CourseTypes). */
+    public string $kind = '';
+
+    public string $level = '';
+
+    public string $language = '';
+
+    public string $tools = '';
+
+    public string $examFormat = '';
+
+    /** @var list<string> the study plugins every new session starts with */
+    public array $plugins = [];
+
+    /** Where the student starts from in this course. */
+    public string $background = '';
+
     private CourseProfiles $profiles;
+
+    private Workspaces $workspaces;
 
     private LearnerProfiles $learner;
 
@@ -104,9 +126,10 @@ final class CourseSetup extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(CourseProfiles $profiles, LearnerProfiles $learner, Runner $runner, Files $files, Settings $settings, PrincipalFactory $principals): void
+    public function boot(CourseProfiles $profiles, LearnerProfiles $learner, Runner $runner, Files $files, Settings $settings, PrincipalFactory $principals, Workspaces $workspaces): void
     {
         $this->profiles = $profiles;
+        $this->workspaces = $workspaces;
         $this->learner = $learner;
         $this->runner = $runner;
         $this->files = $files;
@@ -203,6 +226,12 @@ final class CourseSetup extends Component
         [$rows, $ticks] = $this->cleanRows();
         try {
             $this->profiles->save($by, $this->workspaceId, $this->aboutInput($rows));
+            $this->workspaces->setType($by, $this->workspaceId, $this->kind !== '' ? $this->kind : CourseTypes::NONE);
+            $this->profiles->saveFacts($by, $this->workspaceId, [
+                'level' => $this->level, 'language' => $this->language, 'tools' => $this->tools, 'exam_format' => $this->examFormat,
+                // The kind's own plugins are kept as "those of its kind", so choosing another kind later brings its own.
+                'plugins' => self::same($this->plugins, CourseTypes::plugins($this->kind)) ? null : $this->plugins,
+            ]);
             $added = $this->profiles->addFromReading(
                 $by, $this->workspaceId,
                 array_keys(array_filter($this->moduleTicks)),
@@ -222,6 +251,21 @@ final class CourseSetup extends Component
         $this->added = $parts === [] ? 'The course is saved.' : implode(' and ', $parts).' added.';
 
         return $this->next();
+    }
+
+    /** Another kind of course brings its own study plugins. */
+    public function updatedKind(string $kind): void
+    {
+        $this->plugins = CourseTypes::plugins($kind);
+    }
+
+    /** @param list<string> $a */
+    private static function same(array $a, array $b): bool
+    {
+        sort($a);
+        sort($b);
+
+        return $a === $b;
     }
 
     public function addRow(): void
@@ -269,7 +313,7 @@ final class CourseSetup extends Component
         $this->resetErrorBag();
         try {
             $this->learner->save($this->principal(), $this->workspaceId, [
-                'explain' => $this->explain, 'pace' => $this->pace, 'check' => $this->check, 'goal' => $this->goal, 'note' => $this->note,
+                'explain' => $this->explain, 'pace' => $this->pace, 'check' => $this->check, 'goal' => $this->goal, 'note' => $this->note, 'background' => $this->background,
             ]);
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
@@ -302,6 +346,10 @@ final class CourseSetup extends Component
             'problemText' => $this->problem === null ? null : self::problemText($this->problem),
             'kinds' => Activities::KINDS,
             'chips' => ['explain' => LearnerProfiles::EXPLAIN, 'pace' => LearnerProfiles::PACE, 'check' => LearnerProfiles::CHECK, 'goal' => LearnerProfiles::GOAL],
+            'types' => CourseTypes::TYPES,
+            'levels' => CourseTypes::LEVELS,
+            'backgrounds' => CourseTypes::BACKGROUNDS,
+            'allPlugins' => Plugins::all(),
         ]);
     }
 
@@ -331,9 +379,13 @@ final class CourseSetup extends Component
         $this->assessmentTicks = array_map(fn (array $item) => $item['due_on'] !== null && $item['activity_id'] === null, $profile->assessment);
         $this->moduleTicks = array_fill(0, count($profile->proposedModules), true);
         $this->writing = $profile->hasContent() || $profile->proposedModules !== [];
+        $type = $this->workspaces->find($by, $this->workspaceId)->type;
+        $this->kind = CourseTypes::chosen($type) ? $type : '';
+        [$this->level, $this->language, $this->tools, $this->examFormat] = [(string) $profile->level, (string) $profile->language, implode(', ', $profile->tools), (string) $profile->examFormat];
+        $this->plugins = $this->profiles->plugins($by, $this->workspaceId);
 
         $learn = $this->learner->get($by, $this->workspaceId);
-        [$this->explain, $this->pace, $this->check, $this->goal, $this->note] = [$learn->explain, (string) $learn->pace, (string) $learn->check, (string) $learn->goal, $learn->note];
+        [$this->explain, $this->pace, $this->check, $this->goal, $this->note, $this->background] = [$learn->explain, (string) $learn->pace, (string) $learn->check, (string) $learn->goal, $learn->note, (string) $learn->background];
     }
 
     /**

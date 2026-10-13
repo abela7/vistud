@@ -11,8 +11,8 @@
     use Illuminate\Support\Str;
 
     $open = $session->isOpen();
-    $statusIcons = ['not_started' => 'circle-dot', 'covered' => 'check', 'understood' => 'circle-check', 'confused' => 'circle-alert', 'mastered' => 'shield-check'];
-    $statusWords = ['not_started' => 'Not started', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Still confusing', 'mastered' => 'Mastered'];
+    $statusIcons = \App\Study\TopicDetails::STATUS_ICONS;
+    $statusWords = \App\Study\TopicDetails::STATUS_WORDS;
     $stateIcons = ['running' => 'timer', 'paused' => 'pause', 'break' => 'coffee', 'ended' => 'square'];
     $studied = SessionDetails::duration($session->studySeconds).($session->breakSeconds > 0 ? ', with '.SessionDetails::duration($session->breakSeconds).' of breaks' : '');
     // The header's second word is the mode: the topic, the whole module (or the folder it is in), a quiz, a test, or free.
@@ -125,8 +125,8 @@
                 this.fileUploadConfig = {};
             }
             try {
-                const savedRail = localStorage.getItem('vistud-session-rail-open');
-                this.railOpen = savedRail !== null ? savedRail === 'true' : window.innerWidth >= 1024;
+                // Closed until the student opens it; however it is opened or closed (button, ✕, Esc, backdrop), that is kept.
+                this.railOpen = localStorage.getItem('vistud-session-rail-open') === 'true';
                 const saved = localStorage.getItem('vistud-session-split-percent');
                 if (saved) {
                     const val = parseFloat(saved);
@@ -145,8 +145,14 @@
                     }
                 }
             } catch {}
+            this.$watch('railOpen', (open) => {
+                try {
+                    localStorage.setItem('vistud-session-rail-open', String(open));
+                } catch {}
+            });
             window.addEventListener('message', (e) => {
                 if (e.data?.type === 'note-active' && e.data?.noteId) {
+                    this.adoptSavedNote(e);
                     if (this.activeSyncedNoteId !== e.data.noteId) {
                         this.activeSyncedNoteId = e.data.noteId;
                         this.$wire.setActiveNote(e.data.noteId);
@@ -320,9 +326,6 @@
         },
         toggleTopics() {
             this.railOpen = ! this.railOpen;
-            try {
-                localStorage.setItem('vistud-session-rail-open', String(this.railOpen));
-            } catch {}
             this.notifyLayoutChanged();
         },
         syncActiveNote(url) {
@@ -401,10 +404,43 @@
                 const toAbsolute = (u) => {
                     try { return new URL(u, window.location.href).href; } catch { return u; }
                 };
-                if (toAbsolute(frame.src) !== toAbsolute(this.noteUrl)) {
+                // The editor moves itself from /notes/new to the saved note's address without reloading, so
+                // what the frame shows is remembered here rather than read back from frame.src.
+                if (toAbsolute(frame.dataset.shownUrl || frame.src) !== toAbsolute(this.noteUrl)) {
                     frame.src = this.noteUrl;
+                    frame.dataset.shownUrl = this.noteUrl;
                 }
             });
+        },
+        /** A blank note that has not been saved yet: it has no id, so there is nothing to trash. */
+        get noteIsUnsaved() {
+            return /\/notes\/new(?=[?#]|$)/.test(this.noteUrl);
+        },
+        /** The editor saved its new note: from now on the pane is that note, so trashing and deleting find it. */
+        adoptSavedNote(event) {
+            const frame = this.$refs.sessionNoteSlot?.querySelector('iframe');
+            if (!this.noteIsUnsaved || !frame || frame.contentWindow !== event.source) return;
+            this.noteUrl = this.noteUrl.replace(/\/notes\/new(\?.*)?$/, '/notes/' + event.data.noteId + '?window=1&split=1');
+            frame.dataset.shownUrl = this.noteUrl;
+            this.savePaneState();
+        },
+        isNoteOpen(noteId) {
+            let framed = '';
+            try { framed = this.$refs.sessionNoteSlot?.querySelector('iframe')?.contentWindow.location.href || ''; } catch {}
+            return (this.noteUrl + ' ' + framed).includes('/notes/' + noteId);
+        },
+        closeNote() {
+            this.noteUrl = '';
+            this.noteTitle = '';
+            this.$refs.sessionNoteSlot?.replaceChildren();
+            this.minimizePane('note');
+            this.savePaneState();
+        },
+        /** The pane's bin button: a note that was never saved is simply closed, a saved one is asked about first. */
+        trashOpenNote() {
+            if (this.noteIsUnsaved) return this.closeNote();
+            const match = this.noteUrl.match(/\/notes\/([a-zA-Z0-9_-]+)/);
+            if (match) this.$dispatch('session-confirm', { kind: 'note', id: match[1], name: this.noteTitle });
         },
         openFile(url = null, name = null) {
             let urlChanged = false;
@@ -564,14 +600,7 @@
         const nid = $event.detail?.noteId;
         if (nid) {
             noteItems = noteItems.filter(n => n.id !== nid && !n.url?.includes('/notes/' + nid));
-            if (noteUrl && noteUrl.includes('/notes/' + nid)) {
-                noteUrl = '';
-                noteTitle = '';
-                const slot = $refs.sessionNoteSlot;
-                if (slot) slot.replaceChildren();
-                minimizePane('note');
-            }
-            savePaneState();
+            if (isNoteOpen(nid)) closeNote(); else savePaneState();
         }
     "
     x-on:session-toggle-questions.window="togglePane('questions')"
@@ -662,189 +691,146 @@
                         default => 'Intermediate',
                     };
                     $activePlugins = $tutoring['plugins'] ?? [];
+                    // 'summary' (a teaching style) is only offered in the full settings dialog; the hint
+                    // below a group falls back to its Tutoring label so a choice made there still shows.
+                    $tuningGroups = [
+                        'quiz' => ['label' => 'My understanding', 'default' => 'normal', 'wide' => false, 'options' => [
+                            'easy' => ['Beginner', 'Plain words, built up from first principles.'],
+                            'normal' => ['Intermediate', 'Balanced depth with real, applied examples.'],
+                            'exam' => ['Master', 'Concise and rigorous, with edge cases.'],
+                        ]],
+                        'method' => ['label' => 'Teaching style', 'default' => 'explain', 'wide' => true, 'options' => [
+                            'explain' => ['Explain', 'Explains one idea at a time, then checks you got it.'],
+                            'analogy' => ['Analogies', 'Starts from real-world comparisons, then the theory.'],
+                            'socratic' => ['Socratic', 'Asks you questions so you work each idea out.'],
+                            'steps' => ['Step by step', 'Small numbered steps, one at a time.'],
+                        ]],
+                        'check_ins' => ['label' => 'Check questions', 'default' => 'section', 'wide' => false, 'options' => [
+                            'none' => ['Off', 'No check questions unless you ask for them.'],
+                            'section' => ['Per section', 'One question at the end of each section.'],
+                            'end' => ['At end', 'A short quiz once you finish the material.'],
+                        ]],
+                    ];
                 @endphp
                 <div class="relative shrink-0" x-data="{ tutorMenuOpen: false }" x-on:click.outside="tutorMenuOpen = false" x-on:keydown.escape.stop="tutorMenuOpen = false">
                     <button type="button"
                         class="session-focus-level"
                         x-bind:class="{ 'is-active': tutorMenuOpen }"
                         x-on:click="tutorMenuOpen = ! tutorMenuOpen"
+                        aria-haspopup="dialog"
+                        aria-controls="session-tutor-tuning"
                         x-bind:aria-expanded="tutorMenuOpen.toString()"
                         title="Tutor understanding level: {{ $tutorLevel }} · Click to adjust">
                         <x-icon name="sparkles" class="size-3 text-accent shrink-0" />
-                        <span class="truncate">{{ $tutorLevel }}</span>
+                        <span class="session-focus-level-text truncate">{{ $tutorLevel }}</span>
                         @if ($activePlugins !== [])
                             <span class="size-1.5 rounded-full bg-accent shrink-0" title="{{ count($activePlugins) }} study plugin(s) active"></span>
                         @endif
                         <x-icon name="chevron-down" class="size-3 text-fg-subtle shrink-0 transition-transform" x-bind:class="tutorMenuOpen && 'rotate-180'" />
                     </button>
 
-                    <div class="session-tutor-popover" x-show="tutorMenuOpen" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95">
+                    <div class="session-tutor-backdrop" x-show="tutorMenuOpen" x-cloak x-transition.opacity x-on:click="tutorMenuOpen = false"></div>
+                    <div id="session-tutor-tuning" class="session-tutor-popover" role="dialog" aria-labelledby="session-tutor-tuning-title" x-show="tutorMenuOpen" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-75" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95">
                         <div class="session-tutor-popover-head">
-                            <div class="flex items-center gap-1.5 min-w-0">
-                                <x-icon name="sparkles" class="size-3.5 text-accent shrink-0" />
-                                <span class="text-xs font-semibold text-fg">AI Tutor Tuning</span>
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="session-tutor-popover-icon"><x-icon name="sparkles" class="size-4" /></span>
+                                <div class="min-w-0">
+                                    <p id="session-tutor-tuning-title" class="session-tutor-popover-title">AI Tutor Tuning</p>
+                                    <p class="session-tutor-popover-subtitle">How the tutor teaches you in this session</p>
+                                </div>
                             </div>
-                            <button type="button" class="session-tutor-popover-more" wire:click="editTeaching" x-on:click="tutorMenuOpen = false" title="Open full teaching settings">
-                                <span>Settings</span>
-                                <x-icon name="settings" class="size-3" />
-                            </button>
-                        </div>
-
-                        {{-- Understanding Level (prominent) --}}
-                        <div class="session-tutor-popover-section">
-                            <div class="flex items-center justify-between text-xs mb-1">
-                                <span class="font-semibold text-fg uppercase tracking-wider">My understanding</span>
-                                <span class="text-accent font-semibold">{{ $tutorLevel }}</span>
-                            </div>
-                            <div class="grid grid-cols-3 gap-1">
-                                <button type="button"
-                                    class="session-tutor-choice-btn {{ ($tutoring['quiz'] ?? 'normal') === 'easy' ? 'is-active' : '' }}"
-                                    wire:click="setTutoringChoice('quiz', 'easy')"
-                                    title="Beginner: explain simply from first principles in plain terms with intuitive analogies">
-                                    <span class="font-semibold">Beginner</span>
-                                    <span class="text-xs text-fg-subtle truncate">First principles</span>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button type="button" class="session-tutor-popover-more" wire:click="editTeaching" x-on:click="tutorMenuOpen = false" title="Open full teaching settings" aria-label="Open full teaching settings">
+                                    <x-icon name="settings" class="size-3.5" />
+                                    <span class="session-tutor-popover-more-label">Settings</span>
                                 </button>
-                                <button type="button"
-                                    class="session-tutor-choice-btn {{ ($tutoring['quiz'] ?? 'normal') === 'normal' ? 'is-active' : '' }}"
-                                    wire:click="setTutoringChoice('quiz', 'normal')"
-                                    title="Intermediate: balanced depth and terminology with applied examples">
-                                    <span class="font-semibold">Intermediate</span>
-                                    <span class="text-xs text-fg-subtle truncate">Balanced depth</span>
-                                </button>
-                                <button type="button"
-                                    class="session-tutor-choice-btn {{ ($tutoring['quiz'] ?? 'normal') === 'exam' ? 'is-active' : '' }}"
-                                    wire:click="setTutoringChoice('quiz', 'exam')"
-                                    title="Master: concise, high technical rigor, edge cases and deep problem solving">
-                                    <span class="font-semibold">Master</span>
-                                    <span class="text-xs text-fg-subtle truncate">Deep &amp; concise</span>
+                                <button type="button" class="session-tutor-popover-close" x-on:click="tutorMenuOpen = false" aria-label="Close tutor tuning">
+                                    <x-icon name="x" class="size-4" />
                                 </button>
                             </div>
                         </div>
 
-                        {{-- Teaching Style --}}
-                        <div class="session-tutor-popover-section">
-                            <div class="flex items-center justify-between text-xs mb-1">
-                                <span class="font-semibold text-fg uppercase tracking-wider">Teaching style</span>
-                                <span class="text-accent font-semibold">{{ $tutoringChoices['method'][$tutoring['method'] ?? 'explain'][0] ?? 'Explain' }}</span>
-                            </div>
-                            <div class="grid grid-cols-2 gap-1">
-                                <button type="button"
-                                    class="session-tutor-choice-btn {{ ($tutoring['method'] ?? 'explain') === 'explain' ? 'is-active' : '' }}"
-                                    wire:click="setTutoringChoice('method', 'explain')"
-                                    title="Explain first, then check understanding">
-                                    <span>Explain</span>
-                                </button>
-                                <button type="button"
-                                    class="session-tutor-choice-btn {{ ($tutoring['method'] ?? 'explain') === 'analogy' ? 'is-active' : '' }}"
-                                    wire:click="setTutoringChoice('method', 'analogy')"
-                                    title="Lead with intuitive real-world analogies">
-                                    <span>Analogies</span>
-                                </button>
-                                <button type="button"
-                                    class="session-tutor-choice-btn {{ ($tutoring['method'] ?? 'explain') === 'socratic' ? 'is-active' : '' }}"
-                                    wire:click="setTutoringChoice('method', 'socratic')"
-                                    title="Socratic: guides with questions so you derive insights">
-                                    <span>Socratic</span>
-                                </button>
-                                <button type="button"
-                                    class="session-tutor-choice-btn {{ ($tutoring['method'] ?? 'explain') === 'steps' ? 'is-active' : '' }}"
-                                    wire:click="setTutoringChoice('method', 'steps')"
-                                    title="Step by step: breaks down into small numbered steps">
-                                    <span>Step by step</span>
-                                </button>
-                            </div>
-                        </div>
+                        <div class="session-tutor-popover-body">
+                            @foreach ($tuningGroups as $groupKey => $group)
+                                @php
+                                    $current = $tutoring[$groupKey] ?? $group['default'];
+                                    $currentHint = $group['options'][$current][1] ?? (\App\Study\Tutoring::CHOICES[$groupKey][$current][0] ?? null);
+                                @endphp
+                                <section class="session-tutor-popover-section" aria-labelledby="session-tutor-{{ $groupKey }}-label">
+                                    <h3 id="session-tutor-{{ $groupKey }}-label" class="session-tutor-section-label">{{ $group['label'] }}</h3>
+                                    <div class="session-tutor-options {{ $group['wide'] ? 'is-wide' : '' }}" role="group" aria-labelledby="session-tutor-{{ $groupKey }}-label">
+                                        @foreach ($group['options'] as $value => [$optionLabel, $optionHint])
+                                            <button type="button"
+                                                class="session-tutor-choice-btn {{ $current === $value ? 'is-active' : '' }}"
+                                                aria-pressed="{{ $current === $value ? 'true' : 'false' }}"
+                                                wire:click="setTutoringChoice('{{ $groupKey }}', '{{ $value }}')"
+                                                title="{{ $optionLabel }}: {{ $optionHint }}">
+                                                {{ $optionLabel }}
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                    @if ($currentHint)
+                                        <p class="session-tutor-section-hint">{{ $currentHint }}</p>
+                                    @endif
+                                </section>
+                            @endforeach
 
-                        {{-- Check Questions --}}
-                        <div class="session-tutor-popover-section">
-                            <div class="flex items-center justify-between text-xs mb-1">
-                                <span class="font-semibold text-fg uppercase tracking-wider">Check questions</span>
-                                <span class="text-accent font-semibold">{{ ($tutoring['check_ins'] ?? 'section') === 'none' ? 'Off' : (($tutoring['check_ins'] ?? 'section') === 'section' ? 'Per section' : 'At end') }}</span>
-                            </div>
-                            <div class="grid grid-cols-3 gap-1">
-                                <button type="button"
-                                    class="session-tutor-choice-btn {{ ($tutoring['check_ins'] ?? 'section') === 'none' ? 'is-active' : '' }}"
-                                    wire:click="setTutoringChoice('check_ins', 'none')"
-                                    title="Off: no check questions unless requested">
-                                    <span>Off</span>
-                                </button>
-                                <button type="button"
-                                    class="session-tutor-choice-btn {{ ($tutoring['check_ins'] ?? 'section') === 'section' ? 'is-active' : '' }}"
-                                    wire:click="setTutoringChoice('check_ins', 'section')"
-                                    title="Per section: one check question at the end of each section">
-                                    <span>Per section</span>
-                                </button>
-                                <button type="button"
-                                    class="session-tutor-choice-btn {{ ($tutoring['check_ins'] ?? 'section') === 'end' ? 'is-active' : '' }}"
-                                    wire:click="setTutoringChoice('check_ins', 'end')"
-                                    title="At end: short review quiz at the end of the session">
-                                    <span>At end</span>
-                                </button>
-                            </div>
-                        </div>
+                            <section class="session-tutor-popover-section" aria-labelledby="session-tutor-plugins-label">
+                                <div class="flex items-baseline justify-between gap-2">
+                                    <h3 id="session-tutor-plugins-label" class="session-tutor-section-label">Study plugins</h3>
+                                    <span class="session-tutor-section-meta">{{ count($activePlugins) > 0 ? count($activePlugins).' active' : 'Subject tools' }}</span>
+                                </div>
+                                <div class="session-tutor-plugins">
+                                    @foreach (\App\Study\Plugins::all() as $p)
+                                        @php $isActive = in_array($p->id, $activePlugins, true); @endphp
+                                        <button type="button"
+                                            class="session-tutor-plugin-card {{ $isActive ? 'is-active' : '' }}"
+                                            aria-pressed="{{ $isActive ? 'true' : 'false' }}"
+                                            wire:click="togglePlugin('{{ $p->id }}')"
+                                            title="{{ $p->name }} ({{ $p->badge }}): {{ $p->description }}">
+                                            <x-icon name="{{ $p->icon }}" class="session-tutor-plugin-icon size-4" />
+                                            <span class="min-w-0 flex-1">
+                                                <span class="session-tutor-plugin-name">{{ $p->name }}</span>
+                                                <span class="session-tutor-plugin-badge">{{ $p->badge }}</span>
+                                            </span>
+                                            <x-icon name="{{ $isActive ? 'circle-check' : 'circle' }}" class="session-tutor-plugin-state size-4" />
+                                        </button>
+                                    @endforeach
+                                </div>
+                            </section>
 
-                        {{-- Study Plugins (Domain tools & formatting) --}}
-                        <div class="session-tutor-popover-section">
-                            <div class="flex items-center justify-between text-xs mb-1">
-                                <span class="font-semibold text-fg uppercase tracking-wider">Study plugins</span>
-                                <span class="text-xs text-fg-subtle">
-                                    {{ count($activePlugins) > 0 ? count($activePlugins).' active' : 'Subject tools' }}
-                                </span>
-                            </div>
-                            <div class="grid grid-cols-2 gap-1.5">
-                                @foreach (\App\Study\Plugins::all() as $p)
-                                    @php $isActive = in_array($p->id, $activePlugins, true); @endphp
-                                    <button type="button"
-                                        class="session-tutor-plugin-card {{ $isActive ? 'is-active' : '' }}"
-                                        wire:click="togglePlugin('{{ $p->id }}')"
-                                        title="{{ $p->name }} ({{ $p->badge }}): {{ $p->description }}">
-                                        <div class="flex items-center justify-between gap-1 w-full min-w-0">
-                                            <div class="flex items-center gap-1.5 min-w-0">
-                                                <x-icon name="{{ $p->icon }}" class="size-3.5 shrink-0 {{ $isActive ? 'text-accent' : 'text-fg-subtle' }}" />
-                                                <span class="font-medium text-xs truncate">{{ $p->name }}</span>
+                            @if (! empty($tutoring['custom_do']) || ! empty($tutoring['custom_dont']))
+                                <section class="session-tutor-popover-section session-tutor-popover-custom" aria-labelledby="session-tutor-rules-label">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <h3 id="session-tutor-rules-label" class="session-tutor-section-label">Custom rules</h3>
+                                        <button type="button" class="text-accent hover:underline text-xs font-medium" wire:click="editCustomRules" x-on:click="tutorMenuOpen = false">Edit</button>
+                                    </div>
+                                    <div class="space-y-1">
+                                        @if (! empty($tutoring['custom_do']))
+                                            <div class="text-xs text-fg-muted truncate flex items-center gap-1.5" title="Do: {{ $tutoring['custom_do'] }}">
+                                                <span class="inline-block size-1.5 rounded-full bg-success shrink-0"></span>
+                                                <span class="truncate"><strong class="text-fg font-medium">Do:</strong> {{ $tutoring['custom_do'] }}</span>
                                             </div>
-                                            <span class="size-1.5 rounded-full shrink-0 {{ $isActive ? 'bg-success' : 'bg-fg-subtle opacity-40' }}"></span>
-                                        </div>
-                                        <span class="text-xs text-fg-subtle truncate text-left w-full mt-0.5">{{ $p->badge }}</span>
-                                    </button>
-                                @endforeach
-                            </div>
-                        </div>
-
-                        {{-- Custom instructions (Do & Don't) preview or shortcut --}}
-                        @if (! empty($tutoring['custom_do']) || ! empty($tutoring['custom_dont']))
-                            <div class="session-tutor-popover-section session-tutor-popover-custom">
-                                <div class="flex items-center justify-between text-xs mb-1">
-                                    <span class="font-semibold text-fg uppercase tracking-wider">Custom rules</span>
-                                    <button type="button" class="text-accent hover:underline text-xs font-medium" wire:click="editCustomRules" x-on:click="tutorMenuOpen = false">Edit (1, 2, 3…)</button>
-                                </div>
-                                <div class="space-y-1">
-                                    @if (! empty($tutoring['custom_do']))
-                                        <div class="text-xs text-fg-muted truncate flex items-center gap-1.5" title="Do: {{ $tutoring['custom_do'] }}">
-                                            <span class="inline-block size-1.5 rounded-full bg-success shrink-0"></span>
-                                            <span class="truncate"><strong class="text-fg font-medium">Do:</strong> {{ $tutoring['custom_do'] }}</span>
-                                        </div>
-                                    @endif
-                                    @if (! empty($tutoring['custom_dont']))
-                                        <div class="text-xs text-fg-muted truncate flex items-center gap-1.5" title="Don't: {{ $tutoring['custom_dont'] }}">
-                                            <span class="inline-block size-1.5 rounded-full bg-danger shrink-0"></span>
-                                            <span class="truncate"><strong class="text-fg font-medium">Don't:</strong> {{ $tutoring['custom_dont'] }}</span>
-                                        </div>
-                                    @endif
-                                </div>
-                            </div>
-                        @else
-                            <div class="session-tutor-popover-section pt-1 pb-1">
+                                        @endif
+                                        @if (! empty($tutoring['custom_dont']))
+                                            <div class="text-xs text-fg-muted truncate flex items-center gap-1.5" title="Don't: {{ $tutoring['custom_dont'] }}">
+                                                <span class="inline-block size-1.5 rounded-full bg-danger shrink-0"></span>
+                                                <span class="truncate"><strong class="text-fg font-medium">Don't:</strong> {{ $tutoring['custom_dont'] }}</span>
+                                            </div>
+                                        @endif
+                                    </div>
+                                </section>
+                            @else
                                 <button type="button" class="session-tutor-popover-add-rules" wire:click="editCustomRules" x-on:click="tutorMenuOpen = false">
-                                    <x-icon name="notebook-pen" class="size-3 text-accent shrink-0" />
-                                    <span>Custom rules (1, 2, 3…)</span>
+                                    <x-icon name="notebook-pen" class="size-4 text-accent shrink-0" />
+                                    <span>Add your own rules (do &amp; don't)</span>
                                 </button>
-                            </div>
-                        @endif
+                            @endif
+                        </div>
 
                         <div class="session-tutor-popover-foot">
-                            <span class="inline-block size-1.5 rounded-full bg-success"></span>
-                            <span>Live prompt tuning · survives model switches</span>
+                            <x-icon name="circle-check" class="size-3.5 text-success shrink-0" />
+                            <span>Changes apply right away and stay when you switch models.</span>
                         </div>
                     </div>
                 </div>
@@ -902,6 +888,23 @@
                 <button type="button" class="chat-toolbar-btn" data-session-tools-btn x-data="{ open: false }" x-on:session-tools-state.window="open = $event.detail.open" x-bind:class="{ 'is-active': open }" x-bind:aria-expanded="open.toString()" x-on:click.stop="$dispatch('session-toggle-tools')" title="Study tools" aria-label="Study tools">
                     <x-icon name="plus" class="size-3.5" />
                     <span>Tools</span>
+                </button>
+            @endif
+            @if ($open && $session->usesPomodoro())
+                @php
+                    $pillWaiting = $session->waitingForFocus();
+                    $pillRemaining = $pillWaiting ? (int) $session->pomodoro['focus'] * 60 : $session->phaseRemaining();
+                @endphp
+                {{-- While the Pomodoro clock is hidden: its countdown, small, and a tap brings the clock back. --}}
+                <button type="button" @class(['session-clock-pill', 'is-break' => $session->phase !== 'focus'])
+                    x-data="{ hidden: $persist(false).as('vistud.pomodoro.hidden') }" x-show="hidden" x-cloak
+                    x-on:pomodoro-clock-hidden.window="hidden = true"
+                    x-on:click="hidden = false; $dispatch('pomodoro-clock-show')"
+                    title="Show the Pomodoro clock" aria-label="Show the Pomodoro clock">
+                    <x-icon :name="$session->phase !== 'focus' ? 'coffee' : 'timer'" class="size-3.5" />
+                    <span class="tabular-nums" data-countdown data-remaining="{{ $pillRemaining }}" data-total="{{ $pillWaiting ? $pillRemaining : max(1, $session->phaseSeconds) }}"
+                        data-running="{{ $session->phaseRunning() ? '1' : '0' }}" data-drawn="{{ microtime(true) }}" data-phase-key="{{ $session->phaseKey() }}"
+                        data-phase-words="{{ $session->phase !== 'focus' ? 'Break' : 'Focus' }}" data-next="{{ $session->phaseEndWords() }}">{{ \App\Study\SessionDetails::countdown($pillRemaining) }}</span>
                 </button>
             @endif
             @if ($open && ! $session->usesPomodoro())
@@ -1047,9 +1050,7 @@
                             x-show="fileUrl"
                             x-on:click="
                                 const match = fileUrl.match(/\/files\/([a-zA-Z0-9_-]+)/);
-                                if (match && match[1] && confirm('Delete this file from the platform? This cannot be undone.')) {
-                                    $wire.deleteMaterialFile(match[1]);
-                                }
+                                if (match && match[1]) $dispatch('session-confirm', { kind: 'file', id: match[1], name: fileName });
                             "
                             title="Delete this file from platform"
                             aria-label="Delete this file from platform">
@@ -1327,12 +1328,9 @@
                         <button type="button"
                             class="topbar-button size-7 text-fg-muted hover:text-danger hover:bg-danger-subtle transition-colors"
                             x-show="noteUrl"
-                            x-on:click="
-                                const match = noteUrl.match(/\/notes\/([a-zA-Z0-9_-]+)/);
-                                if (match && match[1] && confirm('Move this note to trash?')) {
-                                    $wire.deleteMaterialNote(match[1]);
-                                }
-                            "
+                            x-on:click="trashOpenNote()"
+                            x-bind:title="noteIsUnsaved ? 'Discard this new note' : 'Move this note to trash'"
+                            x-bind:aria-label="noteIsUnsaved ? 'Discard this new note' : 'Move this note to trash'"
                             title="Move this note to trash"
                             aria-label="Move this note to trash">
                             <x-icon name="trash-2" class="size-3.5" />
@@ -1561,10 +1559,12 @@
                         <span class="ws-chip size-6 rounded shrink-0" aria-hidden="true">
                             <x-icon name="circle-help" class="size-3.5" />
                         </span>
-                        <span class="text-xs font-semibold text-fg truncate">Questions</span>
-                        @if ($sideQuestions['total'] > 0)
-                            <span class="text-xs text-fg-muted">({{ $sideQuestions['pending'] }} open · {{ $sideQuestions['answered'] }} answered)</span>
-                        @endif
+                        <span class="session-pane-heading">
+                            <span class="session-pane-title">Questions</span>
+                            @if ($sideQuestions['total'] > 0)
+                                <span class="session-pane-meta">{{ $sideQuestions['pending'] }} open · {{ $sideQuestions['answered'] }} answered</span>
+                            @endif
+                        </span>
                     </div>
                     <div class="session-note-actions">
                         <button type="button" class="chat-toolbar-btn" wire:click="newQuestion" title="Ask a new question">
@@ -1610,59 +1610,58 @@
 
                         <div class="session-items-list">
                             @foreach ($sideQuestions['items'] as $q)
-                                <div class="session-item-card"
+                                <div @class(['study-q', 'is-'.$q['status']])
                                     wire:key="sq-{{ $q['id'] }}"
                                     x-data="{ editingAnswer: false, answerVal: @js($q['answer'] ?? ''), isGenerating: false }"
                                     x-show="(qFilter === 'all' || (qFilter === 'open' && @js($q['status']) !== 'answered') || (qFilter === 'answered' && @js($q['status']) === 'answered')) && matches(@js($q['text']), @js($q['answer'] ?? ''))">
-                                    <div class="session-item-header">
-                                        <div class="flex items-center gap-1.5 min-w-0">
-                                            <span @class([
-                                                'status-chip',
-                                                'status-understood' => $q['status'] === 'answered',
-                                                'status-confused' => $q['status'] === 'stuck',
-                                                'status-covered' => $q['status'] === 'pending',
-                                            ])>
-                                                {{ $q['statusLabel'] }}
-                                            </span>
-                                            @if ($q['isThisSession'])
-                                                <span class="text-[0.6875rem] font-medium text-accent">This session</span>
-                                            @endif
-                                        </div>
-                                        <div class="session-item-actions">
-                                            <button type="button" class="session-mini-btn is-ai" wire:loading.attr="disabled" wire:target="generateConciseAnswer('{{ $q['id'] }}')" wire:click="generateConciseAnswer('{{ $q['id'] }}')" title="Generate simple, concise answer with AI">
-                                                <x-icon name="sparkles" class="size-3" />
-                                                <span wire:loading.remove wire:target="generateConciseAnswer('{{ $q['id'] }}')">AI Answer</span>
-                                                <span wire:loading wire:target="generateConciseAnswer('{{ $q['id'] }}')">Thinking…</span>
+                                    <div class="study-q-head">
+                                        <span @class(['study-q-status', 'is-'.$q['status']])>{{ $q['statusLabel'] }}</span>
+                                        @if ($q['isThisSession'])
+                                            <span class="study-q-tag">This session</span>
+                                        @endif
+                                        <div class="study-q-menu" x-data="{ menu: false }" x-on:click.outside="menu = false" x-on:keydown.escape.stop="menu = false">
+                                            <button type="button" class="session-icon-btn size-7" x-on:click="menu = ! menu" x-bind:aria-expanded="menu.toString()" aria-label="More for this question" title="More">
+                                                <x-icon name="ellipsis" class="size-4" />
                                             </button>
-                                            <button type="button" class="session-mini-btn" x-on:click="editingAnswer = !editingAnswer" title="Put answer on question">
-                                                <x-icon name="pencil" class="size-3" />
-                                                <span x-text="editingAnswer ? 'Close' : ('{{ $q['answer'] ? 'Edit answer' : 'Put answer' }}')"></span>
-                                            </button>
-                                            @if ($q['status'] !== 'answered')
-                                                <button type="button" class="session-mini-btn" wire:click="resolveQuestion('{{ $q['id'] }}')" title="Mark answered">
-                                                    <x-icon name="check" class="size-3" />
-                                                    <span>Understood</span>
+                                            <div class="study-menu" x-show="menu" x-cloak x-transition.opacity.duration.100ms role="menu">
+                                                <button type="button" class="study-menu-item" role="menuitem" x-on:click="menu = false; editingAnswer = true">
+                                                    <x-icon name="pencil" class="size-4" /><span>{{ $q['answer'] ? 'Edit the answer' : 'Write an answer' }}</span>
                                                 </button>
-                                            @endif
-                                            <button type="button" class="session-mini-btn" x-on:click="askAi('Question: {{ addslashes($q['text']) }}. Can you explain this clearly?')" title="Ask AI tutor">
-                                                <x-icon name="message-square-text" class="size-3" />
-                                                <span>Ask in chat</span>
-                                            </button>
-                                            <button type="button" class="session-mini-btn text-danger" wire:click="deleteQuestion('{{ $q['id'] }}')" title="Delete question">
-                                                <x-icon name="trash-2" class="size-3" />
-                                            </button>
+                                                <button type="button" class="study-menu-item" role="menuitem" x-on:click="menu = false; askAi('Question: {{ addslashes($q['text']) }}. Can you explain this clearly?')">
+                                                    <x-icon name="message-square-text" class="size-4" /><span>Ask in chat</span>
+                                                </button>
+                                                @if ($q['status'] !== 'answered')
+                                                    <button type="button" class="study-menu-item" role="menuitem" x-on:click="menu = false" wire:click="resolveQuestion('{{ $q['id'] }}')">
+                                                        <x-icon name="check" class="size-4" /><span>Mark as Understood</span>
+                                                    </button>
+                                                @endif
+                                                <button type="button" class="study-menu-item is-danger" role="menuitem" x-on:click="menu = false" wire:click="deleteQuestion('{{ $q['id'] }}')">
+                                                    <x-icon name="trash-2" class="size-4" /><span>Delete</span>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-                                    <p class="session-item-text font-medium">{{ $q['text'] }}</p>
+                                    <p class="study-q-text">{{ $q['text'] }}</p>
                                     @if ($q['answer'])
-                                        <div class="session-item-answer" x-show="!editingAnswer">
-                                            <div class="flex items-center justify-between gap-2">
-                                                <span class="text-[0.6875rem] font-semibold text-fg-muted uppercase tracking-wider flex items-center gap-1">
-                                                    <x-icon name="check" class="size-3 text-success" /> Answer
-                                                </span>
-                                                <button type="button" class="text-xs text-fg-muted hover:text-fg text-link" x-on:click="editingAnswer = true">Edit</button>
-                                            </div>
-                                            <p class="text-xs text-fg leading-relaxed">{{ $q['answer'] }}</p>
+                                        <div class="study-q-answer" x-show="! editingAnswer">
+                                            <span class="study-q-answer-label"><x-icon name="check" class="size-3.5" />Answer</span>
+                                            <p>{{ $q['answer'] }}</p>
+                                        </div>
+                                    @endif
+                                    {{-- One clear next step: an answer when there is none, then saying it is understood. --}}
+                                    @if (! $q['answer'])
+                                        <div class="study-q-actions" x-show="! editingAnswer">
+                                            <button type="button" class="session-mini-btn is-ai" wire:loading.attr="disabled" wire:target="generateConciseAnswer('{{ $q['id'] }}')" wire:click="generateConciseAnswer('{{ $q['id'] }}')" title="A short, clear answer from the AI">
+                                                <x-icon name="sparkles" class="size-3" />
+                                                <span wire:loading.remove wire:target="generateConciseAnswer('{{ $q['id'] }}')">Get an AI answer</span>
+                                                <span wire:loading wire:target="generateConciseAnswer('{{ $q['id'] }}')">Thinking…</span>
+                                            </button>
+                                        </div>
+                                    @elseif ($q['status'] !== 'answered')
+                                        <div class="study-q-actions" x-show="! editingAnswer">
+                                            <button type="button" class="session-mini-btn" wire:click="resolveQuestion('{{ $q['id'] }}')">
+                                                <x-icon name="check" class="size-3" /><span>I understand it now</span>
+                                            </button>
                                         </div>
                                     @endif
                                     <div class="session-inline-answer-box" x-show="editingAnswer" x-cloak>
@@ -1699,10 +1698,12 @@
                         <span class="ws-chip size-6 rounded shrink-0" aria-hidden="true">
                             <x-icon name="clipboard-check" class="size-3.5" />
                         </span>
-                        <span class="text-xs font-semibold text-fg truncate">Quizzes</span>
-                        @if ($sideQuizzes['count'] > 0)
-                            <span class="text-xs text-fg-muted">({{ $sideQuizzes['count'] }} taken · {{ $sideQuizzes['avgScore'] }}% avg)</span>
-                        @endif
+                        <span class="session-pane-heading">
+                            <span class="session-pane-title">Quizzes</span>
+                            @if ($sideQuizzes['count'] > 0)
+                                <span class="session-pane-meta">{{ $sideQuizzes['count'] }} taken · {{ $sideQuizzes['avgScore'] }}% average</span>
+                            @endif
+                        </span>
                     </div>
                     <div class="session-note-actions">
                         @if ($quizView === 'idle')
@@ -2021,7 +2022,7 @@
                                                 'status-covered' => $rq['result'] === 'partial',
                                                 'status-confused' => $rq['result'] === 'incorrect',
                                             ])>
-                                                {{ ucfirst($rq['result']) }}
+                                                {{ $rq['result'] === 'unjudged' ? 'Not marked' : ucfirst($rq['result']) }}
                                             </span>
                                         </div>
                                         <div class="text-xs text-fg-muted mt-1.5 break-words">
@@ -2065,30 +2066,20 @@
                         <!-- Quick Launch Action Cards -->
                         <div class="session-quiz-top-actions">
                             <button type="button" class="session-quiz-launch-card" wire:click="startQuickRecap">
-                                <div>
-                                    <div class="flex items-center gap-1 text-xs font-semibold text-fg">
-                                        <x-icon name="flame" class="size-3.5 text-accent" />
-                                        <span>Quick Recap</span>
-                                    </div>
-                                    <p class="text-[0.6875rem] text-fg-muted mt-1">3 rapid questions to test recall in 2 minutes.</p>
-                                </div>
-                                <span class="text-[0.6875rem] font-medium text-accent mt-2 flex items-center gap-0.5">
-                                    <span>Start 3 Qs</span>
-                                    <x-icon name="chevron-right" class="size-3" />
+                                <span class="session-quiz-launch-icon"><x-icon name="flame" class="size-4" /></span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="session-quiz-launch-title">Quick Recap</span>
+                                    <span class="session-quiz-launch-text">3 quick questions, about 2 minutes</span>
                                 </span>
+                                <x-icon name="chevron-right" class="size-4 shrink-0 text-fg-subtle" />
                             </button>
                             <button type="button" class="session-quiz-launch-card" wire:click="openQuizConfigure">
-                                <div>
-                                    <div class="flex items-center gap-1 text-xs font-semibold text-fg">
-                                        <x-icon name="settings" class="size-3.5 text-accent" />
-                                        <span>Custom Quiz</span>
-                                    </div>
-                                    <p class="text-[0.6875rem] text-fg-muted mt-1">Choose format (MCQ, short, write), count & level.</p>
-                                </div>
-                                <span class="text-[0.6875rem] font-medium text-accent mt-2 flex items-center gap-0.5">
-                                    <span>Configure</span>
-                                    <x-icon name="chevron-right" class="size-3" />
+                                <span class="session-quiz-launch-icon"><x-icon name="settings" class="size-4" /></span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="session-quiz-launch-title">Custom Quiz</span>
+                                    <span class="session-quiz-launch-text">Pick the kind of questions, how many, how hard</span>
                                 </span>
+                                <x-icon name="chevron-right" class="size-4 shrink-0 text-fg-subtle" />
                             </button>
                         </div>
 
@@ -2105,37 +2096,36 @@
                             <div class="session-items-list" x-data="{ expandedId: null }">
                                 @foreach ($sideQuizzes['items'] as $quiz)
                                     <div class="session-quiz-card" wire:key="sqz-{{ $quiz['id'] }}">
-                                        <div class="session-quiz-header" x-on:click="expandedId = expandedId === '{{ $quiz['id'] }}' ? null : '{{ $quiz['id'] }}'">
-                                            <div class="flex items-center gap-2 min-w-0">
-                                                <span @class([
-                                                    'session-score-pill',
-                                                    'is-high' => $quiz['score'] >= 80,
-                                                    'is-mid' => $quiz['score'] >= 50 && $quiz['score'] < 80,
-                                                    'is-low' => $quiz['score'] < 50,
-                                                ])>
-                                                    {{ $quiz['score'] }}%
+                                        <button type="button" class="session-quiz-header" x-on:click="expandedId = expandedId === '{{ $quiz['id'] }}' ? null : '{{ $quiz['id'] }}'" x-bind:aria-expanded="(expandedId === '{{ $quiz['id'] }}').toString()">
+                                            <span @class([
+                                                'session-score-pill',
+                                                'is-high' => $quiz['score'] >= 80,
+                                                'is-mid' => $quiz['score'] >= 50 && $quiz['score'] < 80,
+                                                'is-low' => $quiz['score'] < 50,
+                                            ])>{{ $quiz['score'] }}%</span>
+                                            <span class="session-quiz-summary">
+                                                <span class="session-quiz-title">
+                                                    <span class="capitalize">{{ $quiz['kind'] }}</span>
+                                                    @if ($quiz['isThisSession'])
+                                                        <span class="study-q-tag">This session</span>
+                                                    @endif
                                                 </span>
-                                                <div class="min-w-0">
-                                                    <div class="flex items-center gap-1.5">
-                                                        <span class="text-xs font-semibold text-fg capitalize">{{ $quiz['kind'] }}</span>
-                                                        @if ($quiz['isThisSession'])
-                                                            <span class="text-[0.6875rem] font-medium text-accent">This session</span>
-                                                        @endif
-                                                    </div>
-                                                    <span class="text-[0.6875rem] text-fg-muted">{{ $quiz['right'] }}/{{ $quiz['asked'] }} correct · {{ $quiz['durationWords'] }} ({{ $quiz['paceWords'] }}) · {{ $quiz['finishedAt'] }}</span>
-                                                </div>
-                                            </div>
-                                            <div class="flex items-center gap-1">
-                                                <button type="button" class="session-mini-btn" x-on:click.stop="askAi('Can you review the questions I missed from this {{ $quiz['kind'] }} and give me targeted practice?')" title="Review with AI">
-                                                    <x-icon name="sparkles" class="size-3" />
-                                                    <span>Review with AI</span>
-                                                </button>
-                                                <span class="topbar-button size-6 cursor-pointer" aria-hidden="true">
-                                                    <x-icon name="chevron-down" class="size-3.5 transition-transform" x-bind:class="{ 'rotate-180': expandedId === '{{ $quiz['id'] }}' }" />
-                                                </span>
-                                            </div>
-                                        </div>
+                                                <span class="session-quiz-meta">{{ $quiz['right'] }} of {{ $quiz['asked'] }} right · {{ $quiz['durationWords'] }} · {{ $quiz['finishedAt'] }}</span>
+                                            </span>
+                                            <x-icon name="chevron-down" class="size-4 shrink-0 text-fg-subtle transition-transform" x-bind:class="{ 'rotate-180': expandedId === '{{ $quiz['id'] }}' }" />
+                                        </button>
                                         <div class="session-quiz-questions" x-show="expandedId === '{{ $quiz['id'] }}'" x-cloak>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <button type="button" class="session-mini-btn is-ai self-start" x-on:click="askAi('Can you review the questions I missed from this {{ $quiz['kind'] }} and give me targeted practice?')" title="The tutor goes over what you missed, in the chat">
+                                                    <x-icon name="sparkles" class="size-3" /><span>Review with AI</span>
+                                                </button>
+                                                {{-- Asked in the session's confirm dialog; deleted for good, its answers stop counting. --}}
+                                                <button type="button" class="session-mini-btn self-start"
+                                                    x-on:click="$dispatch('session-confirm', { kind: 'quiz', id: @js($quiz['id']), name: @js(ucfirst($quiz['kind']).' · '.$quiz['score'].'% · '.$quiz['right'].' of '.$quiz['asked'].' right') })"
+                                                    title="Delete this {{ $quiz['kind'] }} for good" aria-label="Delete this {{ $quiz['kind'] }}">
+                                                    <x-icon name="trash-2" class="size-3" /><span>Delete</span>
+                                                </button>
+                                            </div>
                                             @foreach ($quiz['questions'] as $qIdx => $q)
                                                 <div class="session-quiz-q-item">
                                                     <div class="flex items-start justify-between gap-2">
@@ -2195,10 +2185,12 @@
                         <span class="ws-chip size-6 rounded shrink-0" aria-hidden="true">
                             <x-icon name="layers" class="size-3.5" />
                         </span>
-                        <span class="text-xs font-semibold text-fg truncate">Flashcards</span>
-                        @if ($sideCards['total'] > 0)
-                            <span class="text-xs text-fg-muted">({{ $sideCards['total'] }} cards · {{ $sideCards['due'] }} due)</span>
-                        @endif
+                        <span class="session-pane-heading">
+                            <span class="session-pane-title">Flashcards</span>
+                            @if ($sideCards['total'] > 0)
+                                <span class="session-pane-meta">{{ $sideCards['total'] }} cards · {{ $sideCards['due'] }} due</span>
+                            @endif
+                        </span>
                     </div>
                     <div class="session-note-actions">
                         <button type="button" class="chat-toolbar-btn" wire:click="newFlashcard" title="Add flashcard">
@@ -2213,7 +2205,9 @@
                         </button>
                     </div>
                 </div>
-                <div class="session-side-pane-body" x-data="{
+                <div class="session-side-pane-body"
+                    x-on:session-confirmed.window="if ($event.detail.kind === 'card') { flipped = false; totalCards = Math.max(0, totalCards - 1); cardIdx = Math.min(cardIdx, Math.max(0, totalCards - 1)); }"
+                    x-data="{
                     cardIdx: 0,
                     flipped: false,
                     totalCards: {{ $sideCards['total'] }},
@@ -2257,71 +2251,81 @@
                         @php
                             $cardList = $sideCards['items'];
                         @endphp
-                        <div class="flashcard-study-container">
-                            <div class="flashcard-study-topbar">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs font-medium text-fg-muted">Card <span x-text="cardIdx + 1"></span> of {{ $sideCards['total'] }}</span>
-                                    <button type="button" class="session-mini-btn" x-on:click="askAi('Please quiz me on these flashcards to test my recall.')" title="Quiz me with AI">
-                                        <x-icon name="sparkles" class="size-3" />
-                                        <span>Quiz with AI</span>
-                                    </button>
-                                </div>
-                                <div class="flex items-center gap-1">
-                                    <button type="button" class="session-icon-btn size-6" x-on:click="flipped = false; cardIdx = (cardIdx - 1 + totalCards) % totalCards" title="Previous card" aria-label="Previous card">
-                                        <x-icon name="chevron-left" class="size-3.5" />
-                                    </button>
-                                    <button type="button" class="session-icon-btn size-6" x-on:click="flipped = false; cardIdx = (cardIdx + 1) % totalCards" title="Next card" aria-label="Next card">
-                                        <x-icon name="chevron-right" class="size-3.5" />
-                                    </button>
-                                </div>
+                        <div class="study-deck">
+                            <div class="study-deck-progress">
+                                <span class="study-deck-count"><span x-text="cardIdx + 1"></span> / {{ $sideCards['total'] }}</span>
+                                <span class="study-deck-bar" aria-hidden="true"><span x-bind:style="{ width: ((cardIdx + 1) / totalCards * 100) + '%' }"></span></span>
+                                <button type="button" class="session-icon-btn size-7" x-on:click="flipped = false; cardIdx = (cardIdx - 1 + totalCards) % totalCards" title="Previous card" aria-label="Previous card">
+                                    <x-icon name="chevron-left" class="size-4" />
+                                </button>
+                                <button type="button" class="session-icon-btn size-7" x-on:click="flipped = false; cardIdx = (cardIdx + 1) % totalCards" title="Next card" aria-label="Next card">
+                                    <x-icon name="chevron-right" class="size-4" />
+                                </button>
                             </div>
 
                             @foreach ($cardList as $idx => $c)
-                                <div class="flashcard-stage" x-show="cardIdx === {{ $idx }}" wire:key="fc-{{ $c['id'] }}" x-cloak>
-                                    <div class="flashcard-flipper" x-bind:class="{ 'is-flipped': flipped }" x-on:click="flipped = !flipped" role="button" tabindex="0" x-on:keydown.space.prevent="flipped = !flipped" title="Click or press Space to flip">
-                                        <div class="flashcard-face flashcard-front">
-                                            <div class="flashcard-face-header">
-                                                <span class="text-[0.6875rem] font-semibold text-fg-muted uppercase tracking-wider">Question</span>
-                                                <span class="text-[0.6875rem] text-fg-subtle">Tap to flip ↷</span>
+                                {{-- Space or Enter flips; once the answer shows, 1, 2 and 3 rate it; the arrows move between cards. --}}
+                                <div class="study-card-stage" x-show="cardIdx === {{ $idx }}" wire:key="fc-{{ $c['id'] }}" x-cloak
+                                    x-on:keydown="
+                                        if (['1', '2', '3'].includes($event.key) && flipped) { $el.querySelector('[data-rate=\'' + $event.key + '\']')?.click(); }
+                                        else if ($event.key === 'ArrowRight') { flipped = false; cardIdx = (cardIdx + 1) % totalCards; }
+                                        else if ($event.key === 'ArrowLeft') { flipped = false; cardIdx = (cardIdx - 1 + totalCards) % totalCards; }
+                                    ">
+                                    <div class="study-card" x-bind:class="{ 'is-flipped': flipped }" x-on:click="flipped = ! flipped"
+                                        role="button" tabindex="0" x-bind:aria-pressed="flipped.toString()"
+                                        aria-label="Flashcard {{ $idx + 1 }} of {{ $sideCards['total'] }}: press to turn it over"
+                                        x-on:keydown.space.prevent="flipped = ! flipped" x-on:keydown.enter.prevent="flipped = ! flipped">
+                                        <div class="study-card-face study-card-front" x-bind:aria-hidden="flipped.toString()">
+                                            <div class="study-card-top">
+                                                <span class="study-card-badge">Question</span>
+                                                <span class="study-card-due">{{ $c['dueWords'] }}</span>
                                             </div>
-                                            <div class="flashcard-face-content">
-                                                <p class="flashcard-text">{{ $c['front'] }}</p>
-                                            </div>
-                                            <div class="flashcard-face-footer">
-                                                <span class="status-chip">{{ $c['dueWords'] }}</span>
-                                            </div>
+                                            <p class="study-card-text">{{ $c['front'] }}</p>
+                                            <p class="study-card-hint"><x-icon name="rotate-cw" class="size-3.5" />Tap the card to see the answer</p>
                                         </div>
-                                        <div class="flashcard-face flashcard-back">
-                                            <div class="flashcard-face-header">
-                                                <span class="text-[0.6875rem] font-semibold text-accent uppercase tracking-wider">Answer</span>
-                                                <span class="text-[0.6875rem] text-fg-subtle">Tap to flip ↶</span>
-                                            </div>
-                                            <div class="flashcard-face-content">
-                                                <p class="flashcard-text">{{ $c['back'] }}</p>
-                                            </div>
-                                            <div class="flashcard-face-footer" x-on:click.stop>
-                                                <button type="button" class="session-mini-btn" x-on:click="askAi('Can you explain this flashcard in depth: &quot;{{ addslashes($c['front']) }}&quot;? Answer: &quot;{{ addslashes($c['back']) }}&quot;')" title="Explain with AI">
-                                                    <x-icon name="sparkles" class="size-3" />
-                                                    <span>Explain with AI</span>
+                                        <div class="study-card-face study-card-back" x-bind:aria-hidden="(! flipped).toString()">
+                                            <div class="study-card-top">
+                                                <span class="study-card-badge is-answer">Answer</span>
+                                                <button type="button" class="study-card-link" x-on:click.stop="askAi('Can you explain this flashcard in depth: &quot;{{ addslashes($c['front']) }}&quot;? Answer: &quot;{{ addslashes($c['back']) }}&quot;')" title="Explain this card in the chat">
+                                                    <x-icon name="sparkles" class="size-3.5" /><span>Explain</span>
                                                 </button>
                                             </div>
+                                            <p class="study-card-asked">{{ $c['front'] }}</p>
+                                            <p class="study-card-text">{{ $c['back'] }}</p>
                                         </div>
                                     </div>
-                                    <div class="flashcard-ratings" x-on:click.stop>
-                                        <span class="text-xs font-medium text-fg-muted mr-1">Rate recall:</span>
-                                        <button type="button" class="btn btn-secondary btn-sm" wire:click="answerCard('{{ $c['id'] }}', 'incorrect')" x-on:click="flipped = false; cardIdx = (cardIdx + 1) % totalCards" title="Not yet (start over)">
-                                            <span>Not yet</span>
+
+                                    <div class="study-card-actions">
+                                        <button type="button" class="btn btn-primary study-card-reveal" x-show="! flipped" x-on:click="flipped = true">
+                                            <x-icon name="eye" class="size-4" /><span>Show answer</span>
                                         </button>
-                                        <button type="button" class="btn btn-secondary btn-sm" wire:click="answerCard('{{ $c['id'] }}', 'partial')" x-on:click="flipped = false; cardIdx = (cardIdx + 1) % totalCards" title="Partly (same interval)">
-                                            <span>Partly</span>
-                                        </button>
-                                        <button type="button" class="btn btn-primary btn-sm" wire:click="answerCard('{{ $c['id'] }}', 'correct')" x-on:click="flipped = false; cardIdx = (cardIdx + 1) % totalCards" title="Got it (longer interval)">
-                                            <x-icon name="check" class="size-3.5" />
-                                            <span>Got it</span>
+                                        <div class="study-rate" x-show="flipped" x-cloak role="group" aria-label="How well did you remember it?">
+                                            <button type="button" class="study-rate-btn is-again" data-rate="1" wire:click="answerCard('{{ $c['id'] }}', 'incorrect')" x-on:click="flipped = false; cardIdx = (cardIdx + 1) % totalCards" title="Not yet: it comes back soon (key 1)">
+                                                <span class="study-rate-label">Again</span><span class="study-rate-sub">Not yet</span>
+                                            </button>
+                                            <button type="button" class="study-rate-btn is-hard" data-rate="2" wire:click="answerCard('{{ $c['id'] }}', 'partial')" x-on:click="flipped = false; cardIdx = (cardIdx + 1) % totalCards" title="Partly: it comes back after the same wait (key 2)">
+                                                <span class="study-rate-label">Hard</span><span class="study-rate-sub">Partly</span>
+                                            </button>
+                                            <button type="button" class="study-rate-btn is-good" data-rate="3" wire:click="answerCard('{{ $c['id'] }}', 'correct')" x-on:click="flipped = false; cardIdx = (cardIdx + 1) % totalCards" title="Got it: it waits longer next time (key 3)">
+                                                <span class="study-rate-label">Got it</span><span class="study-rate-sub">Easy</span>
+                                            </button>
+                                        </div>
+                                        {{-- Asked in the session's confirm dialog; once deleted, the deck shrinks and the card after it shows. --}}
+                                        <button type="button" class="study-card-delete"
+                                            x-on:click="$dispatch('session-confirm', { kind: 'card', id: @js($c['id']), name: @js(Str::limit($c['front'], 120)) })"
+                                            title="Delete this card for good" aria-label="Delete this card">
+                                            <x-icon name="trash-2" class="size-3.5" /><span>Delete card</span>
                                         </button>
                                     </div>
                                 </div>
                             @endforeach
+
+                            <div class="study-deck-foot">
+                                <button type="button" class="session-mini-btn is-ai" x-on:click="askAi('Please quiz me on these flashcards to test my recall.')" title="The tutor asks you about these cards in the chat">
+                                    <x-icon name="sparkles" class="size-3" /><span>Quiz me on these</span>
+                                </button>
+                                <span class="study-deck-keys"><kbd>Space</kbd> flip · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> rate</span>
+                            </div>
                         </div>
                     @endif
                 </div>
@@ -2367,7 +2371,7 @@
         x-on:close="$wire.mode && $wire.close()"
         x-on:click="$event.target === $el && $el.close()">
         @if ($mode)
-            <form wire:submit="save" novalidate @class(['modal-panel', 'modal-panel-wide' => in_array($mode, ['briefing', 'custom_rules', 'plugins'], true)]) wire:key="session-dialog-{{ $mode }}" @if ($mode === 'briefing') x-data="{ copied: false }" @endif>
+            <form wire:submit="save" novalidate @class(['modal-panel', 'modal-panel-wide' => in_array($mode, ['briefing', 'plugins'], true)]) wire:key="session-dialog-{{ $mode }}" @if ($mode === 'briefing') x-data="{ copied: false }" @endif>
                 <div class="modal-head">
                     <h2 id="session-dialog-title" class="min-w-0 flex-1 text-lg font-semibold" tabindex="-1" autofocus>{{ ['end' => 'End this session?', 'done' => 'Session ended', 'delete' => 'Delete this session?', 'reset_time' => 'Reset timer?', 'reset_full' => 'Restart session?', 'pomodoro' => 'Session clock', 'teaching' => 'How the AI teaches', 'custom_rules' => 'Custom Tutor Rules (Do & Don\'t)', 'plugins' => 'Study Plugins Library', 'briefing' => 'Prompt for another AI', 'material' => 'Material for the tutor', 'topic' => 'What this session is about', 'question' => 'Ask a question', 'tell' => 'Tell the tutor about this module'][$mode] ?? 'Settings' }}</h2>
                     <button type="button" class="topbar-button -mt-1 -mr-2 shrink-0" aria-label="Close" x-on:click="$el.closest('dialog').close()">
@@ -2494,7 +2498,7 @@
                                             @endif
                                         </p>
                                         <div class="segmented" role="radiogroup" aria-label="Where you stand on {{ $t->name }}">
-                                            @foreach (['' => 'Leave it', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Still confusing'] as $value => $word)
+                                            @foreach (['' => 'Leave it', 'covered' => $statusWords['covered'], 'understood' => $statusWords['understood'], 'confused' => $statusWords['confused']] as $value => $word)
                                                 <label>
                                                     <input type="radio" name="end-status-{{ $t->id }}" value="{{ $value }}" wire:model="statuses.{{ $t->id }}">
                                                     <span>{{ $word }}</span>
@@ -2615,4 +2619,6 @@
             </form>
         @endif
     </dialog>
+
+    @include('livewire.workspaces.partials.session-confirm-dialog')
 </div>

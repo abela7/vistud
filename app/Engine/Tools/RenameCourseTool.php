@@ -33,6 +33,9 @@ final class RenameCourseTool implements Tool
             return 'Send the new name for the course.';
         }
         $newName = trim($newName);
+        if (($ask = Agreement::needed($by, $context, "rename_course:{$context->workspaceId}:".mb_strtolower($newName), "Rename the course to \"{$newName}\"?")) !== null) {
+            return $ask;
+        }
         $updated = $this->workspaces->update($by, $context->workspaceId, ['name' => $newName]);
 
         return "Renamed course to \"{$updated->name}\".";

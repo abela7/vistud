@@ -90,9 +90,9 @@ abstract class Saving implements Tool
         }
         unset($item);
         $already = count(array_filter($reviewed, fn ($item) => $item['saved']));
-        $result = $this->writeBack->apply($by, $context->sessionId, $reviewed, note: false);
+        $result = $this->writeBack->apply($by, $context->sessionId, $reviewed, note: false, judge: $context->judge());
         $saved = (int) ($result['saved'][$kind] ?? 0);
-        $context->effects->saved($kind, $saved);
+        $context->effects->saved($kind, $saved, $result['ids'][$kind] ?? []);
         $topics = array_values(array_unique(array_map(fn ($item) => (string) $item['topic_name'], array_filter($reviewed, fn ($item) => ! $item['saved']))));
 
         return implode(' ', array_filter([

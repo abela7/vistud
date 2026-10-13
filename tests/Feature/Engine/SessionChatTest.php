@@ -10,6 +10,7 @@ use App\Engine\Request;
 use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Engine\ToolCall;
+use App\Livewire\Workspaces\TutorChat;
 use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
@@ -116,6 +117,50 @@ class SessionChatTest extends TestCase
         $this->engine->will(Fake::says('Yes.'));
         $this->chat()->send($this->by, $this->session->id, 'Is that always true?');
         $this->assertSame(['user', 'assistant', 'tool', 'assistant', 'user'], array_column($this->engine->last()->messages, 'role'));
+    }
+
+    public function test_a_topic_changed_on_the_session_page_is_told_to_the_tutor_where_in_the_chat_it_happened(): void
+    {
+        $sessions = app(Sessions::class);
+        $joins = (string) $this->session->topicId;
+        $keys = app(Topics::class)->create($this->by, $this->databases->id, 'Keys', $this->session->moduleId)->id;
+
+        // Changed before the chat begins: it only sets the session up, and the standing context says the topic.
+        $sessions->setTopic($this->by, $this->session->id, $keys);
+        $this->engine->will(Fake::says('Keys it is.'));
+        $this->chat()->send($this->by, $this->session->id, 'Hi.');
+        $this->assertSame([['role' => 'user', 'content' => 'Hi.']], $this->engine->last()->messages);
+        $this->assertNull($this->chat()->topicChangeSinceLastMessage($this->by, $this->session->id));
+
+        // Changed after: the chat shows it until the student writes, and the tutor reads it just before their words.
+        $this->travel(1)->minutes();
+        $sessions->setTopic($this->by, $this->session->id, $joins);
+        $this->assertSame('You moved the session to Joins', TutorChat::topicChangeWords($this->chat()->topicChangeSinceLastMessage($this->by, $this->session->id)));
+        $this->engine->will(Fake::says('Back to joins.'));
+        $this->chat()->send($this->by, $this->session->id, 'Go on.');
+        $this->assertSame("(From the app, not the student's words: on the session page the student moved this session to the topic \"Joins\". Teach that topic from here.)\n\nGo on.", $this->engine->last()->messages[2]['content']);
+        $this->assertStringContainsString('It was chosen during this chat: earlier turns may be on another topic; teach this one from here.', $this->engine->last()->system);
+        $this->assertNull($this->chat()->topicChangeSinceLastMessage($this->by, $this->session->id));
+        $turns = $this->chat()->transcript($this->by, $this->session->id);
+        $this->assertSame([null, 'Joins'], [$turns[0]['topicChange'], $turns[2]['topicChange']['name']]);
+        $this->assertSame('Go on.', $turns[2]['text'], 'the kept message stays as the student wrote it');
+
+        // Taken off: the tutor is told so, and not to set one back by itself.
+        $this->travel(1)->minutes();
+        $sessions->setTopic($this->by, $this->session->id, null);
+        $this->engine->will(Fake::says('Sure.'));
+        $this->chat()->send($this->by, $this->session->id, 'Anything else?');
+        $this->assertStringStartsWith('(From the app, not the student\'s words: on the session page the student took the topic off this session', $this->engine->last()->messages[4]['content']);
+        $this->assertStringContainsString('Topic now: none: the student took it off on the session page. Answer what they ask, and set one (set_topic) only when they ask for it or agree to yours.', $this->engine->last()->system);
+
+        // The tutor's own change is in the chat as its call: no note, no line, and the log says it was the tutor.
+        $this->travel(1)->minutes();
+        $this->engine->will(Fake::calls('set_topic', ['topic' => 'Keys'], 'c1'), Fake::says('On to keys.'));
+        $this->chat()->send($this->by, $this->session->id, 'Next topic, please.');
+        $this->assertSame('Next topic, please.', $this->engine->last()->messages[6]['content']);
+        $this->assertSame([['Keys', 'student'], ['Joins', 'student'], [null, 'student'], ['Keys', 'tutor']], array_map(fn (array $change) => [$change['name'], $change['by']], $sessions->topicLog($this->by, $this->session->id)));
+        $this->assertNull($this->chat()->topicChangeSinceLastMessage($this->by, $this->session->id));
+        $this->assertSame($keys, $sessions->find($this->by, $this->session->id)->topicId);
     }
 
     public function test_a_model_without_tools_gets_none_and_the_look_up_rounds_are_limited(): void

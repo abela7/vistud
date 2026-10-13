@@ -24,13 +24,13 @@
                         $current = $topic?->id === $t->id;
                     @endphp
                     <li wire:key="rail-topic-{{ $suffix }}-{{ $t->id }}">
-                        <button type="button" class="rail-row" wire:click="switchTopic('{{ $t->id }}')" @if ($current) aria-current="true" @endif @disabled(! $open)>
+                        {{-- Ticked: the session is on it (the tutor teaches it); tapped again, the session has no topic. --}}
+                        <button type="button" class="rail-row" aria-pressed="{{ $current ? 'true' : 'false' }}" @disabled(! $open)
+                            @if ($current) wire:click="clearTopic" aria-current="true" title="Studying this now. Tap to take it off the session." @else wire:click="switchTopic('{{ $t->id }}')" title="Study this now" @endif>
                             <span @class(['rail-dot', "is-{$shown}"]) aria-hidden="true"><x-icon :name="$statusIcons[$shown]" class="size-3.5" /></span>
                             <span class="min-w-0 flex-1 truncate">{{ $t->name }}</span>
                             <span class="sr-only">, {{ $statusWords[$shown] }}{{ $t->byTutor() ? ', marked by the tutor' : '' }}{{ $current ? ', this session is on it' : '' }}</span>
-                            @if ($current)
-                                <span class="rail-tag" aria-hidden="true">Now</span>
-                            @endif
+                            <span class="rail-check" aria-hidden="true">@if ($current)<x-icon name="check" class="size-3" />@endif</span>
                         </button>
                     </li>
                 @endforeach

@@ -60,7 +60,7 @@ class WorkspacesTest extends TestCase
         try {
             $this->workspaces->create($this->principal($this->ada), [
                 'name' => ' ', 'code' => str_repeat('x', 21), 'starts_on' => '2026-10-01', 'ends_on' => '2026-09-01',
-                'colour' => 'chartreuse', 'icon' => 'rocket',
+                'colour' => 'chartreuse', 'icon' => 'skull',
             ]);
             $this->fail('The workspace was created.');
         } catch (Unprocessable $e) {

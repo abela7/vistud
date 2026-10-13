@@ -1,9 +1,14 @@
-{{-- The student's sidebar outside a workspace: the courses, the calendar of every course, Settings, and every course. --}}
+{{-- The student's sidebar outside a workspace: the courses, ViStud AI, the calendar of every course, Settings, and every course. --}}
 @props(['workspaces'])
 <ul class="nav-list">
     <li>
         <a href="{{ route('home') }}" class="nav-item" title="All courses" @if (request()->routeIs('home')) aria-current="page" @endif>
             <x-icon name="house" /><span class="nav-label">All courses</span>
+        </a>
+    </li>
+    <li>
+        <a href="{{ route('vistud-ai') }}" class="nav-item" title="ViStud AI: your study assistant across all your courses" @if (request()->routeIs('vistud-ai')) aria-current="page" @endif>
+            <x-icon name="sparkles" /><span class="nav-label">ViStud AI</span>
         </a>
     </li>
     <li>

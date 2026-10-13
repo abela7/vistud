@@ -23,10 +23,20 @@ async function openSettings(page) {
     await page.getByRole('heading', { name: 'Settings', level: 1 }).waitFor();
 }
 
+/* The panels are folded away under their headings: this opens each, as a student would to use what is in it. */
+async function openAll(page) {
+    for (let i = 0; i < 10; i++) {
+        const closed = page.locator('.acc-head[aria-expanded="false"]').first();
+        if ((await closed.count()) === 0) break;
+        await closed.click();
+    }
+}
+
 for (const [name, viewport] of Object.entries({ desktop, phone })) {
     test(`the page shows the three roles, the usage and the toggles: ${name}`, async ({ page }) => {
         await page.setViewportSize(viewport);
         await openSettings(page);
+        await openAll(page);
 
         await expect(page.getByText('Your key, your models and what they cost.')).toBeVisible();
         await expect(page.getByRole('link', { name: 'Back to All courses' })).toBeVisible();
@@ -56,6 +66,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
     test(`every colour on the page comes from a token: ${name}`, async ({ page }) => {
         await page.setViewportSize(viewport);
         await openSettings(page);
+        await openAll(page);
         await useSentinelTheme(page);
 
         expect(await foreignColours(page), `AI settings ${name}: colours not from a token`).toEqual([]);
@@ -65,6 +76,7 @@ for (const [name, viewport] of Object.entries({ desktop, phone })) {
         test(`axe finds no violations on the page: ${name}, ${theme}`, async ({ page }) => {
             await page.setViewportSize(viewport);
             await openSettings(page);
+        await openAll(page);
             await useTheme(page, theme);
 
             const results = await new AxeBuilder({ page }).analyze();

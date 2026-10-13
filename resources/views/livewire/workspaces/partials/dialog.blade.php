@@ -47,7 +47,8 @@
 
             <div class="space-y-4 px-5 pt-2">
                 @if ($mode === 'module')
-                    <x-field name="title" label="Title" wire:model="title" maxlength="120" autocomplete="off" hint="Like “Week 1: Cells” or “Chapter 3”." autofocus />
+                    <x-field name="title" label="Title" wire:model="title" maxlength="120" autocomplete="off" hint="Like “Week 1: Cells”, “Chapter 3” or “Lab block”." autofocus />
+                    <x-field name="moduleAbout" label="What it is about (optional)" wire:model="moduleAbout" maxlength="300" autocomplete="off" placeholder="Lab week: writing joins in SQL" hint="One line. The tutor reads it too." />
                     <div class="grid gap-4 sm:grid-cols-2">
                         <x-field name="startsOn" label="Starts (optional)" type="date" wire:model="startsOn" />
                         <x-field name="endsOn" label="Ends (optional)" type="date" wire:model="endsOn" />

@@ -13,10 +13,11 @@
         'attempt' => 'Your answers',
         'checkpoint' => 'Where the session stands',
         'status' => 'Statuses: you decide',
+        'remember' => 'About you: you decide',
     ];
     $results = ['correct' => 'Right', 'partial' => 'Partly right', 'incorrect' => 'Not yet', 'unjudged' => 'Not marked'];
     $resultTones = ['correct' => 'status-understood', 'partial' => 'status-covered', 'incorrect' => 'status-confused', 'unjudged' => ''];
-    $kindWords = ['summary' => 'Summary', 'finding' => 'Key point', 'question' => 'Question', 'flashcard' => 'Flashcard', 'attempt' => 'Answer', 'checkpoint' => 'Where it stands', 'status' => 'Status'];
+    $kindWords = ['summary' => 'Summary', 'finding' => 'Key point', 'question' => 'Question', 'flashcard' => 'Flashcard', 'attempt' => 'Answer', 'checkpoint' => 'Where it stands', 'status' => 'Status', 'remember' => 'To remember'];
 @endphp
 <div>
     <div role="status" aria-live="polite" class="space-y-2">
@@ -157,9 +158,17 @@
                                                             @endif
                                                             <p class="text-xs text-fg-muted mt-0.5">Topic mastery will only update if this box is checked.</p>
                                                         </div>
+                                                    @elseif ($kind === 'remember')
+                                                        <div class="capture-checkpoint-card">
+                                                            <x-icon name="brain" class="size-4 text-accent shrink-0 mt-0.5" />
+                                                            <div class="min-w-0 flex-1 space-y-0.5">
+                                                                <p class="text-sm font-medium text-fg">{{ $item['text'] }}</p>
+                                                                <p class="text-xs text-fg-muted">{{ ($item['everywhere'] ?? false) ? 'For all your courses.' : 'For this course.' }} Your tutor keeps it only if this box is checked; you can change or delete it in Instructions for the AI.</p>
+                                                            </div>
+                                                        </div>
                                                     @endif
 
-                                                    @if (! in_array($kind, ['summary', 'checkpoint'], true) && ! $item['saved'])
+                                                    @if (! in_array($kind, ['summary', 'checkpoint', 'remember'], true) && ! $item['saved'])
                                                         <div class="flex flex-wrap items-center gap-2 pt-1 text-xs text-fg-muted">
                                                             <x-icon name="tag" class="size-3.5 shrink-0" />
                                                             <label for="capture-topic-{{ $i }}" class="font-medium">Topic</label>

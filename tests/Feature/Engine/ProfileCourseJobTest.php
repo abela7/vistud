@@ -90,8 +90,8 @@ class ProfileCourseJobTest extends TestCase
         ], $reading['assessment']);
         // An end before its start is dropped.
         $this->assertSame([
-            ['title' => 'Week 1: Introduction', 'starts_on' => '2026-09-14', 'ends_on' => '2026-09-20'],
-            ['title' => 'Week 2: Processes', 'starts_on' => '2026-09-21', 'ends_on' => null],
+            ['title' => 'Week 1: Introduction', 'starts_on' => '2026-09-14', 'ends_on' => '2026-09-20', 'about' => '', 'topics' => [], 'parts' => []],
+            ['title' => 'Week 2: Processes', 'starts_on' => '2026-09-21', 'ends_on' => null, 'about' => '', 'topics' => [], 'parts' => []],
         ], $reading['modules']);
         $this->assertSame('Operating System Concepts', $reading['textbook']);
     }

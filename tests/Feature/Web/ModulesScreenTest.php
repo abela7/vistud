@@ -73,6 +73,16 @@ class ModulesScreenTest extends TestCase
         $page->call('editModule', $cells->id)->assertSet('title', 'Cells')
             ->set('title', 'Cells and organelles')->call('save')
             ->assertSee('Cells and organelles is saved.');
+
+        // A line of what the module is about: shown under its title, and kept when the title alone is changed.
+        $page->call('editModule', $cells->id)->assertSee('What it is about (optional)')->set('moduleAbout', 'Lab week: looking at cells under the microscope.')->call('save');
+        $this->assertSame('Lab week: looking at cells under the microscope.', $this->modules()[0]->about);
+        app(ModuleService::class)->update($this->principal($this->ada), $cells->id, ['title' => 'Cells']);
+        $this->assertSame('Lab week: looking at cells under the microscope.', $this->modules()[0]->about);
+        $lab = app(Folders::class)->create($this->principal($this->ada), 'module', $cells->id, 'Microscope lab', 'lab');
+        $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
+            ->assertOk()->assertSee('Lab week: looking at cells under the microscope.')->assertSeeInOrder(['Lab', 'Microscope lab']);
+        $this->assertSame('lab', $lab->kind);
     }
 
     public function test_reordering_modules_by_dragging_and_from_the_menu(): void

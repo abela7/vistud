@@ -13,6 +13,7 @@ use App\Study\Questions;
 use App\Study\Topics;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -116,14 +117,23 @@ final class QuestionPage extends Component
         $this->resetErrorBag();
         $by = $this->principal();
         try {
-            if ($this->questionId === null) {
-                $id = $this->questions->ask($by, $this->workspaceId, $this->question, $this->topicId ?: null, $this->moduleId ?: null)->id;
-            } else {
-                $id = $this->questionId;
-                $this->questions->update($by, $id, $this->question, $this->moduleId);
-            }
-            $this->questions->setStatus($by, $id, $this->status, $this->answer);
-            $this->questions->setAskTeacher($by, $id, $this->askTeacher);
+            // All or nothing: an answer refused after the question was made would leave it made, and Save again would
+            // make it twice.
+            DB::transaction(function () use ($by) {
+                $before = null;
+                if ($this->questionId === null) {
+                    $id = $this->questions->ask($by, $this->workspaceId, $this->question, $this->topicId ?: null, $this->moduleId ?: null)->id;
+                } else {
+                    $id = $this->questionId;
+                    $before = $this->questions->find($by, $id);
+                    $this->questions->update($by, $id, $this->question, $this->moduleId, $this->topicId);
+                }
+                // New words alone leave the status as it was: an answer the AI wrote stays the AI's until "It makes sense".
+                if ($before === null || $before->status !== $this->status || (string) $before->answer !== trim($this->answer)) {
+                    $this->questions->setStatus($by, $id, $this->status, $this->answer);
+                }
+                $this->questions->setAskTeacher($by, $id, $this->askTeacher);
+            });
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
                 $this->addError(['text' => 'question'][$field] ?? $field, $messages[0]);
@@ -142,14 +152,44 @@ final class QuestionPage extends Component
 
             return;
         }
+        // A topic chosen with no module brings its module: the form says what was kept.
+        $kept = $this->questions->find($by, $this->questionId);
+        [$this->moduleId, $this->topicId] = [$kept->moduleId ?? '', $kept->topicId ?? ''];
         $this->notify('The question is saved.');
+    }
+
+    /** The answer the AI wrote makes sense to the student now: their word, so it counts as understood. */
+    public function confirmAnswer(): void
+    {
+        if ($this->questionId === null) {
+            return;
+        }
+        try {
+            $this->questions->setStatus($this->principal(), $this->questionId, 'answered');
+        } catch (NotFound) {
+            return;
+        }
+        $this->status = 'answered';
+        $this->notify('Marked as understood.');
+    }
+
+    /** Another module: a topic that isn't in it is left out, so the question never sits in one module about another's topic. */
+    public function updatedModuleId(): void
+    {
+        if ($this->topicId === '' || $this->moduleId === '') {
+            return;
+        }
+        $topic = collect($this->topics->list($this->principal(), $this->workspaceId))->firstWhere('id', $this->topicId);
+        if ($topic === null || $topic->moduleId !== $this->moduleId) {
+            $this->topicId = '';
+        }
     }
 
     public function delete(): void
     {
         if ($this->questionId !== null) {
             try {
-                $this->questions->retire($this->principal(), $this->questionId);
+                $this->questions->delete($this->principal(), $this->questionId);
             } catch (NotFound) {
                 // Already gone: the same end.
             }
@@ -171,9 +211,8 @@ final class QuestionPage extends Component
             'asked' => $asked,
             'modules' => $modules,
             'module' => $module,
-            'topicNames' => collect($topics)->pluck('name', 'id')->all(),
-            // For a new question, the topics of the module it is in (all, with none).
-            'topics' => $this->questionId !== null ? [] : array_values(array_filter($topics, fn ($t) => $this->moduleId === '' || $t->moduleId === $this->moduleId || $t->id === $this->topicId)),
+            // The topics of the module it is in (all, with none), and the one it has.
+            'topics' => array_values(array_filter($topics, fn ($t) => $this->moduleId === '' || $t->moduleId === $this->moduleId || $t->id === $this->topicId)),
             'backUrl' => $this->from ?? $this->listUrl(),
             'backTo' => $this->from !== null ? $this->fromName() : ($module !== null ? 'Questions' : 'Progress'),
         ]);

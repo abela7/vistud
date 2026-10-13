@@ -9,21 +9,26 @@ use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Study\CourseProfiles;
+use App\Study\CourseTypes;
 use App\Study\Files;
 use App\Study\Folders;
 use App\Study\Instructions;
 use App\Study\LearnerProfiles;
 use App\Study\ModuleBriefs;
 use App\Study\ModuleDetails;
+use App\Study\ModuleParts;
 use App\Study\Modules;
 use App\Study\NoteDoc;
 use App\Study\Notes;
 use App\Study\PluginDetails;
 use App\Study\Plugins;
 use App\Study\SessionDetails;
+use App\Study\Sessions;
 use App\Study\TopicDetails;
 use App\Study\Topics;
 use App\Study\Tutoring;
+use App\Study\TutorMemories;
+use App\Study\TutorMemory;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
 
@@ -43,7 +48,7 @@ use Carbon\CarbonImmutable;
 final class Stack
 {
     /** Tokens, by layer. A layer left out has no budget of its own (the tools; the folded chat). */
-    public const BUDGETS = [0 => 2_500, 2 => 600, 3 => 250, 4 => 700, 5 => 300];
+    public const BUDGETS = [0 => 2_500, 2 => 600, 3 => 250, 4 => 700, 5 => 380];
 
     public const PROMPT = 'resources/prompts/tutor-2.md';
 
@@ -68,6 +73,8 @@ final class Stack
         private LearnerProfiles $learnerProfiles,
         private ModuleBriefs $briefs,
         private Folders $folders,
+        private TutorMemories $memories,
+        private Sessions $sessions,
     ) {}
 
     /** The tutor's standing context for a session: its system prompt, its tools and the report on its layers. */
@@ -96,6 +103,8 @@ final class Stack
                 $facts = new Facts(
                     courseName: $workspace->name,
                     moduleTitle: $module->title,
+                    moduleAbout: $module->about,
+                    moduleParts: $this->parts($by, $module),
                     moduleDates: self::dates($module),
                     moduleInstructions: $this->instructions->forSession($by, $workspace->id, $module->id)['module'],
                     topics: self::topicsOf($this->topics->list($by, $workspace->id), $module, $folderIds),
@@ -125,6 +134,8 @@ final class Stack
             $facts = new Facts(
                 courseName: $workspace->name,
                 moduleTitle: $module->title,
+                moduleAbout: $module->about,
+                moduleParts: $this->parts($by, $module),
                 moduleDates: self::dates($module),
                 moduleInstructions: $this->instructions->forSession($by, $workspace->id, $module->id)['module'],
                 topics: self::topicsOf($this->topics->list($by, $workspace->id), $module),
@@ -138,6 +149,9 @@ final class Stack
             $facts = new Facts(courseName: $this->workspaces->find($by, $workspaceId)->name);
         }
 
+        // What the student's tutors remember about them for every course: a few short lines, so it explains their way.
+        $facts = $facts->withMemories($this->memories->lines($by, null));
+
         return $this->composeHelper($facts, $tools);
     }
 
@@ -149,7 +163,8 @@ final class Stack
         $about = $facts->moduleTitle === null && $facts->courseName !== '' && $facts->folderName === null
             ? [["## The course: {$facts->courseName}", true]]
             : $this->module($facts, isHelper: true);
-        $layers = [0 => ['Rules', [[self::helperRules(), true]], self::HELPER_BUDGET], 4 => ['Module', $about, self::BUDGETS[4]]];
+        $student = $facts->memories === [] ? [] : [['## The student', true], ['What their tutor remembers about them:', true], ...array_map(fn (string $line) => ["- {$line}", true], $facts->memories)];
+        $layers = [0 => ['Rules', [[self::helperRules(), true]], self::HELPER_BUDGET], 3 => ['Student', $student, self::BUDGETS[3]], 4 => ['Module', $about, self::BUDGETS[4]]];
         $report = [];
         $texts = [];
         foreach ($layers as $number => [$name, $lines, $budget]) {
@@ -160,7 +175,7 @@ final class Stack
         $tooling = $tools === [] ? '' : (string) json_encode($tools, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         array_splice($report, 1, 0, [['layer' => 1, 'name' => 'Tools', 'tokens' => Tokens::of($tooling), 'budget' => null, 'cut' => 0]]);
 
-        return new Built(self::join([$texts[0], $texts[4]]), $texts[0], $tools, $report);
+        return new Built(self::join([$texts[0], $texts[3], $texts[4]]), $texts[0], $tools, $report);
     }
 
     /**
@@ -212,7 +227,8 @@ final class Stack
         $module = $this->moduleOf($by, $workspace->id, $session->moduleId ?? $topic?->moduleId);
         $instructions = $this->instructions->forSession($by, $workspace->id, $module?->id);
         $choices = $this->settings->get($by);
-        $status = fn ($t) => self::status($t);
+        // The session line says the word alone (it names who and the practice itself); the topic lists say it in full.
+        $status = fn ($t) => self::word($t->shown());
         [$material, $materialText] = $this->material($by, $session, $withTools);
 
         $tutoring = Tutoring::normalised($session->tutoring);
@@ -221,6 +237,8 @@ final class Stack
         $brief = $module === null ? null : ($folderIds !== null ? $this->briefs->forFolder($by, (string) $session->folderId) : $this->briefs->for($by, $module->id));
         $course = $this->courseProfiles->get($by, $workspace->id);
         $today = CarbonImmutable::now();
+
+        [$topicChangedInChat, $topicTakenOff] = $this->topicHistory($by, $session);
 
         $openedNoteTitle = null;
         try {
@@ -243,14 +261,21 @@ final class Stack
             courseOutcomes: $course->outcomes,
             courseAssessment: array_map(fn (array $item) => self::assessment($item, $today), $course->assessment),
             courseTextbook: $course->textbook,
+            courseKind: CourseTypes::lines($workspace->type, $course),
             aboutYou: $instructions['me'],
             preferences: LearnerProfiles::lines($this->learnerProfiles->get($by, $workspace->id)),
+            memories: $choices->tutorRemembers ? array_map(fn (TutorMemory $m) => $m->text.($m->everywhere() ? ' (all courses)' : ''), $this->memories->list($by, $workspace->id)) : [],
+            remembers: $choices->tutorRemembers,
             language: $choices->language,
             askTopics: $choices->askTopics,
+            marksTopics: $choices->tutorMarksTopics,
             moduleTitle: $module?->title,
+            moduleAbout: $module?->about,
+            moduleParts: $module === null ? [] : $this->parts($by, $module),
             moduleDates: $module === null ? null : self::dates($module),
             moduleInstructions: $instructions['module'],
             topics: $module === null ? [] : self::topicsOf($topics, $module, $folderIds),
+            moduleOwnTopics: $module === null || $folderIds === null ? [] : self::ownTopicsOf($topics, $module),
             moduleFiles: $brief?->files ?? [],
             moduleQuestions: $brief?->questions ?? [],
             moduleKeyPoints: $brief?->keyPoints ?? [],
@@ -259,7 +284,10 @@ final class Stack
             otherFolders: $otherFolders,
             mode: $session->mode,
             topicNow: $topic?->name,
-            topicPractice: $topic === null ? null : ($topic->byTutor() ? "you marked it {$status($topic)}" : "the student says {$status($topic)}").'; practice: '.$topic->evidence(),
+            topicPractice: $topic === null ? null : ($topic->status === null ? "{$status($topic)}, nobody has said yet" : ($topic->byTutor() ? "you marked it {$status($topic)}" : "the student says {$status($topic)}")).'; practice: '.$topic->evidence().$this->onTopicSoFar($by, $session),
+            topicChangedInChat: $topicChangedInChat,
+            topicTakenOff: $topicTakenOff,
+            withTools: $withTools,
             clock: self::clock($session),
             teaching: array_values(array_filter([
                 ...array_map(fn (string $key) => Tutoring::CHOICES[$key][$tutoring[$key]][1], array_keys(Tutoring::DEFAULTS)),
@@ -292,6 +320,15 @@ final class Stack
         return trim((string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', (string) file_get_contents(base_path(self::HELPER_PROMPT))));
     }
 
+    /**
+     * Which version of the tutor's rules a model was given, as "tutor-2@" and the start of the file's hash: it changes
+     * by itself whenever the rules do, so what a model judged under older rules can be told apart.
+     */
+    public static function promptVersion(): string
+    {
+        return 'tutor-2@'.substr(sha1((string) file_get_contents(base_path(self::PROMPT))), 0, 12);
+    }
+
     /** The tutor's rules, for a model that can call tools or one that can't (the file marks the parts for each). */
     public static function rules(bool $withTools): string
     {
@@ -315,6 +352,9 @@ final class Stack
         $lines = [["## The course: {$f->courseName}", true]];
         if ($f->courseLine !== null) {
             $lines[] = [$f->courseLine, true];
+        }
+        foreach ($f->courseKind as $line) {
+            $lines[] = [$line, true];
         }
         if ($f->courseAbout !== '') {
             $lines[] = ["About: {$f->courseAbout}", true];
@@ -348,10 +388,22 @@ final class Stack
         if ($f->preferences !== []) {
             $lines[] = ['How they like to learn in this course: '.implode(' · ', $f->preferences).'.', true];
         }
+        // What the tutor kept from earlier chats: a few short lines, so never cut. Numbered, so the tool can replace one.
+        if (! $f->remembers) {
+            $lines[] = ['They have turned off your remembering things about them: keep nothing with remember.', true];
+        } elseif ($f->memories !== []) {
+            $lines[] = ['What you remember about them (kept from earlier chats, or written by them; they see, change and delete it):', true];
+            foreach (array_values($f->memories) as $i => $memory) {
+                $lines[] = [($i + 1).'. '.$memory, true];
+            }
+        } elseif ($withTools) {
+            $lines[] = ['What you remember about them: nothing yet. Keep what lasts with remember.', true];
+        }
         if ($withTools) {
             $lines[] = [$f->askTopics
                 ? 'Topics: ask before you add or switch them; propose, and do it once they agree.'
                 : 'Topics: keep them yourself, as you teach, and say so in one line.', true];
+
         }
         if ($f->language !== null) {
             $lines[] = ["\n## Language\n\nThe student chose to be taught in {$f->language}. Write your messages in {$f->language}, whatever language they write in, unless they ask for another in this chat. Keep the course's own terms, and anything you quote from their material, in the course's language, with the {$f->language} beside them when it helps. Write the marks' text (key points, cards, questions, answers) in the course's language, so they match the exams, unless the student asks otherwise.", true];
@@ -385,14 +437,29 @@ final class Stack
         } else {
             $lines = [['## The module: '.$title, true]];
         }
+        // What the module is (a week, a chapter, a lab block) and what it holds, so a lab week is taught as one.
+        if ($f->moduleAbout !== null && $f->moduleAbout !== '') {
+            $lines[] = ['About this module: '.$f->moduleAbout, true];
+        }
+        if ($f->moduleParts !== []) {
+            $lines[] = ['Its parts: '.implode(' · ', $f->moduleParts).'.', true];
+        }
         if ($f->moduleInstructions !== '') {
             $lines[] = ["Instructions for this module, in the student's words: {$f->moduleInstructions}", true];
         }
         $lines[] = [$f->topics === []
             ? ($here ? 'Topics in this folder: none yet.' : 'Topics: none yet.')
-            : ($here ? 'Topics in this folder, with what the student says of each:' : 'Topics, with what the student says of each:'), true];
+            : ($here ? 'Topics in this folder, in course order, where each stands (and who said so, when someone has):' : 'Topics, in course order, where each stands (and who said so, when someone has):'), true];
+        // The session's topic is marked, and kept when the list is cut: the one after it is the next to study.
         foreach ($f->topics as $topic) {
-            $lines[] = ["- {$topic['name']}: {$topic['status']}", false];
+            $now = $f->topicNow !== null && $topic['name'] === $f->topicNow;
+            $lines[] = ["- {$topic['name']}: {$topic['status']}".($now ? ' ← the session\'s topic now' : ''), $now];
+        }
+        if ($here && $f->moduleOwnTopics !== []) {
+            $lines[] = ['In the module but in no folder (they belong to every part of it):', true];
+            foreach ($f->moduleOwnTopics as $topic) {
+                $lines[] = ["- {$topic['name']}: {$topic['status']}", false];
+            }
         }
         if ($f->moduleLast !== null) {
             $lines[] = [($here ? 'Last time in this folder: ' : 'Last time: ').$f->moduleLast, true];
@@ -430,9 +497,18 @@ final class Stack
     {
         $lines = [['## This session', true]];
         $lines[] = [($f->folderName !== null ? (self::FOLDER_MODES[$f->mode] ?? null) : null) ?? self::MODES[$f->mode] ?? self::MODES['topic'], true];
-        $lines[] = [$f->topicNow !== null
-            ? "Topic now: {$f->topicNow} ({$f->topicPractice})."
-            : 'Topic now: none chosen. Propose one and ask whether to take it.', true];
+        // The chat's earlier turns can be on another topic than the one now: the student changes it on the session page.
+        $lines[] = [match (true) {
+            $f->topicNow !== null && $f->topicChangedInChat => "Topic now: {$f->topicNow} ({$f->topicPractice}). It was chosen during this chat: earlier turns may be on another topic; teach this one from here.",
+            $f->topicNow !== null => "Topic now: {$f->topicNow} ({$f->topicPractice}).",
+            $f->topicTakenOff => 'Topic now: none: the student took it off on the session page. Answer what they ask, and set one (set_topic) only when they ask for it or agree to yours.',
+            default => 'Topic now: none chosen. Propose one and ask whether to take it; once you are teaching one, set it (set_topic) so what is saved and studied counts for it.',
+        }, true];
+        if ($f->withTools) {
+            $lines[] = [$f->marksTopics
+                ? 'Statuses: what you set with set_topic_status is applied at once and shown as yours; the student can undo it.'
+                : 'Statuses: what you set with set_topic_status is only proposed; the student accepts it or not.', true];
+        }
         $lines[] = ["Clock: {$f->clock}.", true];
         if ($f->teaching !== []) {
             $lines[] = ['How to teach:', true];
@@ -455,8 +531,9 @@ final class Stack
         if ($f->summary !== null) {
             $lines[] = ["Summary so far: {$f->summary}", false];
         }
+        // A model without tools has no other way to read the chosen notes: they stay whole (each is capped by NOTE_LIMIT).
         foreach ($f->materialText as $block) {
-            $lines[] = ["\n{$block}", false];
+            $lines[] = ["\n{$block}", true];
         }
 
         return $lines;
@@ -508,7 +585,7 @@ final class Stack
             if (mb_strlen($text) > self::NOTE_LIMIT) {
                 $text = rtrim(mb_substr($text, 0, self::NOTE_LIMIT))."\n\n(The rest of this note is left out.)";
             }
-            $blocks[] = "## The student's note: {$note->displayTitle()}\n\n".($text !== '' ? $text : '(Empty.)');
+            $blocks[] = "## The student's note: {$note->displayTitle()}\n\n".NoteDoc::fenced($text !== '' ? $text : '(Empty.)');
         }
 
         return [$lines, $blocks];
@@ -523,6 +600,17 @@ final class Stack
     private static function topicsOf(array $topics, ModuleDetails $module, ?array $folderIds = null): array
     {
         return array_map(fn ($t) => ['name' => $t->name, 'status' => self::status($t)], array_values(array_filter($topics, fn ($t) => $folderIds !== null ? $t->in($folderIds) : $t->moduleId === $module->id)));
+    }
+
+    /**
+     * The module's topics that are in none of its folders, for a folder's session: they are the module's, so its parts'.
+     *
+     * @param  list<TopicDetails>  $topics
+     * @return list<array{name: string, status: string}>
+     */
+    private static function ownTopicsOf(array $topics, ModuleDetails $module): array
+    {
+        return array_map(fn ($t) => ['name' => $t->name, 'status' => self::status($t)], array_values(array_filter($topics, fn ($t) => $t->moduleId === $module->id && $t->folderId === null)));
     }
 
     /**
@@ -544,6 +632,24 @@ final class Stack
     /**
      * @return array{0: ?string, 1: ?list<string>, 2: list<string>}
      */
+    /**
+     * The module's parts: its top-level folders, each with its kind when it has one ("Lab session (lab)").
+     *
+     * @return list<string>
+     */
+    private function parts(Principal $by, ModuleDetails $module): array
+    {
+        $parts = [];
+        foreach ($this->folders->tree($by, $module->workspaceId) as $folder) {
+            if ($folder->moduleId === $module->id && $folder->parentId === null && count($parts) < 8) {
+                $kind = ModuleParts::beside($folder->kind, $folder->name);
+                $parts[] = $folder->name.($kind !== null ? ' ('.mb_strtolower($kind).')' : '');
+            }
+        }
+
+        return $parts;
+    }
+
     public function folderInfo(Principal $by, string $folderId, ModuleDetails $module): array
     {
         try {
@@ -557,16 +663,87 @@ final class Stack
         $others = [];
         foreach ($this->folders->tree($by, $module->workspaceId) as $folder) {
             if ($folder->moduleId === $module->id && $folder->parentId === null && $folder->id !== $path[0]->id) {
-                $others[] = $folder->name;
+                $count = count(array_filter($this->topics->list($by, $module->workspaceId), fn ($t) => $t->in($this->folders->within($by, $folder->id))));
+                $others[] = $folder->name.($count > 0 ? ' ('.$count.' '.($count === 1 ? 'topic' : 'topics').')' : '');
             }
         }
 
         return [implode(' › ', array_map(fn ($folder) => $folder->name, $path)), $this->folders->within($by, $folderId), $others];
     }
 
+    /**
+     * Where the student stands on a topic, as the tutor needs it to teach and to update it (the owner's ask, 2026-10-12):
+     * the word shown, who said it and when (the student's word from this session stands; an older one, or the tutor's own,
+     * it may update), and what the evidence says. "covered: the student said so 3 days ago; evidence: seen, not practised".
+     */
     private static function status(TopicDetails $topic): string
     {
-        return $topic->shown() === 'not_started' ? 'not started' : $topic->shown();
+        $shown = $topic->shown();
+        $word = self::word($shown);
+        // Nobody has said anything and nothing has been studied: the default, not the student's word.
+        if ($shown === 'not_started' && $topic->status === null && $topic->label === 'not_started') {
+            return 'not started (nothing said or studied yet)';
+        }
+        // Who said it, when the word shown is the one said (not overtaken by newer evidence).
+        $said = $topic->status !== null && ($topic->status === $shown || ($shown === 'confused' && $topic->status === 'confused'))
+            ? ($topic->statusBy === 'tutor' ? 'you marked it' : 'the student said so').($topic->statusAt !== null ? ' '.self::ago($topic->statusAt) : '')
+            : null;
+
+        return $word.($said !== null ? ": {$said}" : '').($shown !== 'not_started' || $topic->label !== 'not_started' ? '; evidence: '.$topic->evidence() : '');
+    }
+
+    /**
+     * How long this session has been on its topic, up to the student's last activity: "; on it this session: 14 min,
+     * recorded as studying it when the topic changes or the session ends". Nothing under a minute.
+     */
+    private function onTopicSoFar(Principal $by, SessionDetails $session): string
+    {
+        $since = LearnerTables::query(Guard::learner($by), 'study_sessions')->where('id', $session->id)->value('topic_since');
+        if ($since === null || ! $session->isOpen()) {
+            return '';
+        }
+        $until = CarbonImmutable::parse($session->lastActivityAt, 'UTC')->min(CarbonImmutable::now());
+        $minutes = intdiv(max(0, $until->getTimestamp() - CarbonImmutable::parse((string) $since, 'UTC')->getTimestamp()), 60);
+
+        return $minutes < 1 ? '' : "; on it this session: {$minutes} min, recorded as studying it when the topic changes or the session ends";
+    }
+
+    /**
+     * From the session's topic log: whether the topic now was chosen after the chat's first turn (so its earlier turns
+     * may be on another topic), and whether the student took the topic off. A topic's chat is no session: neither.
+     *
+     * @return array{0: bool, 1: bool}
+     */
+    private function topicHistory(Principal $by, SessionDetails $session): array
+    {
+        try {
+            $log = $this->sessions->topicLog($by, $session->id);
+        } catch (NotFound) {
+            return [false, false];
+        }
+        $last = $log === [] ? null : $log[array_key_last($log)];
+        if ($last === null || $last['topic'] === null) {
+            return [false, $last !== null && $last['by'] === 'student'];
+        }
+        $scope = Guard::learner($by);
+        $threadId = LearnerTables::query($scope, 'engine_threads')->where('session_id', $session->id)->value('id');
+        $first = $threadId === null ? null : LearnerTables::query($scope, 'engine_messages')->where('thread_id', $threadId)->where('role', 'user')->min('created_at');
+
+        return [$first !== null && CarbonImmutable::parse($last['at'])->greaterThan(CarbonImmutable::parse((string) $first, 'UTC')), false];
+    }
+
+    /** A status as the tutor's tools take it: not started, covered, understood, confusing, mastered. */
+    public static function word(string $status): string
+    {
+        return ['not_started' => 'not started', 'confused' => 'confusing'][$status] ?? $status;
+    }
+
+    /** "just now", "3 days ago". */
+    private static function ago(string $at): string
+    {
+        $then = CarbonImmutable::parse($at, 'UTC');
+
+        return $then->diffInSeconds(CarbonImmutable::now(), true) < 60 ? 'just now' : $then->diffForHumans();
     }
 
     private static function dates(ModuleDetails $module): ?string
@@ -616,7 +793,7 @@ final class Stack
             }
         }
         if ($cut > 0) {
-            $kept[] = "(cut: {$cut} more ".($cut === 1 ? 'line' : 'lines').')';
+            $kept[] = "(cut: {$cut} more ".($cut === 1 ? 'line' : 'lines').') Your tools have the rest.';
         }
 
         return [implode("\n", $kept), $cut];

@@ -1,10 +1,42 @@
 {{--
-    Advanced Note Editor for Custom Tutor Rules (Do & Don't)
-    Allows writing and organizing custom numbered instructions (1, 2, 3...)
+    Custom tutor rules (Do & Don't): one editor at a time, so the dialog stays calm.
+    Same look as the AI Tutor Tuning dropdown (session-tutor-* classes).
 --}}
-<div class="space-y-4"
+@php
+    $ruleEditors = [
+        'do' => [
+            'label' => 'What to do',
+            'hint' => 'Things the tutor should always do when it teaches you.',
+            'dot' => 'bg-success',
+            'error' => 'customDo',
+            'placeholder' => "1. Break concepts into small, numbered steps\n2. Lead with intuitive real-world analogies\n3. Always ask a gentle check question before moving on...",
+            'suggestions' => [
+                'Step by step' => 'Break concepts down into step-by-step numbered points',
+                'Analogies' => 'Lead with concrete real-world analogies before formal terms',
+                'Code examples' => 'Always include practical, commented code examples',
+                'Gentle check' => 'Ask gentle check questions to confirm basic recall first',
+                'Plain English' => 'Use plain conversational English and avoid heavy shorthand',
+            ],
+        ],
+        'dont' => [
+            'label' => 'What NOT to do',
+            'hint' => 'Things the tutor should never do.',
+            'dot' => 'bg-danger',
+            'error' => 'customDont',
+            'placeholder' => "1. Never give full solutions right away; provide hints\n2. Do not use unexplained academic jargon\n3. Avoid multiple heavy topics in one reply...",
+            'suggestions' => [
+                'No direct answers' => 'Never provide direct solutions immediately; guide with hints',
+                'No jargon' => 'Do not use unexplained technical acronyms or jargon',
+                'No LaTeX' => 'Avoid dense LaTeX equations; write formulas in plain text',
+                'Don\'t rush' => 'Do not rush through multiple large topics in one message',
+                'No emojis' => 'Avoid excessive emojis and conversational fluff',
+            ],
+        ],
+    ];
+@endphp
+<div class="session-rules"
     x-data="{
-        view: 'split',
+        view: 'do',
         showPreview: false,
         doText: @entangle('customDo'),
         dontText: @entangle('customDont'),
@@ -14,22 +46,22 @@
             return text.split('\n').filter(l => l.trim().length > 0).length;
         },
 
+        get(which) {
+            return (which === 'do' ? this.doText : this.dontText) || '';
+        },
+
         insertRule(which, textToAdd) {
-            const current = (which === 'do' ? this.doText : this.dontText) || '';
-            const lines = current ? current.split('\n') : [];
-            const nonBlank = lines.filter(l => l.trim().length > 0);
-            const nextNum = nonBlank.length + 1;
+            const current = this.get(which);
+            const nextNum = current.split('\n').filter(l => l.trim().length > 0).length + 1;
             const newLine = `${nextNum}. ${textToAdd}`;
-            const updated = current.trim() ? `${current.trim()}\n${newLine}` : newLine;
-            this.updateValue(which, updated);
+            this.updateValue(which, current.trim() ? `${current.trim()}\n${newLine}` : newLine);
         },
 
         formatNumbered(which) {
-            const current = (which === 'do' ? this.doText : this.dontText) || '';
+            const current = this.get(which);
             if (!current.trim()) return;
-            const lines = current.split('\n');
             let num = 1;
-            const formatted = lines.map(line => {
+            const formatted = current.split('\n').map(line => {
                 const trimmed = line.trim();
                 if (!trimmed) return '';
                 const clean = trimmed.replace(/^(\d+[\.\)]|\-|\*|\•)\s*/, '');
@@ -38,54 +70,7 @@
             this.updateValue(which, formatted);
         },
 
-        formatBullet(which) {
-            const current = (which === 'do' ? this.doText : this.dontText) || '';
-            if (!current.trim()) return;
-            const lines = current.split('\n');
-            const formatted = lines.map(line => {
-                const trimmed = line.trim();
-                if (!trimmed) return '';
-                const clean = trimmed.replace(/^(\d+[\.\)]|\-|\*|\•)\s*/, '');
-                return `- ${clean}`;
-            }).filter(l => l.length > 0).join('\n');
-            this.updateValue(which, formatted);
-        },
-
-        wrapBold(textareaRef, which) {
-            const el = this.$refs[textareaRef];
-            if (!el) return;
-            const start = el.selectionStart;
-            const end = el.selectionEnd;
-            const val = el.value || '';
-            const selected = val.substring(start, end);
-            const replacement = selected ? `**${selected}**` : '**bold text**';
-            const newVal = val.substring(0, start) + replacement + val.substring(end);
-            el.value = newVal;
-            this.updateValue(which, newVal);
-            this.$nextTick(() => {
-                el.focus();
-                el.setSelectionRange(start + 2, start + 2 + (selected ? selected.length : 9));
-            });
-        },
-
-        addNewLine(which, textareaRef) {
-            const current = (which === 'do' ? this.doText : this.dontText) || '';
-            const lines = current ? current.split('\n') : [];
-            const nonBlank = lines.filter(l => l.trim().length > 0);
-            const nextNum = nonBlank.length + 1;
-            const prefix = `${nextNum}. `;
-            const updated = current.trim() ? `${current.trim()}\n${prefix}` : prefix;
-            this.updateValue(which, updated);
-            this.$nextTick(() => {
-                const el = this.$refs[textareaRef];
-                if (el) {
-                    el.focus();
-                    el.selectionStart = el.selectionEnd = el.value.length;
-                }
-            });
-        },
-
-        handleKeyDown(e, which, textareaRef) {
+        handleKeyDown(e, which) {
             const el = e.target;
             if (e.key === 'Enter' && !e.shiftKey) {
                 const cursorPos = el.selectionStart;
@@ -166,187 +151,94 @@
         }
     }">
 
-    {{-- Top bar: navigation & view switch --}}
-    <div class="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-divider">
-        <div class="min-w-0">
-            <button type="button" class="inline-flex items-center gap-1.5 text-xs text-accent hover:underline font-medium" wire:click="editTeaching">
-                <x-icon name="arrow-left" class="size-3.5" />
-                <span>Back to general teaching settings</span>
-            </button>
-            <p class="text-xs text-fg-muted mt-0.5">Use numbered lists (1, 2, 3...) for clear step-by-step tutor guidance. If left empty, nothing is added to the prompt.</p>
-        </div>
-
-        {{-- View selector (Split / Do / Don't) --}}
-        <div class="segmented" role="tablist" aria-label="Editor view">
-            <button type="button" class="segmented-btn" x-bind:class="{ 'is-active': view === 'split' }" x-on:click="view = 'split'">
-                <span>Split view</span>
-            </button>
-            <button type="button" class="segmented-btn" x-bind:class="{ 'is-active': view === 'do' }" x-on:click="view = 'do'">
-                <span class="inline-block size-1.5 rounded-full bg-success"></span>
-                <span>Do</span>
-                <span class="text-xs text-fg-subtle" x-text="'(' + countRules(doText) + ')'"></span>
-            </button>
-            <button type="button" class="segmented-btn" x-bind:class="{ 'is-active': view === 'dont' }" x-on:click="view = 'dont'">
-                <span class="inline-block size-1.5 rounded-full bg-danger"></span>
-                <span>Don't</span>
-                <span class="text-xs text-fg-subtle" x-text="'(' + countRules(dontText) + ')'"></span>
-            </button>
-        </div>
+    <div class="session-rules-intro">
+        <button type="button" class="session-rules-back" wire:click="editTeaching">
+            <x-icon name="arrow-left" class="size-4" />
+            <span>Back to teaching settings</span>
+        </button>
+        <p class="session-tutor-section-hint">Write short rules, one per line. Whatever you add is sent to the tutor with every message; if you leave both boxes empty, nothing is added.</p>
     </div>
 
-    {{-- Editor grid --}}
-    <div class="grid gap-4" x-bind:class="view === 'split' ? 'md:grid-cols-2' : 'grid-cols-1'">
-
-        {{-- Section 1: What to do --}}
-        <div class="note-rule-card" x-show="view === 'split' || view === 'do'">
-            <div class="note-rule-header">
-                <div class="flex items-center gap-2 min-w-0">
-                    <span class="inline-block size-2 rounded-full bg-success shrink-0"></span>
-                    <span class="text-xs font-semibold text-fg uppercase tracking-wider">What to do</span>
-                    <span class="text-xs px-1.5 py-0.5 rounded-full bg-surface-sunken text-fg-muted font-medium" x-text="countRules(doText) + ' rules'"></span>
-                </div>
-                <span class="text-xs text-fg-subtle" x-text="((doText || '').length) + ' / {{ \App\Study\Tutoring::MAX_CUSTOM }}'"></span>
-            </div>
-
-            {{-- Toolbar --}}
-            <div class="note-rule-toolbar">
-                <div class="flex items-center gap-1">
-                    <button type="button" class="note-rule-tool-btn" x-on:click="formatNumbered('do')" title="Format all lines as a numbered list (1, 2, 3...)">
-                        <span class="font-bold text-xs">1.</span>
-                        <span class="text-xs">Number</span>
-                    </button>
-                    <button type="button" class="note-rule-tool-btn" x-on:click="formatBullet('do')" title="Format all lines as bullet points">
-                        <span class="font-bold text-xs">•</span>
-                        <span class="text-xs">Bullet</span>
-                    </button>
-                    <button type="button" class="note-rule-tool-btn" x-on:click="wrapBold('doArea', 'do')" title="Bold selected text (**text**)">
-                        <span class="font-bold text-xs">B</span>
-                    </button>
-                    <button type="button" class="note-rule-tool-btn" x-on:click="addNewLine('do', 'doArea')" title="Add next numbered rule">
-                        <x-icon name="plus" class="size-3" />
-                        <span class="text-xs">Add item</span>
-                    </button>
-                </div>
-                <button type="button" class="note-rule-tool-btn text-fg-subtle hover:text-danger" x-show="(doText || '').trim().length > 0" x-on:click="clear('do')" title="Clear What to do rules">
-                    <span class="text-xs">Clear</span>
-                </button>
-            </div>
-
-            {{-- Textarea --}}
-            <div class="relative flex-1">
-                <textarea id="custom-rules-do"
-                    x-ref="doArea"
-                    x-model="doText"
-                    x-on:keydown="handleKeyDown($event, 'do', 'doArea')"
-                    class="note-rule-textarea"
-                    rows="8"
-                    maxlength="{{ \App\Study\Tutoring::MAX_CUSTOM }}"
-                    placeholder="1. Break concepts into small, numbered steps
-2. Lead with intuitive real-world analogies
-3. Always ask a gentle check question before moving on..."></textarea>
-            </div>
-
-            {{-- Preset chips --}}
-            <div class="note-rule-chips">
-                <span class="text-xs text-fg-subtle font-medium mr-1">Suggestions:</span>
-                <button type="button" class="note-rule-chip" x-on:click="insertRule('do', 'Break concepts down into step-by-step numbered points')">+ Step by step</button>
-                <button type="button" class="note-rule-chip" x-on:click="insertRule('do', 'Lead with concrete real-world analogies before formal terms')">+ Analogies</button>
-                <button type="button" class="note-rule-chip" x-on:click="insertRule('do', 'Always include practical, commented code examples')">+ Code examples</button>
-                <button type="button" class="note-rule-chip" x-on:click="insertRule('do', 'Ask gentle check questions to confirm basic recall first')">+ Gentle check</button>
-                <button type="button" class="note-rule-chip" x-on:click="insertRule('do', 'Use plain conversational English and avoid heavy shorthand')">+ Plain English</button>
-            </div>
-            @error('customDo') <p class="field-error px-3 pb-2">{{ $message }}</p> @enderror
-        </div>
-
-        {{-- Section 2: What NOT to do --}}
-        <div class="note-rule-card" x-show="view === 'split' || view === 'dont'">
-            <div class="note-rule-header">
-                <div class="flex items-center gap-2 min-w-0">
-                    <span class="inline-block size-2 rounded-full bg-danger shrink-0"></span>
-                    <span class="text-xs font-semibold text-fg uppercase tracking-wider">What NOT to do</span>
-                    <span class="text-xs px-1.5 py-0.5 rounded-full bg-surface-sunken text-fg-muted font-medium" x-text="countRules(dontText) + ' rules'"></span>
-                </div>
-                <span class="text-xs text-fg-subtle" x-text="((dontText || '').length) + ' / {{ \App\Study\Tutoring::MAX_CUSTOM }}'"></span>
-            </div>
-
-            {{-- Toolbar --}}
-            <div class="note-rule-toolbar">
-                <div class="flex items-center gap-1">
-                    <button type="button" class="note-rule-tool-btn" x-on:click="formatNumbered('dont')" title="Format all lines as a numbered list (1, 2, 3...)">
-                        <span class="font-bold text-xs">1.</span>
-                        <span class="text-xs">Number</span>
-                    </button>
-                    <button type="button" class="note-rule-tool-btn" x-on:click="formatBullet('dont')" title="Format all lines as bullet points">
-                        <span class="font-bold text-xs">•</span>
-                        <span class="text-xs">Bullet</span>
-                    </button>
-                    <button type="button" class="note-rule-tool-btn" x-on:click="wrapBold('dontArea', 'dont')" title="Bold selected text (**text**)">
-                        <span class="font-bold text-xs">B</span>
-                    </button>
-                    <button type="button" class="note-rule-tool-btn" x-on:click="addNewLine('dont', 'dontArea')" title="Add next numbered rule">
-                        <x-icon name="plus" class="size-3" />
-                        <span class="text-xs">Add item</span>
-                    </button>
-                </div>
-                <button type="button" class="note-rule-tool-btn text-fg-subtle hover:text-danger" x-show="(dontText || '').trim().length > 0" x-on:click="clear('dont')" title="Clear What NOT to do rules">
-                    <span class="text-xs">Clear</span>
-                </button>
-            </div>
-
-            {{-- Textarea --}}
-            <div class="relative flex-1">
-                <textarea id="custom-rules-dont"
-                    x-ref="dontArea"
-                    x-model="dontText"
-                    x-on:keydown="handleKeyDown($event, 'dont', 'dontArea')"
-                    class="note-rule-textarea"
-                    rows="8"
-                    maxlength="{{ \App\Study\Tutoring::MAX_CUSTOM }}"
-                    placeholder="1. Never give full solutions right away; provide hints
-2. Do not use unexplained academic jargon
-3. Avoid multiple heavy topics in one reply..."></textarea>
-            </div>
-
-            {{-- Preset chips --}}
-            <div class="note-rule-chips">
-                <span class="text-xs text-fg-subtle font-medium mr-1">Suggestions:</span>
-                <button type="button" class="note-rule-chip" x-on:click="insertRule('dont', 'Never provide direct solutions immediately; guide with hints')">+ No direct answers</button>
-                <button type="button" class="note-rule-chip" x-on:click="insertRule('dont', 'Do not use unexplained technical acronyms or jargon')">+ No jargon</button>
-                <button type="button" class="note-rule-chip" x-on:click="insertRule('dont', 'Avoid dense LaTeX equations; write formulas in plain text')">+ No LaTeX</button>
-                <button type="button" class="note-rule-chip" x-on:click="insertRule('dont', 'Do not rush through multiple large topics in one message')">+ Don't rush</button>
-                <button type="button" class="note-rule-chip" x-on:click="insertRule('dont', 'Avoid excessive emojis and conversational fluff')">+ No emojis</button>
-            </div>
-            @error('customDont') <p class="field-error px-3 pb-2">{{ $message }}</p> @enderror
-        </div>
+    {{-- Which list you are editing --}}
+    <div class="session-tutor-options" role="group" aria-label="Which rules to edit">
+        @foreach ($ruleEditors as $key => $editor)
+            <button type="button"
+                class="session-tutor-choice-btn session-rules-tab"
+                x-bind:class="{ 'is-active': view === '{{ $key }}' }"
+                x-bind:aria-pressed="(view === '{{ $key }}').toString()"
+                x-on:click="view = '{{ $key }}'">
+                <span class="inline-block size-2 rounded-full {{ $editor['dot'] }} shrink-0"></span>
+                <span>{{ $key === 'do' ? 'Do' : 'Don\'t' }}</span>
+                <span class="session-rules-count" x-text="countRules({{ $key }}Text)"></span>
+            </button>
+        @endforeach
     </div>
 
-    {{-- Collapsible Live Prompt Preview --}}
-    <div class="rounded-lg border border-divider bg-surface-sunken p-3 text-xs">
-        <div class="flex items-center justify-between cursor-pointer select-none" x-on:click="showPreview = ! showPreview">
-            <span class="font-medium text-fg flex items-center gap-1.5">
-                <x-icon name="sparkles" class="size-3 text-accent shrink-0" />
-                <span>Preview prompt injected to AI tutor</span>
-            </span>
-            <button type="button" class="text-accent hover:underline text-xs font-medium" x-text="showPreview ? 'Hide preview' : 'Show preview'"></button>
-        </div>
+    @foreach ($ruleEditors as $key => $editor)
+        <section class="session-tutor-popover-section" x-show="view === '{{ $key }}'" aria-labelledby="custom-rules-{{ $key }}-label">
+            <div class="flex items-baseline justify-between gap-2">
+                <h3 id="custom-rules-{{ $key }}-label" class="session-tutor-section-label">{{ $editor['label'] }}</h3>
+                <span class="session-tutor-section-meta" x-text="({{ $key }}Text || '').length + ' / {{ \App\Study\Tutoring::MAX_CUSTOM }}'"></span>
+            </div>
+            <p class="session-tutor-section-hint">{{ $editor['hint'] }}</p>
 
-        <div x-show="showPreview" x-cloak class="mt-2 pt-2 border-t border-divider">
+            <div class="note-rule-card">
+                <textarea id="custom-rules-{{ $key }}"
+                    x-ref="{{ $key }}Area"
+                    x-model="{{ $key }}Text"
+                    x-on:keydown="handleKeyDown($event, '{{ $key }}')"
+                    class="note-rule-textarea"
+                    rows="7"
+                    aria-labelledby="custom-rules-{{ $key }}-label"
+                    maxlength="{{ \App\Study\Tutoring::MAX_CUSTOM }}"
+                    placeholder="{{ $editor['placeholder'] }}"></textarea>
+                <div class="note-rule-toolbar">
+                    <button type="button" class="note-rule-tool-btn" x-on:click="formatNumbered('{{ $key }}')" title="Number every line: 1, 2, 3...">
+                        <x-icon name="list-ordered" class="size-4" />
+                        <span>Number the lines</span>
+                    </button>
+                    <button type="button" class="note-rule-tool-btn" x-show="({{ $key }}Text || '').trim().length > 0" x-on:click="clear('{{ $key }}')">
+                        <span>Clear</span>
+                    </button>
+                </div>
+            </div>
+            @error($editor['error']) <p class="field-error">{{ $message }}</p> @enderror
+
+            <div class="session-rules-suggestions">
+                <h4 class="session-tutor-section-label">Tap to add</h4>
+                <div class="note-rule-chips">
+                    @foreach ($editor['suggestions'] as $chipLabel => $rule)
+                        <button type="button" class="note-rule-chip" x-on:click="insertRule('{{ $key }}', @js($rule))" title="{{ $rule }}">+ {{ $chipLabel }}</button>
+                    @endforeach
+                </div>
+            </div>
+        </section>
+    @endforeach
+
+    {{-- What the tutor will actually receive --}}
+    <div class="session-tutor-popover-custom">
+        <button type="button" class="session-rules-preview-toggle" x-on:click="showPreview = ! showPreview" x-bind:aria-expanded="showPreview.toString()" aria-controls="custom-rules-preview">
+            <x-icon name="sparkles" class="size-4 text-accent shrink-0" />
+            <span class="flex-1 text-left">See what the tutor receives</span>
+            <x-icon name="chevron-down" class="size-4 text-fg-subtle shrink-0 transition-transform" x-bind:class="showPreview && 'rotate-180'" />
+        </button>
+
+        <div id="custom-rules-preview" x-show="showPreview" x-cloak class="session-rules-preview">
             <template x-if="! (doText || '').trim() && ! (dontText || '').trim()">
-                <p class="text-fg-subtle italic">Both fields are empty: nothing will be added to the AI tutor's prompt.</p>
+                <p class="session-tutor-section-hint">Both boxes are empty, so nothing will be added to the tutor's prompt.</p>
             </template>
             <template x-if="(doText || '').trim() || (dontText || '').trim()">
-                <div class="space-y-2 font-mono text-xs text-fg-muted whitespace-pre-wrap leading-relaxed">
-                    <p class="text-fg font-semibold font-sans text-xs">## Custom instructions</p>
+                <div class="space-y-2 text-sm text-fg-muted leading-relaxed">
                     <template x-if="(doText || '').trim()">
-                        <div class="p-2 rounded bg-surface border border-border">
-                            <span class="text-success font-bold font-sans text-xs">What to do:</span>
-                            <div x-text="doText.trim()"></div>
+                        <div class="session-rules-preview-block">
+                            <span class="block text-success font-semibold">What to do</span>
+                            <div class="whitespace-pre-wrap" x-text="doText.trim()"></div>
                         </div>
                     </template>
                     <template x-if="(dontText || '').trim()">
-                        <div class="p-2 rounded bg-surface border border-border">
-                            <span class="text-danger font-bold font-sans text-xs">What NOT to do:</span>
-                            <div x-text="dontText.trim()"></div>
+                        <div class="session-rules-preview-block">
+                            <span class="block text-danger font-semibold">What NOT to do</span>
+                            <div class="whitespace-pre-wrap" x-text="dontText.trim()"></div>
                         </div>
                     </template>
                 </div>

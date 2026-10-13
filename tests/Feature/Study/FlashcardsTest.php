@@ -217,17 +217,46 @@ class FlashcardsTest extends TestCase
         $this->assertSame(['record', 'claim', 'attempt'], $kinds);
     }
 
-    public function test_a_deleted_card_leaves_reviews_and_its_task_is_retired(): void
+    public function test_a_deleted_card_is_gone_for_good_and_its_answers_stop_counting_for_its_topic(): void
     {
-        $id = $this->cards->add($this->by, $this->databases->id, null, 'Front', 'Back');
-        $this->cards->retire($this->by, $id);
+        $id = $this->cards->add($this->by, $this->databases->id, $this->joins->id, 'Front', 'Back');
+        $this->cards->answer($this->by, $id, 'correct');
+        $this->cards->delete($this->by, $id);
 
         $this->assertSame([], $this->cards->list($this->by, $this->databases->id));
         $this->assertSame(0, $this->cards->counts($this->by, $this->databases->id)['total']);
+        $this->assertSame(0, DB::table('flashcards')->where('id', $id)->count(), 'the row is gone, not hidden');
         $tasks = $this->entries(fn ($e) => $e->kind->value === 'record' && ($e->body['record_type'] ?? null) === 'task');
         $this->assertSame(['active', 'retired'], array_map(fn ($e) => $e->body['status'], $tasks));
+        // It no longer exercises its topic: the answer stays in the journal, but not as the topic's evidence.
+        $this->assertSame([
+            ['task:card-'.$id, 'topic:'.$this->joins->id, 'active'],
+            ['task:card-'.$id, 'topic:'.$this->joins->id, 'retired'],
+        ], $this->exercises());
         $this->expectException(NotFound::class);
         $this->cards->answer($this->by, $id, 'correct');
+    }
+
+    public function test_cards_hidden_before_deleting_was_for_good_are_purged_once(): void
+    {
+        // Deleted the old way: hidden, the task retired, but still the topic's.
+        $old = $this->cards->add($this->by, $this->databases->id, $this->joins->id, 'Old', 'Card');
+        $this->cards->answer($this->by, $old, 'correct');
+        DB::table('flashcards')->where('id', $old)->update(['retired_at' => now()]);
+        $kept = $this->cards->add($this->by, $this->databases->id, $this->keys->id, 'Kept', 'Card');
+
+        $this->artisan('vistud:purge-deleted', ['email' => $this->ada->email])->assertSuccessful()->expectsOutputToContain('Deleted 1 hidden card and 0 hidden questions for good.');
+
+        $this->assertSame(0, DB::table('flashcards')->where('id', $old)->count());
+        $this->assertSame([$kept], array_map(fn ($card) => $card->id, $this->cards->list($this->by, $this->databases->id)));
+        $this->assertSame([
+            ['task:card-'.$old, 'topic:'.$this->joins->id, 'active'],
+            ['task:card-'.$kept, 'topic:'.$this->keys->id, 'active'],
+            ['task:card-'.$old, 'topic:'.$this->joins->id, 'retired'],
+        ], $this->exercises());
+
+        // Again: nothing left to do.
+        $this->artisan('vistud:purge-deleted')->assertSuccessful()->expectsOutputToContain('Deleted 0 hidden cards and 0 hidden questions for good.');
     }
 
     public function test_another_students_cards_are_not_found(): void
@@ -239,7 +268,7 @@ class FlashcardsTest extends TestCase
             fn () => $this->cards->find($grace, $id),
             fn () => $this->cards->answer($grace, $id, 'correct'),
             fn () => $this->cards->update($grace, $id, null, 'Mine', 'Now'),
-            fn () => $this->cards->retire($grace, $id),
+            fn () => $this->cards->delete($grace, $id),
             fn () => $this->cards->list($grace, $this->databases->id),
             fn () => $this->cards->add($grace, $this->databases->id, null, 'Front', 'Back'),
         ] as $attempt) {

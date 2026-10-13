@@ -246,6 +246,20 @@ final class EntryValidator
                 throw new InvalidEntry('A key the learner wrote is not trusted. Record the attempt as judged_by self.', 'body.checker.key_source');
             }
         }
+        // An AI's judgement says which AI, under which prompt, and how it came (ViStud's chat, a pasted chat, the quiz
+        // panel), so what a model judged can be told apart from another's, audited and, if need be, set aside.
+        if ($body['judged_by'] === 'ai') {
+            $judge = $body['judge'] ?? null;
+            if (! is_array($judge)) {
+                throw new InvalidEntry('judged_by ai needs a judge: the model, the prompt and how it came.', 'body.judge');
+            }
+            foreach (['model', 'prompt'] as $key) {
+                if (! is_string($judge[$key] ?? null) || $judge[$key] === '' || mb_strlen($judge[$key]) > 128) {
+                    throw new InvalidEntry('Must be a string of 1 to 128 characters.', "body.judge.{$key}");
+                }
+            }
+            self::in($judge['via'] ?? null, Vocabulary::JUDGE_VIA, 'body.judge.via');
+        }
         if (isset($body['score']) && (! is_numeric($body['score']['raw'] ?? null) || ! is_numeric($body['score']['max'] ?? null))) {
             throw new InvalidEntry('Needs numeric raw and max.', 'body.score');
         }

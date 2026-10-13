@@ -58,6 +58,12 @@ final class Sessions
     /** The range each Pomodoro setting may take. */
     public const POMODORO_LIMITS = ['focus' => [5, 120], 'short' => [1, 30], 'long' => [5, 60], 'every' => [2, 8]];
 
+    /** Seconds on a topic before the session counts as contact with it (opening a topic and moving on isn't studying it). */
+    public const CONTACT_SECONDS = 120;
+
+    /** The topic changes a session keeps (older ones fall off): enough for any real session. */
+    public const TOPIC_LOG_LIMIT = 100;
+
     public function __construct(private Memory $memory, private LearnerProfiles $profiles) {}
 
     /** The student's open session, in any workspace, or null. */
@@ -230,6 +236,13 @@ final class Sessions
         $pomodoro = $pomodoro === null ? null : self::pomodoroSettings($pomodoro);
         // Not chosen: the way the student said they like to learn in this course, if they said.
         $tutoring = Tutoring::validated($tutoring ?? LearnerProfiles::teaching($this->profiles->get($by, $workspaceId)));
+        // No subject plugins chosen: those the course starts every session with (its type's, unless it chose others).
+        if (! isset($tutoring['plugins'])) {
+            $plugins = CourseProfiles::pluginsOf($scope, $workspaceId);
+            if ($plugins !== []) {
+                $tutoring['plugins'] = $plugins;
+            }
+        }
         $open = $this->openRow($scope);
         if ($open !== null && $this->settled($scope, $by, $open->id)->state !== 'ended') {
             throw new Conflict('session_open', 'Another session is still open. End it first.', ['session' => $open->id, 'workspace' => $open->workspace_id]);
@@ -244,7 +257,7 @@ final class Sessions
             // The database keeps one open session per student (open_learner is unique): a start in another tab at the same moment loses.
             try {
                 LearnerTables::insert($scope, 'study_sessions', [
-                    'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'folder_id' => $folderId, 'topic_id' => $topicId, 'mode' => $mode,
+                    'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'folder_id' => $folderId, 'topic_id' => $topicId, 'topic_since' => $topicId === null ? null : $now, 'mode' => $mode,
                     'pomodoro' => $pomodoro === null ? null : json_encode($pomodoro), 'phase' => $pomodoro === null ? null : 'focus',
                     'phase_started_at' => $pomodoro === null ? null : $now, 'tutoring' => json_encode($tutoring),
                     'state' => 'running', 'started_at' => $now, 'last_activity_at' => $now, 'revision' => 1,
@@ -359,17 +372,45 @@ final class Sessions
     /**
      * What the open session is about: a topic of its workspace, or none. The session keeps its module and its folder (a
      * topic from elsewhere is studied there); one without a module takes the topic's, and its folder. A new revision of
-     * its journal record says so.
+     * its journal record says so, and its topic log who changed it ($who: 'student' or 'tutor').
      */
-    public function setTopic(Principal $by, string $id, ?string $topicId): SessionDetails
+    public function setTopic(Principal $by, string $id, ?string $topicId, string $who = 'student'): SessionDetails
     {
-        $this->change($by, $id, ['running', 'paused', 'break'], function (LearnerScope $scope, object $row) use ($topicId) {
+        $this->change($by, $id, ['running', 'paused', 'break'], function (LearnerScope $scope, object $row, CarbonImmutable $now) use ($topicId, $by, $who) {
             [$topicId, $topicModule, $topicFolder] = $this->place($scope, (string) $row->workspace_id, $topicId, null);
+            $fields = ['topic_id' => $topicId, 'module_id' => $row->module_id ?? $topicModule, 'folder_id' => $row->module_id === null ? $topicFolder : $row->folder_id];
+            if ($topicId === $row->topic_id) {
+                return $fields;
+            }
+            $this->contact($scope, $by, $row, $now);
+            $name = $topicId === null ? null : (string) LearnerTables::query($scope, 'topics')->where('id', $topicId)->value('name');
+            $change = ['topic' => $topicId, 'name' => $name, 'by' => $who === 'tutor' ? 'tutor' : 'student', 'at' => $now->format('Y-m-d\TH:i:s.uP')];
 
-            return ['topic_id' => $topicId, 'module_id' => $row->module_id ?? $topicModule, 'folder_id' => $row->module_id === null ? $topicFolder : $row->folder_id];
+            return $fields + ['topic_since' => $topicId === null ? null : $now, 'topic_log' => json_encode(array_slice([...self::logged($row), $change], -self::TOPIC_LOG_LIMIT))];
         }, journal: true);
 
         return $this->find($by, $id);
+    }
+
+    /**
+     * Each change of the session's topic since it started, oldest first: the topic (null when it was taken off), its
+     * name then, who changed it ('student' or 'tutor') and when (ISO 8601, UTC, with microseconds).
+     *
+     * @return list<array{topic: ?string, name: ?string, by: string, at: string}>
+     */
+    public function topicLog(Principal $by, string $id): array
+    {
+        $row = LearnerTables::query(Guard::learner($by), 'study_sessions')->where('id', $id)->first(['topic_log']) ?? throw new NotFound;
+
+        return self::logged($row);
+    }
+
+    /** @return list<array{topic: ?string, name: ?string, by: string, at: string}> */
+    private static function logged(object $row): array
+    {
+        $log = isset($row->topic_log) && is_string($row->topic_log) ? json_decode($row->topic_log, true) : null;
+
+        return is_array($log) ? array_values(array_filter($log, fn ($entry) => is_array($entry) && is_string($entry['at'] ?? null) && is_string($entry['by'] ?? null))) : [];
     }
 
     /** Puts a note or file of the workspace (`note:{id}`, `file:{id}`) in the session's material, or takes it out. */
@@ -506,10 +547,11 @@ final class Sessions
     /** Ends the session; its totals are kept on the row and in the journal. */
     public function end(Principal $by, string $id): SessionDetails
     {
-        $this->change($by, $id, ['running', 'paused', 'break'], function (LearnerScope $scope, object $row, CarbonImmutable $now) {
+        $this->change($by, $id, ['running', 'paused', 'break'], function (LearnerScope $scope, object $row, CarbonImmutable $now) use ($by) {
             $this->closeOpen($scope, $row, $now, 'end');
+            $this->contact($scope, $by, $row, $now);
 
-            return ['state' => 'ended', 'paused_by' => null, 'ended_at' => $now];
+            return ['state' => 'ended', 'paused_by' => null, 'ended_at' => $now, 'topic_since' => null];
         }, journal: true);
 
         return $this->find($by, $id);
@@ -602,6 +644,7 @@ final class Sessions
             LearnerTables::insert($scope, 'session_segments', [
                 'id' => Ids::new(), 'session_id' => $id, 'kind' => 'study', 'started_at' => $start, 'ended_at' => $end, 'ended_by' => 'log',
             ]);
+            $this->contact($scope, $by, (object) ['id' => $id, 'workspace_id' => $workspaceId, 'topic_id' => $topicId, 'topic_since' => $start], $end);
             $this->record($scope, $by, $this->lock($scope, $id));
         });
 
@@ -691,6 +734,34 @@ final class Sessions
         });
     }
 
+    /**
+     * Studying a topic is contact with it (the owner's ask, 2026-10-12): when a session leaves its topic (for another
+     * topic, or by ending), the time on it up to the student's last activity, if CONTACT_SECONDS or more, is written to
+     * the journal as an exposure to it: taught (an explanation) when the tutor was in the session, read when the student
+     * studied alone. The
+     * topic's evidence moves on from "no contact yet", and a "not started" said before is overtaken (TopicDetails::shown).
+     * A session with no topic is contact with none: its time stays the module's or folder's.
+     */
+    private function contact(LearnerScope $scope, Principal $by, object $row, CarbonImmutable $until): void
+    {
+        if ($row->topic_id === null || ($row->topic_since ?? null) === null) {
+            return;
+        }
+        $from = CarbonImmutable::parse((string) $row->topic_since, 'UTC');
+        // Studied up to the student's last activity, not while the page sat open with no one there.
+        if (($row->last_activity_at ?? null) !== null) {
+            $until = $until->min(CarbonImmutable::parse((string) $row->last_activity_at, 'UTC'));
+        }
+        if ($until->getTimestamp() - $from->getTimestamp() < self::CONTACT_SECONDS) {
+            return;
+        }
+        $taught = LearnerTables::query($scope, 'engine_threads')->where('session_id', $row->id)->exists();
+        $entry = Memory::observation($scope, $by, 'exposure', ['format' => $taught ? 'explanation' : 'reading'],
+            [['rel' => 'about', 'target' => "topic:{$row->topic_id}"]], [], $until->format('Y-m-d\TH:i:s.uP'));
+        $entry['session'] = $row->id;
+        $this->memory->append($scope, [$entry], (string) $row->workspace_id);
+    }
+
     /** The row after the idle, long-break and auto-end rules. */
     private function settled(LearnerScope $scope, Principal $by, string $id): object
     {
@@ -723,7 +794,8 @@ final class Sessions
             if ($ended) {
                 $this->closeOpen($scope, $row, $last, 'end');
                 $latest = LearnerTables::query($scope, 'session_segments')->where('session_id', $id)->max('ended_at');
-                $fields = ['state' => 'ended', 'paused_by' => null, 'ended_at' => max((string) $latest, (string) $row->started_at), 'revision' => $row->revision + 1];
+                $fields = ['state' => 'ended', 'paused_by' => null, 'ended_at' => max((string) $latest, (string) $row->started_at), 'revision' => $row->revision + 1, 'topic_since' => null];
+                $this->contact($scope, $by, $row, CarbonImmutable::parse($fields['ended_at'], 'UTC'));
             }
             if ($fields !== []) {
                 LearnerTables::query($scope, 'study_sessions')->where('id', $id)->update($fields + ['updated_at' => $now]);

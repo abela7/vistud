@@ -742,6 +742,8 @@
         letter-spacing: -0.01em;
         line-height: 1.2;
         overflow-wrap: anywhere;
+        /* Long titles break into even lines, not one long line and a stray word. */
+        text-wrap: balance;
     }
 
     .section-header-actions {
@@ -770,6 +772,33 @@
     @media (min-width: 640px) {
         .section-header-title {
             font-size: 1.75rem;
+        }
+    }
+
+    /*
+    | A page's heading with actions (x-page: the ⋯ menu, a primary action) on a phone: Back and the actions share a slim
+    | row at the top, and the title, the line above it and the line below sit under them across the whole width, not in
+    | a narrow column squeezed between two buttons. A heading with only Back stays on one row.
+    */
+    @media (width < 40rem) {
+        .section-header.is-page:has(> .section-header-actions) {
+            row-gap: 0.25rem;
+        }
+
+        .section-header.is-page:has(> .section-header-actions) > .section-header-text {
+            flex: 1 0 100%;
+            order: 1;
+        }
+
+        /*
+        | A section's heading with several or wide actions (x-workspace.section-header, `stack`): Back and the title keep
+        | the first row, and the actions get a row of their own under it, running from the left, instead of wrapping
+        | ragged against the right edge.
+        */
+        .section-header.is-stacked > .section-header-actions {
+            flex: 1 0 100%;
+            justify-content: flex-start;
+            margin-left: 0;
         }
     }
 
@@ -911,6 +940,78 @@
         }
     }
 
+    /*
+    | A small yes/no question (delete this?). A bottom sheet on a phone like every dialog; from 640 px a card in the
+    | middle of the screen rather than the side panel, since there is nothing to scroll or fill in.
+    */
+    .modal-confirm-head {
+        align-items: center;
+        border-bottom: 0;
+        background-color: transparent;
+    }
+
+    .modal-confirm-icon {
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 9999px;
+        background-color: var(--danger-subtle);
+        color: var(--danger);
+    }
+
+    .modal-confirm-name {
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background-color: var(--surface);
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--text);
+        overflow-wrap: anywhere;
+    }
+
+    .modal-confirm .modal-actions {
+        border-top: 0;
+        padding-top: 0.5rem;
+    }
+
+    @media (min-width: 640px) {
+        .modal.modal-confirm {
+            inset: 0;
+            margin: auto;
+            width: min(26rem, calc(100vw - 2rem));
+            height: fit-content;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-2xl);
+            translate: 0 0;
+            opacity: 0;
+            scale: 0.96;
+            transition:
+                opacity 160ms ease-out,
+                scale 160ms ease-out,
+                overlay 160ms allow-discrete,
+                display 160ms allow-discrete;
+        }
+
+        .modal.modal-confirm[open] {
+            opacity: 1;
+            scale: 1;
+        }
+
+        @starting-style {
+            .modal.modal-confirm[open] {
+                opacity: 0;
+                scale: 0.96;
+            }
+        }
+
+        .modal-confirm .modal-panel {
+            min-height: 0;
+        }
+    }
+
     /* ---------- The admin account list ---------- */
 
     .account-list {
@@ -1026,6 +1127,536 @@
         color: var(--ws, var(--accent-contrast));
     }
 
+    /* The providers a key of one's own can come from (AI settings): a row of badges that wraps. */
+    .provider-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+
+    /* ---------- AI settings layout: one column on a phone, two on a wide screen ---------- */
+
+    .engine-layout {
+        display: grid;
+        gap: 2rem;
+        align-items: start;
+    }
+
+    /*
+    | The other parts of Settings (Appearance, Security, Your data), in the AI part's panels. The theme picker's own
+    | legend and hint are kept for screen readers; the panel's title already says them.
+    */
+    .settings-bare-fieldset > legend,
+    .settings-bare-fieldset > .field-hint {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .settings-mode-switch {
+        display: flex;
+        width: 100%;
+    }
+
+    .settings-mode-switch .segmented-option {
+        flex: 1 1 0;
+        justify-content: center;
+    }
+
+    .settings-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        font-size: 0.8125rem;
+        line-height: 1.45;
+        color: var(--text-muted);
+    }
+
+    .settings-note > svg {
+        flex: none;
+        margin-top: 0.0625rem;
+        color: var(--text-subtle);
+    }
+
+    .settings-steps {
+        display: grid;
+        gap: 0.5rem;
+        padding-left: 1.25rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: var(--text-muted);
+        list-style: decimal;
+    }
+
+    .settings-facts {
+        display: grid;
+        gap: 0.125rem;
+        margin: 0;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+    }
+
+    .settings-facts > div {
+        display: grid;
+        grid-template-columns: minmax(6.5rem, auto) minmax(0, 1fr);
+        gap: 0.75rem;
+        padding: 0.625rem 0.875rem;
+        background-color: var(--surface);
+    }
+
+    .settings-facts dt {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
+
+    .settings-facts dd {
+        margin: 0;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--text);
+        overflow-wrap: anywhere;
+    }
+
+    .settings-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+
+    @media (min-width: 64rem) {
+        .engine-layout {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    /* ---------- AI settings: folded panels. Nothing is cut short; long words wrap. ---------- */
+
+    /* One column: the panels one under another, as wide as is easy to read. */
+    .engine-page,
+    .engine-form-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        min-width: 0;
+    }
+
+    .engine-page {
+        max-width: 64rem;
+    }
+
+    .acc {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+        overflow-wrap: anywhere;
+    }
+
+    /* The two ways to get a key: side by side only where each has room for its words. */
+    .acc .choice-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    }
+
+    .acc-heading {
+        margin: 0;
+    }
+
+    .acc-head {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        width: 100%;
+        padding: 1rem 1.25rem;
+        border: 0;
+        border-radius: var(--radius-xl);
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .acc-head:hover .acc-chevron {
+        color: var(--fg);
+    }
+
+    .acc-static {
+        cursor: default;
+    }
+
+    .acc-head:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+    }
+
+    .acc-text {
+        margin: 0;
+        font: inherit;
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 0.125rem;
+        min-width: 0;
+    }
+
+    .acc-status {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.8125rem;
+        color: var(--fg-muted);
+    }
+
+    .acc-chevron {
+        flex-shrink: 0;
+        color: var(--fg-muted);
+        transition: transform 0.15s;
+    }
+
+    .acc-head[aria-expanded='true'] .acc-chevron {
+        transform: rotate(90deg);
+    }
+
+    .acc-body {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        padding: 0 1.25rem 1.25rem;
+    }
+
+    .acc-note {
+        font-size: 0.875rem;
+        color: var(--fg-muted);
+    }
+
+    .acc-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .acc-chevron {
+            transition: none;
+        }
+    }
+
+    .choice-text {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .key-fields,
+    .model-fields {
+        display: grid;
+        gap: 1rem;
+    }
+
+    @media (min-width: 40rem) {
+        .key-fields:has(#key-provider) {
+            grid-template-columns: minmax(10rem, 14rem) minmax(0, 1fr);
+        }
+
+        .model-fields {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    /* Recommended models: the kinds side by side as the width allows. */
+    .rec-body {
+        display: grid;
+        gap: 1.25rem 1.5rem;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    }
+
+    /* Favorite models: name and id in full, a button beside them. */
+    .fav-block {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--divider);
+    }
+
+    .fav-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--fg);
+    }
+
+    .fav-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .fav-item {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 0.75rem;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface-sunken);
+    }
+
+    .fav-text {
+        display: flex;
+        flex: 1 1 12rem;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .fav-name {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--fg);
+    }
+
+    .fav-id {
+        font-family: var(--font-mono, ui-monospace, monospace);
+        font-size: 0.75rem;
+        color: var(--fg-muted);
+    }
+
+    .fav-add {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .fav-add .input {
+        flex: 1 1 12rem;
+        min-width: 0;
+    }
+
+    .fav-suggest {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .fav-suggest-label {
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--fg-muted);
+    }
+
+    .fav-chip {
+        cursor: pointer;
+    }
+
+    .fav-chip:hover {
+        border-color: var(--accent);
+    }
+
+    /* ---------- Recommended models (AI settings): a card is a link to where its provider is paid ---------- */
+
+    .rec-kind {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--fg);
+    }
+
+
+    .rec-grid {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+    }
+
+    .rec-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+        height: 100%;
+        padding: 0.875rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background: var(--surface);
+        color: inherit;
+        text-decoration: none;
+        transition: border-color 0.15s;
+    }
+
+    .rec-card:hover {
+        border-color: var(--accent);
+    }
+
+    .rec-card:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    .rec-card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .rec-card-name {
+        font-weight: 600;
+        color: var(--fg);
+        overflow-wrap: anywhere;
+    }
+
+    .rec-card-go {
+        flex-shrink: 0;
+        color: var(--fg-muted);
+    }
+
+    .rec-card:hover .rec-card-go {
+        color: var(--accent);
+    }
+
+    .rec-card-by,
+    .rec-card-why {
+        font-size: 0.8125rem;
+        color: var(--fg-muted);
+    }
+
+    .rec-card-why {
+        flex: 1;
+    }
+
+    .rec-card-price {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        font-size: 0.875rem;
+    }
+
+    .rec-card-cta {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--accent-contrast);
+    }
+
+    /* ---------- Trying the models (AI settings): each role's answer, and a little chat ---------- */
+
+    .model-checks {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .model-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.625rem;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background: var(--surface-sunken);
+    }
+
+    .model-check-mark {
+        flex-shrink: 0;
+        color: var(--success);
+    }
+
+    .model-check[data-ok='no'] {
+        border-color: var(--danger);
+    }
+
+    .model-check[data-ok='no'] .model-check-mark {
+        color: var(--danger);
+    }
+
+    .model-check-head {
+        font-size: 0.875rem;
+        overflow-wrap: anywhere;
+    }
+
+    .model-check-head code,
+    .try-chat-meta code {
+        font-size: 0.75rem;
+        color: var(--fg-muted);
+    }
+
+    .model-check-said {
+        margin-top: 0.125rem;
+        font-size: 0.8125rem;
+        color: var(--fg-muted);
+        overflow-wrap: anywhere;
+    }
+
+    .try-chat {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .try-chat-log {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        max-height: 20rem;
+        overflow-y: auto;
+    }
+
+    .try-chat-you {
+        align-self: flex-end;
+        max-width: 85%;
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-lg);
+        background: var(--accent-subtle);
+        font-size: 0.875rem;
+        overflow-wrap: anywhere;
+    }
+
+    .try-chat-reply {
+        align-self: flex-start;
+        max-width: 92%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        font-size: 0.875rem;
+        overflow-wrap: anywhere;
+    }
+
+    .try-chat-reply[data-ok='no'] {
+        border-color: var(--danger);
+        background: var(--danger-subtle);
+    }
+
+    .try-chat-meta {
+        margin-bottom: 0.125rem;
+        font-size: 0.75rem;
+        color: var(--fg-muted);
+    }
+
+    .try-chat-form {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .try-chat-model {
+        flex: 1 1 12rem;
+        min-width: 0;
+    }
+
+    .try-chat-text {
+        flex: 2 1 14rem;
+        min-width: 0;
+    }
+
     /* ---------- Colour and icon pickers (the workspace form) ---------- */
 
     .swatch {
@@ -1051,6 +1682,89 @@
 
     .swatch:has(input:checked) svg {
         visibility: visible;
+    }
+
+    /* A colour of the student's own: the browser's colour picker over the swatch. Not chosen yet, a dashed ring with a
+       palette; chosen, the colour itself (its --ws comes from App\Appearance\CourseColour) and the tick. */
+    .swatch-custom {
+        border: 1px dashed var(--border-strong);
+        background-color: var(--surface);
+        color: var(--text-muted);
+    }
+
+    .swatch-custom svg {
+        visibility: visible;
+    }
+
+    .swatch-custom.ws-colour-custom {
+        border-color: transparent;
+        background-color: var(--ws);
+        color: var(--ws-subtle);
+    }
+
+    .swatch.is-checked {
+        outline: 2px solid var(--text);
+        outline-offset: 2px;
+    }
+
+    .swatch-picker {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        border-radius: inherit;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    /* More icons: the groups under the first ones, opened by a quiet summary. */
+    .icon-more-summary {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        min-height: 2.75rem;
+        margin-top: 0.25rem;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        list-style: none;
+    }
+
+    .icon-more-summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .icon-more-summary:hover {
+        color: var(--text);
+    }
+
+    .icon-more-summary:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
+    }
+
+    .icon-more-summary svg {
+        transition: rotate 0.15s ease;
+    }
+
+    .icon-more[open] .icon-more-summary svg {
+        rotate: 90deg;
+    }
+
+    .icon-group {
+        display: grid;
+        gap: 0.375rem;
+        margin-top: 0.75rem;
+    }
+
+    .icon-group-label {
+        color: var(--text-subtle);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
     }
 
     .swatch:has(input:focus-visible),

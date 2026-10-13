@@ -6,6 +6,7 @@ use App\Engine\Engine;
 use App\Engine\Fake;
 use App\Engine\Settings;
 use App\Livewire\Workspaces\TopicPage;
+use App\Livewire\Workspaces\TutorChat;
 use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Study\Findings;
@@ -15,7 +16,7 @@ use App\Study\Notes;
 use App\Study\Questions;
 use App\Study\Topics;
 use App\Study\Workspaces;
-use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
@@ -66,7 +67,7 @@ class TopicPageScreenTest extends TestCase
             ->assertOk()
             ->assertSee('Coffman Conditions')
             ->assertSee('Where You Stand')
-            ->assertSee('Not understand');
+            ->assertSee('Not understood');
     }
 
     public function test_another_learner_cannot_view_the_topic_page(): void
@@ -84,9 +85,9 @@ class TopicPageScreenTest extends TestCase
 
         $page = Livewire::test(TopicPage::class, ['workspaceId' => $this->workspace, 'topicId' => $this->topic]);
 
-        // Mark as Not understand (confused)
+        // Mark as Not understood (confused)
         $page->call('report', 'confused')
-            ->assertSee('Status marked as Not understand.')
+            ->assertSee('Status marked as Not understood.')
             ->assertDispatched('topics-changed');
         $this->assertSame('confused', app(Topics::class)->find($this->by, $this->topic)->status);
 
@@ -103,7 +104,9 @@ class TopicPageScreenTest extends TestCase
         // Reset to Not started
         $page->call('report', 'not_started')
             ->assertSee('Status marked as Not started.');
-        $this->assertNull(app(Topics::class)->find($this->by, $this->topic)->status);
+        // "Not started" is kept as the student's word, so it holds over what was met before (TrackingTest).
+        $back = app(Topics::class)->find($this->by, $this->topic);
+        $this->assertSame(['not_started', 'not_started'], [$back->status, $back->shown()]);
     }
 
     public function test_questions_can_be_asked_and_answered_specifically_on_this_topic(): void
@@ -191,7 +194,7 @@ class TopicPageScreenTest extends TestCase
         $this->assertSame([], app(Topics::class)->list($this->by, $this->workspace));
     }
 
-    public function test_topic_chat_supports_file_uploads_and_clears_them_after_sending(): void
+    public function test_the_ai_tab_is_the_same_tutor_chat_kept_on_the_topic_and_not_a_session(): void
     {
         $engine = new Fake;
         $this->app->instance(Engine::class, $engine);
@@ -202,33 +205,38 @@ class TopicPageScreenTest extends TestCase
             'helper_model' => 'fake/tutor',
             'consent' => true,
         ]);
-
-        $engine->will(Fake::says('Deadlock prevention invalidates one of the four Coffman conditions.', 1_000, 'fake/tutor'));
-
         $this->actingAs($this->ada);
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
 
-        $file = UploadedFile::fake()->createWithContent('coffman_notes.txt', 'Details about mutual exclusion.');
+        Livewire::test(TopicPage::class, ['workspaceId' => $this->workspace, 'topicId' => $this->topic])
+            ->assertSeeHtml('wire:name="workspaces.tutor-chat"');
 
-        $page = Livewire::test(TopicPage::class, ['workspaceId' => $this->workspace, 'topicId' => $this->topic]);
+        $chat = Livewire::test(TutorChat::class, ['workspaceId' => $this->workspace, 'topicId' => $this->topic])
+            ->assertSee('Ask anything about Coffman Conditions', false);
 
-        $page->set('chatUploads', [$file])
-            ->assertCount('chatUploads', 1)
-            ->call('removeChatUpload', 0)
-            ->assertCount('chatUploads', 0);
+        $engine->will(Fake::says('Deadlock prevention breaks one of the four Coffman conditions.', 1_000, 'fake/tutor'));
+        $chat->call('send', 'How do we break the conditions?')->assertSet('text', '')->assertSet('error', null)
+            ->assertSee('Deadlock prevention breaks one of the four Coffman conditions.');
 
-        $page->set('chatUploads', [$file])
-            ->set('chatText', 'How do we break the conditions?')
-            ->call('sendChat')
-            ->assertSet('chatUploads', [])
-            ->assertSet('chatText', '');
+        $asked = $engine->last();
+        $this->assertSame('fake/tutor', $asked->model);
+        $this->assertStringContainsString('## This chat', $asked->system);
+        $this->assertStringContainsString('Coffman Conditions', $asked->system);
+        $tools = array_map(fn (array $tool) => $tool['function']['name'] ?? $tool['name'] ?? '', $asked->tools);
+        $this->assertContains('set_topic_status', $tools);
+        $this->assertNotContains('end_session', $tools);
 
-        $chat = $page->get('chat');
-        $this->assertNotEmpty($chat);
-        $lastUserMsg = $chat[count($chat) - 2];
-        $this->assertSame('user', $lastUserMsg['role']);
-        $this->assertSame('How do we break the conditions?', $lastUserMsg['text']);
-        $this->assertNotEmpty($lastUserMsg['attachments']);
-        $this->assertSame('coffman_notes.txt', $lastUserMsg['attachments'][0]['name']);
+        // It remembers the talk: the next turn carries the first one.
+        $engine->will(Fake::says('Hold-and-wait is the easiest one to break.', 1_000, 'fake/tutor'));
+        $chat->call('send', 'Which is easiest?');
+        $this->assertCount(3, $engine->last()->messages);
+        $this->assertSame('How do we break the conditions?', $engine->last()->messages[0]['content']);
+
+        // Talking about a topic isn't a study session and isn't counted as studying it.
+        $this->assertSame(0, DB::table('study_sessions')->count());
+        $this->assertNull(app(Topics::class)->find($this->by, $this->topic)->status);
+
+        $chat->call('startOver')->assertDontSee('Hold-and-wait is the easiest one to break.')
+            ->assertSee('Ask anything about Coffman Conditions', false);
     }
 }

@@ -71,7 +71,14 @@ class ReadFileJobTest extends TestCase
 
     private function row(): object
     {
-        return LearnerTables::query(LearnerScope::of($this->by), 'engine_jobs')->orderByDesc('created_at')->firstOrFail();
+        // The reading's own row: a read file starts the choosing of its part's topics after it (ChooseTopicsTest).
+        return LearnerTables::query(LearnerScope::of($this->by), 'engine_jobs')->where('kind', 'read_file')->orderByDesc('created_at')->firstOrFail();
+    }
+
+    /** The calls the reader made (not the choosing of topics that follows a reading). */
+    private function readerCalls(): int
+    {
+        return count(array_filter($this->engine->requests, fn ($r) => str_contains($r->system, 'You read one file')));
     }
 
     private function read(FileDetails $file): string
@@ -161,7 +168,7 @@ class ReadFileJobTest extends TestCase
         $this->engine->will(Fake::says(json_encode(self::ANSWER), 15_000));
         $first = $this->upload();
         $this->read($first);
-        $this->assertCount(1, $this->engine->requests);
+        $this->assertSame(1, $this->readerCalls());
 
         // Reading it again says it was read.
         $this->read($first);
@@ -171,13 +178,13 @@ class ReadFileJobTest extends TestCase
         $second = $this->upload(name: 'Lecture 3 (copy).txt');
         $this->read($second);
         $this->assertSame(['done', 0], [$this->row()->status, (int) $this->row()->cost_micros]);
-        $this->assertCount(1, $this->engine->requests);
+        $this->assertSame(1, $this->readerCalls());
         $this->assertSame('English', app(FileDigests::class)->find($this->by, $second->id)->language);
 
         // A different file is read.
         $this->engine->will(Fake::says(json_encode(self::ANSWER)));
         $this->read($this->upload("Something else.\n", 'Lab 3.txt'));
-        $this->assertCount(2, $this->engine->requests);
+        $this->assertSame(2, $this->readerCalls());
     }
 
     public function test_a_picture_and_a_file_with_no_words_are_skipped_and_not_tried_again(): void

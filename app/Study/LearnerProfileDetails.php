@@ -16,6 +16,8 @@ final readonly class LearnerProfileDetails
         public ?string $goal = null,
         public string $note = '',
         public ?string $updatedAt = null,
+        /** Where they start from in this course: a key of CourseTypes::BACKGROUNDS. */
+        public ?string $background = null,
     ) {}
 
     /** Whether the student has answered anything at all. */

@@ -5,6 +5,7 @@ namespace App\Engine\Tools;
 use App\Engine\Settings;
 use App\Platform\Access\Principal;
 use App\Study\Quizzes;
+use App\Study\Sessions;
 use App\Study\Topics;
 
 /**
@@ -14,7 +15,7 @@ use App\Study\Topics;
  */
 final class RecordQuizTool implements Tool
 {
-    public function __construct(private Quizzes $quizzes, private Topics $topics, private Settings $settings) {}
+    public function __construct(private Quizzes $quizzes, private Topics $topics, private Settings $settings, private Sessions $sessions) {}
 
     public function name(): string
     {
@@ -47,7 +48,7 @@ final class RecordQuizTool implements Tool
         if ($context->sessionId === null) {
             return 'Recording a quiz needs a study session: ask the student to start one.';
         }
-        $quiz = $this->quizzes->record($by, $context->sessionId, $input);
+        $quiz = $this->quizzes->record($by, $context->sessionId, $input, $context->judge());
         $context->effects->quiz($quiz->id, $quiz->kind, $quiz->score, $quiz->asked);
 
         $out = ucfirst($quiz->kind)." recorded: {$quiz->right()} of {$quiz->asked} right, {$quiz->score} %.";
@@ -56,6 +57,7 @@ final class RecordQuizTool implements Tool
         }
         $marks = $this->settings->get($by)->tutorMarksTopics;
         $lines = [];
+        $since = $context->sessionId === null ? null : $this->sessions->find($by, $context->sessionId)->startedAt;
         foreach ($quiz->proposals as $p) {
             $topic = collect($this->topics->list($by, $context->workspaceId))->firstWhere('id', $p['topic_id']);
             if ($topic === null) {
@@ -66,7 +68,7 @@ final class RecordQuizTool implements Tool
             if ($topic->status === $p['status']) {
                 continue;
             }
-            if ($topic->status !== null && $topic->statusBy !== 'tutor') {
+            if ($topic->status !== null && $topic->statusBy !== 'tutor' && Topics::saidSince($topic->statusAt, $since)) {
                 $context->effects->status($topic->id, $topic->name, $topic->status, $p['status'], false, $reason);
                 $lines[] = "{$topic->name}: {$words} proposed (the student's own word stays)";
 
@@ -78,7 +80,7 @@ final class RecordQuizTool implements Tool
 
                 continue;
             }
-            $before = $this->topics->mark($by, $topic->id, $p['status']);
+            $before = $this->topics->mark($by, $topic->id, $p['status'], $since);
             if ($before !== null) {
                 $context->effects->status($topic->id, $topic->name, $topic->status, $p['status'], true, $reason, $before);
                 $lines[] = "{$topic->name}: marked {$words}";

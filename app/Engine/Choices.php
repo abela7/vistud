@@ -29,10 +29,14 @@ final readonly class Choices
         public bool $autoReadFiles = true,
         /** The tutor sets a topic's status itself (with undo); otherwise it proposes one. */
         public bool $tutorMarksTopics = true,
+        /** The tutor keeps short notes about the student (App\Study\TutorMemories); otherwise it keeps none. */
+        public bool $tutorRemembers = true,
         /** The copy-paste path (briefing, paste-and-review) is shown, for use with another AI. */
         public bool $copyPasteAi = false,
         /** Favorite models chosen to be available mid-chat. */
         public array $favoriteModels = [],
+        /** Whose the student's own key is (App\Engine\Providers): OpenRouter or a provider's id; null without a key. */
+        public ?string $provider = null,
     ) {}
 
     /**
@@ -44,7 +48,10 @@ final readonly class Choices
     public function chatModels(): array
     {
         $models = array_values(array_filter($this->favoriteModels));
-        if ($models === []) {
+        if ($models === [] && $this->provider !== null && Providers::direct($this->provider)) {
+            // A provider's own key: its models for the roles (OpenRouter's names would mean nothing to it).
+            $models = array_values(array_filter([$this->tutorModel, $this->readerModel, $this->helperModel]));
+        } elseif ($models === []) {
             $models = [
                 'anthropic/claude-3.5-sonnet',
                 'openai/gpt-4o',

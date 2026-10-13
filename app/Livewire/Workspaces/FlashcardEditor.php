@@ -136,7 +136,7 @@ final class FlashcardEditor extends Component
             match ($this->mode) {
                 'new' => $this->flashcards->add($by, $this->workspaceId, $topicId, $this->front, $this->back, moduleId: $this->moduleId === '' ? null : $this->moduleId),
                 'edit' => $this->flashcards->update($by, (string) $this->cardId, $topicId, $this->front, $this->back, $this->moduleId),
-                'delete' => $this->flashcards->retire($by, (string) $this->cardId),
+                'delete' => $this->flashcards->delete($by, (string) $this->cardId),
                 default => null,
             };
         } catch (Unprocessable $e) {

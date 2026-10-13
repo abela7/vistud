@@ -7,6 +7,7 @@ use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Instructions as InstructionTexts;
+use App\Study\TutorMemories;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -16,7 +17,8 @@ use Livewire\Component;
  * The instructions a study session starts from (docs/specs/study-memory.md
  * §3), in one dialog opened with the `instructions-open` event: about the
  * student, for every course, and for this course. A module's own are in its
- * menu.
+ * menu. Beside them, the way to what the tutor remembers about the student
+ * (App\Livewire\Study\Memories), with how many lines it holds.
  */
 final class Instructions extends Component
 {
@@ -34,11 +36,14 @@ final class Instructions extends Component
 
     private InstructionTexts $instructions;
 
+    private TutorMemories $memories;
+
     private PrincipalFactory $principals;
 
-    public function boot(InstructionTexts $instructions, PrincipalFactory $principals): void
+    public function boot(InstructionTexts $instructions, TutorMemories $memories, PrincipalFactory $principals): void
     {
         $this->instructions = $instructions;
+        $this->memories = $memories;
         $this->principals = $principals;
     }
 
@@ -83,7 +88,11 @@ final class Instructions extends Component
 
     public function render(): View
     {
-        return view('livewire.workspaces.instructions');
+        $by = $this->editing ? $this->principal() : null;
+
+        return view('livewire.workspaces.instructions', [
+            'memoryCount' => $by === null ? 0 : count($this->memories->list($by, $this->workspaceId)),
+        ]);
     }
 
     private function principal(): Principal

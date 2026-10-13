@@ -10,6 +10,8 @@ use App\Engine\Models;
 use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Engine\Toolbox;
+use App\Engine\Troubles;
+use App\Engine\VistudAi;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
@@ -27,6 +29,7 @@ use App\Study\Sessions;
 use App\Study\TopicDetails;
 use App\Study\Topics;
 use App\Study\Tutoring;
+use App\Study\TutorMemories;
 use Closure;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Locked;
@@ -59,6 +62,11 @@ final class TutorChat extends Component
         'where' => ['Where are we', 'flag', 'Where are we? What is done and what is left?'],
     ];
 
+    /** A chip only for a subject that needs it: shown while its study plugin is on (a law student has no graphs to plot). */
+    public const ACTION_PLUGINS = [
+        'plot' => 'math_physics',
+    ];
+
     public const TEST_ASK = 'Test me on this whole module: ten exam-level questions, one at a time, and score me at the end.';
 
     /** How often the answer so far is sent to the browser while it streams, in seconds. */
@@ -68,7 +76,24 @@ final class TutorChat extends Component
     public string $workspaceId;
 
     #[Locked]
-    public string $sessionId;
+    public string $sessionId = '';
+
+    /**
+     * On a topic's own page (the owner's ask, 2026-10-12): the same chat about this one topic, with no session
+     * (App\Engine\SessionChat::sendOnTopic). Null in a study session.
+     */
+    #[Locked]
+    public ?string $topicId = null;
+
+    /**
+     * ViStud AI's chat (App\Engine\VistudAi) on the main dashboard, above every course: the same chat, another AI. Its
+     * conversation, once it has one; null until the first words are sent.
+     */
+    #[Locked]
+    public bool $vistud = false;
+
+    #[Locked]
+    public ?string $conversationId = null;
 
     public string $text = '';
 
@@ -103,9 +128,11 @@ final class TutorChat extends Component
 
     private Folders $folders;
 
-    public function boot(SessionChat $chat, Settings $settings, Sessions $sessions, PrincipalFactory $principals, ChatStream $stream, Notes $notes, Files $files, Topics $topics, Models $models, Modules $modules, Folders $folders): void
+    private TutorMemories $memories;
+
+    public function boot(SessionChat $chat, Settings $settings, Sessions $sessions, PrincipalFactory $principals, ChatStream $stream, Notes $notes, Files $files, Topics $topics, Models $models, Modules $modules, Folders $folders, TutorMemories $memories): void
     {
-        [$this->notes, $this->files, $this->topics, $this->models, $this->modules, $this->folders] = [$notes, $files, $topics, $models, $modules, $folders];
+        [$this->notes, $this->files, $this->topics, $this->models, $this->modules, $this->folders, $this->memories] = [$notes, $files, $topics, $models, $modules, $folders, $memories];
         $this->chat = $chat;
         $this->settings = $settings;
         $this->sessions = $sessions;
@@ -113,9 +140,24 @@ final class TutorChat extends Component
         $this->stream = $stream;
     }
 
-    public function mount(string $workspaceId, string $sessionId): void
+    public function mount(string $workspaceId = '', string $sessionId = '', ?string $topicId = null, bool $vistud = false, ?string $conversationId = null): void
     {
-        [$this->workspaceId, $this->sessionId] = [$workspaceId, $sessionId];
+        [$this->workspaceId, $this->sessionId, $this->topicId] = [$workspaceId, $sessionId, $topicId];
+        if ($vistud) {
+            $by = $this->principal();
+            [$this->vistud, $this->conversationId] = [true, $conversationId];
+            $this->activeModel = ($conversationId !== null ? app(VistudAi::class)->model($by, $conversationId) : null) ?: $this->settings->get($by)->tutorModel;
+
+            return;
+        }
+        if ($topicId !== null) {
+            $by = $this->principal();
+            $topic = $this->topics->find($by, $topicId);
+            $topic->workspaceId === $workspaceId || throw new NotFound;
+            $this->activeModel = $this->chat->topicThreadModel($by, $topicId) ?: $this->settings->get($by)->tutorModel;
+
+            return;
+        }
         // A session that ended without its wrap-up (it ended by itself, or the engine was down) gets it once, here.
         $by = $this->principal();
         $session = $this->sessions->find($by, $sessionId);
@@ -153,7 +195,23 @@ final class TutorChat extends Component
 
             return;
         }
-        $this->turn(fn (Closure $on) => $this->chat->send($this->principal(), $this->sessionId, $words, $on, $attach, $this->activeModel), $words);
+        if ($this->vistud) {
+            $this->turn(function (Closure $on) use ($words) {
+                $ai = app(VistudAi::class);
+                if ($this->conversationId === null) {
+                    // The first words start the conversation: the page lists it and opens it at its address.
+                    $this->conversationId = $ai->start($this->principal(), $words, $this->activeModel);
+                    $this->dispatch('vistud-conversation-started', id: $this->conversationId);
+                }
+
+                return $ai->send($this->principal(), $this->conversationId, $words, $on, $this->activeModel);
+            }, $words);
+
+            return;
+        }
+        $this->turn(fn (Closure $on) => $this->topicId !== null
+            ? $this->chat->sendOnTopic($this->principal(), $this->topicId, $words, $on, $attach, $this->activeModel)
+            : $this->chat->send($this->principal(), $this->sessionId, $words, $on, $attach, $this->activeModel), $words);
     }
 
     /** Switches the AI model to use for the next response in this session. */
@@ -164,7 +222,14 @@ final class TutorChat extends Component
             return;
         }
         $this->activeModel = $model;
-        $this->chat->setModel($this->principal(), $this->sessionId, $model);
+        if ($this->vistud) {
+            $this->conversationId !== null && app(VistudAi::class)->setModel($this->principal(), $this->conversationId, $model);
+
+            return;
+        }
+        $this->topicId !== null
+            ? $this->chat->setTopicModel($this->principal(), $this->topicId, $model)
+            : $this->chat->setModel($this->principal(), $this->sessionId, $model);
     }
 
     /** Updates a tutoring choice in real time for this open session. */
@@ -209,6 +274,16 @@ final class TutorChat extends Component
     /** One of the suggested openings, or a quiz from the Quiz me menu. */
     public function say(string $text): void
     {
+        if ($this->vistud) {
+            in_array($text, array_column(self::VISTUD_STARTERS, 'prompt'), true) ? $this->send($text) : $this->dispatch('chat-done', restore: null);
+
+            return;
+        }
+        if ($this->topicId !== null) {
+            in_array($text, self::topicSuggestions(), true) ? $this->send($text) : $this->dispatch('chat-done', restore: null);
+
+            return;
+        }
         $by = $this->principal();
         $session = $this->sessions->find($by, $this->sessionId);
         $pluginStarters = Plugins::starterQuestions($session->tutoring['plugins'] ?? []);
@@ -243,10 +318,27 @@ final class TutorChat extends Component
         $this->dispatch('chat-done', restore: null);
     }
 
+    /** On a topic's page: starts its chat afresh (what it cost stays counted). A session's chat starts over from its page. */
+    public function startOver(): void
+    {
+        if ($this->topicId === null) {
+            return;
+        }
+        $this->chat->clearTopicChat($this->principal(), $this->topicId);
+        $this->reload();
+    }
+
     /** Answers the last message again, after the engine failed on it. */
     public function retry(): void
     {
-        $this->turn(fn (Closure $on) => $this->chat->retry($this->principal(), $this->sessionId, $on));
+        if ($this->vistud) {
+            $this->conversationId !== null && $this->turn(fn (Closure $on) => app(VistudAi::class)->retry($this->principal(), (string) $this->conversationId, $on));
+
+            return;
+        }
+        $this->turn(fn (Closure $on) => $this->topicId !== null
+            ? $this->chat->retryOnTopic($this->principal(), $this->topicId, $on)
+            : $this->chat->retry($this->principal(), $this->sessionId, $on));
     }
 
     /** Opens the write-back's review on everything the tutor marked so far. */
@@ -285,7 +377,7 @@ final class TutorChat extends Component
     public function applyStatus(string $topicId, string $status): void
     {
         $by = $this->principal();
-        $this->sessions->find($by, $this->sessionId);
+        $this->topicId !== null || $this->sessions->find($by, $this->sessionId);
         if (! in_array($status, Topics::STATUSES, true)) {
             return;
         }
@@ -301,7 +393,7 @@ final class TutorChat extends Component
     public function undoStatus(string $topicId): void
     {
         $by = $this->principal();
-        $last = $this->chat->activity($by, $this->sessionId)['statuses'][$topicId] ?? null;
+        $last = ($this->topicId !== null ? $this->chat->topicActivity($by, $this->topicId) : $this->chat->activity($by, $this->sessionId))['statuses'][$topicId] ?? null;
         if (! is_array($last) || ($last['applied'] ?? false) !== true || ! is_array($last['before'] ?? null)) {
             return;
         }
@@ -313,18 +405,63 @@ final class TutorChat extends Component
         $this->dispatch('session-changed');
     }
 
+    /** What the tutor remembers changed in its window: the chips say so. */
+    #[On('memories-changed')]
+    public function memoriesChanged(): void {}
+
+    /** The student changed the session's topic on its page: the chat shows where. */
+    #[On('session-topic-changed')]
+    public function topicChanged(): void {}
+
+    /**
+     * The chat's line where the student changed the session's topic on its page.
+     *
+     * @param  array{topic: ?string, name: ?string}  $change
+     */
+    public static function topicChangeWords(array $change): string
+    {
+        return $change['topic'] === null ? 'You took the topic off the session' : 'You moved the session to '.($change['name'] ?? 'another topic');
+    }
+
+    /** The student forgets a line the tutor remembered in this chat (the chip's "Forget"). */
+    public function forgetMemory(string $id): void
+    {
+        try {
+            $this->memories->forget($this->principal(), $id);
+        } catch (NotFound) {
+            // Forgotten already, or changed in another tab.
+        }
+    }
+
     public function render(): View
     {
         $by = $this->principal();
-        $session = $this->sessions->find($by, $this->sessionId);
+        $onTopic = $this->topicId !== null ? $this->topics->find($by, $this->topicId) : null;
+        $ai = $this->vistud ? app(VistudAi::class) : null;
+        $session = match (true) {
+            $ai !== null => self::vistudSession(),
+            $onTopic !== null => SessionChat::topicSession($onTopic),
+            default => $this->sessions->find($by, $this->sessionId),
+        };
         $choices = $this->settings->get($by);
-        $turns = $this->chat->transcript($by, $this->sessionId);
-        $spent = $this->chat->spent($by, $this->sessionId);
+        $turns = match (true) {
+            $ai !== null => $this->conversationId !== null ? $ai->transcript($by, $this->conversationId) : [],
+            $onTopic !== null => $this->chat->topicTranscript($by, $this->topicId),
+            default => $this->chat->transcript($by, $this->sessionId),
+        };
+        $spent = match (true) {
+            $ai !== null => ['session' => $this->conversationId !== null ? $ai->spent($by, $this->conversationId) : 0, 'session_cap' => $choices->sessionCapMicros],
+            $onTopic !== null => ['session' => $this->chat->topicSpent($by, $this->topicId), 'session_cap' => 0],
+            default => $this->chat->spent($by, $this->sessionId),
+        };
         $ready = $this->settings->keyAvailable($by) && $choices->ready();
         $hasStatuses = array_filter($turns, fn (array $t) => ($t['statuses'] ?? []) !== []) !== [];
         $topicsNow = $hasStatuses ? array_column($this->topics->list($by, $session->workspaceId), null, 'id') : [];
+        // What the tutor remembered: kept still, or forgotten since.
+        $kept = array_filter($turns, fn (array $t) => ($t['remembered'] ?? []) !== []) !== [] ? array_flip(array_map(fn ($m) => $m->id, $ai !== null ? $this->memories->all($by) : $this->memories->list($by, $session->workspaceId))) : [];
         $latestAssistant = null;
         foreach ($turns as &$turn) {
+            $turn['topicChangeWords'] = isset($turn['topicChange']) ? self::topicChangeWords($turn['topicChange']) : null;
             $turn['attachments'] = array_map(fn (array $a) => $a + [
                 'url' => $this->urlOf($a['ref']),
                 'icon' => self::ICONS[$a['kind']] ?? 'file',
@@ -337,6 +474,7 @@ final class TutorChat extends Component
                 $turn['savedWords'] = self::savedWords($turn['saved'] ?? []);
                 $turn['notes'] = array_map(fn (array $note) => $note + ['url' => route('workspaces.notes.show', [$this->workspaceId, $note['id'], 'window' => 1])], $turn['notes'] ?? []);
                 $turn['marks'] = self::marks($turn['statuses'] ?? [], $topicsNow);
+                $turn['remembered'] = array_map(fn (array $m) => $m + ['kept' => isset($kept[$m['id'] ?? ''])], $turn['remembered'] ?? []);
                 if ($turn['text'] !== '') {
                     $latestAssistant = $turn;
                 }
@@ -347,7 +485,8 @@ final class TutorChat extends Component
         $latestText = $latestAssistant['text'] ?? '';
         $latestHasMarks = $latestAssistant !== null && ChatMarks::present($latestText) !== $latestText;
         $latestFingerprint = $latestHasMarks ? md5($latestText) : null;
-        $marked = $latestHasMarks && ($this->dismissedMarkFingerprint !== $latestFingerprint);
+        // What the tutor marked is kept by a session's write-back: a topic's chat has none to keep it.
+        $marked = $onTopic === null && $ai === null && $latestHasMarks && ($this->dismissedMarkFingerprint !== $latestFingerprint);
 
         $chatModelIds = $choices->chatModels();
         $key = $this->settings->key($by);
@@ -383,16 +522,26 @@ final class TutorChat extends Component
             'ready' => $ready,
             'choices' => $choices,
             'turns' => $turns,
+            'topicChangeAfter' => $onTopic === null && $ai === null && ($change = $this->chat->topicChangeSinceLastMessage($by, $this->sessionId)) !== null ? self::topicChangeWords($change) : null,
             'marked' => $marked,
             'marksDismissed' => $this->marksDismissed,
-            'waiting' => $session->isOpen() && $ready && $this->chat->waiting($by, $this->sessionId),
-            'spentWords' => Choices::dollars($spent['session']).($spent['session_cap'] > 0 ? ' of '.Choices::dollars($spent['session_cap']) : '').' this session',
-            'suggestions' => array_merge(self::SUGGESTIONS, $pluginStarters),
-            'actions' => self::ACTIONS,
+            'waiting' => $session->isOpen() && $ready && match (true) {
+                $ai !== null => $this->conversationId !== null && $ai->waiting($by, $this->conversationId),
+                $onTopic !== null => $this->chat->topicWaiting($by, $this->topicId),
+                default => $this->chat->waiting($by, $this->sessionId),
+            },
+            'vistud' => $ai !== null,
+            'assistant' => $ai !== null ? 'ViStud AI' : 'your tutor',
+            'onTopic' => $onTopic !== null ? Topics::cleanMarkdown($onTopic->name) : null,
+            'trouble' => ($trouble = app(Troubles::class)->last($by)) !== null && $trouble['role'] === 'tutor' ? $trouble : null,
+            'spentWords' => Choices::dollars($spent['session']).($spent['session_cap'] > 0 ? ' of '.Choices::dollars($spent['session_cap']) : '').($onTopic !== null || $ai !== null ? ' in this chat' : ' this session'),
+            'suggestions' => $ai !== null ? [] : ($onTopic !== null ? self::topicSuggestions() : array_merge(self::SUGGESTIONS, $pluginStarters)),
+            'starters' => $ai !== null ? self::VISTUD_STARTERS : ($onTopic !== null ? self::TOPIC_STARTERS : []),
+            'actions' => $onTopic !== null || $ai !== null ? [] : array_filter(self::ACTIONS, fn (string $key) => ! isset(self::ACTION_PLUGINS[$key]) || in_array(self::ACTION_PLUGINS[$key], $tutoring['plugins'] ?? [], true), ARRAY_FILTER_USE_KEY),
             'testAsk' => self::TEST_ASK,
             'mode' => $session->mode,
-            'hasModule' => $this->moduleOf($by, $session) !== null,
-            'attachable' => $ready && $session->isOpen() ? $this->attachable($by, $session) : ['module' => null, 'items' => []],
+            'hasModule' => $ai === null && $this->moduleOf($by, $session) !== null,
+            'attachable' => $ai === null && $ready && $session->isOpen() ? $this->attachable($by, $session) : ['module' => null, 'items' => []],
             'account' => (string) auth()->id(),
             'upload' => [
                 'url' => route('api.v1.files.store'),
@@ -403,7 +552,7 @@ final class TutorChat extends Component
                 'accept' => implode(',', array_map(fn (string $extension) => ".{$extension}", array_keys(FileTypes::TYPES))),
                 'icons' => array_map(fn (string $icon) => Icons::url($icon), self::ICONS),
             ],
-            'quizzes' => $ready && $session->isOpen() ? $this->quizzes($by, $session) : [],
+            'quizzes' => $onTopic === null && $ai === null && $ready && $session->isOpen() ? $this->quizzes($by, $session) : [],
             'chatModels' => $chatModels,
             'activeModel' => $currentModelId,
             'activeModelName' => $activeModelName,
@@ -413,6 +562,36 @@ final class TutorChat extends Component
             'tutoringQuestions' => Tutoring::QUESTIONS,
             'tutoringSummary' => Tutoring::summary($session->tutoring),
         ]);
+    }
+
+    /** What a topic's chat offers to start with: the four ways in to one topic, each a card with what it sends. */
+    public const TOPIC_STARTERS = [
+        ['title' => 'Core concepts', 'hint' => 'Explained one at a time', 'icon' => 'lightbulb', 'prompt' => 'Explain the core concepts of this topic, one at a time.'],
+        ['title' => 'Real-world examples', 'hint' => 'Where it shows up', 'icon' => 'globe', 'prompt' => 'Give me real-world examples of this topic.'],
+        ['title' => 'Common pitfalls', 'hint' => 'Mistakes and misconceptions', 'icon' => 'triangle-alert', 'prompt' => 'What are the common pitfalls and misconceptions here?'],
+        ['title' => 'Test me', 'hint' => 'A question at my level', 'icon' => 'target', 'prompt' => 'Test my understanding with a question at my level.'],
+    ];
+
+    /** ViStud AI's chat as a session for the chat's own workings (open, free, no clock): never kept, and in no course. */
+    public static function vistudSession(): SessionDetails
+    {
+        $now = now()->toIso8601String();
+
+        return new SessionDetails('vistud-ai', '', null, null, 'running', null, false, $now, null, $now, 0, 0, null, null, mode: 'free');
+    }
+
+    /** What ViStud AI offers to start with: the four questions about the whole of one's study. */
+    public const VISTUD_STARTERS = [
+        ['title' => 'What should I study today?', 'hint' => 'From deadlines and what needs attention', 'icon' => 'target', 'prompt' => 'What should I study today, across all my courses? Look at my deadlines and what needs attention.'],
+        ['title' => 'Where am I weakest?', 'hint' => 'Across all my courses', 'icon' => 'trending-up', 'prompt' => 'Where am I weakest across all my courses, and what should I do about it?'],
+        ['title' => 'Plan my week', 'hint' => 'Around my deadlines and time', 'icon' => 'calendar-days', 'prompt' => 'Plan my study for the next 7 days around my deadlines and the time I usually study.'],
+        ['title' => 'What do you know about me?', 'hint' => 'How I study, and what is remembered', 'icon' => 'brain', 'prompt' => 'What do you know about how I study? Include what is remembered about me.'],
+    ];
+
+    /** The words the topic's starters send: the only quick asks a topic's chat answers. */
+    public static function topicSuggestions(): array
+    {
+        return array_column(self::TOPIC_STARTERS, 'prompt');
     }
 
     /**
@@ -425,7 +604,7 @@ final class TutorChat extends Component
      */
     private static function marks(array $statuses, array $topics): array
     {
-        $words = ['covered' => 'covered', 'understood' => 'understood', 'confused' => 'still confusing'];
+        $words = array_map('strtolower', array_intersect_key(TopicDetails::STATUS_WORDS, array_flip(['covered', 'understood', 'confused'])));
         $marks = [];
         foreach ($statuses as $s) {
             $now = $topics[$s['topic_id']] ?? null;
@@ -643,6 +822,8 @@ final class TutorChat extends Component
         } catch (EngineFailed $e) {
             $this->announce($changed);
             $this->error = $e->getMessage();
+            // Kept past this page, so "hasn't answered" can say why (App\Engine\Troubles).
+            app(Troubles::class)->note($this->principal(), 'tutor', (string) $this->activeModel, $e);
             $this->text = '';
             $this->dispatch('chat-done', restore: null);
 
@@ -651,6 +832,7 @@ final class TutorChat extends Component
         if ($answer !== '') {
             $this->stream->push($this, 'answer', MarkdownPreview::html(ChatMarks::present(ChatMarks::partial($answer))));
         }
+        app(Troubles::class)->clear($this->principal(), 'tutor');
         $this->announce($changed);
         $this->text = '';
         $this->dispatch('chat-turn');

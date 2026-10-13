@@ -110,6 +110,6 @@ class TwoFactorSetupScreenTest extends TestCase
     public function test_settings_links_to_the_setup_from_its_security_part(): void
     {
         $this->actingAs($this->student())->get(route('settings', ['part' => 'security']))
-            ->assertOk()->assertSee('Two-step sign-in')->assertSee('Off. Turn it on')->assertSee(route('two-factor.setup'), false);
+            ->assertOk()->assertSee('Two-step sign-in')->assertSee('Turn it on to be asked')->assertSee(route('two-factor.setup'), false);
     }
 }

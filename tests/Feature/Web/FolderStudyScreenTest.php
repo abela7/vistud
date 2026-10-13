@@ -4,6 +4,8 @@ namespace Tests\Feature\Web;
 
 use App\Engine\Engine;
 use App\Engine\Fake;
+use App\Engine\Jobs\ChooseTopics;
+use App\Engine\Settings;
 use App\Livewire\Workspaces\Contents;
 use App\Livewire\Workspaces\Deck;
 use App\Livewire\Workspaces\FlashcardReview;
@@ -13,6 +15,7 @@ use App\Livewire\Workspaces\StudyTime;
 use App\Livewire\Workspaces\TopicSheet;
 use App\Models\User;
 use App\Platform\Access\Principal;
+use App\Study\FileDigests;
 use App\Study\Files;
 use App\Study\Flashcards;
 use App\Study\Folders;
@@ -112,7 +115,7 @@ class FolderStudyScreenTest extends TestCase
         app(TopicSuggestions::class)->suggest($this->by, $this->week1, $lecture->id, ['Interrupts', 'Shells']);
         app(TopicSuggestions::class)->suggest($this->by, $this->week1, $other->id, ['Paging']);
 
-        $this->folder()->assertSee('2 new topics found')->assertSee('Interrupts, Shells')->assertDontSee('Paging')
+        $this->folder()->assertSee('Main topics to review')->assertSee('Accept Interrupts')->assertSee('Accept Shells')->assertDontSee('Paging')
             ->call('addSuggested')->assertSee('2 topics added.');
         $this->assertSame($this->first, collect(app(Topics::class)->list($this->by, $this->workspace))->firstWhere('name', 'Shells')->folderId);
         $this->assertCount(1, app(TopicSuggestions::class)->list($this->by, $this->week1));
@@ -281,33 +284,104 @@ class FolderStudyScreenTest extends TestCase
             ->assertOk()->assertSeeInOrder(['Week overview', 'Lecture 1 + Lab 1', 'The kernel', 'Lecture 2 + Lab 2', 'Scheduling']);
     }
 
-    public function test_generating_a_session_study_map_analyzes_materials_and_suggests_concise_topics(): void
+    public function test_find_the_main_topics_reads_all_of_the_parts_files_and_each_comes_with_why(): void
     {
-        app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Process lifecycle, states and scheduling.\n"), 'Processes.txt');
-        app(Notes::class)->create($this->by, 'folder', $this->first, 'Thread Concurrency & Locks');
+        $engine = new Fake;
+        $this->app->instance(Engine::class, $engine);
+        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
+        $slides = app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Process lifecycle, states and scheduling.\n"), 'Processes.txt');
+        $handbook = app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Office hours and deadlines.\n"), 'Handbook.txt');
+        foreach ([[$slides, 'Process states and scheduling.', ['Process states', 'Scheduling']], [$handbook, 'Office hours.', ['Office hours']]] as [$file, $summary, $topics]) {
+            app(FileDigests::class)->keep($this->by, $file->id, ['summary' => $summary, 'outline' => [], 'topics' => $topics, 'language' => 'English'], 3, 100, 'fake/quick');
+        }
+        $engine->will(Fake::says(json_encode(['files' => [['file' => 'F1', 'use' => 'core', 'why' => 'The lecture.'], ['file' => 'F2', 'use' => 'skip', 'why' => 'Course admin.']], 'topics' => [
+            ['name' => 'Process lifecycle', 'why' => 'Every later topic in the week builds on how a process moves between states.', 'covers' => ['Process states', 'Transitions'], 'files' => ['F1'], 'pages' => '1–3'],
+        ]])));
 
-        $dash = $this->folder('dashboard')
-            ->assertSee('AI Study Map')
-            ->call('generateSessionStudyMap')
-            ->assertSee('Study map generated from 1 file and 1 note')
-            ->assertSee('Session Study Map')
-            ->assertSee('Foundational Principles')
-            ->assertSee('Core Mechanics & Deep Dive')
-            ->assertSee('Hands-on Practice & Problem Solving');
+        $dash = $this->folder('dashboard')->assertSee('No topics yet')->assertDontSee('Main topics to review')
+            ->call('chooseTopics')
+            ->assertSee('Main topics to review')->assertSee('1 topic from 1 of 2 files, in the order to study them')
+            ->assertSee('Process lifecycle')->assertSee('Every later topic in the week builds on')
+            ->assertSee('Transitions')->assertSee('Processes.txt · p. 1–3')
+            ->assertSee('What the AI read: 1 used, 1 left out')->assertSee('Course admin.')
+            ->assertDontSee('Generate Study Map')->assertDontSee('Foundational Principles');
 
-        $this->assertNotNull($dash->get('sessionStudyMap'));
-        $this->assertCount(3, $dash->get('sessionStudyMap')['stages']);
-        $this->assertLessThanOrEqual(4, count($dash->get('sessionStudyMap')['topics']));
+        // Accepted, it is the folder's topic, tracked from now on.
+        $dash->call('addSuggested')->assertSee('1 topic added.')->assertDontSee('Main topics to review');
+        $topic = collect(app(Topics::class)->list($this->by, $this->workspace))->firstWhere('name', 'Process lifecycle');
+        $this->assertSame([$this->first, 'not_started'], [$topic->folderId, $topic->shown()]);
+    }
 
-        // Suggestions exist and can be accepted directly into the session
-        $dash->call('addSuggested')->assertSee('topics added.');
-        $topics = app(Topics::class)->list($this->by, $this->workspace);
-        $folderTopics = array_values(array_filter($topics, fn ($t) => $t->folderId === $this->first));
-        $this->assertNotEmpty($folderTopics);
+    public function test_each_topic_shows_the_ais_note_and_the_student_can_have_the_ai_choose_again(): void
+    {
+        $engine = new Fake;
+        $this->app->instance(Engine::class, $engine);
+        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
+        $slides = app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Graphs, BFS and DFS.\n"), 'Graphs.txt');
+        app(FileDigests::class)->keep($this->by, $slides->id, ['summary' => 'Graphs, BFS and DFS.', 'outline' => [], 'topics' => ['Graphs', 'BFS', 'DFS'], 'language' => 'English'], 3, 100, 'fake/quick');
+        $engine->will(Fake::says(json_encode(['files' => [['file' => 'F1', 'use' => 'core', 'why' => 'The lecture.']], 'topics' => [
+            ['name' => 'Graphs', 'why' => 'Many problems are graphs.', 'note' => 'All 30 pages build on it; folded in BFS and DFS.', 'files' => ['F1']],
+        ]])));
+        $dash = $this->folder('dashboard')->call('chooseTopics')
+            ->assertSee('Why the AI chose Graphs')->assertSee('Why the AI chose it')->assertSee('All 30 pages build on it; folded in BFS and DFS.')
+            ->assertSee('Choose again')->assertSee('Ask the AI to rethink it');
 
-        // Topic statuses render correctly
-        $topic = $folderTopics[0];
-        $this->assertSame('not_started', $topic->shown());
+        // Rethink one: the box opens with its name, the student says what to change, and the AI chooses again.
+        $graphs = app(TopicSuggestions::class)->list($this->by, $this->week1)[0];
+        $dash->call('openChooseAgain', $graphs->id)->assertSet('choosingAgain', true)->assertSet('againNote', 'About “Graphs”: ')
+            ->assertSee('What should the AI change?');
+        $engine->will(Fake::says(json_encode(['files' => [], 'topics' => [
+            ['name' => 'Breadth-first search', 'why' => 'Shortest paths.', 'note' => 'Split from Graphs, as asked.', 'files' => ['F1']],
+            ['name' => 'Depth-first search', 'why' => 'Cycles.', 'note' => 'Split from Graphs, as asked.', 'files' => ['F1']],
+        ]])));
+        $dash->set('againNote', 'About “Graphs”: too broad, split it into BFS and DFS.')->call('chooseAgain')
+            ->assertSet('choosingAgain', false)->assertSet('againNote', '')
+            ->assertSee('Breadth-first search')->assertSee('Depth-first search')->assertDontSee('Why the AI chose Graphs');
+        $this->assertStringContainsString('too broad, split it into BFS and DFS.', $engine->requests[1]->messages[0]['content']);
+
+        // Cancel closes the box with nothing sent.
+        $dash->call('openChooseAgain')->assertSet('choosingAgain', true)->call('cancelChooseAgain')->assertSet('choosingAgain', false);
+        $this->assertCount(2, $engine->requests);
+    }
+
+    public function test_the_student_ticks_which_files_the_ai_reads_for_topics_and_that_is_remembered(): void
+    {
+        $engine = new Fake;
+        $this->app->instance(Engine::class, $engine);
+        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
+        $slides = app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Process states.\n"), 'Slides.txt');
+        $revision = app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Last year's revision.\n"), 'Revision.txt');
+        foreach ([$slides, $revision] as $file) {
+            app(FileDigests::class)->keep($this->by, $file->id, ['summary' => "About {$file->name}.", 'outline' => [], 'topics' => ['Process states'], 'language' => 'English'], 2, 50, 'fake/quick');
+        }
+
+        // Finding the topics opens the form first: every file ticked, each saying whether it is read.
+        $page = $this->folder('dashboard')->call('openChooseAgain')
+            ->assertSee('Find the main topics')->assertSee('Files the AI reads')->assertSee('Slides.txt')->assertSee('Revision.txt')->assertSee('Read')
+            ->assertSee('Anything the AI should know?');
+        $this->assertEqualsCanonicalizing([$slides->id, $revision->id], $page->get('aiFiles'));
+
+        // None ticked: refused.
+        $page->set('aiFiles', [])->call('chooseAgain')->assertHasErrors('aiFiles')->assertSee('Tick at least one file for the AI to read.');
+        $this->assertSame([], $engine->requests);
+
+        // Only the slides: the revision file is not given to the AI, now or the next time.
+        $engine->will(Fake::says(json_encode(['files' => [['file' => 'F1', 'use' => 'core', 'why' => '']], 'topics' => [['name' => 'Process states', 'why' => 'x', 'files' => ['F1']]]])));
+        $page->set('aiFiles', [$slides->id])->call('chooseAgain')->assertHasNoErrors()->assertSet('choosingAgain', false)->assertSee('Process states');
+        $sent = $engine->requests[0]->messages[0]['content'];
+        $this->assertStringContainsString('F1: Slides.txt', $sent);
+        $this->assertStringNotContainsString('Revision.txt', $sent);
+        $this->assertSame([$revision->id], ChooseTopics::leftOut($this->by, $this->week1));
+        $this->folder('dashboard')->call('openChooseAgain')->assertSet('aiFiles', [$slides->id]);
+    }
+
+    public function test_a_topics_sheet_offers_its_statuses(): void
+    {
+        $topic = app(Topics::class)->create($this->by, $this->workspace, 'Process lifecycle', $this->week1, $this->first);
+        $this->as();
 
         $sheet = Livewire::test(TopicSheet::class, ['workspaceId' => $this->workspace])
             ->dispatch('topic-sheet-open', topicId: $topic->id)

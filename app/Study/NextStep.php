@@ -50,13 +50,17 @@ final class NextStep
             if ($anchor->suggested > 0 && $anchor->topics === 0) {
                 return new Step('add_topics', 'Add the topics found in '.($anchor->suggestedFrom ?? 'your files'), 'Add topics', $anchor->url, moduleId: $anchor->id);
             }
+            // Study starts on the next topic, and a topic in a folder is studied in that folder: the line says where.
             if ($anchor->topics > 0 && ! $anchor->studied) {
-                return new Step('study_new', "Study {$name}", 'Study', $anchor->url, true, $anchor->id, $anchor->nextTopicId);
+                $where = $anchor->nextFolderName !== null ? ", starting in {$anchor->nextFolderName}" : '';
+
+                return new Step('study_new', "Study {$name}{$where}", 'Study', $anchor->url, true, $anchor->id, $anchor->nextTopicId);
             }
             if ($anchor->left() > 0 && $anchor->nextTopicName !== null) {
                 $left = $anchor->left() === 1 ? '1 topic left' : "{$anchor->left()} topics left";
+                $in = $anchor->nextFolderName !== null ? " in {$anchor->nextFolderName}" : '';
 
-                return new Step('study_topic', "{$anchor->nextTopicName}: {$left} in {$name}", 'Study', $anchor->url, true, $anchor->id, $anchor->nextTopicId);
+                return new Step('study_topic', "{$anchor->nextTopicName}{$in}: {$left} in {$name}", 'Study', $anchor->url, true, $anchor->id, $anchor->nextTopicId);
             }
         }
         if (! $inModule && $state->cardsDue >= self::CARDS_DUE) {
@@ -68,7 +72,9 @@ final class NextStep
         if ($look !== null) {
             $module = self::module($state, $look['moduleId']);
 
-            return new Step('attention', "Go over {$look['topic']} again", 'Study', $module->url ?? $state->modulesUrl, true, $look['moduleId'], $look['topicId']);
+            $in = ($look['folder'] ?? null) !== null ? " in {$look['folder']}" : '';
+
+            return new Step('attention', "Go over {$look['topic']}{$in} again", 'Study', $module->url ?? $state->modulesUrl, true, $look['moduleId'], $look['topicId']);
         }
         if ($anchor !== null && $anchor->done()) {
             $next = self::after($state, $anchor);

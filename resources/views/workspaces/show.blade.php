@@ -14,7 +14,7 @@
     [, $label, $icon] = $sections[$section];
 @endphp
 <x-layouts.app :title="$section === 'overview' ? $workspace->name : $label.' · '.$workspace->name" :workspace="$workspace" :section="$section">
-    <div class="mx-auto max-w-6xl space-y-6">
+    <div class="page-frame space-y-6">
         @if ($workspace->archived())
             <x-alert tone="warning" title="This course is archived">
                 <button type="button" class="font-semibold underline underline-offset-2" x-data x-on:click="Livewire.dispatch('workspace-restore')">Restore it</button>
@@ -56,7 +56,7 @@
             <livewire:workspaces.study-time :workspace-id="$workspace->id" />
 
             <section class="next-line" aria-label="Next">
-                <span class="item-icon ws-colour-{{ $workspace->colour }}" aria-hidden="true"><x-icon name="arrow-right" class="size-5" /></span>
+                <span class="item-icon {{ $workspace->colourClass() }}" @if ($workspace->colourStyle()) style="{{ $workspace->colourStyle() }}" @endif aria-hidden="true"><x-icon name="arrow-right" class="size-5" /></span>
                 <p class="next-line-text"><span class="font-semibold">Next:</span> {{ $step->text }}</p>
                 @if ($step->study)
                     <x-button variant="secondary" icon="play" x-data x-on:click="{{ $startNow($step->moduleId, $step->topicId) }}">{{ $step->label }}</x-button>

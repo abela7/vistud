@@ -10,7 +10,7 @@
 @endphp
 <div class="space-y-5" x-data="selectable()" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
     {{-- One row of heading and actions, like Modules. While selecting, the selection bar's Done ends it. --}}
-    <x-workspace.section-header :workspace="$workspace" title="Notes & files">
+    <x-workspace.section-header :workspace="$workspace" title="Notes & files" stack>
         <button type="button" class="btn btn-secondary" x-show="!isSelecting" x-on:click="toggleMode(); $nextTick(() => $root.querySelector('.selection-all-box input')?.focus())">
             <x-icon name="list-checks" class="size-4" />
             <span class="max-md:sr-only">Select</span>

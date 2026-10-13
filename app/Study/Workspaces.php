@@ -2,7 +2,7 @@
 
 namespace App\Study;
 
-use App\Appearance\Theme;
+use App\Appearance\CourseColour;
 use App\Brain\Writer\JournalWriter;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
@@ -23,10 +23,21 @@ use Illuminate\Support\Facades\DB;
  */
 final class Workspaces
 {
-    /** The icons a workspace can have (Lucide names, synced by scripts/sync-icons.mjs). */
+    /** The icons a course is shown first (Lucide names, synced by scripts/sync-icons.mjs); the rest are under More icons. */
     public const ICONS = [
         'book-open', 'microscope', 'sigma', 'languages', 'flask-conical', 'globe',
         'code', 'palette', 'calculator', 'music', 'landmark', 'brain',
+    ];
+
+    /** Every icon a course can have, in groups (the owner's ask, 2026-10-12: more icons). */
+    public const ICON_GROUPS = [
+        'Study' => ['graduation-cap', 'library', 'notebook', 'pencil-ruler', 'lightbulb', 'target', 'star', 'flag', 'trophy', 'puzzle', 'rocket'],
+        'Maths and science' => ['pi', 'infinity', 'ruler', 'compass', 'atom', 'orbit', 'magnet', 'zap', 'test-tube', 'telescope', 'satellite', 'dna'],
+        'Computing' => ['terminal', 'binary', 'cpu', 'database', 'server', 'network', 'cloud', 'bot', 'smartphone', 'wifi', 'bug', 'shield', 'lock', 'key', 'cog'],
+        'Life and health' => ['leaf', 'sprout', 'tree-pine', 'fish', 'paw-print', 'bone', 'heart-pulse', 'stethoscope', 'pill', 'syringe', 'apple', 'baby', 'droplet', 'flame', 'sun', 'moon', 'earth'],
+        'People and society' => ['scale', 'gavel', 'briefcase', 'handshake', 'users', 'chart-line', 'chart-pie', 'coins', 'store', 'building-2', 'newspaper', 'megaphone', 'map', 'mountain', 'plane', 'car'],
+        'Languages and arts' => ['quote', 'scroll', 'feather', 'pen-tool', 'brush', 'camera', 'film', 'drama', 'piano', 'guitar', 'book-heart'],
+        'Everyday' => ['dumbbell', 'gamepad-2', 'dice-5', 'chef-hat', 'utensils', 'shirt', 'gem', 'crown', 'heart', 'wrench', 'hammer'],
     ];
 
     /**
@@ -49,6 +60,12 @@ final class Workspaces
     public const NAV = ['overview', 'modules', 'flashcards', 'questions', 'assignments', 'progress'];
 
     public const MAX_NAME = 80;
+
+    /** Every icon a course can have: the first ones, then the groups. @return list<string> */
+    public static function icons(): array
+    {
+        return array_values(array_unique([...self::ICONS, ...array_merge(...array_values(self::ICON_GROUPS))]));
+    }
 
     public function __construct(private JournalWriter $journal) {}
 
@@ -74,7 +91,7 @@ final class Workspaces
     }
 
     /**
-     * @param  array{name?: mixed, code?: mixed, term?: mixed, starts_on?: mixed, ends_on?: mixed, colour?: mixed, icon?: mixed, project_tools?: mixed}  $input
+     * @param  array{name?: mixed, code?: mixed, term?: mixed, starts_on?: mixed, ends_on?: mixed, colour?: mixed, icon?: mixed, type?: mixed, project_tools?: mixed}  $input
      */
     public function create(Principal $by, array $input): WorkspaceDetails
     {
@@ -86,13 +103,13 @@ final class Workspaces
             $position = (int) LearnerTables::query($scope, 'workspaces')->max('position') + 1;
             LearnerTables::insert($scope, 'workspaces', $fields + [
                 'id' => $id,
-                'type' => 'general',
+                'type' => CourseTypes::NONE,
                 'position' => $position,
                 'revision' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
-            $this->record($by, $scope, $id, 1, $fields, archived: false);
+            $this->record($by, $scope, $id, 1, $fields + ['type' => CourseTypes::NONE], archived: false);
         });
 
         return $this->find($by, $id);
@@ -107,7 +124,27 @@ final class Workspaces
             $row = $this->lock($scope, $id);
             $revision = $row->revision + 1;
             LearnerTables::query($scope, 'workspaces')->where('id', $id)->update($fields + ['revision' => $revision, 'updated_at' => now()]);
-            $this->record($by, $scope, $id, $revision, $fields, archived: $row->archived_at !== null);
+            $this->record($by, $scope, $id, $revision, $fields + ['type' => $row->type], archived: $row->archived_at !== null);
+        });
+
+        return $this->find($by, $id);
+    }
+
+    /** What kind of course it is (CourseTypes), or none (`general`): only that changes, as a new revision of its record. */
+    public function setType(Principal $by, string $id, string $type): WorkspaceDetails
+    {
+        $scope = Guard::learner($by);
+        Input::refuse($type === CourseTypes::NONE || CourseTypes::chosen($type) ? [] : ['type' => 'Pick one of the kinds of course.']);
+
+        DB::transaction(function () use ($by, $scope, $id, $type) {
+            $row = $this->lock($scope, $id);
+            if ($row->type === $type) {
+                return;
+            }
+            $revision = $row->revision + 1;
+            LearnerTables::query($scope, 'workspaces')->where('id', $id)->update(['type' => $type, 'revision' => $revision, 'updated_at' => now()]);
+            $fields = array_intersect_key((array) $row, array_flip(['name', 'code', 'term', 'starts_on', 'ends_on', 'colour', 'icon']));
+            $this->record($by, $scope, $id, $revision, $fields + ['type' => $type], archived: $row->archived_at !== null);
         });
 
         return $this->find($by, $id);
@@ -126,8 +163,8 @@ final class Workspaces
 
     /**
      * Deletes the workspace and everything inside it: modules, folders, notes,
-     * files, flashcards, study sessions, its instructions and profiles, and the
-     * reader's and helper's runs for it.
+     * files, flashcards, study sessions, its instructions and profiles, what the
+     * tutor remembered for it, and the reader's and helper's runs for it.
      */
     public function delete(Principal $by, string $id): void
     {
@@ -169,6 +206,7 @@ final class Workspaces
                 LearnerTables::query($scope, 'module_briefs')->whereIn('module_id', $moduleIds)->delete();
             }
             LearnerTables::query($scope, 'quizzes')->where('workspace_id', $id)->delete();
+            TutorMemories::forgetCourse($scope, $id);
             LearnerTables::query($scope, 'files')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'folders')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'modules')->where('workspace_id', $id)->delete();
@@ -197,7 +235,7 @@ final class Workspaces
             // Delete course
             LearnerTables::query($scope, 'workspaces')->where('id', $id)->delete();
 
-            $fields = array_intersect_key((array) $row, array_flip(['name', 'code', 'term', 'starts_on', 'ends_on', 'colour', 'icon']));
+            $fields = array_intersect_key((array) $row, array_flip(['name', 'code', 'term', 'starts_on', 'ends_on', 'colour', 'icon', 'type']));
             $this->record($by, $scope, $id, $row->revision + 1, $fields, archived: false, deleted: true);
 
             return $storageKeys;
@@ -268,7 +306,7 @@ final class Workspaces
                 'revision' => $revision,
                 'updated_at' => now(),
             ]);
-            $fields = array_intersect_key((array) $row, array_flip(['name', 'code', 'term', 'starts_on', 'ends_on', 'colour', 'icon']));
+            $fields = array_intersect_key((array) $row, array_flip(['name', 'code', 'term', 'starts_on', 'ends_on', 'colour', 'icon', 'type']));
             $this->record($by, $scope, $id, $revision, $fields, $archived);
         });
     }
@@ -301,6 +339,8 @@ final class Workspaces
                 'starts_on' => $fields['starts_on'] ?? null,
                 'ends_on' => $fields['ends_on'] ?? null,
                 'colour' => $fields['colour'],
+                // The kind of course (CourseTypes), so what is learnt in it knows its subject.
+                'subject' => CourseTypes::chosen($fields['type'] ?? null) ? $fields['type'] : null,
                 'status' => $status,
             ], fn ($value) => $value !== null),
         ]);
@@ -321,10 +361,14 @@ final class Workspaces
             'term' => Input::text($input, 'term'),
             'starts_on' => $startsOn,
             'ends_on' => $endsOn,
-            'colour' => $input['colour'] ?? 'blue',
+            // A category, or a colour of the student's own (#rrggbb).
+            'colour' => CourseColour::normalise($input['colour'] ?? 'blue') ?? '',
             'icon' => $input['icon'] ?? 'book-open',
         ];
-        // Left as it is unless the input says (an update from somewhere that doesn't know of it must not switch it off).
+        // Left as they are unless the input says (an update from somewhere that doesn't know of them must not change them).
+        if (array_key_exists('type', $input)) {
+            $fields['type'] = is_string($input['type']) && $input['type'] !== '' ? $input['type'] : CourseTypes::NONE;
+        }
         if (array_key_exists('project_tools', $input)) {
             $fields['project_tools'] = filter_var($input['project_tools'], FILTER_VALIDATE_BOOLEAN);
         }
@@ -338,8 +382,9 @@ final class Workspaces
             'code' => $fields['code'] !== null && mb_strlen($fields['code']) > 20 ? 'Keep the code to 20 characters.' : null,
             'term' => $fields['term'] !== null && mb_strlen($fields['term']) > 40 ? 'Keep the term to 40 characters.' : null,
             ...$dateErrors,
-            'colour' => in_array($fields['colour'], Theme::CATEGORIES, true) ? null : 'Pick one of the colours.',
-            'icon' => in_array($fields['icon'], self::ICONS, true) ? null : 'Pick one of the icons.',
+            'colour' => $fields['colour'] !== '' ? null : 'Pick one of the colours, or a colour of your own.',
+            'icon' => in_array($fields['icon'], self::icons(), true) ? null : 'Pick one of the icons.',
+            'type' => isset($fields['type']) && $fields['type'] !== CourseTypes::NONE && ! CourseTypes::chosen($fields['type']) ? 'Pick one of the kinds of course.' : null,
         ]));
 
         return $fields;

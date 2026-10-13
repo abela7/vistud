@@ -37,6 +37,20 @@ final class CourseProfiles
     /** The most of a syllabus the reader is given, in characters. */
     public const MAX_SYLLABUS = 40_000;
 
+    public const MAX_TOOLS = 10;
+
+    public const MAX_TOOL = 30;
+
+    public const MAX_LANGUAGE = 40;
+
+    public const MAX_EXAM_FORMAT = 300;
+
+    /**
+     * What the guide asks about a course, in the order it asks: the first three are picked from a list (CourseTypes),
+     * the rest are talked through. A question the student skipped is kept as skipped, and no AI asks it again.
+     */
+    public const QUESTIONS = ['type', 'level', 'background', 'about', 'assessment', 'textbook', 'tools'];
+
     public function __construct(private Modules $modules, private Activities $activities) {}
 
     public function get(Principal $by, string $workspaceId): CourseProfileDetails
@@ -183,6 +197,74 @@ final class CourseProfiles
         }
     }
 
+    /**
+     * The facts beside the About text, each left as it is unless given: the level (CourseTypes::LEVELS), the language
+     * it is taught in, its tools or notation (short tags), how its exams go, and the subject plugins every new session
+     * starts with (null: those of the course's type). Refusals name the field.
+     *
+     * @param  array{level?: mixed, language?: mixed, tools?: mixed, exam_format?: mixed, plugins?: mixed}  $input
+     */
+    public function saveFacts(Principal $by, string $workspaceId, array $input): CourseProfileDetails
+    {
+        $scope = Guard::learner($by);
+        Input::workspace($scope, $workspaceId);
+        $given = fn (string $key) => array_key_exists($key, $input);
+        $level = $given('level') && is_string($input['level']) && $input['level'] !== '' ? $input['level'] : null;
+        $language = $given('language') ? Input::text($input, 'language') : null;
+        $exam = $given('exam_format') ? Input::text($input, 'exam_format') : null;
+        $tools = $given('tools') ? self::tags($input['tools']) : [];
+        Input::refuse(array_filter([
+            'level' => $level !== null && ! isset(CourseTypes::LEVELS[$level]) ? 'Pick one of the levels.' : null,
+            'language' => $language !== null && mb_strlen($language) > self::MAX_LANGUAGE ? 'Keep it to '.self::MAX_LANGUAGE.' characters.' : null,
+            'exam_format' => $exam !== null && mb_strlen($exam) > self::MAX_EXAM_FORMAT ? 'Keep it to '.self::MAX_EXAM_FORMAT.' characters.' : null,
+            'tools' => match (true) {
+                count($tools) > self::MAX_TOOLS => 'Keep it to '.self::MAX_TOOLS.' tools.',
+                array_filter($tools, fn (string $tool) => mb_strlen($tool) > self::MAX_TOOL) !== [] => 'Keep each tool to '.self::MAX_TOOL.' characters.',
+                default => null,
+            },
+        ]));
+
+        $plugins = $given('plugins') && is_array($input['plugins']) ? array_values(array_unique(Plugins::validIds($input['plugins']))) : null;
+        $values = array_intersect_key([
+            'level' => $level,
+            'language' => $language,
+            'exam_format' => $exam,
+            'tools' => $tools === [] ? null : json_encode($tools),
+            'plugins' => $plugins === null ? null : json_encode($plugins),
+        ], array_filter(['level' => $given('level'), 'language' => $given('language'), 'exam_format' => $given('exam_format'), 'tools' => $given('tools'), 'plugins' => $given('plugins')]));
+        if ($values !== []) {
+            $this->write($scope, $workspaceId, $values);
+        }
+
+        return $this->get($by, $workspaceId);
+    }
+
+    /** The student would rather not answer one of the guide's questions: no AI asks it again, until unskip(). */
+    public function skip(Principal $by, string $workspaceId, string $question): void
+    {
+        $this->setSkipped($by, $workspaceId, $question, true);
+    }
+
+    public function unskip(Principal $by, string $workspaceId, string $question): void
+    {
+        $this->setSkipped($by, $workspaceId, $question, false);
+    }
+
+    /** The subject plugins a new session of this course starts with: the course's own choice, else its type's. @return list<string> */
+    public function plugins(Principal $by, string $workspaceId): array
+    {
+        return self::pluginsOf(Guard::learner($by), $workspaceId);
+    }
+
+    /** plugins(), for a service that has the scope already (App\Study\Sessions starting one). @return list<string> */
+    public static function pluginsOf(LearnerScope $scope, string $workspaceId): array
+    {
+        $type = LearnerTables::query($scope, 'workspaces')->where('id', $workspaceId)->value('type') ?? throw new NotFound;
+        $chosen = LearnerTables::query($scope, 'course_profiles')->where('workspace_id', $workspaceId)->value('plugins');
+
+        return $chosen === null ? CourseTypes::plugins((string) $type) : Plugins::validIds(self::decode($chosen));
+    }
+
     /** Everything the course's profile holds goes with the course (called by Workspaces::delete inside its transaction). */
     public static function forget(LearnerScope $scope, string $workspaceId): void
     {
@@ -190,6 +272,33 @@ final class CourseProfiles
     }
 
     // ---------- Inside ----------
+
+    private function setSkipped(Principal $by, string $workspaceId, string $question, bool $skipped): void
+    {
+        $scope = Guard::learner($by);
+        Input::workspace($scope, $workspaceId);
+        Input::refuse(in_array($question, self::QUESTIONS, true) ? [] : ['question' => 'There is no such question.']);
+        DB::transaction(function () use ($scope, $workspaceId, $question, $skipped) {
+            $now = array_map('strval', self::decode(LearnerTables::query($scope, 'course_profiles')->where('workspace_id', $workspaceId)->lockForUpdate()->value('skipped')));
+            $now = $skipped ? array_values(array_unique([...$now, $question])) : array_values(array_diff($now, [$question]));
+            $this->write($scope, $workspaceId, ['skipped' => $now === [] ? null : json_encode($now)]);
+        });
+    }
+
+    /** Short tags from a list or a line ("Python, SQL"): trimmed, without empties or repeats, in the order given. @return list<string> */
+    public static function tags(mixed $value): array
+    {
+        $items = is_string($value) ? preg_split('/[,;\n]/u', $value) : (is_array($value) ? $value : []);
+        $tags = [];
+        foreach ($items as $item) {
+            $tag = is_string($item) ? trim((string) preg_replace('/\s+/u', ' ', $item)) : '';
+            if ($tag !== '' && ! in_array(mb_strtolower($tag), array_map('mb_strtolower', $tags), true)) {
+                $tags[] = $tag;
+            }
+        }
+
+        return $tags;
+    }
 
     private function row(LearnerScope $scope, string $workspaceId): ?object
     {
@@ -314,6 +423,12 @@ final class CourseProfiles
             model: $row->model,
             builtAt: $row->built_at,
             updatedAt: $row->updated_at,
+            level: $row->level,
+            language: $row->language,
+            tools: array_map('strval', self::decode($row->tools)),
+            examFormat: $row->exam_format,
+            plugins: $row->plugins === null ? null : Plugins::validIds(self::decode($row->plugins)),
+            skipped: array_map('strval', self::decode($row->skipped)),
         );
     }
 }

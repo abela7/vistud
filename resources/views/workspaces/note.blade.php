@@ -101,6 +101,7 @@
                         @endforeach
                         <span data-save-label>{{ $new ? 'Not saved yet' : 'Saved' }}</span>
                     </p>
+                    @include('workspaces.partials.note-save', ['compact' => false])
                     @if ($window)
                         <button type="button" class="btn btn-ghost note-mode" data-note-pop-in title="Open this note in ViStud's main window, and close this one">
                             <span><x-icon name="app-window" class="size-4" /><span class="max-sm:sr-only">Open in ViStud</span></span>
@@ -481,6 +482,7 @@
                     </div>
                     {{-- Full screen and a note in its own window have no header: what it held that still matters is here, the same buttons in small. --}}
                     <div class="note-bar-tools" role="group" aria-label="Note">
+                        @include('workspaces.partials.note-save', ['compact' => true])
                         @if ($window)
                             <button type="button" class="toolbar-button note-mode" data-note-pop-in title="Open this note in ViStud's main window, and close this one" aria-label="Open in ViStud">
                                 <x-icon name="app-window" class="size-4" />

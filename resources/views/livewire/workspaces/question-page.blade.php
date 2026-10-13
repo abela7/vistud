@@ -13,7 +13,7 @@
 @endphp
 <div class="space-y-5">
     <x-workspace.section-header :workspace="$workspace" :title="$new ? 'New question' : 'Question'" :back-href="$backUrl" :back-to="$backTo"
-        :eyebrow="$workspace->name.($module ? ' · '.$module->title : '')">
+        :eyebrow="$workspace->name.($module ? ' · '.$module->title : '')" stack>
         @unless ($new)
             <x-ai-menu kind="question" :id="$questionId" :label="\Illuminate\Support\Str::limit($question, 60)" />
             <span @class(['question-status', "ws-colour-{$look[$status][1]}"])>
@@ -35,6 +35,13 @@
                 <p class="field-hint mt-1">What you found out, in your own words. Mark it Answered when it makes sense.</p>
                 <textarea id="question-answer" class="input question-input mt-2" rows="{{ $status === 'answered' ? 9 : 6 }}" maxlength="{{ Questions::MAX_ANSWER }}" wire:model="answer" @if (! $new && $status === 'answered' && $answer === '') autofocus @endif></textarea>
                 @error('answer') <p class="field-error mt-2">{{ $message }}</p> @enderror
+                @if ($asked?->answeredByAi())
+                    {{-- The AI wrote this answer: it counts as understood only once the student says so. --}}
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <p class="field-hint flex items-center gap-1.5"><x-icon name="sparkles" class="size-3.5" />The AI wrote this answer.</p>
+                        <x-button size="sm" icon="circle-check" wire:click="confirmAnswer">It makes sense now</x-button>
+                    </div>
+                @endif
             </div>
         </div>
 
@@ -64,7 +71,7 @@
                     </select>
                 </div>
 
-                @if ($new && $topics !== [])
+                @if ($topics !== [])
                     <div class="field">
                         <label for="question-topic" class="field-label">Topic <span class="font-normal text-fg-muted">(optional)</span></label>
                         <select id="question-topic" class="input mt-2" wire:model="topicId">
@@ -73,11 +80,6 @@
                                 <option value="{{ $topic->id }}">{{ $topic->name }}</option>
                             @endforeach
                         </select>
-                    </div>
-                @elseif (! $new && $topicId !== '' && isset($topicNames[$topicId]))
-                    <div>
-                        <p class="field-label">Topic</p>
-                        <p class="mt-1 text-sm text-fg-muted">{{ $topicNames[$topicId] }}</p>
                     </div>
                 @endif
 

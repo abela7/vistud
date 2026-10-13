@@ -3,9 +3,11 @@
 namespace App\Engine\Jobs;
 
 use App\Engine\Engine;
+use App\Engine\EngineFailed;
 use App\Engine\Models;
 use App\Engine\Role;
 use App\Engine\Settings;
+use App\Engine\Troubles;
 use App\Engine\Usage;
 use App\Jobs\RunEngineJob;
 use App\Platform\Access\Guard;
@@ -137,6 +139,7 @@ final class Runner
     {
         $scope = Guard::learner($by);
         $this->update($scope, $id, ['status' => 'running', 'started_at' => now(), 'attempts' => DB::raw('attempts + 1')]);
+        $model = '';
         try {
             [$choices, $key, $model] = $this->settings->ready($by, $role);
             if ($modelOverride !== null && trim($modelOverride) !== '') {
@@ -152,6 +155,9 @@ final class Runner
             return null;
         } catch (AppError $e) {
             $this->update($scope, $id, ['status' => 'failed', 'error_code' => mb_substr($e->errorCode, 0, 60), 'finished_at' => now()]);
+            if ($e instanceof EngineFailed) {
+                app(Troubles::class)->note($by, $role->value, $model, $e);
+            }
             if (! $swallow) {
                 throw $e;
             }

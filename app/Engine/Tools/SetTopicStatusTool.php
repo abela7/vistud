@@ -11,7 +11,8 @@ use App\Study\Topics;
  * Where the student stands on a topic, as the tutor sees it: covered, understood or confusing (docs/specs/
  * vistud-2-blueprint.md §3.8, Appendix B). With the student's setting "Let the tutor mark topics" on, it is set at
  * once, shown as the tutor's and undoable; with it off, it is only proposed, for the student to accept. The student's
- * own word on a topic always wins: the tutor can't change it, only say what it saw.
+ * word said in this session wins: the tutor can't change it, only say what it saw. A word they said before the session
+ * is older than what the tutor saw in it, and is updated, shown as the tutor's, to undo (the owner's ask, 2026-10-12).
  */
 final class SetTopicStatusTool implements Tool
 {
@@ -24,7 +25,7 @@ final class SetTopicStatusTool implements Tool
 
     public function description(): string
     {
-        return 'Says where the student stands on a topic: covered (you taught it), understood (they showed it) or confusing (they struggled). Use it when a topic\'s part ends, after a quiz, and when a test shows it; never from a hunch. Set at once and shown as yours when the student lets you mark topics, else only proposed; their own word always wins. Defaults to the session\'s topic.';
+        return 'Says where the student stands on a topic: covered (you taught it), understood (they showed it) or confusing (they struggled). Use it when a topic\'s part ends, after a quiz, and when a test shows it; never from a hunch. Applied at once or only proposed, as the Statuses line of your instructions says; their own word from this session always wins; one from before it you may update. Defaults to the session\'s topic.';
     }
 
     public function parameters(): array
@@ -62,7 +63,8 @@ final class SetTopicStatusTool implements Tool
         if ($topic->status === $status) {
             return "\"{$topic->name}\" is {$words} already.";
         }
-        if ($topic->status !== null && $topic->statusBy !== 'tutor') {
+        $since = $context->sessionId === null ? null : $this->sessions->find($by, $context->sessionId)->startedAt;
+        if ($topic->status !== null && $topic->statusBy !== 'tutor' && Topics::saidSince($topic->statusAt, $since)) {
             // The student's own word on it: it stays. What the tutor saw is still told to them, to take or leave.
             $context->effects->status($topic->id, $topic->name, $topic->status, $status, false, $reason);
 
@@ -73,7 +75,7 @@ final class SetTopicStatusTool implements Tool
 
             return "Proposed \"{$topic->name}\" as {$words}: the student has chosen to accept statuses themselves, so it shows as a suggestion they can tap. Say so in a line; don't say it is set.";
         }
-        $before = $this->topics->mark($by, $topic->id, $status);
+        $before = $this->topics->mark($by, $topic->id, $status, $since);
         if ($before === null) {
             return "\"{$topic->name}\" is {$words} already.";
         }

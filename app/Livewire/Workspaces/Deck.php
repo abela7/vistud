@@ -123,7 +123,7 @@ final class Deck extends Component
         if (in_array($action, ['remove', 'delete'], true)) {
             foreach ($items as [$type, $id]) {
                 try {
-                    $this->flashcards->retire($by, $id);
+                    $this->flashcards->delete($by, $id);
                     $done++;
                 } catch (NotFound) {
                     // Ignored

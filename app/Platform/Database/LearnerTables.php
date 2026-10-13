@@ -58,19 +58,21 @@ final class LearnerTables
         'module_briefs',
         'folder_briefs',
         'quizzes',
+        'tutor_memories',
     ];
 
-    public static function query(LearnerScope $scope, string $table): Builder
+    /** `$connection`: another than the default, such as the owner's for what the runtime user may not do (journal rebuilds). */
+    public static function query(LearnerScope $scope, string $table, ?string $connection = null): Builder
     {
         if (! in_array($table, self::TABLES, true)) {
             throw new InvalidArgumentException("'{$table}' is not a registered learner table.");
         }
 
-        return DB::table($table)->where($table.'.learner_id', $scope->learnerId);
+        return DB::connection($connection)->table($table)->where($table.'.learner_id', $scope->learnerId);
     }
 
     /** Insert rows, forcing learner_id to the scope's learner. */
-    public static function insert(LearnerScope $scope, string $table, array $rows): void
+    public static function insert(LearnerScope $scope, string $table, array $rows, ?string $connection = null): void
     {
         if (! in_array($table, self::TABLES, true)) {
             throw new InvalidArgumentException("'{$table}' is not a registered learner table.");
@@ -80,7 +82,7 @@ final class LearnerTables
         }
         $rows = array_is_list($rows) ? $rows : [$rows];
 
-        DB::table($table)->insert(array_map(
+        DB::connection($connection)->table($table)->insert(array_map(
             fn (array $row) => ['learner_id' => $scope->learnerId] + $row,
             $rows,
         ));

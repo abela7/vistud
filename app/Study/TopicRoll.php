@@ -56,7 +56,7 @@ final readonly class TopicRoll
     /** The word beside the topic: an icon's one word. */
     public function word(): string
     {
-        return ['not_started' => 'Not started', 'covered' => 'Covered', 'understood' => 'Understood', 'confused' => 'Still confusing', 'mastered' => 'Mastered'][$this->shown] ?? ucfirst($this->shown);
+        return TopicDetails::STATUS_WORDS[$this->shown] ?? ucfirst($this->shown);
     }
 
     /** "since 2 Oct · 2 cards": the small print under the word. */
@@ -82,7 +82,7 @@ final readonly class TopicRoll
         $words = [];
         foreach ($this->reasons as $reason) {
             $words[] = match ($reason) {
-                'confusing' => 'confusing for over a week',
+                'confusing' => 'not understood for over a week',
                 'stuck' => $this->stuckQuestions === 1 ? 'a stuck question' : "{$this->stuckQuestions} stuck questions",
                 'test' => "{$this->tested} % in the test",
                 'overdue' => ($this->cardsOverdue === 1 ? '1 card' : "{$this->cardsOverdue} cards").' a week late',

@@ -17,6 +17,9 @@ final class Vocabulary
 
     public const JUDGED_BY = ['auto', 'person', 'ai', 'self', 'none'];
 
+    /** How an AI's judgement of an attempt came: ViStud's own chat, a chat pasted back from elsewhere, the quiz panel. */
+    public const JUDGE_VIA = ['chat', 'pasted', 'quiz'];
+
     public const STANCES = ['confused', 'unsure', 'stuck', 'confident', 'clicked', 'forgot'];
 
     public const UNCERTAIN_STANCES = ['confused', 'unsure', 'stuck'];

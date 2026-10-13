@@ -47,6 +47,9 @@ final class RenameModuleTool implements Tool
         } else {
             return 'Say which module to rename.';
         }
+        if (($ask = Agreement::needed($by, $context, "rename_module:{$module->id}:".mb_strtolower($newTitle), "Rename the module \"{$module->title}\" to \"{$newTitle}\"?")) !== null) {
+            return $ask;
+        }
 
         $updated = $this->modules->update($by, $module->id, ['title' => $newTitle]);
 

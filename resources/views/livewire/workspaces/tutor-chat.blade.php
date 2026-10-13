@@ -12,14 +12,15 @@
     use Illuminate\Support\Str;
 @endphp
 <section class="chat" aria-labelledby="chat-heading-{{ $this->getId() }}"
-    x-data="tutorChat(@js(['upload' => $upload, 'account' => $account, 'mentionItems' => $attachable['items'] ?? []]))"
+    x-data="tutorChat(@js(['upload' => $upload, 'account' => $account, 'mentionItems' => $attachable['items'] ?? [], 'mentions' => ! $vistud]))"
     x-on:chat-done.window="done($event.detail.restore)"
     x-on:notes-changed.window="noteChanged($event.detail.notes)"
     x-on:session-toggle-tools.window="toggleTools()"
     x-on:session-layout-changed.window="if (menu) positionToolsPopover(); if (follow) $nextTick(() => stick(false))"
     x-on:resize.window="if (menu) positionToolsPopover()"
+    x-on:keydown.window="dictationKey($event)"
     x-on:scroll.window="if (menu) positionToolsPopover()">
-    <h2 id="chat-heading-{{ $this->getId() }}" class="sr-only">Your tutor</h2>
+    <h2 id="chat-heading-{{ $this->getId() }}" class="sr-only">{{ $vistud ? 'ViStud AI' : 'Your tutor' }}</h2>
 
     {{-- Floating Quote / Reply pill on text selection in the chat --}}
     <div id="chat-selection-quote-pill-{{ $this->getId() }}" class="chat-selection-quote-pill" data-chat-quote-pill x-ref="quotePill" popover="manual" hidden>
@@ -36,7 +37,35 @@
             <a href="{{ route('settings', ['part' => 'ai']) }}" class="btn btn-primary"><x-icon name="brain" class="size-4" />AI settings</a>
         </div>
     @else
-        @if ($turns === [])
+        @if ($turns === [] && (($onTopic ?? null) || $vistud))
+            {{-- A topic's empty chat, or ViStud AI's: what it is about, and four ways in as cards (two by two from a tablet up). --}}
+            <div class="chat-empty chat-empty-topic" x-show="! live">
+                <span class="chat-empty-badge" aria-hidden="true"><x-icon name="sparkles" class="size-5" /></span>
+                @if ($vistud)
+                    <p class="chat-empty-title">Ask me anything about your study</p>
+                    <p class="chat-empty-hint">I see all your courses, deadlines and sessions, and what your tutors remember about you.</p>
+                @else
+                    <p class="chat-empty-title">Ask anything about {{ $onTopic }}</p>
+                    <p class="chat-empty-hint">Taught from this topic's notes, files and key points, at your level.</p>
+                @endif
+                @if ($open)
+                    <ul class="chat-starters" role="list">
+                        @foreach ($starters as $starter)
+                            <li>
+                                <button type="button" class="chat-starter" x-on:click="say(@js($starter['prompt']))" x-bind:disabled="live" title="{{ $starter['prompt'] }}">
+                                    <span class="chat-starter-icon" aria-hidden="true"><x-icon :name="$starter['icon']" class="size-4" /></span>
+                                    <span class="chat-starter-text">
+                                        <span class="chat-starter-title">{{ $starter['title'] }}</span>
+                                        <span class="chat-starter-hint">{{ $starter['hint'] }}</span>
+                                    </span>
+                                    <x-icon name="arrow-right" class="chat-starter-go size-4" />
+                                </button>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </div>
+        @elseif ($turns === [])
             <div class="chat-empty" x-show="! live">
                 <p class="font-medium">Say hello, or ask about anything in this course.</p>
                 <p class="text-sm text-fg-muted">The tutor already knows where you stand: your topics, questions, notes and earlier sessions. It looks things up rather than guessing.</p>
@@ -49,11 +78,25 @@
                 @endif
             </div>
         @endif
+        @if (($onTopic ?? null) && $turns !== [])
+            {{-- A topic's chat starts over from here (a session's, from the session's page). --}}
+            <div class="chat-topic-bar">
+                <button type="button" class="btn btn-ghost btn-sm" wire:click="startOver" wire:confirm="Start this chat over? The conversation is cleared." x-bind:disabled="live">
+                    <x-icon name="rotate-ccw" class="size-4" />Start over
+                </button>
+            </div>
+        @endif
         <ol class="chat-log" role="list" aria-label="The chat" tabindex="0" x-ref="log"
             x-on:scroll.passive="onScroll()"
             x-on:wheel.passive="onWheel($event)"
             x-show="live || $el.querySelector('[data-turn]') !== null" @if ($turns === []) x-cloak @endif>
             @foreach ($turns as $i => $turn)
+                @if ($turn['topicChangeWords'])
+                    {{-- Where the student changed the session's topic on its page (the tutor's own changes show under its reply). --}}
+                    <li wire:key="topic-change-{{ $i }}" class="chat-topic-change" x-show="!live || {{ $i }} < turnCount">
+                        <span class="chat-topic-change-text"><x-icon name="tag" class="size-3.5" />{{ $turn['topicChangeWords'] }}</span>
+                    </li>
+                @endif
                 <li wire:key="turn-{{ $i }}" data-turn @class(['chat-turn', 'is-me' => $turn['role'] === 'user', 'is-tutor' => $turn['role'] === 'assistant']) x-show="!live || {{ $i }} < turnCount">
                     @if ($turn['role'] === 'user')
                         @if ($turn['text'] !== '')
@@ -77,7 +120,7 @@
                                     <div class="chat-bubble-quote" title="Quoted excerpt">
                                         <div class="chat-bubble-quote-bar">
                                             <x-icon name="text-quote" class="size-3 text-accent" />
-                                            <span class="chat-bubble-quote-label">Quoting tutor</span>
+                                            <span class="chat-bubble-quote-label">Quoting {{ $vistud ? 'ViStud AI' : 'tutor' }}</span>
                                         </div>
                                         <blockquote class="chat-bubble-quote-text">{{ $quotedText }}</blockquote>
                                     </div>
@@ -125,7 +168,7 @@
                             {{-- A finished reply never changes; ignored by updates, so its drawn diagrams and formulas stay. --}}
                             <div class="chat-bubble chat-markdown" wire:ignore>{!! $turn['html'] !!}</div>
                         @endif
-                        @if ($turn['savedWords'] || $turn['notes'] !== [] || ($turn['topic'] ?? null) !== null)
+                        @if ($turn['savedWords'] || $turn['notes'] !== [] || ($turn['topic'] ?? null) !== null || $turn['remembered'] !== [])
                             {{-- What the tutor did in the course this turn: the session's topic, saved, and the notes it wrote in (open beside the chat). --}}
                             <ul class="chat-files chat-did" role="list" aria-label="Done in your course">
                                 @if (($turn['topic'] ?? null) !== null)
@@ -136,6 +179,17 @@
                                 @endif
                                 @foreach ($turn['notes'] as $note)
                                     <li><a class="chat-file" href="{{ $note['url'] }}" target="_blank" data-note-window x-on:click.prevent="$dispatch('session-open-note', { url: @js($note['url']), title: @js($note['title']) })"><x-icon name="notebook-pen" class="size-4" /><span class="truncate">Wrote in {{ $note['title'] }}</span></a></li>
+                                @endforeach
+                                {{-- What the tutor remembered about the student, with a tap to forget it (all of it is in Instructions for the AI). --}}
+                                @foreach ($turn['remembered'] as $memory)
+                                    <li class="chat-mark" wire:key="remembered-{{ $i }}-{{ $memory['id'] }}">
+                                        @if ($memory['kept'])
+                                            <button type="button" class="chat-file" title="See and change what your tutor remembers" x-on:click="Livewire.dispatch('memories-open', { id: @js($memory['id']) })"><x-icon name="brain" class="size-4" /><span class="truncate">Remembered: {{ $memory['text'] }}</span></button>
+                                            <button type="button" class="chat-file-action" wire:click="forgetMemory('{{ $memory['id'] }}')">Forget<span class="sr-only"> that</span></button>
+                                        @else
+                                            <span class="chat-file" title="{{ $memory['text'] }}"><x-icon name="undo-2" class="size-4" /><span class="truncate">Forgotten: {{ $memory['text'] }}</span></span>
+                                        @endif
+                                    </li>
                                 @endforeach
                             </ul>
                         @endif
@@ -181,6 +235,11 @@
                     @endif
                 </li>
             @endforeach
+            @if ($topicChangeAfter)
+                <li wire:key="topic-change-after" class="chat-topic-change">
+                    <span class="chat-topic-change-text"><x-icon name="tag" class="size-3.5" />{{ $topicChangeAfter }}</span>
+                </li>
+            @endif
             {{-- The turn under way: the student's words at once, then the answer as it streams in. --}}
             <li wire:key="live-me" class="chat-turn is-me" x-show="pending !== '' || pendingFiles.length > 0" x-cloak>
                 <template x-if="pendingQuote !== ''">
@@ -188,7 +247,7 @@
                         <div class="chat-bubble-quote" title="Quoted excerpt">
                             <div class="chat-bubble-quote-bar">
                                 <x-icon name="text-quote" class="size-3 text-accent" />
-                                <span class="chat-bubble-quote-label">Quoting tutor</span>
+                                <span class="chat-bubble-quote-label">Quoting {{ $vistud ? 'ViStud AI' : 'tutor' }}</span>
                             </div>
                             <blockquote class="chat-bubble-quote-text" x-text="pendingQuote"></blockquote>
                         </div>
@@ -306,7 +365,14 @@
             </div>
             @if ($waiting)
                 <div class="chat-retry" x-show="! live">
-                    <p class="text-sm text-fg-muted">The tutor hasn't answered your last message.</p>
+                    @if ($vistud)
+                        <p class="text-sm text-fg-muted">ViStud AI hasn't answered your last message.</p>
+                    @else
+                        <p class="text-sm text-fg-muted">The tutor hasn't answered your last message.</p>
+                    @endif
+                    @if ($trouble)
+                        <p class="chat-retry-why">{{ $trouble['message'] }} <a href="{{ route('settings', ['part' => 'ai']) }}#try-models" wire:navigate>Try your models</a></p>
+                    @endif
                     <x-button size="sm" icon="rotate-ccw" x-on:click="retry()">Try again</x-button>
                 </div>
             @endif
@@ -354,25 +420,25 @@
                         </template>
                         <li class="chat-file" x-show="uploading > 0" role="status"><x-icon name="loader-circle" class="size-4 animate-spin" />Uploading…</li>
                     </ul>
-                    <div class="chat-dictation-pill" x-show="transcribing" x-cloak role="status" aria-live="polite">
-                        <div class="chat-dictation-waves" aria-hidden="true">
+                    {{-- Voice typing (resources/js/dictation.js): the words go straight into the box below as they're said. --}}
+                    <div class="chat-dictation-pill" x-show="transcribing" x-cloak x-bind:class="{ 'is-quiet': ! hearing }">
+                        <span class="chat-dictation-waves" aria-hidden="true">
                             <span class="chat-dictation-wave"></span>
                             <span class="chat-dictation-wave"></span>
                             <span class="chat-dictation-wave"></span>
                             <span class="chat-dictation-wave"></span>
                             <span class="chat-dictation-wave"></span>
-                        </div>
-                        <div class="chat-dictation-body">
-                            <span class="chat-dictation-status">Listening…</span>
-                            <span class="chat-dictation-preview" x-text="interimSpeech ? interimSpeech : 'Speak now…'"></span>
-                        </div>
+                        </span>
+                        <span class="chat-dictation-status" role="status" aria-live="polite" x-text="hearing ? 'Hearing you…' : 'Listening…'">Listening…</span>
+                        <span class="chat-dictation-time" x-text="dictationTime" aria-hidden="true">0:00</span>
+                        <span class="chat-dictation-hint"><kbd>Enter</kbd> sends · <kbd>Esc</kbd> or <kbd>Alt+S</kbd> stops</span>
                         <div class="chat-dictation-actions">
-                            <button type="button" class="chat-dictation-done-btn" x-on:click="stopDictation(true)" title="Done dictating" aria-label="Done dictating">
-                                <x-icon name="check" class="size-3" />
+                            <button type="button" class="chat-dictation-done-btn" x-on:click="stopDictation(true)" title="Stop listening and keep the words (Esc)">
+                                <x-icon name="check" class="size-3.5" />
                                 <span>Done</span>
                             </button>
-                            <button type="button" class="chat-dictation-cancel-btn" x-on:click="cancelDictation()" title="Cancel dictation" aria-label="Cancel dictation">
-                                <x-icon name="x" class="size-3.5" />
+                            <button type="button" class="chat-dictation-cancel-btn" x-on:click="cancelDictation()" title="Stop and take out what you said" aria-label="Discard what you said">
+                                <x-icon name="trash-2" class="size-4" />
                             </button>
                         </div>
                     </div>
@@ -490,9 +556,12 @@
                         </div>
                     </div>
 
-                    <label for="chat-box-{{ $this->getId() }}" class="sr-only">Write to your tutor</label>
+                    @php $boxWords = $vistud ? 'Ask ViStud AI… (Enter sends, Shift+Enter for a new line)' : 'Write to your tutor… (Enter sends, Shift+Enter for a new line, @ to mention files & notes)'; @endphp
+                    <label for="chat-box-{{ $this->getId() }}" class="sr-only">{{ $vistud ? 'Ask ViStud AI' : 'Write to your tutor' }}</label>
                     <textarea id="chat-box-{{ $this->getId() }}" class="chat-box" rows="1" x-model="draft" x-ref="box" maxlength="8000"
-                        placeholder="Write to your tutor… (Enter sends, Shift+Enter for a new line, @ to mention files &amp; notes)" x-bind:disabled="live"
+                        placeholder="{{ $boxWords }}" x-bind:disabled="live"
+                        x-bind:class="{ 'is-dictating': transcribing }"
+                        x-bind:placeholder="transcribing ? 'Speak now. Your words appear here as you say them.' : @js($boxWords)"
                         x-on:input="handleInput($event)"
                         x-on:click="checkMentionTrigger()"
                         x-on:keyup="checkMentionTrigger()"
@@ -502,6 +571,8 @@
 
                 <div class="chat-compose-bar">
                     <div class="chat-compose-tools" role="toolbar" aria-label="Attachments and models">
+                        {{-- ViStud AI works across courses: no one course's notes and files to attach or mention. --}}
+                        @unless ($vistud)
                         <div class="chat-attach" x-on:keydown.escape.stop="picking = false" x-on:click.outside="picking = false">
                             <button type="button" class="chat-tool-btn chat-add-btn" :class="{ 'is-active': picking }" x-on:click="picking = ! picking; menu = false" x-bind:aria-expanded="picking.toString()"
                                 aria-controls="chat-picker-{{ $this->getId() }}" aria-label="Add file, photo or note" title="Add file, photo or note" x-bind:disabled="busy">
@@ -543,13 +614,17 @@
                             </div>
                         </div>
 
+                        @endunless
+
                         <button type="button" class="chat-tool-btn" :class="{ 'is-active': formatOpen }" x-on:click="formatOpen = ! formatOpen" x-bind:aria-expanded="formatOpen.toString()" title="Text formatting (Aa)" aria-label="Text formatting">
                             <span class="text-xs font-semibold leading-none">Aa</span>
                         </button>
 
-                        <button type="button" class="chat-tool-btn" :class="{ 'is-active': mentionOpen }" x-on:click="openMentionPicker()" title="Mention a file or note (@)" aria-label="Mention a file or note">
-                            <x-icon name="at-sign" class="size-3.5" />
-                        </button>
+                        @unless ($vistud)
+                            <button type="button" class="chat-tool-btn" :class="{ 'is-active': mentionOpen }" x-on:click="openMentionPicker()" title="Mention a file or note (@)" aria-label="Mention a file or note">
+                                <x-icon name="at-sign" class="size-3.5" />
+                            </button>
+                        @endunless
 
                         <div class="chat-format-group" x-show="formatOpen" x-cloak x-transition>
                             <span class="chat-tool-divider" aria-hidden="true"></span>
@@ -616,8 +691,10 @@
                             x-show="speechSupported"
                             x-cloak
                             x-on:click="toggleDictation()"
-                            :title="transcribing ? 'Stop dictating' : 'Dictate with voice'"
-                            :aria-label="transcribing ? 'Stop dictating' : 'Dictate with voice'"
+                            :title="transcribing ? 'Stop listening and keep the words (Esc or Alt+S)' : 'Speak instead of typing (Alt+S)'"
+                            :aria-label="transcribing ? 'Stop listening' : 'Speak instead of typing'"
+                            aria-keyshortcuts="Alt+S"
+                            :aria-pressed="transcribing.toString()"
                             x-bind:disabled="busy">
                             <span x-show="! transcribing"><x-icon name="mic" class="size-4" /></span>
                             <span x-show="transcribing" x-cloak><x-icon name="mic-off" class="size-4" /></span>

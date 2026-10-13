@@ -62,7 +62,7 @@ class OpenRouterTest extends TestCase
     public function test_failures_become_plain_messages_without_the_key(): void
     {
         $engine = app(OpenRouter::class);
-        $statuses = [401 => 'refused the key', 402 => 'out of credit', 404 => 'does not know that model', 429 => 'busy right now', 500 => 'down right now'];
+        $statuses = [401 => 'refused the key', 402 => 'out of credit', 404 => "doesn't offer that model", 429 => 'limiting this key', 500 => 'down right now'];
         $sequence = Http::sequence();
         foreach (array_keys($statuses) as $status) {
             $sequence->push(['error' => ['message' => 'Provider said no']], $status);

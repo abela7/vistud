@@ -24,7 +24,8 @@ use Illuminate\Support\Facades\Log;
  *   (the same question asked again is the same task), the task exercises
  *   the topic, and the answer is an attempt judged by the AI, in this
  *   session, which is what the mastery rules count;
- * - a proposed status is applied only if the student ticks it;
+ * - a proposed status is applied only if the student ticks it, and so is something the tutor would remember
+ *   about them (App\Study\TutorMemories), while they let it;
  * - the summary and the last checkpoint stay on the session, for the next
  *   briefing; and a session note gathers it all in the module.
  *
@@ -32,6 +33,9 @@ use Illuminate\Support\Facades\Log;
  */
 final class WriteBack
 {
+    /** Who judged the answers in a chat pasted back from elsewhere: an AI ViStud can't name. */
+    public const PASTED = ['model' => 'unknown', 'prompt' => 'tutor', 'via' => 'pasted'];
+
     public function __construct(
         private Sessions $sessions,
         private Topics $topics,
@@ -41,6 +45,7 @@ final class WriteBack
         private Notes $notes,
         private Memory $memory,
         private JournalStore $journal,
+        private TutorMemories $memories,
     ) {}
 
     /**
@@ -85,16 +90,20 @@ final class WriteBack
             }
         }
 
+        $remembers = $this->memories->enabled($by);
         $reviewed = [];
         foreach (array_values($items) as $item) {
-            if (! in_array($item['kind'], ['summary', 'checkpoint'], true)) {
+            if ($item['kind'] === 'remember' && ! $remembers) {
+                continue;
+            }
+            if (! in_array($item['kind'], ['summary', 'checkpoint', 'remember'], true)) {
                 $match = $item['topic'] !== null ? ($names[mb_strtolower($item['topic'])] ?? null) : $sessionTopic;
                 $item['topic_id'] = $match?->id ?? 'new';
                 $item['topic_name'] = $match?->name ?? ($item['topic'] ?? 'General');
             }
             $item['saved'] = isset($captured[$item['fingerprint']]);
-            // Statuses are the student's decision: never ticked for them.
-            $item['include'] = ! $item['saved'] && $item['kind'] !== 'status';
+            // Statuses, and what is kept about them, are the student's decision: never ticked for them.
+            $item['include'] = ! $item['saved'] && ! in_array($item['kind'], ['status', 'remember'], true);
             $reviewed[] = $item;
         }
 
@@ -102,13 +111,18 @@ final class WriteBack
     }
 
     /**
-     * Saves the ticked items. Returns what was saved, by kind, and the items
-     * that couldn't be (with the reason), so the screen can say so.
+     * Saves the ticked items. Returns what was saved, by kind, the ids of the
+     * flashcards, key points and questions made, and the items that couldn't
+     * be (with the reason), so the screen can say so.
+     *
+     * $judge is the AI that judged the answers, kept with each (Vocabulary::JUDGE_VIA); left out, a chat pasted back
+     * from elsewhere, by a model ViStud can't name.
      *
      * @param  list<array<string, mixed>>  $items  as review() gave them, possibly edited
-     * @return array{saved: array<string, int>, failed: list<array{0: int, 1: string}>}
+     * @param  ?array{model: string, prompt: string, via: string}  $judge
+     * @return array{saved: array<string, int>, ids: array<string, list<string>>, failed: list<array{0: int, 1: string}>}
      */
-    public function apply(Principal $by, string $sessionId, array $items, bool $note = true): array
+    public function apply(Principal $by, string $sessionId, array $items, bool $note = true, ?array $judge = null): array
     {
         $session = $this->sessions->find($by, $sessionId);
         $scope = Guard::learner($by);
@@ -123,6 +137,7 @@ final class WriteBack
         $quiz = $session->tutoring['quiz'] ?? 'normal';
 
         $saved = [];
+        $ids = [];
         $failed = [];
         $fingerprints = [];
         $kept = [];
@@ -131,16 +146,19 @@ final class WriteBack
                 continue;
             }
             try {
-                $topicId = in_array($item['kind'], ['summary', 'checkpoint'], true) ? null : $this->topicFor($by, $session, $item, $topics, $moduleId, $folderId);
+                $topicId = in_array($item['kind'], ['summary', 'checkpoint', 'remember'], true) ? null : $this->topicFor($by, $session, $item, $topics, $moduleId, $folderId);
                 $topicName = $topicId !== null ? $topics[$topicId]->name : null;
-                match ($item['kind']) {
+                $made = match ($item['kind']) {
                     'flashcard' => $this->flashcards->add($by, $session->workspaceId, $topicId, $item['front'] ?? '', $item['back'] ?? '', 'ai', $session->id, $topicId === null ? $moduleId : null),
                     'finding' => $this->findings->add($by, $topicId, ['text' => (string) ($item['text'] ?? '')], 'ai'),
                     'question' => $this->questions->ask($by, $session->workspaceId, (string) ($item['text'] ?? ''), $topicId, $topicId !== null ? ($topics[$topicId]->moduleId ?? $moduleId) : $moduleId, $session->id),
-                    'attempt' => $this->attempt($scope, $by, $session, $topicId, $item, $at, $quiz),
+                    'attempt' => $this->attempt($scope, $by, $session, $topicId, $item, $at, $quiz, $judge ?? self::PASTED),
                     'status' => $this->topics->report($by, $topicId, (string) ($item['proposed'] ?? '')),
                     'summary' => $this->sessions->setSummary($by, $session->id, (string) ($item['text'] ?? '')),
                     'checkpoint' => $this->sessions->setCheckpoint($by, $session->id, (string) ($item['text'] ?? '')),
+                    'remember' => $this->memories->enabled($by)
+                        ? $this->memories->add($by, ($item['everywhere'] ?? false) === true ? null : $session->workspaceId, (string) ($item['text'] ?? ''), 'tutor', $session->id)
+                        : throw new Unprocessable('Remembering is turned off in your AI settings.'),
                 };
             } catch (Unprocessable $e) {
                 $fields = $e->details['fields'] ?? [];
@@ -155,6 +173,16 @@ final class WriteBack
                 continue;
             }
             $saved[$item['kind']] = ($saved[$item['kind']] ?? 0) + 1;
+            $madeId = match ($item['kind']) {
+                'flashcard' => is_string($made) ? $made : null,
+                'finding', 'question' => $made->id,
+                // An answer to a check question: the journal entry, so a quiz can take it back (Quizzes::delete).
+                'attempt' => is_string($made) ? $made : null,
+                default => null,
+            };
+            if ($madeId !== null) {
+                $ids[$item['kind']][] = $madeId;
+            }
             $fingerprints[] = is_string($item['fingerprint'] ?? null) && preg_match('/^[0-9a-f]{40}$/', $item['fingerprint']) ? $item['fingerprint'] : Capture::fingerprint($item);
             $kept[] = $item + ['topic_label' => $topicName ?? null];
         }
@@ -167,7 +195,7 @@ final class WriteBack
             $this->sessions->remember($by, $session->id, $fingerprints, $noteId);
         }
 
-        return ['saved' => $saved, 'failed' => $failed];
+        return ['saved' => $saved, 'ids' => $ids, 'failed' => $failed];
     }
 
     /**
@@ -201,15 +229,14 @@ final class WriteBack
      * claim that the task exercises the topic, and the attempt, judged by the
      * AI, in this session.
      */
-    private function attempt(LearnerScope $scope, Principal $by, SessionDetails $session, string $topicId, array $item, string $at, string $quiz): void
+    private function attempt(LearnerScope $scope, Principal $by, SessionDetails $session, string $topicId, array $item, string $at, string $quiz, array $judge): string
     {
         $asked = trim((string) ($item['asked'] ?? ''));
         Input::refuse($asked === '' ? ['asked' => 'Say what was asked.'] : (mb_strlen($asked) > Capture::LIMITS['asked'] ? ['asked' => 'That question is too long.'] : []));
         $answer = mb_substr(trim((string) ($item['answer'] ?? '')), 0, Capture::LIMITS['answer']);
         // The tutor's feedback, kept with the answer: what was right, and what to fix.
         $feedback = array_filter(['right' => mb_substr(trim((string) ($item['right'] ?? '')), 0, Capture::LIMITS['right']), 'fix' => mb_substr(trim((string) ($item['fix'] ?? '')), 0, Capture::LIMITS['fix'])], fn (string $text) => $text !== '');
-        $normalised = mb_strtolower(trim((string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', $asked)));
-        $taskId = 'chat-'.substr(sha1($session->workspaceId.'|'.$normalised), 0, 40);
+        $taskId = self::taskIdFor($session->workspaceId, $asked);
         $result = in_array($item['result'] ?? null, Capture::RESULTS, true) ? $item['result'] : 'unjudged';
         $form = in_array($item['form'] ?? null, Capture::FORMS, true) ? $item['form'] : ($quiz === 'easy' ? 'recall' : 'apply');
         $link = fn (array $spec) => $spec + ['session' => $session->id];
@@ -225,12 +252,23 @@ final class WriteBack
         if (! $this->exercises($scope, $taskId, $topicId)) {
             $specs[] = $link(Memory::claim($scope, $by, 'relates', ["task:{$taskId}", "topic:{$topicId}"], ['relation' => 'exercises', 'status' => 'active'], [], $at));
         }
-        $specs[] = $link(Memory::observation($scope, $by, 'attempt', [
+        $attempt = $link(Memory::observation($scope, $by, 'attempt', [
             'task' => $taskId, 'form' => $form, 'support' => ($item['support'] ?? null) === 'hinted' ? 'hinted' : 'unaided',
-            'setting' => 'chat', 'outcome' => $result, 'judged_by' => 'ai',
+            'setting' => 'chat', 'outcome' => $result, 'judged_by' => 'ai', 'judge' => $judge,
         ], [], array_filter(['answer' => $answer], fn (string $text) => $text !== '') + $feedback, $at));
+        $specs[] = $attempt;
 
         $this->memory->append($scope, $specs);
+
+        return $attempt['id'];
+    }
+
+    /** The task a check question is in the journal: its id comes from its words, so asking it again is the same task. */
+    public static function taskIdFor(string $workspaceId, string $asked): string
+    {
+        $normalised = mb_strtolower(trim((string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', $asked)));
+
+        return 'chat-'.substr(sha1($workspaceId.'|'.$normalised), 0, 40);
     }
 
     /** Whether a claim already says the task exercises the topic. */

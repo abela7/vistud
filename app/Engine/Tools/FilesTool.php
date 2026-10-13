@@ -20,7 +20,7 @@ final class FilesTool implements Tool
 
     public function description(): string
     {
-        return 'The files (slides, PDFs, Word documents, pictures) and web links kept in this course, or in one module: their names, types and sizes. Read a file\'s contents with read_file.';
+        return 'The files (slides, PDFs, Word documents, pictures) and web links kept in this course, or in one module: their names, types, sizes and upload dates. Read a file\'s contents, and how long it is (pages, slides, sheets), who made it and when, with read_file.';
     }
 
     public function parameters(): array
@@ -47,7 +47,7 @@ final class FilesTool implements Tool
         $rows = [];
         foreach ($this->files->list($by, $context->workspaceId) as $file) {
             if ($only === null || $file->moduleId === $only) {
-                $rows[] = array_filter(['file' => $file->fileName(), 'type' => $file->typeLabel(), 'size' => $file->humanSize(), 'module' => $file->moduleId !== null ? $titles[$file->moduleId] ?? null : null, 'folder' => $file->folderId !== null ? $folderNames[$file->folderId] ?? null : null]);
+                $rows[] = array_filter(['file' => $file->fileName(), 'type' => $file->typeLabel(), 'size' => $file->humanSize(), 'uploaded' => substr($file->uploadedAt, 0, 10), 'module' => $file->moduleId !== null ? $titles[$file->moduleId] ?? null : null, 'folder' => $file->folderId !== null ? $folderNames[$file->folderId] ?? null : null]);
             }
         }
         foreach ($this->links->list($by, $context->workspaceId) as $link) {

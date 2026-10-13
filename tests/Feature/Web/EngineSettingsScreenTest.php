@@ -3,10 +3,12 @@
 namespace Tests\Feature\Web;
 
 use App\Engine\Engine;
+use App\Engine\EngineFailed;
 use App\Engine\Fake;
 use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Engine\Setup;
+use App\Engine\Troubles;
 use App\Livewire\Study\EngineSettings;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Database\LearnerTables;
@@ -52,7 +54,7 @@ class EngineSettingsScreenTest extends TestCase
         $page = Livewire::test(EngineSettings::class)->assertSet('sessionCap', '2.00')->assertSet('monthCap', '20.00')->assertSet('consent', false)
             ->set('key', 'nope')->call('saveKey')->assertHasErrors(['key'])
             ->set('key', 'sk-or-v1-abcdefghijklmnopqrstuvwxyz')->call('saveKey')->assertHasNoErrors()->assertSet('key', '')
-            ->assertSee('Your key is saved and works.')->assertSee('It works: the service offers 3 models.')->assertSee('Your key ending …wxyz')->assertSee('Replace your key')
+            ->assertSee('Your OpenRouter key is saved and works.')->assertSee('It works: OpenRouter offers 3 models.')->assertSee('OpenRouter key ending …wxyz')->assertSee('Replace your key')
             // The models are offered with their prices once a key works.
             ->assertSee('Fake tutor · $1.00 in · $5.00 out per million tokens');
         $this->assertSame('sk-or-v1-abcdefghijklmnopqrstuvwxyz', app(Settings::class)->key($by));
@@ -66,6 +68,46 @@ class EngineSettingsScreenTest extends TestCase
 
         $page->call('askRemove')->assertSee('Remove your key?')->call('removeKey')->assertSee('Your key is removed.')->assertSee('Not set up');
         $this->assertNull(app(Settings::class)->key($by));
+    }
+
+    public function test_recommended_models_are_shown_with_their_price_and_open_their_providers_billing_page(): void
+    {
+        $this->actingAs($this->student());
+        Livewire::test(EngineSettings::class)->assertSee('Recommended models')->assertSee('Smartest')->assertSee('Best value')->assertSee('Cheapest')
+            ->assertSee('DeepSeek V4 Pro')->assertSee('About $0.24 a session')
+            ->assertSeeHtml('href="https://platform.deepseek.com/top_up"')->assertSeeHtml('target="_blank"')->assertSee('Get a DeepSeek key')
+            ->assertDontSee('GPT-6 Astra');
+    }
+
+    public function test_the_models_are_tried_before_a_session_and_the_last_problem_is_shown(): void
+    {
+        $engine = new Fake;
+        $this->app->instance(Engine::class, $engine);
+        $ada = $this->student();
+        $by = $this->principal($ada);
+        $this->actingAs($ada);
+
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick']);
+        // Saving a key tries each role's model at once: here the tutor's plan runs none of it.
+        $engine->will(fn () => throw new EngineFailed('engine_limit', "Google Gemini won't run this model on your plan."), Fake::says('OK'));
+        $page = Livewire::test(EngineSettings::class)->assertDontSee('Try your models')
+            ->set('key', 'sk-or-v1-abcdefghijklmnopqrstuvwxyz')->call('saveKey')
+            ->assertSee('Try your models')->assertSee("Google Gemini won't run this model on your plan.")->assertSee('Answered: “OK”');
+        $this->assertFalse($page->get('checks')['Tutor']['ok']);
+        $this->assertTrue($page->get('checks')['Reader']['ok']);
+
+        // The little chat: one message to one model, its answer or why not.
+        $engine->will(Fake::says('Hello there.'));
+        $page->set('tryModel', 'fake/quick')->set('tryText', 'Hi')->call('sendTry')->assertSee('Hello there.')->assertSee('fake/quick')->assertSet('tryText', '');
+        $this->assertSame('fake/quick', $engine->requests[array_key_last($engine->requests)]->model);
+        $page->call('clearTry')->assertSet('trial', []);
+
+        // A failure in the chat is kept, so the page and the chat's "hasn't answered" can say why after a reload.
+        app(Troubles::class)->note($by, 'tutor', 'fake/tutor', new EngineFailed('engine_limit', 'Out of quota for this model.'));
+        Livewire::test(EngineSettings::class)->assertSee('Last problem · Tutor · fake/tutor')->assertSee('Out of quota for this model.');
+        $engine->will(Fake::says('OK'), Fake::says('OK'));
+        Livewire::test(EngineSettings::class)->call('checkModels')->assertDontSee('Last problem');
+        $this->assertNull(app(Troubles::class)->last($by));
     }
 
     public function test_with_the_owners_key_the_chat_works_already_and_an_admin_is_pointed_to_the_shared_set_up(): void

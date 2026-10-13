@@ -2,6 +2,8 @@
 
 namespace App\Study;
 
+use App\Appearance\CourseColour;
+
 /** A student's workspace, as the screens see it (docs/specs/workspaces.md). */
 final readonly class WorkspaceDetails
 {
@@ -24,6 +26,18 @@ final readonly class WorkspaceDetails
     public function archived(): bool
     {
         return $this->archivedAt !== null;
+    }
+
+    /** The class that gives an element the course's colour, a category's or its own (App\Appearance\CourseColour). */
+    public function colourClass(): string
+    {
+        return CourseColour::classFor($this->colour);
+    }
+
+    /** The variables a colour of the course's own sets; empty for a category. */
+    public function colourStyle(): string
+    {
+        return CourseColour::style($this->colour);
     }
 
     /** The line under the name: "BIO101 · Autumn 2026". */

@@ -3,4 +3,4 @@
 @php
     [$box, $icon] = ['sm' => ['size-6', 'size-3.5'], 'md' => ['', 'size-4'], 'lg' => ['size-11', 'size-5']][$size];
 @endphp
-<span {{ $attributes->class(['ws-chip', "ws-colour-{$workspace->colour}", $box]) }} aria-hidden="true"><x-icon :name="$workspace->icon" :class="$icon" /></span>
+<span {{ $attributes->class(['ws-chip', $workspace->colourClass(), $box])->merge(['style' => $workspace->colourStyle() ?: null]) }} aria-hidden="true"><x-icon :name="$workspace->icon" :class="$icon" /></span>

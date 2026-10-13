@@ -142,7 +142,7 @@ Each checkpoint takes the belief view: every entry up to that position, with "no
 | Thu 22 Oct 19:05 | **working** |
 | 19:12 | secure |
 | Tue 17 Nov 18:05 | durable |
-| Sat 16 Jan 2027 18:05 | durable, needs_review |
+| Sat 16 Jan 2027 18:06 | durable, needs_review (due just after 18:05: exactly 60 days after E14 is not yet longer than the interval) |
 | Wed 3 Feb 19:42 | developing, regressed |
 
 The belief view in the checkpoints never shows "working" for LFILTER. The verdicts on E12 and E13 were both recorded at 19:42, so it jumped straight from checkpoint 8 to checkpoint 9. The current view places each piece of evidence at the time it occurred: E12 alone (together with E10) resolves M1 at 19:05, and E13 makes the topic secure.

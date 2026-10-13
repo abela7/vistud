@@ -192,11 +192,13 @@ class AiMenuScreenTest extends TestCase
         $this->sheet()->dispatch('ai-assist', action: 'file.summarise', id: $file->id)->call('run')
             ->assertSee('How the CPU picks the next process.')->assertSee('Round robin · Priorities')->assertSee('Scheduling');
         $this->assertTrue(app(FileDigests::class)->find($this->by, $file->id)->read());
-        $this->assertCount(1, $this->engine->requests);
+        // One reading (the choosing of the module's main topics that follows it is ChooseTopicsTest's).
+        $readings = fn () => count(array_filter($this->engine->requests, fn ($r) => str_contains($r->system, 'You read one file')));
+        $this->assertSame(1, $readings());
 
         // Already read: no second call, and the topics go to the module as suggestions, not as topics.
         $this->sheet()->dispatch('ai-assist', action: 'file.topics', id: $file->id)->call('run')->assertSee('Nothing new')->assertSee('Round robin, Priorities');
-        $this->assertCount(1, $this->engine->requests);
+        $this->assertSame(1, $readings());
         $waiting = app(TopicSuggestions::class)->list($this->by, $this->module);
         $this->assertSame(['Round robin', 'Priorities'], array_map(fn ($s) => $s->name, $waiting), 'the reading itself put them there');
         $this->assertCount(1, app(Topics::class)->list($this->by, $this->workspace));

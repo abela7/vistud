@@ -48,7 +48,6 @@ final class RenameTopicTool implements Tool
         if ($context->sessionId !== null) {
             $context->effects->topic($newName, $topic->id);
         }
-        $context->effects->saved('topic', 1);
 
         return "Renamed topic \"{$topic->name}\" to \"{$newName}\".";
     }

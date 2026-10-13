@@ -370,14 +370,14 @@ final class AiAssist extends Component
                 $lines = $proposal['questions'] ?? [];
                 $this->questions->update($by, $id, $lines[0] ?? '');
                 if (($proposal['verb'] ?? '') === 'split' && isset($lines[1])) {
-                    $this->questions->ask($by, $question->workspaceId, $lines[1], $question->topicId, $question->moduleId);
+                    $this->questions->ask($by, $question->workspaceId, $lines[1], $question->topicId, $question->moduleId, $question->sessionId, $question->folderId);
                 }
                 $this->dispatch('questions-changed');
 
                 return ($proposal['verb'] ?? '') === 'split' ? 'The question is now two.' : 'The question is clearer.';
             case 'answer':
                 $from = $proposal['from'] ?? [];
-                $this->questions->setStatus($by, $id, 'answered', trim(($proposal['answer'] ?? '').' (From your notes'.($from === [] ? '' : ': '.implode(', ', $from)).'.)'));
+                $this->questions->setStatus($by, $id, 'answered', trim(($proposal['answer'] ?? '').' (From your notes'.($from === [] ? '' : ': '.implode(', ', $from)).'.)'), theirWord: false);
                 $this->dispatch('questions-changed');
 
                 return 'The answer is kept on the question.';

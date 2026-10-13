@@ -23,7 +23,7 @@
 @endphp
 <div class="mx-auto max-w-7xl space-y-5" x-data="{ edit: {{ $new ? 'true' : 'false' }}, sure: false }" x-on:details-saved.window="edit = false">
     <x-workspace.section-header :workspace="$workspace" :title="$new ? 'New assignment' : $assignment->title" :back-href="$backUrl" back-to="Assignments"
-        :eyebrow="$workspace->name.($moduleTitle ? ' · '.$moduleTitle : '').($new ? '' : ' · '.$assignment->kindLabel())">
+        :eyebrow="$workspace->name.($moduleTitle ? ' · '.$moduleTitle : '').($new ? '' : ' · '.$assignment->kindLabel())" stack>
         @unless ($new)
             @if ($assignment->dueOn !== null)
                 <span @class(['assignment-deadline', 'asg-due', "ws-colour-{$urgency}"])>

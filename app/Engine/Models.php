@@ -6,9 +6,10 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * The models the service offers, kept for a day (the list is long and changes rarely), so the settings can
- * show them with their prices and the chat can tell what a model takes. The list is the same for every key, so
- * one copy serves everyone, asked with whatever key is at hand. When the service can't be asked, the list is
- * empty and nothing is kept.
+ * show them with their prices and the chat can tell what a model takes. OpenRouter's list is the same for every key,
+ * so one copy serves everyone, asked with whatever key is at hand; a provider's own list can differ from one account
+ * to the next, so it is kept for its key (by a hash of it, never the key). When the service can't be asked, the list
+ * is empty and nothing is kept.
  */
 final class Models
 {
@@ -19,10 +20,11 @@ final class Models
     /** @return list<Model> */
     public function all(bool $fresh = false, ?string $key = null): array
     {
+        $cacheKey = self::cacheKey($key);
         if ($fresh) {
-            Cache::forget(self::KEY);
+            Cache::forget($cacheKey);
         }
-        $cached = Cache::get(self::KEY);
+        $cached = Cache::get($cacheKey);
         if (is_array($cached)) {
             return array_map(fn (array $m) => new Model(...$m), $cached);
         }
@@ -32,9 +34,17 @@ final class Models
         } catch (EngineFailed) {
             return [];
         }
-        Cache::put(self::KEY, array_map(fn (Model $m) => get_object_vars($m), $models), now()->addHours((int) config('vistud.engine.models_cache_hours')));
+        Cache::put($cacheKey, array_map(fn (Model $m) => get_object_vars($m), $models), now()->addHours((int) config('vistud.engine.models_cache_hours')));
 
         return $models;
+    }
+
+    /** Where a key's list is kept: OpenRouter's one copy, or a provider's own for that key. */
+    public static function cacheKey(?string $key): string
+    {
+        [$provider, $secret] = Credential::unpack($key);
+
+        return Providers::direct($provider) ? self::KEY.'.'.$provider.'.'.substr(hash('sha256', (string) $secret), 0, 16) : self::KEY;
     }
 
     public function find(string $id, ?string $key = null): ?Model

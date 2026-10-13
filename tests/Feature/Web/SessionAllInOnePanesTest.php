@@ -95,6 +95,15 @@ class SessionAllInOnePanesTest extends TestCase
         $updatedCard = $cardsService->find($this->by, $cardId);
         $this->assertSame('correct', $updatedCard->lastResult);
         $this->assertSame(1, $updatedCard->reviews);
+
+        // A card the student doesn't want: deleted for good from the pane, and the deck is empty again.
+        $comp->assertSee('Delete card')
+            ->call('deleteCard', $cardId)
+            ->assertSee('Card deleted.')
+            ->assertDispatched('flashcards-changed')
+            ->assertDontSee('What is an INNER JOIN?')
+            ->assertSee('No flashcards yet');
+        $this->assertSame([], $cardsService->list($this->by, $this->workspace));
     }
 
     public function test_questions_pane_displays_and_resolves_questions(): void

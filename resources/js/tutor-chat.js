@@ -10,6 +10,11 @@
 
 import { placeBeside } from './floating.js';
 import { toast } from './toasts.js';
+import { decorateCodeBlocks } from './chat-markdown.js';
+import { joinSpeech, listen, speechSupported } from './dictation.js';
+
+/** A phone or tablet: the keyboard is not opened for the student while they speak. */
+const touch = () => window.matchMedia('(pointer: coarse)').matches;
 
 const MOST = 4;
 const xsrf = () => decodeURIComponent(document.cookie.split('; ').find((c) => c.startsWith('XSRF-TOKEN='))?.slice(11) ?? '');
@@ -42,7 +47,7 @@ function uploadOne(upload, file) {
     });
 }
 
-export function tutorChat({ upload, account, mentionItems = [] }) {
+export function tutorChat({ upload, account, mentionItems = [], mentions = true }) {
     return {
         draft: '',
         quoteText: '',
@@ -56,6 +61,8 @@ export function tutorChat({ upload, account, mentionItems = [] }) {
         hasOverflow: false,
         attached: [],
         mentionItems: Array.isArray(mentionItems) ? mentionItems : [],
+        // Whether @ mentions a note or a file (not in ViStud AI's chat, which is in no one course).
+        mentions: mentions !== false,
         mentionOpen: false,
         mentionQuery: '',
         mentionIndex: -1,
@@ -77,10 +84,20 @@ export function tutorChat({ upload, account, mentionItems = [] }) {
         },
         picking: false,
         marksDismissed: false,
+        // Voice typing: the box shows `dictationBase` (what was there and the phrases kept) and the phrase still
+        // being heard; `dictationStart` is the box before, for Discard.
         transcribing: false,
         speechSupported: false,
+        hearing: false,
         interimSpeech: '',
-        recognition: null,
+        dictationBase: '',
+        dictationStart: '',
+        dictationSeconds: 0,
+        dictationTimer: null,
+        stopListening: null,
+        get dictationTime() {
+            return `${Math.floor(this.dictationSeconds / 60)}:${String(this.dictationSeconds % 60).padStart(2, '0')}`;
+        },
         menu: false,
         quizSub: false,
         toolsStyle: '',
@@ -109,7 +126,7 @@ export function tutorChat({ upload, account, mentionItems = [] }) {
                 setTimeout(() => this.scrollDown(false), 150);
             });
             this.decorate();
-            this.speechSupported = typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+            this.speechSupported = speechSupported();
             this.$nextTick(() => this.resize());
 
             this.$watch('live', (val) => {
@@ -354,88 +371,7 @@ export function tutorChat({ upload, account, mentionItems = [] }) {
         },
 
         decorateCodeBlocks(replies) {
-            for (const reply of replies) {
-                const pres = reply.querySelectorAll('pre:not([data-copy-ready])');
-                for (const pre of pres) {
-                    if (pre.querySelector('code.language-mermaid:not([data-tried])')) {
-                        continue;
-                    }
-                    if (pre.closest('.chat-code-block') || pre.closest('.chat-diagram')) {
-                        pre.dataset.copyReady = 'true';
-                        continue;
-                    }
-
-                    pre.dataset.copyReady = 'true';
-
-                    const code = pre.querySelector('code');
-                    let lang = 'snippet';
-                    if (code) {
-                        for (const cls of code.classList) {
-                            if (cls.startsWith('language-')) {
-                                lang = cls.replace(/^language-/, '').trim() || 'snippet';
-                                break;
-                            }
-                        }
-                    }
-
-                    const wrapper = document.createElement('div');
-                    wrapper.className = 'chat-code-block';
-
-                    const header = document.createElement('div');
-                    header.className = 'chat-code-header';
-
-                    const langBadge = document.createElement('span');
-                    langBadge.className = 'chat-code-lang';
-                    langBadge.textContent = lang;
-
-                    const copyBtn = document.createElement('button');
-                    copyBtn.type = 'button';
-                    copyBtn.className = 'chat-code-copy-btn';
-                    copyBtn.setAttribute('title', 'Copy to clipboard');
-                    copyBtn.setAttribute('aria-label', `Copy ${lang}`);
-                    copyBtn.innerHTML = '<svg class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><span>Copy</span>';
-
-                    copyBtn.addEventListener('click', async (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const text = (code || pre).textContent || '';
-                        let success = false;
-                        try {
-                            if (navigator.clipboard?.writeText) {
-                                await navigator.clipboard.writeText(text);
-                                success = true;
-                            }
-                        } catch {}
-                        if (!success) {
-                            try {
-                                const ta = document.createElement('textarea');
-                                ta.value = text;
-                                ta.style.position = 'fixed';
-                                ta.style.opacity = '0';
-                                ta.style.left = '-9999px';
-                                document.body.appendChild(ta);
-                                ta.select();
-                                success = document.execCommand('copy');
-                                document.body.removeChild(ta);
-                            } catch {}
-                        }
-
-                        copyBtn.classList.add('is-copied');
-                        copyBtn.innerHTML = '<svg class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Copied!</span>';
-                        setTimeout(() => {
-                            copyBtn.classList.remove('is-copied');
-                            copyBtn.innerHTML = '<svg class="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg><span>Copy</span>';
-                        }, 2000);
-                    });
-
-                    header.appendChild(langBadge);
-                    header.appendChild(copyBtn);
-
-                    pre.parentNode?.insertBefore(wrapper, pre);
-                    wrapper.appendChild(header);
-                    wrapper.appendChild(pre);
-                }
-            }
+            decorateCodeBlocks(replies);
         },
 
         resize() {
@@ -1154,109 +1090,60 @@ export function tutorChat({ upload, account, mentionItems = [] }) {
             this.$nextTick(() => this.resize());
         },
 
-        commitInterim() {
-            if (this.interimSpeech && this.interimSpeech.trim()) {
-                const chunk = this.interimSpeech.trim();
-                const current = this.draft.trim();
-                this.draft = current ? `${current} ${chunk}` : chunk;
-                this.interimSpeech = '';
-                this.$nextTick(() => this.resize());
-            }
-        },
-
+        /** Starts voice typing: what is said shows in the box as it is said. Enter sends it, Esc stops. */
         startDictation() {
-            if (this.busy) return;
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                toast('Live speech transcription is not supported in this browser.', 'warning');
+            if (this.busy || this.transcribing) return;
+            if (!speechSupported()) {
+                toast('Voice typing is not available in this browser. Try Chrome, Edge or Safari.', 'warning');
                 return;
             }
-            if (this.recognition) {
-                try { this.recognition.abort(); } catch {}
-                this.recognition = null;
-            }
-            try {
-                const recognition = new SpeechRecognition();
-                recognition.continuous = true;
-                recognition.interimResults = true;
-                recognition.maxAlternatives = 1;
-                recognition.lang = document.documentElement.lang || navigator.language || 'en-US';
-
-                recognition.onstart = () => {
-                    this.transcribing = true;
-                    this.interimSpeech = '';
-                };
-
-                recognition.onresult = (event) => {
-                    let interim = '';
-                    let finalizedChunk = '';
-
-                    for (let i = event.resultIndex; i < event.results.length; ++i) {
-                        const transcript = event.results[i][0]?.transcript || '';
-                        if (event.results[i].isFinal) {
-                            finalizedChunk += transcript;
-                        } else {
-                            interim += transcript;
-                        }
-                    }
-
-                    if (finalizedChunk.trim()) {
-                        const chunk = finalizedChunk.trim();
-                        const current = this.draft.trim();
-                        this.draft = current ? `${current} ${chunk}` : chunk;
-                        this.$nextTick(() => this.resize());
-                    }
-
-                    this.interimSpeech = interim.trim();
-                };
-
-                recognition.onerror = (event) => {
-                    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-                        toast('Microphone access was denied. Please allow microphone permissions.', 'warning');
-                        this.stopDictation(false);
-                    } else if (event.error === 'network') {
-                        toast('Network issue with speech recognition service.', 'warning');
-                        this.stopDictation(false);
-                    }
-                };
-
-                recognition.onend = () => {
-                    if (this.transcribing) {
-                        this.commitInterim();
-                        this.transcribing = false;
-                    }
-                    this.recognition = null;
-                    this.$nextTick(() => {
-                        this.resize();
-                        this.$refs.box?.focus();
-                    });
-                };
-
-                this.recognition = recognition;
-                recognition.start();
-            } catch (err) {
-                console.error('Failed to start speech recognition:', err);
-                toast('Could not start speech recognition.', 'warning');
-                this.transcribing = false;
-            }
+            [this.dictationStart, this.dictationBase, this.interimSpeech] = [this.draft, this.draft, ''];
+            [this.transcribing, this.hearing, this.dictationSeconds] = [true, false, 0];
+            clearInterval(this.dictationTimer);
+            this.dictationTimer = setInterval(() => { this.dictationSeconds += 1; }, 1000);
+            this.stopListening = listen({
+                lang: document.documentElement.lang || navigator.language || 'en-US',
+                onWords: (sure, stillHearing) => this.showSpeech(sure, stillHearing),
+                onHearing: (on) => { this.hearing = on; },
+                onStop: (reason) => {
+                    const why = {
+                        denied: 'ViStud can\'t hear you. Allow the microphone for this site, then try again.',
+                        network: 'Voice typing needs the internet. Check the connection and try again.',
+                        failed: 'Voice typing could not start. Try again.',
+                    }[reason];
+                    if (why) toast(why, 'warning');
+                    this.stopDictation(true);
+                },
+            });
+            if (!touch()) this.$nextTick(() => this.focusBoxEnd());
         },
 
-        stopDictation(commit = true) {
-            if (commit) {
-                this.commitInterim();
-            } else {
-                this.interimSpeech = '';
-            }
-            this.transcribing = false;
-            if (this.recognition) {
-                try {
-                    this.recognition.stop();
-                } catch {}
-                this.recognition = null;
-            }
+        /** The box: the text kept so far, then the phrase still being heard, scrolled to the end. */
+        showSpeech(sure, stillHearing) {
+            if (!this.transcribing) return;
+            if (sure !== '') this.dictationBase = joinSpeech(this.dictationBase, sure);
+            this.interimSpeech = stillHearing;
+            this.draft = joinSpeech(this.dictationBase, stillHearing);
             this.$nextTick(() => {
                 this.resize();
-                this.$refs.box?.focus();
+                const box = this.$refs.box;
+                if (box) box.scrollTop = box.scrollHeight;
+            });
+        },
+
+        /** Stops voice typing, keeping what was said (or, with keep false, putting the box back as it was). */
+        stopDictation(keep = true) {
+            const stop = this.stopListening;
+            this.stopListening = null;
+            stop?.();
+            clearInterval(this.dictationTimer);
+            this.dictationTimer = null;
+            if (!this.transcribing) return;
+            if (!keep) this.draft = this.dictationStart;
+            [this.transcribing, this.hearing, this.interimSpeech] = [false, false, ''];
+            this.$nextTick(() => {
+                this.resize();
+                if (!touch()) this.focusBoxEnd();
             });
         },
 
@@ -1272,6 +1159,40 @@ export function tutorChat({ upload, account, mentionItems = [] }) {
             }
         },
 
+        /**
+         * Alt+S starts or stops voice typing from anywhere on the page. While voice typing, wherever the focus is
+         * (the mic button, Done): Enter sends what was said, Esc stops. Another field keeps its own Enter; the box
+         * handles its own (handleKeydown sends).
+         */
+        dictationKey(event) {
+            if (event.isComposing) return;
+            // event.code, so it is the S key on any keyboard layout; AltGr (Ctrl+Alt) is left to type its letters.
+            if (event.code === 'KeyS' && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+                event.preventDefault();
+                if (!event.repeat) this.toggleDictation();
+                return;
+            }
+            if (!this.transcribing) return;
+            const target = event.target;
+            if (target !== this.$refs.box && target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                this.submit();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                this.stopDictation(true);
+            }
+        },
+
+        focusBoxEnd() {
+            const box = this.$refs.box;
+            if (!box || box.disabled) return;
+            box.focus();
+            const end = box.value.length;
+            box.setSelectionRange(end, end);
+        },
+
+
         chosen(event) {
             const files = [...event.target.files];
             event.target.value = '';
@@ -1279,13 +1200,15 @@ export function tutorChat({ upload, account, mentionItems = [] }) {
         },
 
         handleInput(event) {
+            // Typed while speaking: the box as it is now is kept, and new speech goes after it.
+            if (this.transcribing) [this.dictationBase, this.interimSpeech] = [event.target.value, ''];
             this.resize();
             this.checkMentionTrigger();
         },
 
         checkMentionTrigger() {
             const el = this.$refs.box;
-            if (!el) return;
+            if (!el || !this.mentions) return;
             const val = el.value || '';
             const caret = el.selectionStart ?? val.length;
             const beforeCaret = val.slice(0, caret);

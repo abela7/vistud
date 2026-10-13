@@ -9,7 +9,7 @@
     $tabs = ['open' => 'To do', 'done' => 'Done'];
 @endphp
 <div class="space-y-5">
-    <x-workspace.section-header :workspace="$workspace" title="Assignments" :count="$counts['open']" count-label="to do">
+    <x-workspace.section-header :workspace="$workspace" title="Assignments" :count="$counts['open']" count-label="to do" stack>
         <a href="{{ route('workspaces.assignments.create', $workspace->id) }}" class="btn btn-primary"><x-icon name="plus" class="size-4" />New assignment</a>
     </x-workspace.section-header>
 

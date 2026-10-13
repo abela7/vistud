@@ -28,6 +28,16 @@
             </x-alert>
         @endif
 
+        {{-- ViStud AI, above every course (App\Engine\VistudAi). --}}
+        <a href="{{ route('vistud-ai') }}" class="vistud-ai-card">
+            <span class="chat-empty-badge" aria-hidden="true"><x-icon name="sparkles" class="size-5" /></span>
+            <span class="min-w-0 flex-1">
+                <span class="block font-semibold">Ask ViStud AI</span>
+                <span class="block text-sm text-fg-muted">What should I study today? Plan my week. Where am I weakest? It sees all your courses.</span>
+            </span>
+            <x-icon name="arrow-right" class="size-5 shrink-0" />
+        </a>
+
         <livewire:workspaces.index />
     </div>
 

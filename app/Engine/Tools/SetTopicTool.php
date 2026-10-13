@@ -63,10 +63,10 @@ final class SetTopicTool implements Tool
         if ($session->topicId === $topic->id) {
             return "The session's topic is \"{$topic->name}\" already.";
         }
-        $this->sessions->setTopic($by, $context->sessionId, $topic->id);
+        $this->sessions->setTopic($by, $context->sessionId, $topic->id, 'tutor');
         $context->effects->topic($topic->name, $topic->id);
         if ($made) {
-            $context->effects->saved('topic', 1);
+            $context->effects->saved('topic', 1, [$topic->id]);
         }
         $module = $topic->moduleId !== null ? $this->modules->find($by, $topic->moduleId)->title : null;
 

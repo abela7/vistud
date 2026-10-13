@@ -11,6 +11,8 @@
     $openWith = ['document' => 'Word, Pages or LibreOffice', 'slides' => 'PowerPoint, Keynote or LibreOffice', 'spreadsheet' => 'Excel, Numbers or LibreOffice'][$file->kind] ?? 'an app on your device';
     $hasPreview = $file->trashedAt === null && ($file->previewable() || $officePreview !== null || $markdown !== null);
     $split = request()->boolean('split');
+    // Pictures have their own zoom (image-viewer.js); a PDF, an office preview, Markdown and text use the bar below.
+    $zoomable = $file->trashedAt === null && ($file->kind === 'pdf' || $officePreview !== null || $markdown !== null || $file->kind === 'text');
 @endphp
 <x-dynamic-component :component="$split ? 'layouts.note-window' : 'layouts.app'" :title="$file->fileName().' · '.$workspace->name" :workspace="$workspace" :section="$inModule ? 'modules' : 'notes'" :module-id="$file->moduleId" :folder-id="$file->folderId" :livewire="$split">
     <div
@@ -288,9 +290,49 @@
             x-bind:class="{ 'has-split': splitOpen, 'is-dragging': isDragging }"
         >
             {{-- Document Pane (Left) --}}
+            {{--
+                The zoom (--doc-zoom, 50 to 300 %), kept for each file in this browser. resources/js/pdf-viewer.js
+                redraws the pages at it on 'file-zoom'; Markdown and text grow with it in CSS.
+            --}}
             <div
                 class="file-pane-doc"
-                x-bind:style="splitOpen ? 'width: ' + splitPercent + '%;' : 'width: 100%;'"
+                x-bind:style="(splitOpen ? 'width: ' + splitPercent + '%;' : 'width: 100%;') + '--doc-zoom: ' + zoom + ';'"
+                @if ($zoomable)
+                    x-data="{
+                        steps: [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3],
+                        key: 'vistud.file.zoom.{{ $file->id }}',
+                        zoom: 1,
+                        lastWheel: 0,
+                        init() {
+                            try { this.zoom = Number(localStorage.getItem(this.key)) || 1; } catch {}
+                            this.zoom = Math.min(3, Math.max(0.5, this.zoom));
+                        },
+                        set(value) {
+                            this.zoom = Math.min(3, Math.max(0.5, Math.round(value * 100) / 100));
+                            try { this.zoom === 1 ? localStorage.removeItem(this.key) : localStorage.setItem(this.key, this.zoom); } catch {}
+                            window.dispatchEvent(new CustomEvent('file-zoom', { detail: { zoom: this.zoom } }));
+                        },
+                        zoomIn() { this.set(this.steps.find((s) => s > this.zoom + 0.001) ?? 3); },
+                        zoomOut() { this.set([...this.steps].reverse().find((s) => s < this.zoom - 0.001) ?? 0.5); },
+                        wheel(event) {
+                            if (! event.ctrlKey && ! event.metaKey) return;
+                            event.preventDefault();
+                            if (event.timeStamp - this.lastWheel < 120) return;
+                            this.lastWheel = event.timeStamp;
+                            event.deltaY < 0 ? this.zoomIn() : this.zoomOut();
+                        },
+                        key_(event) {
+                            if (! event.ctrlKey && ! event.metaKey) return;
+                            if (event.key === '+' || event.key === '=') { event.preventDefault(); this.zoomIn(); }
+                            else if (event.key === '-') { event.preventDefault(); this.zoomOut(); }
+                            else if (event.key === '0') { event.preventDefault(); this.set(1); }
+                        },
+                    }"
+                    x-on:wheel="wheel($event)"
+                    x-on:keydown.window="key_($event)"
+                @else
+                    x-data="{ zoom: 1 }"
+                @endif
             >
                 @if ($file->trashedAt !== null)
                     <x-alert tone="warning" title="This file is in the trash">
@@ -362,6 +404,23 @@
                         <p class="max-w-md text-fg-muted">Download it to open it in {{ $openWith }}.</p>
                         <a class="btn btn-primary" href="{{ route('files.content', [$file->id, 'download' => 1]) }}"><x-icon name="download" class="size-4" />Download</a>
                     </section>
+                @endif
+
+                @if ($zoomable)
+                    <div class="file-zoom-bar" role="toolbar" aria-label="Zoom">
+                        <div class="file-zoom-group">
+                            <button type="button" class="file-zoom-btn" x-on:click="zoomOut()" x-bind:disabled="zoom <= 0.5" title="Zoom out (Ctrl −)">
+                                <x-icon name="zoom-out" class="size-4" /><span class="sr-only">Zoom out</span>
+                            </button>
+                            <button type="button" class="file-zoom-value" x-on:click="set(1)" title="Back to 100%, as wide as the pane (Ctrl 0)">
+                                <span x-text="Math.round(zoom * 100) + '%'">100%</span><span class="sr-only"> zoom. Press for 100%</span>
+                            </button>
+                            <button type="button" class="file-zoom-btn" x-on:click="zoomIn()" x-bind:disabled="zoom >= 3" title="Zoom in (Ctrl +)">
+                                <x-icon name="zoom-in" class="size-4" /><span class="sr-only">Zoom in</span>
+                            </button>
+                        </div>
+                        <p class="sr-only" role="status" aria-live="polite" x-text="'Zoom ' + Math.round(zoom * 100) + '%'"></p>
+                    </div>
                 @endif
             </div>
 

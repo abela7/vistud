@@ -83,7 +83,7 @@ test('the answer streams in as it is written, then stays as a turn', async ({ pa
     // A busy service: the words stay in the chat, and Try again answers them once.
     await box.fill('Are you busy?');
     await box.press('Enter');
-    await expect(chat.getByRole('alert')).toContainText('busy right now', { timeout: 10_000 });
+    await expect(chat.getByRole('alert')).toContainText('too many requests', { timeout: 10_000 });
     await expect(chat.locator('.chat-turn.is-me:visible')).toHaveCount(3);
     await chat.getByRole('button', { name: 'Try again' }).click();
     await expect(answer).toHaveCount(3, { timeout: 15_000 });
@@ -371,7 +371,7 @@ test('the tutor marks a topic as its own, with a tap to undo it, and the end scr
     await expect(end.getByRole('heading', { name: 'End this session?' })).toBeVisible();
     const group = end.getByRole('radiogroup', { name: 'Where you stand on Self joins' });
     await expect(group.getByLabel('Understood')).toBeChecked();
-    await group.getByLabel('Covered').check();
+    await group.getByLabel('Studying').check();
     await end.getByRole('button', { name: 'End session' }).click();
     await expect(end.getByRole('heading', { name: 'Session ended' })).toBeVisible();
     const status = JSON.parse(tinker(`echo json_encode(DB::table('topics')->where('workspace_id', '${student.workspace}')->where('name', 'Self joins')->first(['status', 'status_by']));`));
@@ -627,12 +627,25 @@ test('guide: a course is made on its own page and set up by the guide, and the w
     await expect(page.getByRole('radio', { name: /Guide me/ })).toBeChecked();
     await page.getByLabel('Name', { exact: true }).fill('Operating Systems');
     await page.getByText('Green', { exact: true }).click({ force: true });
+    // The kind of course is left for the guide to ask.
+    await expect(page.getByRole('radiogroup', { name: 'What kind of course?' })).toBeVisible();
     await page.getByRole('button', { name: 'Create course' }).click();
 
-    // The guide asks first; nothing is sent to the AI until the student writes.
+    // The guide asks first, with a button for each answer and Skip; buttons ask no AI.
     await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
     const log = page.getByRole('log', { name: 'Talk with the guide' });
+    const known = page.getByRole('navigation', { name: 'What the AI knows about this course' });
     await expect(log).toContainText("Let's set up Operating Systems");
+    await expect(log).toContainText('What kind of course is it?');
+    await expect(known).toContainText('0 of 7');
+    await log.getByRole('button', { name: 'Computing & IT' }).click();
+    await expect(log).toContainText('What level is it taught at?');
+    await expect(known).toContainText('1 of 7');
+    await log.getByRole('button', { name: 'Undergraduate' }).click();
+    await expect(log).toContainText('Where are you starting from in it?');
+    await log.getByRole('button', { name: "I don't know, skip" }).click();
+    await expect(log).toContainText('What is the course about?');
+    await expect(known.getByRole('button', { name: /Your start, skipped/ })).toBeVisible();
     await page.getByLabel('Your message').fill(timetable);
     await page.getByRole('button', { name: 'Send' }).click();
     await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
@@ -644,7 +657,10 @@ test('guide: a course is made on its own page and set up by the guide, and the w
     await expect(guideProposal(page).getByRole('checkbox', { name: /Week/ })).toHaveCount(0);
     await guideProposal(page).getByRole('button', { name: /^Add what is ticked \(2\)/ }).click();
     await expect(log).toContainText('Added: the About text and 1 assessment.');
-    await expect(log).toContainText('The course is set up.');
+    // On to what is still open: the textbook, which can be skipped too.
+    await expect(log).toContainText('Is there a textbook or main reading?');
+    await log.getByRole('button', { name: 'Skip this question' }).click();
+    await expect(log).toContainText('Which languages or tools does it use?');
     await expect(guideProposal(page)).toHaveCount(0);
 
     // The weeks come next, on Modules, where the guide has read what the course is about.
@@ -657,6 +673,9 @@ test('guide: a course is made on its own page and set up by the guide, and the w
     await expect(page.getByRole('log', { name: 'Talk with the guide' })).toContainText('I have read what Operating Systems is about');
     await page.getByLabel('Your message').fill(weeks);
     await page.getByRole('button', { name: 'Send' }).click();
+    // Sent is sent: the box empties at once, while the answer is still coming, and the words show in the talk.
+    await expect(page.getByLabel('Your message')).toHaveValue('');
+    await expect(guideProposal(page)).toHaveCount(0);
     await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
     await expect(guideProposal(page).getByRole('checkbox', { name: /Week 3/ })).toBeChecked();
 
@@ -729,7 +748,7 @@ test('guide: choosing to do it myself goes to the course page, and the guide is 
     await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
 });
 
-for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } })) {
+for (const [name, viewport] of Object.entries({ large: { width: 2048, height: 860 }, desktop: { width: 1440, height: 900 }, laptop: { width: 1280, height: 720 }, tablet: { width: 820, height: 1180 }, phone: { width: 390, height: 844 }, 'small phone': { width: 320, height: 640 } })) {
     test(`guide: the New course page and the guide fit and use only tokens: ${name}`, async ({ page }) => {
         await ai(page, { email: makeStudentAccount() }, '/courses/new', viewport);
         await page.getByRole('heading', { level: 1, name: 'New course' }).waitFor();
@@ -739,6 +758,11 @@ for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
         await page.locator('.course-new-more summary').click();
         states['new course details'] = await foreignColours(page);
+        await page.getByText('Mathematics', { exact: true }).click();
+        await useSentinelTheme(page);
+        states['new course with a kind picked'] = await foreignColours(page);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+        await page.screenshot({ path: `test-results/course-kind/new-course-${name}.png`, fullPage: true });
 
         await page.getByRole('button', { name: 'Create course' }).click();
         await page.getByRole('heading', { level: 1, name: 'Set up with the AI' }).waitFor();
@@ -751,7 +775,13 @@ for (const [name, viewport] of Object.entries({ desktop: { width: 1440, height: 
         await expect(guideProposal(page)).toBeVisible({ timeout: 15_000 });
         await useSentinelTheme(page);
         states['the guide with a proposal'] = await foreignColours(page);
+        // The talk fills the window and only it scrolls: the box to answer in and Send are in view without scrolling.
+        for (const control of [page.getByLabel('Your message'), page.getByRole('button', { name: 'Send' })]) {
+            const box = await control.boundingBox();
+            expect(box.y + box.height, 'in view without scrolling').toBeLessThanOrEqual(viewport.height);
+        }
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+        await page.screenshot({ path: `test-results/course-kind/guide-${name}.png`, fullPage: true });
         for (const [state, colours] of Object.entries(states)) {
             expect(colours, `${state}: colours not from a token`).toEqual([]);
         }

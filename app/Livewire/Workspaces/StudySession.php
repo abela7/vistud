@@ -4,6 +4,7 @@ namespace App\Livewire\Workspaces;
 
 use App\Appearance\Icons;
 use App\Engine\Helper;
+use App\Engine\Role;
 use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Identity\PrincipalFactory;
@@ -41,6 +42,7 @@ use App\Study\Tutoring;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -56,6 +58,9 @@ use Livewire\Component;
 final class StudySession extends Component
 {
     use Notices, PomodoroForm, TeachingForm;
+
+    /** What the helper is asked for a question's answer at a glance. */
+    private const CONCISE_ANSWER = 'Answer the question directly, simply, and concisely. Output ONLY the direct answer in 1 or 2 clear, question-oriented sentences (maximum 35 words). Do not include any background explanations, filler, or preamble.';
 
     #[Locked]
     public string $workspaceId;
@@ -270,6 +275,14 @@ final class StudySession extends Component
             }
         });
         $this->notice = $now === null ? null : "Now on {$now}.";
+        $this->dispatch('session-topic-changed');
+    }
+
+    /** The rail's ticked topic, tapped again: the session has no topic (the tutor reads it from its next message). */
+    public function clearTopic(): void
+    {
+        $this->act(fn () => $this->sessions->setTopic($this->principal(), $this->sessionId, null), 'The session has no topic now.');
+        $this->dispatch('session-topic-changed');
     }
 
     /** A question to keep, from the + menu: it goes to the module's questions (and to this session). */
@@ -314,77 +327,60 @@ final class StudySession extends Component
         $this->dispatch('questions-changed');
     }
 
+    /** The AI's concise answer, kept on the question at once: answered by the AI, not yet understood (Questions::setStatus). */
     public function generateConciseAnswer(string $questionId): void
     {
         $by = $this->principal();
         try {
             $question = $this->questions->find($by, $questionId);
+            $clean = $this->aiAnswer($by, $question->text, self::CONCISE_ANSWER);
         } catch (NotFound) {
             return;
-        }
-        $session = $this->sessions->find($by, $this->sessionId);
-        $moduleId = $this->moduleIdOf($by, $session);
-        $briefing = $this->briefings->forSession($by, $this->sessionId)->markdown;
-        $briefingExcerpt = mb_substr($briefing, 0, 3_800);
-
-        $recentChat = [];
-        foreach (array_slice($this->chat->transcript($by, $this->sessionId), -6) as $turn) {
-            $who = ($turn['role'] ?? '') === 'user' ? 'Student' : 'Tutor';
-            $turnText = trim((string) ($turn['text'] ?? ''));
-            if ($turnText !== '') {
-                $recentChat[] = "{$who}: ".mb_substr($turnText, 0, 300);
-            }
-        }
-        $chatBlock = $recentChat === [] ? '' : "\n\nRecent study session chat:\n".implode("\n", $recentChat);
-        $thing = mb_substr("Question:\n{$question->text}\n\nContext:\n{$briefingExcerpt}{$chatBlock}", 0, Helper::MAX_THING);
-        $task = 'Answer the question directly, simply, and concisely. Output ONLY the direct answer in 1 or 2 clear, question-oriented sentences (maximum 35 words). Do not include any background explanations, filler, or preamble.';
-
-        try {
-            $answer = $this->helper->quick($by, $task, $thing, $moduleId, $this->workspaceId, $session->folderId);
-            $clean = mb_substr(trim($answer), 0, Questions::MAX_ANSWER);
-            if ($clean !== '') {
-                $this->act(function () use ($by, $questionId, $clean) {
-                    $this->questions->setStatus($by, $questionId, 'answered', $clean);
-                }, 'Answer saved.');
-                $this->dispatch('questions-changed');
-            }
         } catch (AppError $e) {
             $this->error = $e->getMessage();
+
+            return;
+        }
+        if ($clean !== '') {
+            $this->act(function () use ($by, $questionId, $clean) {
+                $this->questions->setStatus($by, $questionId, 'answered', $clean, theirWord: false);
+            }, 'Answer saved.');
+            $this->dispatch('questions-changed');
         }
     }
 
+    /** The AI's concise answer as a draft, for the student to read and keep or not. */
     public function draftConciseAnswer(string $questionId): ?string
     {
         $by = $this->principal();
         try {
-            $question = $this->questions->find($by, $questionId);
-        } catch (NotFound) {
+            return $this->aiAnswer($by, $this->questions->find($by, $questionId)->text, self::CONCISE_ANSWER);
+        } catch (NotFound|AppError) {
             return null;
         }
-        $session = $this->sessions->find($by, $this->sessionId);
-        $moduleId = $this->moduleIdOf($by, $session);
-        $briefing = $this->briefings->forSession($by, $this->sessionId)->markdown;
-        $briefingExcerpt = mb_substr($briefing, 0, 3_800);
+    }
 
+    /**
+     * The helper's answer to a question, from the session's briefing and the last turns of its chat, within the
+     * question's answer limit.
+     *
+     * @throws AppError when the helper can't answer
+     */
+    private function aiAnswer(Principal $by, string $question, string $task): string
+    {
+        $session = $this->sessions->find($by, $this->sessionId);
+        $briefingExcerpt = mb_substr($this->briefings->forSession($by, $this->sessionId)->markdown, 0, 3_800);
         $recentChat = [];
         foreach (array_slice($this->chat->transcript($by, $this->sessionId), -6) as $turn) {
-            $who = ($turn['role'] ?? '') === 'user' ? 'Student' : 'Tutor';
-            $turnText = trim((string) ($turn['text'] ?? ''));
-            if ($turnText !== '') {
-                $recentChat[] = "{$who}: ".mb_substr($turnText, 0, 300);
+            $words = trim((string) ($turn['text'] ?? ''));
+            if ($words !== '') {
+                $recentChat[] = (($turn['role'] ?? '') === 'user' ? 'Student' : 'Tutor').': '.mb_substr($words, 0, 300);
             }
         }
         $chatBlock = $recentChat === [] ? '' : "\n\nRecent study session chat:\n".implode("\n", $recentChat);
-        $thing = mb_substr("Question:\n{$question->text}\n\nContext:\n{$briefingExcerpt}{$chatBlock}", 0, Helper::MAX_THING);
-        $task = 'Answer the question directly, simply, and concisely. Output ONLY the direct answer in 1 or 2 clear, question-oriented sentences (maximum 35 words). Do not include any background explanations, filler, or preamble.';
+        $thing = mb_substr("Question:\n{$question}\n\nContext:\n{$briefingExcerpt}{$chatBlock}", 0, Helper::MAX_THING);
 
-        try {
-            $answer = $this->helper->quick($by, $task, $thing, $moduleId, $this->workspaceId, $session->folderId);
-
-            return mb_substr(trim($answer), 0, Questions::MAX_ANSWER);
-        } catch (AppError) {
-            return null;
-        }
+        return mb_substr(trim($this->helper->quick($by, $task, $thing, $this->moduleIdOf($by, $session), $this->workspaceId, $session->folderId)), 0, Questions::MAX_ANSWER);
     }
 
     public function resolveQuestion(string $questionId): void
@@ -398,7 +394,7 @@ final class StudySession extends Component
     public function deleteQuestion(string $questionId): void
     {
         $this->act(function () use ($questionId) {
-            $this->questions->retire($this->principal(), $questionId);
+            $this->questions->delete($this->principal(), $questionId);
         });
         $this->dispatch('questions-changed');
     }
@@ -409,6 +405,33 @@ final class StudySession extends Component
             $this->flashcards->answer($this->principal(), $cardId, $result);
         });
         $this->dispatch('flashcards-changed');
+    }
+
+    /** A card the student doesn't want: deleted for good (Flashcards::delete), its answers no longer its topic's. */
+    public function deleteCard(string $cardId): void
+    {
+        $this->act(function () use ($cardId) {
+            try {
+                $this->flashcards->delete($this->principal(), $cardId);
+            } catch (NotFound) {
+                // Deleted already, in another tab.
+            }
+        }, 'Card deleted.');
+        $this->dispatch('flashcards-changed');
+    }
+
+    /** A quiz or test the student doesn't want: deleted for good, and its answers stop counting (Quizzes::delete). */
+    public function deleteQuiz(string $quizId): void
+    {
+        $by = $this->principal();
+        try {
+            $quiz = $this->quizzes->find($by, $quizId);
+            $quiz->workspaceId === $this->workspaceId || throw new NotFound;
+            $this->act(fn () => $this->quizzes->delete($by, $quizId), ucfirst($quiz->kind).' deleted.');
+        } catch (NotFound) {
+            // Deleted already, in another tab, or not of this course.
+        }
+        $this->dispatch('quizzes-changed');
     }
 
     public function openQuizConfigure(?string $kind = 'custom'): void
@@ -704,20 +727,20 @@ Output ONLY a valid JSON object:
   \"fix\": \"1-2 concise sentences explaining why the correct answer is right and giving constructive feedback.\"
 }";
                     $thing = "Question: {$q['asked']}\nStudent answer: {$studentAns}\nIdeal: {$right}";
-                    $result = 'correct';
-                    $fix = $explanation;
+                    // What the AI couldn't mark stays unmarked: never guessed, since it goes into the journal as evidence.
+                    $result = 'unjudged';
+                    $fix = "This answer couldn't be marked. Key concept: {$right}. {$explanation}";
                     try {
                         $aiEval = $this->helper->quick($by, $task, $thing, $session->moduleId, $this->workspaceId, $session->folderId);
                         if (preg_match('/\{.*\}/s', $aiEval, $m)) {
                             $dec = json_decode($m[0], true);
-                            if (is_array($dec)) {
-                                $result = in_array($dec['result'] ?? '', ['correct', 'partial', 'incorrect'], true) ? $dec['result'] : 'correct';
+                            if (is_array($dec) && in_array($dec['result'] ?? '', ['correct', 'partial', 'incorrect'], true)) {
+                                $result = $dec['result'];
                                 $fix = trim((string) ($dec['fix'] ?? $explanation));
                             }
                         }
-                    } catch (\Throwable $e) {
-                        $result = mb_strlen($studentAns) > 15 ? 'correct' : 'partial';
-                        $fix = $explanation;
+                    } catch (\Throwable) {
+                        // Left unmarked, as above.
                     }
 
                     $graded[] = [
@@ -752,7 +775,9 @@ Output ONLY a valid JSON object:
             'started_at' => $startedAt,
         ];
 
-        $savedQuiz = $this->quizzes->record($by, $this->sessionId, $recordInput);
+        // The helper marked the written answers, and an answer key it wrote marked the choices.
+        $judge = ['model' => $this->settings->get($by)->modelFor(Role::Helper) ?: 'unknown', 'prompt' => 'quiz-panel@1', 'via' => 'quiz'];
+        $savedQuiz = $this->quizzes->record($by, $this->sessionId, $recordInput, $judge);
 
         $durWords = $savedQuiz->durationWords();
         $paceWords = $savedQuiz->paceWords();
@@ -797,8 +822,9 @@ Output ONLY a valid JSON object:
         try {
             $question = $this->questions->ask($by, $this->workspaceId, $asked, $topicId, $moduleId, $session->id);
             if ($answer !== null && trim($answer) !== '') {
+                // The quiz's right answer, not the student's understanding: answered by the AI.
                 $clean = mb_substr(trim($answer), 0, Questions::MAX_ANSWER);
-                $this->questions->setStatus($by, $question->id, 'answered', $clean);
+                $this->questions->setStatus($by, $question->id, 'answered', $clean, theirWord: false);
             }
             $this->quizSavedAsQuestions[$asked] = true;
             $this->notice = 'Question saved to your questions list for long-term review.';
@@ -838,27 +864,8 @@ Output ONLY a valid JSON object:
             return;
         }
 
-        $by = $this->principal();
-        $session = $this->sessions->find($by, $this->sessionId);
-        $moduleId = $this->moduleIdOf($by, $session);
-        $briefing = $this->briefings->forSession($by, $this->sessionId)->markdown;
-        $briefingExcerpt = mb_substr($briefing, 0, 3_800);
-
-        $recentChat = [];
-        foreach (array_slice($this->chat->transcript($by, $this->sessionId), -6) as $turn) {
-            $who = ($turn['role'] ?? '') === 'user' ? 'Student' : 'Tutor';
-            $turnText = trim((string) ($turn['content'] ?? ''));
-            if ($turnText !== '') {
-                $recentChat[] = "{$who}: ".mb_substr($turnText, 0, 300);
-            }
-        }
-        $chatBlock = $recentChat === [] ? '' : "\n\nRecent study session chat:\n".implode("\n", $recentChat);
-        $thing = mb_substr("Student question:\n{$text}\n\nStudy session context:\n{$briefingExcerpt}{$chatBlock}", 0, Helper::MAX_THING);
-        $task = 'Answer the student\'s question directly, straightforwardly, and concisely using the study session context, notes, and course material. Write 2 to 4 clear sentences in plain words with no preamble or headings.';
-
         try {
-            $answer = $this->helper->quick($by, $task, $thing, $moduleId, $this->workspaceId, $session->folderId);
-            $this->questionAnswer = mb_substr(trim($answer), 0, Questions::MAX_ANSWER);
+            $this->questionAnswer = $this->aiAnswer($this->principal(), $text, 'Answer the student\'s question directly, straightforwardly, and concisely using the study session context, notes, and course material. Write 2 to 4 clear sentences in plain words with no preamble or headings.');
         } catch (AppError $e) {
             $this->addError('questionText', $e->getMessage());
         }
@@ -1173,19 +1180,26 @@ Output ONLY a valid JSON object:
             }
             $this->notice = $this->error === null ? ($topicId === null ? 'The session has no topic now.' : 'The topic is set. The tutor and what you save use it from now on.') : null;
             $this->dispatch('session-changed');
+            $this->dispatch('session-topic-changed');
         }
         if ($this->mode === 'question') {
             $answer = trim($this->questionAnswer);
             try {
                 $session = $this->sessions->find($by, $this->sessionId);
-                if ($this->editingQuestionId !== null) {
-                    $question = $this->questions->update($by, $this->editingQuestionId, $this->questionText, $this->moduleIdOf($by, $session));
-                } else {
-                    $question = $this->questions->ask($by, $this->workspaceId, $this->questionText, $session->topicId, $this->moduleIdOf($by, $session), $session->id);
-                }
-                if ($answer !== '') {
-                    $this->questions->setStatus($by, $question->id, 'answered', mb_substr($answer, 0, Questions::MAX_ANSWER));
-                }
+                DB::transaction(function () use ($by, $session, $answer) {
+                    if ($this->editingQuestionId !== null) {
+                        // Its words change; it stays in its own module.
+                        $question = $this->questions->update($by, $this->editingQuestionId, $this->questionText);
+                    } else {
+                        $question = $this->questions->ask($by, $this->workspaceId, $this->questionText, $session->topicId, $this->moduleIdOf($by, $session), $session->id);
+                    }
+                    if ($answer !== '') {
+                        $this->questions->setStatus($by, $question->id, 'answered', mb_substr($answer, 0, Questions::MAX_ANSWER));
+                    } elseif ($question->answer !== null) {
+                        // The answer taken out: it is gone, and the question is no longer answered.
+                        $this->questions->setStatus($by, $question->id, $question->status === 'answered' ? 'pending' : $question->status, '');
+                    }
+                });
             } catch (Unprocessable $e) {
                 $fields = $e->details['fields'] ?? [];
                 if (isset($fields['answer'][0])) {

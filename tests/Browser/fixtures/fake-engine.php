@@ -46,7 +46,7 @@ if (str_contains($system, 'You set up a course with a student')) {
             'modules' => [['title' => 'Week 1: Not for this talk']],
         ]])
         : json_encode(['reply' => 'How is it assessed?', 'proposal' => null]);
-} elseif (str_contains($system, 'You add modules to a course with a student')) {
+} elseif (str_contains($system, "You set up a course's modules with a student")) {
     // The course guide, adding modules: weeks told get a proposal, anything else a question.
     $quick = str_contains($asked, 'Week 1')
         ? json_encode(['reply' => 'I found three weeks. Tick the ones to add now.', 'proposal' => [
@@ -79,13 +79,21 @@ if (str_contains($system, 'You set up a course with a student')) {
         default => 'You found Deadlocks hard, and Joins confusing.',
     };
 }
+// The course guide streams its answer (App\Engine\CourseGuide), so a streamed request gets the same answer in pieces.
+$pause = 250_000;
+if ($quick !== null && ($request['stream'] ?? false)) {
+    $words = str_split($quick, 24);
+    $pause = 60_000;
+    $quick = null;
+    $guide = true;
+}
 if ($quick !== null) {
     header('Content-Type: application/json');
     echo json_encode(['model' => 'fake/tutor', 'choices' => [['message' => ['content' => $quick], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 10, 'cost' => 0.0001]]);
 
     return;
 }
-$words = ['A ', 'left ', 'join ', 'keeps ', 'every ', 'row ', 'of ', 'the ', '**left** ', 'table.'];
+$words ??= ['A ', 'left ', 'join ', 'keeps ', 'every ', 'row ', 'of ', 'the ', '**left** ', 'table.'];
 // Acting in the course: "make cards" saves two cards, "jot" writes in the study note, "mark it" sets the topic's status; each answers after its tool ran.
 $acts = ['mark it' => ['set_topic_status', ['status' => 'understood', 'reason' => 'Two right answers in a row.']], 'make cards' => ['make_flashcards', ['cards' => [['front' => 'What is an OS?', 'back' => 'The layer between hardware and apps.'], ['front' => 'What is a kernel?', 'back' => 'The core of the OS.']]]], 'jot more' => ['write_note', ['text' => '- System calls ask the kernel for help.']], 'jot' => ['write_note', ['text' => "## Kernels\n\n- The kernel is the core of the OS."]]];
 $act = null;
@@ -95,14 +103,16 @@ foreach ($acts as $trigger => $call) {
         break;
     }
 }
-if ($act !== null && ($last['role'] ?? '') === 'user') {
+if (! isset($guide) && $act !== null && ($last['role'] ?? '') === 'user') {
     header('Content-Type: text/event-stream');
     echo 'data: '.json_encode(['model' => 'fake/tutor', 'choices' => [['index' => 0, 'delta' => ['tool_calls' => [['index' => 0, 'id' => 'call_act', 'type' => 'function', 'function' => ['name' => $act[0], 'arguments' => json_encode($act[1])]]]], 'finish_reason' => 'tool_calls']]])."\n\n";
     echo "data: [DONE]\n\n";
 
     return;
 }
-if ($act !== null) {
+if (isset($guide)) {
+    // The guide's answer, as it is.
+} elseif ($act !== null) {
     $words = match ($act[0]) {
         'make_flashcards' => ['Saved ', 'two ', 'cards.'],
         'set_topic_status' => ['You ', 'have ', 'this.'],
@@ -118,7 +128,7 @@ if ($act !== null) {
 
 // "busy" fails once (a 429, as a busy provider answers), then works: for "Try again".
 $flag = sys_get_temp_dir().'/vistud-fake-engine-busy';
-if (str_contains($asked, 'busy') && ! file_exists($flag)) {
+if (! isset($guide) && str_contains($asked, 'busy') && ! file_exists($flag)) {
     touch($flag);
     http_response_code(429);
     header('Content-Type: application/json');
@@ -126,13 +136,13 @@ if (str_contains($asked, 'busy') && ! file_exists($flag)) {
 
     return;
 }
-if (str_contains($asked, 'busy')) {
+if (! isset($guide) && str_contains($asked, 'busy')) {
     @unlink($flag);
     $words = ['Back ', 'now: ', 'joins ', 'combine ', 'rows.'];
 }
 // "notes" asks for a look-up first, then answers after a pause (so the look-up can be seen).
-$lookUp = str_contains($asked, 'notes') && ($last['role'] ?? '') === 'user';
-if (str_contains($asked, 'notes') && ! $lookUp) {
+$lookUp = ! isset($guide) && str_contains($asked, 'notes') && ($last['role'] ?? '') === 'user';
+if (! isset($guide) && str_contains($asked, 'notes') && ! $lookUp) {
     usleep(1_000_000);
     $words = ['Your ', 'notes ', 'cover ', 'joins.'];
 }
@@ -164,7 +174,7 @@ if ($lookUp) {
 }
 foreach ($words as $i => $word) {
     $send(['model' => 'fake/tutor', 'choices' => [['index' => 0, 'delta' => ['content' => $word], 'finish_reason' => $i === count($words) - 1 ? 'stop' : null]]]);
-    usleep(250_000);
+    usleep($pause);
 }
 $send(['choices' => [], 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 10, 'cost' => 0.0001]]);
 echo "data: [DONE]\n\n";

@@ -28,14 +28,14 @@ final class ReadFileTool implements Tool
 
     public function description(): string
     {
-        return 'Reads one of the student\'s files, a few pages at a time: a PDF\'s pages, a PowerPoint\'s slides with the speaker\'s notes, a Word or text file in parts; each headed like "Page 4 of 18". Use it for the session\'s material and any file the student names or attaches, instead of guessing what it says, and go through it a part at a time. Pictures can\'t be read as text: the student attaches them in the chat.';
+        return 'Reads one of the student\'s files, a few pages at a time: a PDF\'s pages, a PowerPoint\'s slides (title, text, tables, chart data, picture descriptions, hidden or not) with the speaker\'s notes, a Word document\'s pages (headings, lists and tables kept), an Excel workbook\'s sheets (row numbers, column letters, formulas beside their results), a text file in parts; each headed like "Page 4 of 18", with what it is (a slide\'s title, a sheet and its rows). Every answer starts with the file\'s details: its name, kind and size, how long it is, who made it and when. Use it for the session\'s material and any file the student names or attaches, instead of guessing what it says, and go through it a part at a time. Pictures can\'t be read as text: the student attaches them in the chat.';
     }
 
     public function parameters(): array
     {
         return ['type' => 'object', 'properties' => [
             'file' => ['type' => 'string', 'description' => 'The file\'s name (or part of it).'],
-            'pages' => ['type' => 'string', 'description' => 'Which pages (or slides, or parts): one, like "7", or a range, like "4-6"; at most '.self::PAGES.' at a time. "all" gives an outline of the whole file: each page\'s first line. The first three when left out.'],
+            'pages' => ['type' => 'string', 'description' => 'Which pages (or slides, or parts): one, like "7", or a range, like "4-6"; at most '.self::PAGES.' at a time. "all" gives the file\'s details and an outline of the whole file: what each page is. The first three when left out.'],
         ], 'required' => ['file'], 'additionalProperties' => false];
     }
 
@@ -62,20 +62,21 @@ final class ReadFileTool implements Tool
         $name = $text->file->fileName();
         $count = $text->count();
         if ($count === 0 || ! $text->hasWords()) {
-            return "\"{$name}\" has {$text->size()} but no text in them: it is probably scanned, or made of pictures. Ask the student to attach the pages they're on as pictures.";
+            return "\"{$name}\" has {$text->size()} but no text in them: it is probably scanned, or made of pictures. Ask the student to attach the pages they're on as pictures.\n".$text->profile();
         }
         if ($wanted !== null && in_array(mb_strtolower(trim($wanted)), ['all', 'outline', 'everything'], true)) {
             return $this->outline($text);
         }
         [$from, $to] = self::range($wanted, $count);
         if ($from === null) {
-            return "\"{$name}\" has {$text->size()}: ask for {$text->unit}s 1 to {$count}.";
+            return "\"{$name}\" has {$text->size()}: ask for {$text->unit}s 1 to {$count}.\n".$text->profile();
         }
         $out = [];
         $length = 0;
         for ($number = $from; $number <= $to; $number++) {
             $page = trim($text->pages[$number - 1]);
-            $block = '--- '.$text->label($number)." ---\n".($page !== '' ? $page : '(no text on this '.$text->unit.')');
+            $caption = $text->caption($number);
+            $block = '--- '.$text->label($number).($caption !== '' && ! str_starts_with($page, $caption) ? ': '.$caption : '')." ---\n".($page !== '' ? $page : '(no text on this '.$text->unit.')');
             if ($out !== [] && $length + mb_strlen($block) > self::CHARS) {
                 $out[] = "(Stopped before {$text->unit} {$number}, to keep this short: ask for {$text->unit} {$number} on.)";
                 $to = $number - 1;
@@ -86,19 +87,20 @@ final class ReadFileTool implements Tool
         }
         $span = $from === $to ? "{$text->unit} {$from}" : "{$text->unit}s {$from}-{$to}";
 
-        return "\"{$name}\": {$span} of {$count}.\n\n".implode("\n\n", $out);
+        return "\"{$name}\": {$span} of {$count}.\n".$text->profile()."\n\n".implode("\n\n", $out);
     }
 
-    /** The whole file at a glance: each page's first line (its title, on slides), to see what it covers. */
+    /** The whole file at a glance: what each page is (a slide's title, a sheet and its rows, or its first line). */
     private function outline(FileText $text): string
     {
         $lines = [];
         foreach ($text->pages as $i => $page) {
-            $first = trim((string) strtok(trim($page)."\n", "\n"));
+            $caption = trim((string) strtok($text->caption($i + 1)."\n", "\n"));
+            $first = $caption !== '' ? $caption : trim((string) strtok(trim($page)."\n", "\n"));
             $lines[] = ucfirst($text->unit).' '.($i + 1).': '.($first !== '' ? mb_substr($first, 0, 100) : '(no text)');
         }
 
-        return "\"{$text->file->fileName()}\": an outline of its {$text->size()}, each one's first line. Read any of them with pages.\n\n".implode("\n", $lines);
+        return "\"{$text->file->fileName()}\": an outline of its {$text->size()}, what each one is. Read any of them with pages.\n".$text->profile()."\n\n".implode("\n", $lines);
     }
 
     /**

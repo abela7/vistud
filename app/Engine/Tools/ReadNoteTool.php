@@ -43,6 +43,6 @@ final class ReadNoteTool implements Tool
             $text = rtrim(mb_substr($text, 0, self::LIMIT))."\n\n(The rest of this note is left out; it is longer than ".self::LIMIT.' characters.)';
         }
 
-        return "# {$note->displayTitle()}\n\n{$text}";
+        return "# {$note->displayTitle()}\n\n".NoteDoc::fenced($text);
     }
 }

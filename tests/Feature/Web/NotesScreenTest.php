@@ -55,6 +55,8 @@ class NotesScreenTest extends TestCase
             ->assertSee('data-account="'.$this->ada->id.'"', false)
             ->assertSee('data-save-url="'.route('api.v1.notes.update', $note->id).'"', false)
             ->assertSee('role="toolbar" aria-label="Formatting"', false)
+            // Save, which then offers the note as a Word file (resources/js/note/editor.js): in the header and in full screen.
+            ->assertSeeHtml('data-note-save')
             // The document is JSON in a script tag, with nothing that could close it early.
             ->assertDontSee('Lab 1 </script>', false);
     }

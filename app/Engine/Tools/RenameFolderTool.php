@@ -43,6 +43,9 @@ final class RenameFolderTool implements Tool
         if (is_string($folder)) {
             return $folder;
         }
+        if (($ask = Agreement::needed($by, $context, "rename_folder:{$folder->id}:".mb_strtolower($newName), "Rename the folder \"{$folder->name}\" to \"{$newName}\"?")) !== null) {
+            return $ask;
+        }
 
         $this->folders->rename($by, $folder->id, $newName);
 

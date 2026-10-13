@@ -37,9 +37,11 @@ final class DeleteTopicTool implements Tool
         if (is_string($topic)) {
             return $topic;
         }
+        if (($ask = Agreement::needed($by, $context, "delete_topic:{$topic->id}", "Remove the topic \"{$topic->name}\"? Its questions, quizzes and flashcards stay, with no topic; its key points are deleted with it.")) !== null) {
+            return $ask;
+        }
 
-        $this->topics->retire($by, $topic->id);
-        $context->effects->saved('topic', 1);
+        $this->topics->retire($by, $topic->id, 'tutor');
 
         return "Removed topic \"{$topic->name}\" from the course.";
     }

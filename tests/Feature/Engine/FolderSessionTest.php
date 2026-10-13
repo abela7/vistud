@@ -96,13 +96,15 @@ class FolderSessionTest extends TestCase
 
         $this->assertStringContainsString("## Where you are\nOperating Systems › Week 1: OS Structure | Processes & Threads (21 Sep – 27 Sep) › Lecture 1 + Lab 1", $system);
         $this->assertStringContainsString('This session is in the folder Lecture 1 + Lab 1: teach from its files and keep to its topics. What you save (notes, cards, questions, key points, new topics) goes in it.', $system);
-        $this->assertStringContainsString("The module's other folders are for other sessions: Lecture 2 + Lab 2.", $system);
-        $this->assertStringContainsString("Topics in this folder, with what the student says of each:\n- The kernel: understood", $system);
+        $this->assertStringContainsString("The module's other folders are for other sessions: Lecture 2 + Lab 2 (1 topic).", $system);
+        $this->assertStringContainsString("Topics in this folder, in course order, where each stands (and who said so, when someone has):\n- The kernel: understood", $system);
         $this->assertStringContainsString('- Lecture 1 - OS Structure.txt (not read yet)', $system);
         $this->assertStringContainsString('- Lab 01 - Command Line Basics.txt (not read yet)', $system);
         $this->assertStringContainsString("Mode: whole folder. Go through the folder's material in order, topic by topic.", $system);
-        // The module's other topics and files are another session's.
-        foreach (['- Threads:', 'Week 1 overview', 'Lecture 2 - Processes', '## The module:'] as $elsewhere) {
+        // The module's own topics (in no folder) belong to each of its parts; the other folders' topics and files are another session's.
+        $this->assertStringContainsString("In the module but in no folder (they belong to every part of it):
+- Week 1 overview: not started (nothing said or studied yet)", $system);
+        foreach (['- Threads:', 'Lecture 2 - Processes', '## The module:'] as $elsewhere) {
             $this->assertStringNotContainsString($elsewhere, $system);
         }
         $this->assertSame(1, DB::table('folder_briefs')->where('folder_id', $this->first)->count());
@@ -129,7 +131,8 @@ class FolderSessionTest extends TestCase
         $this->assertSame(['Lab 01 - Command Line Basics.txt', 'Lecture 1 - OS Structure.txt'], collect($files)->pluck('file')->sort()->values()->all());
         $this->assertCount(3, json_decode($this->use('module_files', ['module' => 'Week 1']), true));
 
-        $this->assertSame(['The kernel'], array_column(json_decode($this->use('topics'), true), 'topic'));
+        // The folder's topics, and the module's own (in no folder): they are this part's too.
+        $this->assertSame(['The kernel', 'Week 1 overview'], array_column(json_decode($this->use('topics'), true), 'topic'));
         $everywhere = json_decode($this->use('topics', ['everywhere' => true]), true);
         $this->assertCount(3, $everywhere);
         $this->assertSame('Lecture 2 + Lab 2', collect($everywhere)->firstWhere('topic', 'Threads')['folder']);

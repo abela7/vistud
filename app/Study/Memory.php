@@ -81,6 +81,23 @@ final class Memory
         ], fn ($v) => $v !== []);
     }
 
+    /**
+     * The student takes back what they recorded: the journal never erases, so these events (not claims) are retracted
+     * by a correction, and the rules replay as if they had not happened (Replay::applyAmendments).
+     *
+     * @param  list<string>  $eventIds
+     */
+    public static function retract(LearnerScope $scope, Principal $by, array $eventIds): array
+    {
+        return [
+            'id' => Ids::new(),
+            'kind' => 'amendment',
+            'actor' => self::actor($scope, $by),
+            'occurred_at' => self::now(),
+            'body' => ['action' => 'retract', 'reason' => 'learner_request', 'targets' => array_map(fn (string $id) => "event:{$id}", array_values($eventIds))],
+        ];
+    }
+
     /** Now, to the microsecond, so events written moments apart keep their order. */
     public static function now(): string
     {

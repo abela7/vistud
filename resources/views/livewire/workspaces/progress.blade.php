@@ -7,7 +7,7 @@
 @php
     use Illuminate\Support\Str;
 
-    $statusIcons = ['not_started' => 'circle-dot', 'covered' => 'check', 'understood' => 'circle-check', 'confused' => 'circle-alert', 'mastered' => 'shield-check'];
+    $statusIcons = \App\Study\TopicDetails::STATUS_ICONS;
     $filters = ['all' => 'All', 'attention' => 'Needs attention', 'not_started' => 'Not started', 'mastered' => 'Mastered'];
     $nothing = ['attention' => 'Nothing needs another look.', 'not_started' => 'Everything has been started.', 'mastered' => 'Nothing is mastered yet.'];
     $ordered = $roll->groups();
@@ -47,9 +47,9 @@
     </div>
 
     <x-selection-bar>
-        <x-button variant="secondary" size="sm" icon="check" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'covered' })">Covered</x-button>
+        <x-button variant="secondary" size="sm" icon="book-open" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'covered' })">Studying</x-button>
         <x-button variant="secondary" size="sm" icon="circle-check" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'understood' })">Understood</x-button>
-        <x-button variant="secondary" size="sm" icon="circle-alert" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'confused' })">Still confusing</x-button>
+        <x-button variant="secondary" size="sm" icon="circle-alert" ::disabled="count === 0" x-on:click="$wire.bulk('status', selectedKeys(), { status: 'confused' })">Not understood</x-button>
         @if ($modules !== [])
             <x-button variant="secondary" size="sm" icon="folder-input" ::disabled="count === 0" x-on:click="$wire.openBulkMove(selectedKeys())">Move to module…</x-button>
         @endif
@@ -80,6 +80,10 @@
                     $place = array_flip(array_map(fn ($topic) => $topic->topic->id, $shown));
                     usort($shown, fn ($a, $b) => [$folderOf($a)['order'] ?? -1, $place[$a->topic->id]] <=> [$folderOf($b)['order'] ?? -1, $place[$b->topic->id]]);
                     $lastFolder = false;
+                    // How many each heading holds, so the module's number adds up on sight; the module's own topics get a
+                    // heading of their own once any of its topics are in a folder (as on the module's page).
+                    $perFolder = array_count_values(array_map(fn ($topic) => $folderOf($topic)['id'] ?? '', $shown));
+                    $foldered = array_diff_key($perFolder, ['' => 0]) !== [];
                     $isCurrent = $group->id() !== '' && $group->id() === $roll->currentId;
                     $open = $filter !== 'all' || $isCurrent || ($roll->currentId === null && $loop->first);
                 @endphp
@@ -122,6 +126,12 @@
                             @if ($inFolder !== null && $inFolder['id'] !== $lastFolder)
                                 <li class="tree-folder" wire:key="tree-folder-{{ $inFolder['id'] }}-{{ $filter }}">
                                     <x-icon name="folder" class="size-4 shrink-0" /><a href="{{ route('workspaces.folders.show', [$workspaceId, $inFolder['id']]) }}" class="tile-link">{{ $inFolder['name'] }}</a>
+                                    <span class="tree-folder-count">{{ $perFolder[$inFolder['id']] }}</span>
+                                </li>
+                            @elseif ($inFolder === null && $lastFolder === false && $foldered && $group->module !== null)
+                                <li class="tree-folder" wire:key="tree-folder-own-{{ $group->id() }}-{{ $filter }}">
+                                    <x-icon name="layers" class="size-4 shrink-0" /><span>In the module, not in a folder</span>
+                                    <span class="tree-folder-count">{{ $perFolder[''] }}</span>
                                 </li>
                             @endif
                             @php $lastFolder = $inFolder['id'] ?? null; @endphp

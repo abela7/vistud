@@ -10,7 +10,8 @@ use RuntimeException;
  * Gives the runtime database user exactly the privileges it needs, table by
  * table (docs/development/setup.md):
  *
- * - SELECT and INSERT on append-only tables (audit_log, ADR 0003 §10.4);
+ * - SELECT and INSERT on append-only tables (audit_log, ADR 0003 §10.4; the journal, ADR 0002);
+ * - SELECT, INSERT and DELETE on tables that are never rewritten (a journal entry's text, which a redaction deletes);
  * - SELECT on read-only tables (migrations);
  * - SELECT, INSERT, UPDATE and DELETE on everything else.
  *
@@ -46,6 +47,7 @@ final class RuntimeGrants
 
         $database = $owner->getDatabaseName();
         $appendOnly = config('vistud.database.append_only_tables', []);
+        $noUpdate = config('vistud.database.no_update_tables', []);
         $readOnly = config('vistud.database.read_only_tables', []);
         $statements = [];
 
@@ -55,6 +57,7 @@ final class RuntimeGrants
             }
             $privileges = match (true) {
                 in_array($table, $appendOnly, true) => 'SELECT, INSERT',
+                in_array($table, $noUpdate, true) => 'SELECT, INSERT, DELETE',
                 in_array($table, $readOnly, true) => 'SELECT',
                 default => 'SELECT, INSERT, UPDATE, DELETE',
             };

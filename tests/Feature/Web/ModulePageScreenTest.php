@@ -103,25 +103,29 @@ class ModulePageScreenTest extends TestCase
             ->assertSee('aria-label="This module"', false)->assertSee(route('workspaces.modules.show', [$this->workspace, $this->module, 'tab' => 'files']), false);
     }
 
-    public function test_what_the_reader_found_is_one_line_with_add_all_pick_and_not_these(): void
+    public function test_suggested_topics_are_reviewed_one_by_one_or_all_together(): void
     {
         $file = $this->file();
         app(TopicSuggestions::class)->suggest($this->by, $this->module, $file, ['CPU scheduling', 'Round robin', 'Deadlocks', 'Paging', 'Memory']);
 
-        $page = $this->page(tab: 'topics')->assertSee('5 new topics found')->assertSee('in Lecture 3.txt')->assertSee('CPU scheduling, Round robin, Deadlocks, Paging…')
-            ->assertSee('Add all')->assertSee('Pick')->assertSee('Not these')
-            ->call('pickSuggested')->assertSet('picking', true)->assertSee('Add Round robin');
+        $page = $this->page(tab: 'topics')->assertSee('Main topics to review')->assertSee('Found in your files. Accept the ones you want to track.')
+            ->assertSee('Lecture 3.txt')->assertSee('Accept all')->assertSee('Skip all')->assertSee('Accept Round robin')->assertSee('Skip this topic')->assertSee('Ask the AI to rethink it');
 
         $round = app(TopicSuggestions::class)->list($this->by, $this->module)[1];
-        $page->call('addOneSuggested', $round->id)->assertDontSee('Add Round robin')->assertSee('4 new topics found')->assertSee('Round robin');
-        $page->call('dismissOneSuggested', app(TopicSuggestions::class)->list($this->by, $this->module)[0]->id)->assertSee('3 new topics found');
+        $page->call('addOneSuggested', $round->id)->assertDontSee('Accept Round robin')->assertSee('Round robin');
+        $page->call('dismissOneSuggested', app(TopicSuggestions::class)->list($this->by, $this->module)[0]->id)->assertDontSee('Accept CPU scheduling');
 
-        $page->call('addSuggested')->assertSee('3 topics added.')->assertSet('picking', false)->assertDontSee('new topics found');
-        $this->assertSame(['Round robin', 'Deadlocks', 'Paging', 'Memory'], array_map(fn ($t) => $t->name, app(Topics::class)->list($this->by, $this->workspace)));
+        // Renamed before it is accepted.
+        $paging = collect(app(TopicSuggestions::class)->list($this->by, $this->module))->firstWhere('name', 'Paging');
+        $page->call('startRenameSuggestion', $paging->id)->assertSet('editingSuggestionName', 'Paging')
+            ->set('editingSuggestionName', 'Paging and page tables')->call('saveRenameSuggestion', $paging->id)->assertSee('Accept Paging and page tables');
 
-        // Not these: the rest is dismissed for good.
+        $page->call('addSuggested')->assertSee('3 topics added.')->assertDontSee('Main topics to review');
+        $this->assertSame(['Round robin', 'Deadlocks', 'Paging and page tables', 'Memory'], array_map(fn ($t) => $t->name, app(Topics::class)->list($this->by, $this->workspace)));
+
+        // Skip all: the rest is said no to for good.
         app(TopicSuggestions::class)->suggest($this->by, $this->module, null, ['Semaphores']);
-        $this->page(tab: 'topics')->assertSee('1 new topic found')->call('dismissSuggested')->assertDontSee('new topic');
+        $this->page(tab: 'topics')->assertSee('Accept Semaphores')->call('dismissSuggested')->assertDontSee('Main topics to review');
         $this->assertSame(0, app(TopicSuggestions::class)->suggest($this->by, $this->module, null, ['Semaphores']));
     }
 
@@ -150,7 +154,7 @@ class ModulePageScreenTest extends TestCase
         $page = $this->page()->set('tab', 'files');
 
         // No AI set up: one line, no run.
-        $page->call('readFile', $file)->assertSee('Add your OpenRouter key in your AI settings first.');
+        $page->call('readFile', $file)->assertSee('Add your key in your AI settings first.');
         $this->assertSame(0, LearnerTables::query(LearnerScope::of($this->by), 'engine_jobs')->count());
 
         $this->ready();
@@ -220,8 +224,8 @@ class ModulePageScreenTest extends TestCase
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
         $sheet = Livewire::test(TopicSheet::class, ['workspaceId' => $this->workspace])->dispatch('topic-sheet-open', topicId: $topic)
             ->assertSet('topicId', $topic)->assertDispatched('topic-sheet-dialog-open')
-            ->assertSee('Scheduling')->assertSee('Where you stand')->assertSee('Covered')->assertSee('Understood')->assertSee('Still confusing')
-            ->assertSee('Cards:')->assertSee('1 (1 due)')->assertSee('Why does round robin starve long jobs?')->assertSee('Round robin gives each process a quantum.');
+            ->assertSee('Scheduling')->assertSee('Where you stand')->assertSee('Studying')->assertSee('Understood')->assertSee('Not understood')
+            ->assertSeeInOrder(['1', 'card', '1 due'])->assertSee('Why does round robin starve long jobs?')->assertSee('Round robin gives each process a quantum.');
 
         $sheet->call('report', 'confused')->assertSee('Saved.')->assertDispatched('topics-changed');
         $this->assertSame('confused', app(Topics::class)->find($this->by, $topic)->status);
@@ -274,7 +278,7 @@ class ModulePageScreenTest extends TestCase
 
         $panel = Livewire::test(FileDigest::class, ['fileId' => $file])->assertSee('Read now');
         // No AI set up: a line says what to do, and nothing runs.
-        $panel->call('readNow')->assertSee('Add your OpenRouter key in your AI settings first.');
+        $panel->call('readNow')->assertSee('Add your key in your AI settings first.');
         $this->assertSame(0, LearnerTables::query(LearnerScope::of($this->by), 'engine_jobs')->count());
 
         $this->ready();

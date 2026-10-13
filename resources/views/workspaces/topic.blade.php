@@ -6,7 +6,7 @@
     $cleanName = \App\Study\Topics::cleanMarkdown($topic->name);
 @endphp
 <x-layouts.app :title="$cleanName.' · Topics · '.$workspace->name" :workspace="$workspace" :section="$topic->moduleId !== null ? 'modules' : 'progress'" :module-id="$topic->moduleId" :folder-id="$topic->folderId">
-    <div class="mx-auto max-w-6xl px-4 sm:px-6 py-6">
+    <div class="page-frame">
         <livewire:workspaces.topic-page
             :workspace-id="$workspace->id"
             :topic-id="$topic->id" />

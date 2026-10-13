@@ -36,6 +36,9 @@ final class CourseNew extends Component
 
     public string $endsOn = '';
 
+    /** What kind of course it is (App\Study\CourseTypes), or empty for the guide to ask. */
+    public string $type = '';
+
     /** guide or myself */
     public string $how = 'guide';
 
@@ -74,6 +77,7 @@ final class CourseNew extends Component
                 'term' => $this->term,
                 'starts_on' => $this->startsOn,
                 'ends_on' => $this->endsOn,
+                'type' => $this->type,
             ]);
         } catch (Unprocessable $e) {
             $this->resetErrorBag();
@@ -93,7 +97,7 @@ final class CourseNew extends Component
 
     public function render(): View
     {
-        return view('livewire.workspaces.course-new', ['colours' => Theme::CATEGORIES, 'icons' => Workspaces::ICONS]);
+        return view('livewire.workspaces.course-new', ['colours' => Theme::CATEGORIES, 'icons' => Workspaces::icons()]);
     }
 
     private function notReady(): ?string

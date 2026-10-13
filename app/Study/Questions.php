@@ -121,10 +121,12 @@ final class Questions
     /**
      * Moves a question to pending, stuck or answered, with the answer when
      * there is one. Answered records an explanation that answered it (the
-     * answer as its text) and a `clicked` self-report; stuck, or pending
-     * again after an answer, a `confused` one.
+     * answer as its text) and, when it is the student's own word, a
+     * `clicked` self-report; stuck, or pending again after an answer, a
+     * `confused` one. An answer the AI wrote (`$theirWord` false) answers the
+     * question but says nothing of whether it clicked: only the student can.
      */
-    public function setStatus(Principal $by, string $id, string $status, mixed $answer = null): QuestionDetails
+    public function setStatus(Principal $by, string $id, string $status, mixed $answer = null, bool $theirWord = true): QuestionDetails
     {
         $scope = Guard::learner($by);
         $answer = $answer === null ? null : (Input::text(['v' => $answer], 'v') ?? '');
@@ -133,22 +135,35 @@ final class Questions
             'answer' => $answer !== null && mb_strlen($answer) > self::MAX_ANSWER ? 'Keep the answer to '.self::MAX_ANSWER.' characters.' : null,
         ]));
 
-        DB::transaction(function () use ($scope, $by, $id, $status, $answer) {
+        DB::transaction(function () use ($scope, $by, $id, $status, $answer, $theirWord) {
             $row = $this->row($scope, $id, lock: true);
             $was = $this->statusOf($scope, $row);
+            $clicked = fn () => Memory::observation($scope, $by, 'self_report', ['stance' => 'clicked'], [['rel' => 'about', 'target' => "question:{$id}"]]);
             $specs = [];
             if ($status === 'answered' && $was !== 'answered') {
                 $about = $row->topic_id === null ? [] : [['rel' => 'about', 'target' => "topic:{$row->topic_id}"]];
                 $specs[] = Memory::observation($scope, $by, 'exposure', ['format' => 'explanation'],
                     [['rel' => 'responds_to', 'target' => "event:{$row->ask_event_id}"], ...$about], $answer ? ['text' => $answer] : []);
-                $specs[] = Memory::observation($scope, $by, 'self_report', ['stance' => 'clicked'], [['rel' => 'about', 'target' => "question:{$id}"]]);
+                if ($theirWord) {
+                    $specs[] = $clicked();
+                }
+            } elseif ($status === 'answered' && $theirWord && ($row->answered_by ?? null) === 'ai') {
+                // Answered by the AI before: the student says now that it clicked.
+                $specs[] = $clicked();
             } elseif (($status === 'stuck' && $was !== 'stuck') || ($status === 'pending' && $was === 'answered')) {
                 $specs[] = Memory::observation($scope, $by, 'self_report', ['stance' => 'confused'], [['rel' => 'about', 'target' => "question:{$id}"]]);
             }
             if ($specs !== []) {
                 $this->memory->append($scope, $specs, $row->workspace_id);
             }
-            $changes = ['status' => $status, 'answered_at' => $status === 'answered' ? ($row->answered_at ?? now()) : null, 'updated_at' => now()];
+            // Who said it is answered: the student, or the AI (until the student says it clicked).
+            $answeredBy = match (true) {
+                $status !== 'answered' => null,
+                $was !== 'answered' => $theirWord ? 'student' : 'ai',
+                $theirWord => 'student',
+                default => $row->answered_by ?? 'student',
+            };
+            $changes = ['status' => $status, 'answered_at' => $status === 'answered' ? ($row->answered_at ?? now()) : null, 'answered_by' => $answeredBy, 'updated_at' => now()];
             if ($answer !== null) {
                 $changes['answer'] = $answer === '' ? null : $answer;
             }
@@ -170,26 +185,41 @@ final class Questions
         $this->setStatus($by, $id, 'stuck');
     }
 
-    /** New words for the question, or another module. */
-    public function update(Principal $by, string $id, mixed $text, ?string $moduleId = null): QuestionDetails
+    /**
+     * New words for the question, another module, or another topic: null leaves the module or the topic as it is, '' takes
+     * it off. A topic chosen for a question in no module brings its module, and a question follows its topic's folder, as
+     * when it is asked. The topic lives on the question's row only: the journal's rules read a question's state from its
+     * own events, not from its topic, so nothing is written there (an answer given from now on is contact with the new
+     * topic; one given before stays contact with the old).
+     */
+    public function update(Principal $by, string $id, mixed $text, ?string $moduleId = null, ?string $topicId = null): QuestionDetails
     {
         $scope = Guard::learner($by);
         $text = self::validatedText($text);
 
-        DB::transaction(function () use ($scope, $by, $id, $text, $moduleId) {
+        DB::transaction(function () use ($scope, $by, $id, $text, $moduleId, $topicId) {
             $row = $this->row($scope, $id, lock: true);
             if ($moduleId !== null && $moduleId !== '') {
                 LearnerTables::query($scope, 'modules')->where('id', $moduleId)->where('workspace_id', $row->workspace_id)->exists() || throw new NotFound;
             }
+            $topic = $topicId === null ? $row->topic_id : $this->topicIn($scope, (string) $row->workspace_id, $topicId);
             if ($text !== $row->text) {
                 $this->memory->append($scope, [
                     Memory::claim($scope, $by, 'defines', ["question:{$id}"], ['entity_type' => 'question', 'status' => 'active'], ['phrasing' => $text]),
                 ], $row->workspace_id);
             }
             $module = $moduleId === '' ? null : ($moduleId ?? $row->module_id);
+            $topicMoved = $topic !== null && $topic !== $row->topic_id;
+            if ($topicMoved && $module === null) {
+                $module = LearnerTables::query($scope, 'topics')->where('id', $topic)->value('module_id');
+            }
+            // Another module takes it out of its folder; another topic puts it in that topic's.
+            $folder = $module === $row->module_id ? $row->folder_id : null;
+            if ($topicMoved) {
+                $folder = self::folderFor($scope, $topic, $module, null);
+            }
             LearnerTables::query($scope, 'questions')->where('id', $id)->update([
-                // Another module takes it out of its folder.
-                'text' => $text, 'module_id' => $module, 'folder_id' => $module === $row->module_id ? $row->folder_id : null, 'updated_at' => now(),
+                'text' => $text, 'topic_id' => $topic, 'module_id' => $module, 'folder_id' => $folder, 'updated_at' => now(),
             ]);
         });
 
@@ -203,16 +233,32 @@ final class Questions
         LearnerTables::query($scope, 'questions')->where('id', $id)->update(['ask_teacher' => $ask, 'updated_at' => now()]);
     }
 
-    /** Retires the question: it leaves the screens, and its events stay in the journal. */
-    public function retire(Principal $by, string $id): void
+    /**
+     * Deletes the question for good: its row goes, and the journal says it is retired. The journal is append-only: its
+     * events stay there as what happened, tied to a retired question.
+     */
+    public function delete(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
-        $row = $this->row($scope, $id);
 
-        $this->memory->append($scope, [
-            Memory::claim($scope, $by, 'defines', ["question:{$id}"], ['entity_type' => 'question', 'status' => 'retired'], ['phrasing' => $row->text]),
-        ], $row->workspace_id);
-        LearnerTables::query($scope, 'questions')->where('id', $id)->update(['retired_at' => now(), 'updated_at' => now()]);
+        DB::transaction(function () use ($scope, $by, $id) {
+            $row = $this->row($scope, $id, lock: true);
+            $this->memory->append($scope, [
+                Memory::claim($scope, $by, 'defines', ["question:{$id}"], ['entity_type' => 'question', 'status' => 'retired'], ['phrasing' => $row->text]),
+            ], $row->workspace_id);
+            LearnerTables::query($scope, 'questions')->where('id', $id)->delete();
+        });
+    }
+
+    /**
+     * The questions deleted before deleting was for good (only hidden, already retired in the journal): their rows go.
+     * For vistud:purge-deleted.
+     *
+     * @return int how many went
+     */
+    public function purgeHidden(LearnerScope $scope): int
+    {
+        return LearnerTables::query($scope, 'questions')->whereNotNull('retired_at')->delete();
     }
 
     private function topicIn(LearnerScope $scope, string $workspaceId, ?string $topicId): ?string
@@ -267,6 +313,7 @@ final class Questions
             $row->id, $row->workspace_id, $row->topic_id, $row->text, (bool) $row->ask_teacher,
             $derived['state'] ?? 'open', $derived['flags'] ?? [], Carbon::parse($row->created_at)->utc()->format('Y-m-d\TH:i:s.up'),
             $row->module_id, self::shownStatus($row, $derived), $row->answer, $row->session_id, $row->folder_id ?? null,
+            $row->answered_by ?? null,
         );
     }
 

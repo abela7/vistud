@@ -12,7 +12,9 @@ export default defineConfig({
     ],
     server: {
         watch: {
-            ignored: ['**/storage/framework/views/**'],
+            // Never source: compiled views, and the temporary files LibreOffice makes while exporting a note
+            // (one vanishing mid-scan crashes the watcher on Windows).
+            ignored: ['**/storage/**'],
         },
     },
 });

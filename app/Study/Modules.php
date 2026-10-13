@@ -22,6 +22,9 @@ final class Modules
 {
     public const MAX_TITLE = 120;
 
+    /** A line of what the module is about: a week, a chapter, a lab block. */
+    public const MAX_ABOUT = 300;
+
     public function __construct(private JournalWriter $journal) {}
 
     /** @return list<ModuleDetails> in order */
@@ -41,7 +44,7 @@ final class Modules
         return $row === null ? throw new NotFound : self::details($row);
     }
 
-    /** @param array{title?: mixed, starts_on?: mixed, ends_on?: mixed} $input */
+    /** @param array{title?: mixed, about?: mixed, starts_on?: mixed, ends_on?: mixed} $input */
     public function create(Principal $by, string $workspaceId, array $input): ModuleDetails
     {
         $scope = Guard::learner($by);
@@ -153,6 +156,7 @@ final class Modules
                 'revision' => (int) $row->revision,
                 'workspace' => $row->workspace_id,
                 'title' => $row->title,
+                'about' => $row->about ?? null,
                 'position' => (int) $row->position,
                 'starts_on' => $row->starts_on,
                 'ends_on' => $row->ends_on,
@@ -161,10 +165,15 @@ final class Modules
         ]);
     }
 
-    /** @return array{title: string, starts_on: ?string, ends_on: ?string} */
+    /**
+     * The fields to write. `about` is written only when it is given, so a form that doesn't show it keeps it.
+     *
+     * @return array{title: string, about?: ?string, starts_on: ?string, ends_on: ?string}
+     */
     private static function validated(array $input): array
     {
         $title = Input::text($input, 'title');
+        $about = array_key_exists('about', $input) ? Input::text($input, 'about') : false;
         [$startsOn, $endsOn, $dateErrors] = Input::dates($input);
 
         Input::refuse(array_filter([
@@ -173,14 +182,15 @@ final class Modules
                 mb_strlen($title) > self::MAX_TITLE => 'Keep the title to '.self::MAX_TITLE.' characters.',
                 default => null,
             },
+            'about' => is_string($about) && mb_strlen($about) > self::MAX_ABOUT ? 'Keep it to '.self::MAX_ABOUT.' characters.' : null,
             ...$dateErrors,
         ]));
 
-        return ['title' => $title, 'starts_on' => $startsOn, 'ends_on' => $endsOn];
+        return ['title' => $title, ...($about !== false ? ['about' => $about] : []), 'starts_on' => $startsOn, 'ends_on' => $endsOn];
     }
 
     private static function details(object $row): ModuleDetails
     {
-        return new ModuleDetails($row->id, $row->workspace_id, $row->title, $row->starts_on, $row->ends_on, (int) $row->position);
+        return new ModuleDetails($row->id, $row->workspace_id, $row->title, $row->starts_on, $row->ends_on, (int) $row->position, $row->about ?? null);
     }
 }

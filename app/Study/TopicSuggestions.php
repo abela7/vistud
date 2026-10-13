@@ -130,6 +130,89 @@ final class TopicSuggestions
         return $new;
     }
 
+    /**
+     * The main topics the AI chose for one part of a module, from all of its files at once (AppEngineJobsChooseTopics):
+     * they take the place of what was waiting there, in the order to study them, each with why it matters, what it covers
+     * and where it is taught. A topic the module has, or one the student added or said no to before, is left out. A part
+     * is a folder of the module, or the module itself for files outside its folders ($folderId null). Returns how many
+     * wait now.
+     *
+     * @param  list<array{name: string, why: string, note?: string, covers: list<string>, sources: list<array{file: string, pages: string}>}>  $topics
+     */
+    public function choose(Principal $by, string $moduleId, ?string $folderId, array $topics): int
+    {
+        $scope = Guard::learner($by);
+        $module = $this->module($scope, $moduleId);
+        // What is there already, by the name's core (case, plurals, punctuation and "the" aside): never chosen again.
+        $known = [];
+        foreach ($this->topics->list($by, $module->workspace_id) as $topic) {
+            if ($topic->moduleId === $moduleId) {
+                $known[self::core($topic->name)] = true;
+            }
+        }
+        foreach (LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->get(['name', 'status', 'folder_id']) as $row) {
+            // Said no to, or waiting in another part of the module.
+            if ($row->status === 'dismissed' || ($row->status === 'suggested' && $row->folder_id !== $folderId)) {
+                $known[self::core($row->name)] = true;
+            }
+        }
+
+        $waiting = 0;
+        DB::transaction(function () use ($scope, $moduleId, $folderId, $topics, $known, &$waiting) {
+            // What waited in this part is replaced: the new choice was made from all of its files.
+            $here = LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('status', 'suggested');
+            ($folderId === null ? $here->whereNull('folder_id') : $here->where('folder_id', $folderId))->delete();
+
+            $position = 0;
+            foreach ($topics as $topic) {
+                $name = Topics::cleanMarkdown(trim((string) $topic['name']));
+                $key = self::key($name);
+                $core = self::core($name);
+                if ($name === '' || mb_strlen($name) > Topics::MAX_NAME || isset($known[$core])) {
+                    continue;
+                }
+                $known[$core] = true;
+                $fields = [
+                    'reason' => $topic['why'] !== '' ? mb_substr($topic['why'], 0, 300) : null,
+                    'note' => ($topic['note'] ?? '') !== '' ? mb_substr($topic['note'], 0, 500) : null,
+                    'covers' => json_encode(array_values($topic['covers']), JSON_UNESCAPED_UNICODE),
+                    'sources' => json_encode(array_values($topic['sources']), JSON_UNESCAPED_UNICODE),
+                    'position' => ++$position,
+                    'folder_id' => $folderId,
+                    'source_file_id' => $topic['sources'][0]['file'] ?? null,
+                ];
+                $existing = LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('name_key', $key)->first();
+                if ($existing === null) {
+                    LearnerTables::insert($scope, 'topic_suggestions', $fields + ['id' => Ids::new(), 'module_id' => $moduleId, 'name' => $name, 'name_key' => $key, 'status' => 'suggested', 'created_at' => now()]);
+                } elseif ($existing->status === 'suggested') {
+                    // Waiting in another part of the module: it is this part's now.
+                    LearnerTables::query($scope, 'topic_suggestions')->where('id', $existing->id)->update($fields);
+                } else {
+                    // Added or said no to before: not suggested again.
+                    $position--;
+
+                    continue;
+                }
+                $waiting++;
+            }
+        });
+
+        return $waiting;
+    }
+
+    /**
+     * The topics the student said no to in a module, so they aren't chosen again under another name.
+     *
+     * @return list<string>
+     */
+    public function refused(Principal $by, string $moduleId): array
+    {
+        $scope = Guard::learner($by);
+        $this->module($scope, $moduleId);
+
+        return LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('status', 'dismissed')->orderBy('name')->pluck('name')->all();
+    }
+
     /** Adds every waiting suggestion of the module (or of some of its folders) as a topic, in order. Returns how many. */
     public function addAll(Principal $by, string $moduleId, ?array $folderIds = null): int
     {
@@ -218,12 +301,30 @@ final class TopicSuggestions
         if ($moduleIds === []) {
             return [];
         }
-        $rows = LearnerTables::query($scope, 'topic_suggestions')->whereIn('module_id', $moduleIds)->where('status', 'suggested')->orderBy('created_at')->orderBy('id')->get();
-        $files = LearnerTables::query($scope, 'files')->whereIn('id', $rows->pluck('source_file_id')->filter()->all())->get(['id', 'name', 'extension'])->keyBy('id');
+        // In the order to study them where the AI gave one, then as they were found.
+        $rows = LearnerTables::query($scope, 'topic_suggestions')->whereIn('module_id', $moduleIds)->where('status', 'suggested')
+            ->orderByRaw('position is null')->orderBy('position')->orderBy('created_at')->orderBy('id')->get();
+        $sourcesOf = fn (object $row): array => is_string($row->sources ?? null) ? array_values(array_filter((array) json_decode($row->sources, true), 'is_array')) : [];
+        $fileIds = $rows->pluck('source_file_id')->filter()->all();
+        foreach ($rows as $row) {
+            foreach ($sourcesOf($row) as $source) {
+                $fileIds[] = (string) ($source['file'] ?? '');
+            }
+        }
+        $files = LearnerTables::query($scope, 'files')->whereIn('id', array_values(array_unique(array_filter($fileIds))))->whereNull('trashed_at')->get(['id', 'name', 'extension'])->keyBy('id');
         $by = [];
         foreach ($rows as $row) {
             $file = $files[$row->source_file_id] ?? null;
-            $by[$row->module_id][] = new TopicSuggestionDetails($row->id, $row->module_id, $row->name, $file?->id, $file === null ? null : "{$file->name}.{$file->extension}", $row->folder_id ?? null);
+            $sources = [];
+            foreach ($sourcesOf($row) as $source) {
+                $at = $files[$source['file'] ?? ''] ?? null;
+                if ($at !== null) {
+                    $sources[] = ['fileId' => $at->id, 'name' => "{$at->name}.{$at->extension}", 'pages' => (string) ($source['pages'] ?? '')];
+                }
+            }
+            $covers = is_string($row->covers ?? null) ? array_values(array_filter((array) json_decode($row->covers, true), 'is_string')) : [];
+            $by[$row->module_id][] = new TopicSuggestionDetails($row->id, $row->module_id, $row->name, $file?->id, $file === null ? null : "{$file->name}.{$file->extension}", $row->folder_id ?? null,
+                $row->reason ?? null, $covers, $sources, isset($row->position) ? (int) $row->position : null, $row->note ?? null);
         }
 
         return $by;
@@ -237,6 +338,26 @@ final class TopicSuggestions
     private function row(LearnerScope $scope, string $id): object
     {
         return LearnerTables::query($scope, 'topic_suggestions')->where('id', $id)->first() ?? throw new NotFound;
+    }
+
+    /**
+     * A name's core, for telling twins apart from new topics: lower case, no punctuation, no "the", "a" or "an", and
+     * each word without a plural's s ("The Graph Traversals" and "graph traversal" are one topic).
+     */
+    public static function core(string $name): string
+    {
+        $words = preg_split('/\s+/u', trim((string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', mb_strtolower($name)))) ?: [];
+        $words = array_filter($words, fn (string $w) => ! in_array($w, ['the', 'a', 'an', 'and', 'of'], true));
+
+        $one = fn (string $w): string => match (true) {
+            mb_strlen($w) <= 3 => $w,
+            str_ends_with($w, 'ies') => mb_substr($w, 0, -3).'y',                              // theories
+            (bool) preg_match('/(ss|x|z|ch|sh)es$/u', $w) => mb_substr($w, 0, -2),             // processes, matches
+            str_ends_with($w, 's') && ! preg_match('/(ss|us|is)$/u', $w) => mb_substr($w, 0, -1), // graphs, not status or analysis
+            default => $w,
+        };
+
+        return implode(' ', array_map($one, $words));
     }
 
     private static function key(string $name): string

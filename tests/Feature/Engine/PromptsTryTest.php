@@ -165,7 +165,7 @@ class PromptsTryTest extends TestCase
         $this->assertCount(5, $this->engine->requests);
         foreach ($this->engine->requests as $number => $request) {
             $this->assertSame('fake/tutor', $request->model);
-            $this->assertStringStartsWith($number < 2 ? '# You set up a course with a student' : '# You add modules to a course with a student', $request->system);
+            $this->assertStringStartsWith($number < 2 ? '# You set up a course with a student' : "# You set up a course's modules with a student", $request->system);
             $this->assertStringContainsString('## What is set up', $request->system);
             $this->assertSame([], $request->tools);
         }

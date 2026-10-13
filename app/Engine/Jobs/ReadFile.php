@@ -3,9 +3,13 @@
 namespace App\Engine\Jobs;
 
 use App\Engine\EngineFailed;
+use App\Engine\Role;
+use App\Engine\Settings;
 use App\Platform\Access\Principal;
+use App\Platform\Errors\AppError;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\FileDetails;
 use App\Study\FileDigests;
 use App\Study\Files;
 use App\Study\FileText;
@@ -42,7 +46,6 @@ final class ReadFile extends Job
     {
         $files = app(Files::class);
         $digests = app(FileDigests::class);
-        $suggestions = app(TopicSuggestions::class);
         $file = $files->find($by, (string) $this->targetId);
         $file->workspaceId === $this->workspaceId || throw new NotFound;
         if ($file->trashedAt !== null) {
@@ -53,7 +56,7 @@ final class ReadFile extends Job
         }
         // The same bytes in another file of the course: what was read there is the answer, and it costs nothing.
         if (($same = $digests->reuse($by, $file)) !== null) {
-            $file->moduleId === null || $suggestions->suggest($by, $file->moduleId, $file->id, $same->topics);
+            self::chooseTopics($by, $file, $same->topics);
 
             return;
         }
@@ -76,7 +79,29 @@ final class ReadFile extends Job
         $reading = self::parse($reply->text);
 
         $digests->keep($by, $file->id, $reading, $text->count(), $chars, $reply->model, $run->id);
-        $file->moduleId === null || $suggestions->suggest($by, $file->moduleId, $file->id, $reading['topics']);
+        self::chooseTopics($by, $file, $reading['topics']);
+    }
+
+    /**
+     * Once a file is read, the main topics of its part are chosen from all of the part's files at once (ChooseTopics:
+     * which files matter, a few main topics, why each matters), not a list per file. Without an AI that can do it (no
+     * tutor model yet), what this file's reader saw waits for the student instead, as it used to.
+     *
+     * @param  list<string>  $topics  what the reader saw in this file
+     */
+    private static function chooseTopics(Principal $by, FileDetails $file, array $topics): void
+    {
+        if (($place = ChooseTopics::placeOf($by, $file)) === null) {
+            return;
+        }
+        try {
+            app(Settings::class)->ready($by, Role::Tutor);
+        } catch (AppError) {
+            app(TopicSuggestions::class)->suggest($by, (string) $file->moduleId, $file->id, $topics);
+
+            return;
+        }
+        app(Runner::class)->start($by, new ChooseTopics($file->workspaceId, $place[0], $place[1]));
     }
 
     /** The reader's rules, without the file's opening comment (for people). */

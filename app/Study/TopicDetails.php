@@ -8,6 +8,14 @@ namespace App\Study;
  */
 final readonly class TopicDetails
 {
+    /**
+     * Where a topic stands, in the words every screen uses for it (the topic page, its sheet, Progress, a module's page,
+     * a session), and the icon beside each. "covered" reads Studying and "confused" Not understood.
+     */
+    public const STATUS_WORDS = ['not_started' => 'Not started', 'covered' => 'Studying', 'understood' => 'Understood', 'confused' => 'Not understood', 'mastered' => 'Mastered'];
+
+    public const STATUS_ICONS = ['not_started' => 'circle-dashed', 'covered' => 'book-open', 'understood' => 'circle-check', 'confused' => 'circle-alert', 'mastered' => 'shield-check'];
+
     /** The rules' labels, in plain words. */
     public const LABELS = [
         'not_started' => 'no contact yet',
@@ -44,6 +52,8 @@ final readonly class TopicDetails
         public ?string $statusAt = null,
         /** The folder of its module it belongs to (docs/specs/vistud-2-blueprint.md, Phase 9), or null. */
         public ?string $folderId = null,
+        /** When the student last got it right (a qualifying success), from the evidence; null before any. */
+        public ?string $lastSuccess = null,
     ) {}
 
     /** Whether it is in one of these folders (Folders::within gives a folder and those inside it). @param list<string> $folderIds */
@@ -52,15 +62,36 @@ final readonly class TopicDetails
         return $this->folderId !== null && in_array($this->folderId, $folderIds, true);
     }
 
-    /** The one word shown: mastered is earned, the rest is the student's word. */
+    /**
+     * The one word shown (the owner's ask, 2026-10-12: tracking that follows every change of mind). The newest word holds
+     * until newer evidence: "not started" until the topic is studied again, "not understood" until the student gets it
+     * right again, whatever was earned before; so a student who takes a topic back, or says they've lost it, is believed.
+     * Otherwise mastered is earned from the evidence, then the student's (or the tutor's) word, then "covered" once the
+     * topic has been met at all.
+     */
     public function shown(): string
     {
         return match (true) {
+            $this->status === 'not_started' && ! self::newer($this->lastContact, $this->statusAt) => 'not_started',
+            $this->status === 'confused' && ! self::newer($this->lastSuccess, $this->statusAt) => 'confused',
             in_array($this->label, ['secure', 'durable'], true) => 'mastered',
-            $this->status !== null => $this->status,
+            in_array($this->status, ['covered', 'understood'], true) => $this->status,
             $this->label !== 'not_started' => 'covered',
             default => 'not_started',
         };
+    }
+
+    /** Whether evidence at $evidence came after the word said at $said (to the second: a tie goes to the word). */
+    private static function newer(?string $evidence, ?string $said): bool
+    {
+        if ($evidence === null) {
+            return false;
+        }
+        if ($said === null) {
+            return true;
+        }
+
+        return strtotime($evidence) > strtotime($said.(preg_match('/[zZ]|[+-]\d\d:?\d\d$/', $said) === 1 ? '' : ' UTC'));
     }
 
     /** Whether the tutor set the status shown, rather than the student: it says so, and can be undone. */

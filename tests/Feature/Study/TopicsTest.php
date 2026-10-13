@@ -5,9 +5,14 @@ namespace Tests\Feature\Study;
 use App\Brain\Store\JournalReader;
 use App\Brain\Writer\JournalWriter;
 use App\Models\User;
+use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\Findings;
+use App\Study\Flashcards;
+use App\Study\Folders;
 use App\Study\ModuleDetails;
 use App\Study\Modules;
 use App\Study\Questions;
@@ -114,16 +119,31 @@ class TopicsTest extends TestCase
         $normal = $this->topics->create($this->by, $this->databases->id, 'Normalisation', $this->week1->id);
 
         $this->topics->rename($this->by, $joins->id, 'SQL joins');
+        // The journal names the topic by its new label too, once: renaming to the same name says nothing.
+        $this->topics->rename($this->by, $joins->id, 'SQL joins');
+        $labels = LearnerTables::query(Guard::learner($this->by), 'journal_content')->where('field', 'label')->pluck('text')->all();
+        $this->assertSame(['Joins', 'Normalisation', 'SQL joins'], $labels);
         $this->topics->move($this->by, $joins->id, $this->week1->id);
         $this->topics->reorder($this->by, $normal->id, 0);
         $this->assertSame([['Normalisation', $this->week1->id], ['SQL joins', $this->week1->id]], array_map(fn ($t) => [$t->name, $t->moduleId], $this->topics->list($this->by, $this->databases->id)));
 
         $this->topics->move($this->by, $joins->id, null);
         $question = $this->questions->ask($this->by, $this->databases->id, 'Why is a left join different?', $joins->id);
+        $card = app(Flashcards::class)->add($this->by, $this->databases->id, $joins->id, 'What does a left join keep?', 'Every left row.');
+        app(Findings::class)->add($this->by, $joins->id, ['text' => 'A left join keeps every left row.']);
+        $session = app(Sessions::class)->start($this->by, $this->databases->id, $joins->id);
         $this->topics->retire($this->by, $joins->id);
         $this->assertSame(['Normalisation'], array_map(fn ($t) => $t->name, $this->topics->list($this->by, $this->databases->id)));
         $this->assertNull($this->questions->find($this->by, $question->id)->topicId);
         $this->assertThrows(fn () => $this->topics->find($this->by, $joins->id), NotFound::class);
+        // Nothing points at it: the card stays with no topic and no longer counts for it, its key points go, and the
+        // open session has no topic now (and says the student took it off).
+        $this->assertNull(app(Flashcards::class)->find($this->by, $card)->topicId);
+        $exercises = array_values(array_filter($this->entries(), fn ($e) => $e->kind->value === 'claim' && $e->body['type'] === 'relates' && $e->body['value']['relation'] === 'exercises'));
+        $this->assertSame('retired', end($exercises)->body['value']['status']);
+        $this->assertSame(0, LearnerTables::query(Guard::learner($this->by), 'findings')->where('topic_id', $joins->id)->count());
+        $this->assertNull(app(Sessions::class)->find($this->by, $session->id)->topicId);
+        $this->assertSame([null, 'student'], array_map(fn ($c) => [$c['topic'], $c['by']], app(Sessions::class)->topicLog($this->by, $session->id))[0]);
     }
 
     public function test_questions_open_get_understood_and_reopen_through_the_journal(): void
@@ -145,9 +165,39 @@ class TopicsTest extends TestCase
         $this->assertSame('open', $reopened->shown());
         $this->assertContains('reopened', $reopened->flags);
 
-        $this->questions->retire($this->by, $question->id);
+        $this->questions->delete($this->by, $question->id);
         $this->assertSame([], $this->questions->list($this->by, $this->databases->id));
+        $this->assertSame(0, LearnerTables::query(Guard::learner($this->by), 'questions')->where('id', $question->id)->count(), 'gone, not hidden');
         $this->assertThrows(fn () => $this->questions->ask($this->by, $this->databases->id, ''), Unprocessable::class);
+    }
+
+    public function test_a_question_can_be_given_another_topic_and_follows_its_modules_and_folder(): void
+    {
+        $lab = app(Folders::class)->create($this->by, 'module', $this->week1->id, 'Lab');
+        $week2 = app(Modules::class)->create($this->by, $this->databases->id, ['title' => 'Week 2']);
+        $joins = $this->topics->create($this->by, $this->databases->id, 'Joins', $this->week1->id, $lab->id);
+        $views = $this->topics->create($this->by, $this->databases->id, 'Views', $week2->id);
+        $place = fn ($q) => [$q->topicId, $q->moduleId, $q->folderId];
+
+        // In no module and about no topic: choosing a topic brings its module and its folder.
+        $question = $this->questions->ask($this->by, $this->databases->id, 'What is a join?');
+        $this->assertSame([null, null, null], $place($question));
+        $this->assertSame([$joins->id, $this->week1->id, $lab->id], $place($this->questions->update($this->by, $question->id, $question->text, null, $joins->id)));
+
+        // null leaves the topic as it is, even with new words.
+        $this->assertSame([$joins->id, $this->week1->id, $lab->id], $place($this->questions->update($this->by, $question->id, 'What is a join, really?')));
+
+        // Another topic in another module: the module is the one given, and the folder is the new topic's (none).
+        $this->assertSame([$views->id, $week2->id, null], $place($this->questions->update($this->by, $question->id, 'What is a join, really?', $week2->id, $views->id)));
+
+        // '' takes the topic off; it stays in its module.
+        $this->assertSame([null, $week2->id, null], $place($this->questions->update($this->by, $question->id, 'What is a join, really?', null, '')));
+
+        // A topic of another course isn't found, and the question is as it was.
+        $maths = app(Workspaces::class)->create($this->by, ['name' => 'Maths']);
+        $sets = $this->topics->create($this->by, $maths->id, 'Sets');
+        $this->assertThrows(fn () => $this->questions->update($this->by, $question->id, 'What is a join, really?', null, $sets->id), NotFound::class);
+        $this->assertSame([null, $week2->id, null], $place($this->questions->find($this->by, $question->id)));
     }
 
     public function test_a_question_is_pending_stuck_or_answered_in_its_module_and_session(): void

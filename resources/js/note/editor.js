@@ -1014,16 +1014,6 @@ export async function mount(host) {
         }
     }
 
-    function saveNow() {
-        if (autosave) {
-            autosave.flush();
-            if (autosave.isClean()) {
-                setStatus('saved');
-            }
-        } else if (hasWords()) {
-            createNote();
-        }
-    }
 
     // ---------- A draft left in this browser ----------
     if (note.id) {
@@ -1140,7 +1130,7 @@ export async function mount(host) {
             }
             if (key === 's') {
                 event.preventDefault();
-                saveNow();
+                saveAndOfferWord();
                 return;
             }
         }
@@ -3725,7 +3715,7 @@ export async function mount(host) {
 
         if (isMod && !event.shiftKey && !event.altKey && key === 's') {
             event.preventDefault();
-            saveNow();
+            saveAndOfferWord();
             return;
         }
         if (isMod && !event.shiftKey && !event.altKey && key === 'f') {
@@ -3939,7 +3929,10 @@ export async function mount(host) {
     }
     // ---------- Share as a file ----------
     // PDF, Word, Markdown or text (App\Http\Controllers\NoteExportController), with everything written in it: the device's
-    // share sheet where it can share files (phones, Windows), a download where it can't.
+    // share sheet on a phone or tablet, where that is how a file is kept; a download straight away on a computer. (A
+    // computer's share sheet opened only for a press that was recent, and a Word file takes seconds to make, so the
+    // student was left with "ready" and no file.)
+    const sharesFiles = (file) => window.matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [file] });
     const sharedName = (response, format) => {
         const header = response.headers.get('Content-Disposition') ?? '';
         const utf8 = header.match(/filename\*=UTF-8''([^;]+)/i);
@@ -3958,14 +3951,14 @@ export async function mount(host) {
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
-        toast(`“${file.name}” is in your downloads.`, 'success');
+        toast(`“${file.name}” was downloaded. Look in your Downloads folder.`, 'success');
     };
     const shareFile = (file) => navigator.share({ files: [file], title: file.name });
-    page.querySelectorAll('[data-share-format]').forEach((item) => item.addEventListener('click', async () => {
-        const format = item.dataset.shareFormat;
+    /** The saved note as a `format` file, made by the server; null (with the reason shown) when it can't be. */
+    async function makeExport(format) {
         if (!(await savedForMoving()) || !host.dataset.noteUrl) {
             toast(host.dataset.noteUrl ? 'This note isn\'t saved yet. Try again in a moment.' : 'Write a title or some text first: there\'s nothing to share yet.', 'info');
-            return;
+            return null;
         }
         if (format === 'pdf' || format === 'docx') toast(`Making the ${format === 'pdf' ? 'PDF' : 'Word document'}…`, 'info');
         let response = null;
@@ -3975,11 +3968,33 @@ export async function mount(host) {
         if (!response?.ok) {
             const said = response?.status === 422 ? await response.text().catch(() => '') : '';
             toast(said || 'The file couldn\'t be made. Check your connection, then try again.', 'info');
-            return;
+            return null;
         }
         const blob = await response.blob();
-        const file = new File([blob], sharedName(response, format), { type: blob.type });
-        if (!navigator.canShare?.({ files: [file] })) {
+
+        return new File([blob], sharedName(response, format), { type: blob.type });
+    }
+    // Word is in the Share menu only where the server can make it (LibreOffice), so that is how to know.
+    const canMakeWord = page.querySelector('[data-share-format="docx"]') !== null;
+    /** Save, then say so, with the note as a Word file one press away: the way an assignment written here goes to Word. */
+    async function saveAndOfferWord() {
+        if (!(await savedForMoving()) || !host.dataset.noteUrl) {
+            toast(host.dataset.noteUrl ? 'This note isn\'t saved yet. Try again in a moment.' : 'Write a title or some text first: there\'s nothing to save yet.', 'info');
+            return;
+        }
+        toast('Note saved.', 'success', canMakeWord ? {
+            label: 'Save as Word (.docx)',
+            click: async () => {
+                const file = await makeExport('docx');
+                if (file) download(file);
+            },
+        } : null);
+    }
+    page.querySelectorAll('[data-note-save]').forEach((button) => button.addEventListener('click', saveAndOfferWord));
+    page.querySelectorAll('[data-share-format]').forEach((item) => item.addEventListener('click', async () => {
+        const file = await makeExport(item.dataset.shareFormat);
+        if (!file) return;
+        if (!sharesFiles(file)) {
             download(file);
             return;
         }

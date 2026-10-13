@@ -1298,55 +1298,1361 @@
     }
 
     /*
-    | Topic Page layout: concise, responsive 2-column layout matching ViStud theme rules.
-    | On desktop & tablet (>= 768px): Deep-dive tabs on the left, compact status & options sidebar on the right.
-    | On mobile (< 768px): Smooth stacked layout with zero overflow and compact padding.
+    | The topic page, the page's full width. Below 1024 px one column: where the student stands, the work (the tabs),
+    | then renaming and moving. From 1024 px the work on the left and a slim column on the right with the other two.
+    | The AI tutor fills the height of the screen there, so the page has no dead space under a short box.
     */
+    .topic-page {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
     .topic-page-layout {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: 'standing' 'main' 'manage';
         align-items: start;
-        gap: 0.875rem;
+        gap: 1rem;
     }
 
-    @media (min-width: 48rem) {
-        .topic-page-layout {
-            grid-template-columns: minmax(0, 1fr) 18.5rem;
-            gap: 1rem;
+    .topic-page-main {
+        grid-area: main;
+        display: flex;
+        flex-direction: column;
+        gap: 0.875rem;
+        min-width: 0;
+    }
+
+    .topic-page .topic-page-standing {
+        grid-area: standing;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
+
+    .topic-page .topic-panel {
+        padding: 1rem;
+    }
+
+    .topic-page .topic-panel.topic-page-manage {
+        grid-area: manage;
+        padding: 0;
+    }
+
+    .topic-page-standing .topic-page-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    /* A phone: where they stand stays short, so the work starts on the first screen. */
+    @media (max-width: 39.99rem) {
+        .topic-page-standing .tsheet-choice {
+            min-height: 2.75rem;
+            align-items: center;
+        }
+
+        .topic-page-standing .tsheet-choice-hint {
+            display: none;
+        }
+
+        .topic-page-standing .topic-page-stats {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.375rem;
+        }
+
+        .topic-page-stats .tsheet-stat {
+            padding: 0.5rem;
+        }
+
+        .topic-page-stats .tsheet-stat-value {
+            font-size: 1.0625rem;
+        }
+
+        .topic-page-stats .tsheet-stat-label {
+            font-size: 0.6875rem;
+            line-height: 1.25;
+        }
+    }
+
+    /* A tablet: the four choices and the four numbers each fit one row. */
+    @media (min-width: 40rem) and (max-width: 63.99rem) {
+        .topic-page-standing .tsheet-choices,
+        .topic-page-standing .topic-page-stats {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
         }
     }
 
     @media (min-width: 64rem) {
         .topic-page-layout {
             grid-template-columns: minmax(0, 1fr) 20rem;
+            grid-template-rows: auto 1fr;
+            grid-template-areas: 'main standing' 'main manage';
+            gap: 1rem 1.5rem;
+        }
+    }
+
+    @media (min-width: 90rem) {
+        .topic-page-layout {
+            grid-template-columns: minmax(0, 1fr) 23rem;
         }
     }
 
     /*
-    | Compact Topic Sheet Dialog (#topic-sheet):
-    | Eliminates the empty right-hand gap and empty bottom vertical space of full-height drawers.
-    | Fits content tightly on both mobile bottom-sheet (< 640px) and desktop right-edge panel (>= 640px).
+    | The AI tutor on a topic's page: the same chat as a study session's (tutor-chat.blade.php), as a box of fixed height
+    | with the writing line at its bottom; the talk, or the empty chat's starters, fill what is above it. On a phone or a
+    | tablet the box is most of a screen. From a laptop up it reaches the window's bottom, and the column beside it ends
+    | with it: what the tutor reads takes that column's spare height (.topic-page-reads).
     */
-    .topic-sheet-modal .modal-panel {
+    .topic-tutor .chat {
+        height: min(max(28rem, 74dvh), 44rem);
+        min-width: 0;
+    }
+
+    .topic-tutor .chat-log {
+        flex: 1 1 0;
+        min-height: 0;
+        max-height: none;
+    }
+
+    .topic-tutor .chat-empty {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    /* Below a laptop an empty chat is only as tall as its starters; the box takes its height with the first turn. */
+    @media (max-width: 63.99rem) {
+        .topic-tutor .chat:not(:has([data-turn])) {
+            height: auto;
+        }
+    }
+
+    /*
+    | Each line the tutor remembers (livewire/study/memories.blade.php): who wrote it and when, with change and delete,
+    | and the line to add one. Long lines wrap; nothing is cut.
+    */
+    /* The window (livewire/study/memories.blade.php): the lines by where they hold, scrolling; adding stays at the foot. */
+    .memories-panel {
+        display: flex;
+        flex-direction: column;
+        max-height: min(46rem, calc(100dvh - 2rem));
+    }
+
+    .memories-body {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 1rem;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0.25rem 1.25rem 1rem;
+    }
+
+    .memories-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 1.5rem 0.5rem;
+        text-align: center;
+    }
+
+    .memory-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+    }
+
+    .memory-group-title {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .memory-group-here {
+        padding: 0 0.375rem;
+        border-radius: 9999px;
+        background-color: var(--accent-subtle);
+        color: var(--accent);
+        font-size: 0.6875rem;
+        letter-spacing: 0;
+        text-transform: none;
+    }
+
+    .memory-item.is-highlighted {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+    }
+
+    .memories-add {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.875rem 1.25rem 1.125rem;
+        border-top: 1px solid var(--divider);
+    }
+
+    .memories-add .field-label {
+        margin: 0;
+    }
+
+    /* The way in from a course's Instructions for the AI, and from Settings. */
+    .memory-link {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
         width: 100%;
-        max-width: none;
+        padding: 0.75rem 0.875rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .memory-link > svg:first-child {
+        color: var(--accent);
+    }
+
+    .memory-link:hover {
+        border-color: var(--accent);
+    }
+
+    .memory-link:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .memory-setting {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
+    }
+
+
+    .memory-off {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: flex-start;
+        gap: 0.375rem;
+    }
+
+    .memory-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+    }
+
+    .memory-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.5rem 0.25rem 0.5rem 0.625rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background-color: var(--surface);
+    }
+
+    .memory-icon {
+        margin-top: 0.125rem;
+        color: var(--accent);
+    }
+
+    .memory-body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .memory-text {
+        font-size: 0.875rem;
+        color: var(--text);
+        overflow-wrap: break-word;
+    }
+
+    .memory-meta {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    /* Change and delete: small, side by side; a tap target of 2 rem each. */
+    .memory-actions {
+        display: flex;
+        flex-shrink: 0;
+        margin-block: -0.25rem;
+    }
+
+    .memory-action {
+        display: grid;
+        place-items: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: var(--radius-md);
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+
+    .memory-action:hover {
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    .memory-action.is-danger:hover {
+        color: var(--danger);
+    }
+
+    .memory-action:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: -2px;
+    }
+
+    .memory-edit {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    .memory-edit-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .memory-add-row {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .memory-add-row .input {
+        flex: 1;
+        min-width: 0;
+    }
+    /*
+    | ViStud AI (livewire/study/vistud-ai-page.blade.php): one workspace the height of the window under the top bar, or
+    | of the whole screen in full screen (data-session-fullscreen hides the app's frame). A slim bar; then the
+    | conversations beside the chat from a laptop up (they fold away), sliding in over it below that; the chat fills the
+    | rest, and on a wide one its messages and box keep a width that reads well. And the card on My courses.
+    */
+    .app-main:has(.vistud-ai) {
+        padding-block: 0.75rem;
+    }
+
+    .vistud-ai {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        height: calc(100dvh - 3.5rem - 1.5rem);
+        min-height: 24rem;
+    }
+
+    .vistud-ai.is-fullscreen {
+        height: 100dvh;
+        min-height: 0;
+        padding: 0.375rem 0.75rem max(0.5rem, env(safe-area-inset-bottom));
+    }
+
+    .vistud-ai-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 2.75rem;
+    }
+
+    .vistud-ai-icon-btn {
+        display: grid;
+        flex-shrink: 0;
+        place-items: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--radius-md);
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+
+    .vistud-ai-icon-btn:hover {
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    .vistud-ai-icon-btn[aria-pressed='true'],
+    .vistud-ai-icon-btn[aria-expanded='true'] {
+        color: var(--accent);
+    }
+
+    .vistud-ai-icon-btn:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .vistud-ai-mark {
+        display: grid;
+        flex-shrink: 0;
+        place-items: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 9999px;
+        background-color: var(--accent-subtle);
+        color: var(--accent);
+    }
+
+    .vistud-ai-names {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .vistud-ai-name {
+        font-size: 1rem;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--text);
+    }
+
+    .vistud-ai-current {
+        overflow: hidden;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .vistud-ai-actions {
+        display: flex;
+        flex-shrink: 0;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .vistud-ai-body {
+        position: relative;
+        display: flex;
+        flex: 1 1 auto;
+        gap: 0.75rem;
         min-height: 0;
     }
 
-    .topic-sheet-modal .modal-head + * {
-        flex: 0 1 auto;
-        margin-top: 0;
+    .vistud-ai-side {
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        gap: 0.625rem;
+        width: 17rem;
+        min-height: 0;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+    }
+
+    .vistud-ai-side-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 2rem;
+    }
+
+    .vistud-ai-side-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .vistud-ai-side-close {
+        width: 2rem;
+        height: 2rem;
+    }
+
+    .vistud-ai-search {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        height: 2.25rem;
+        padding: 0 0.625rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background-color: var(--surface);
+        color: var(--text-muted);
+    }
+
+    .vistud-ai-search:focus-within {
+        border-color: var(--accent);
+    }
+
+    .vistud-ai-search-input {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        background-color: transparent;
+        font-size: 0.875rem;
+        color: var(--text);
+        outline: none;
+    }
+
+    .vistud-ai-items {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        min-height: 0;
+        margin-inline: -0.25rem;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .vistud-ai-list-empty {
+        padding: 0.25rem 0.125rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
+
+    .vistud-ai-item {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        border-radius: var(--radius-md);
+    }
+
+    .vistud-ai-item:hover,
+    .vistud-ai-item.is-current {
+        background-color: var(--hover);
+    }
+
+    .vistud-ai-item.is-current {
+        box-shadow: inset 2px 0 0 var(--accent);
+    }
+
+    .vistud-ai-open {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+        padding: 0.5rem;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .vistud-ai-open:focus-visible {
+        border-radius: var(--radius-md);
+        outline: 2px solid var(--focus-ring);
+        outline-offset: -2px;
+    }
+
+    .vistud-ai-title {
+        overflow: hidden;
+        font-size: 0.875rem;
+        color: var(--text);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .vistud-ai-when {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    .vistud-ai-scrim {
+        position: absolute;
+        inset: 0;
+        z-index: 15;
+        border-radius: var(--radius-xl);
+        background-color: var(--overlay);
+    }
+
+    .vistud-ai-slide {
+        transition:
+            transform 0.18s ease,
+            opacity 0.18s ease;
+    }
+
+    .vistud-ai-slide.is-out {
+        opacity: 0;
+        transform: translateX(-0.75rem);
+    }
+
+    /* The chat fills what is left; on a wide one its messages and box keep a width that reads well, centred. */
+    .vistud-ai-chat {
+        display: flex;
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+        container-type: inline-size;
+    }
+
+    .vistud-ai-chat .chat {
+        flex: 1 1 auto;
+        height: auto;
+        min-width: 0;
+        min-height: 0;
+    }
+
+    .vistud-ai-chat .chat-log {
+        flex: 1 1 0;
+        min-height: 0;
+        max-height: none;
+        padding-inline: max(0.25rem, calc((100cqw - 54rem) / 2));
+    }
+
+    .vistud-ai-chat .chat-empty {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    .vistud-ai-chat .chat-dock {
+        width: 100%;
+        max-width: 54rem;
+        margin-inline: auto;
+    }
+
+    /* Below a laptop: the conversations slide in over the chat; a small phone's New chat is its icon. */
+    @media (max-width: 63.99rem) {
+        .vistud-ai-side {
+            position: absolute;
+            inset: 0 auto 0 0;
+            z-index: 20;
+            width: min(20rem, 88%);
+            box-shadow: var(--elevation-lg);
+        }
+    }
+
+    @media (max-width: 29.99rem) {
+        .vistud-ai-mark {
+            display: none;
+        }
+
+        .vistud-ai-label {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+            white-space: nowrap;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .vistud-ai-slide {
+            transition: none;
+        }
+    }
+
+    .vistud-ai-card {
+        display: flex;
+        align-items: center;
+        gap: 0.875rem;
+        padding: 0.875rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+        color: var(--text);
+        text-decoration: none;
+        transition: border-color 0.15s ease;
+    }
+
+    .vistud-ai-card:hover {
+        border-color: var(--accent);
+    }
+
+    .vistud-ai-card > svg:last-child {
+        color: var(--text-muted);
+    }
+
+    .vistud-ai-card:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .chat-topic-bar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: -0.25rem;
+    }
+
+    /* A topic's empty chat: a badge, what to ask about, and four starters as cards; two by two once there is room. */
+    .chat-empty.chat-empty-topic {
+        justify-content: safe center;
+        gap: 0.5rem;
+        padding: 1.5rem 1rem;
+        border: 0;
+    }
+
+    .chat-empty-badge {
+        display: grid;
+        place-items: center;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 9999px;
+        background-color: var(--accent-subtle);
+        color: var(--accent);
+    }
+
+    .chat-empty-title {
+        max-width: 36rem;
+        font-size: 1.0625rem;
+        font-weight: 600;
+        line-height: 1.35;
+        color: var(--text);
+        overflow-wrap: anywhere;
+    }
+
+    .chat-empty-hint {
+        max-width: 32rem;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+
+    .chat-starters {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.5rem;
+        width: 100%;
+        max-width: 40rem;
+        margin-top: 0.75rem;
+    }
+
+    .chat-starter {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        width: 100%;
+        min-height: 3.5rem;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
+        text-align: left;
+        cursor: pointer;
+        transition:
+            border-color 0.15s ease,
+            background-color 0.15s ease;
+    }
+
+    .chat-starter:hover {
+        border-color: var(--accent);
+        background-color: var(--hover);
+    }
+
+    .chat-starter:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .chat-starter:disabled {
+        cursor: default;
+        opacity: 0.6;
+    }
+
+    .chat-starter-icon {
+        display: grid;
+        flex-shrink: 0;
+        place-items: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: var(--radius-md);
+        background-color: var(--accent-subtle);
+        color: var(--accent);
+    }
+
+    .chat-starter-text {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .chat-starter-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .chat-starter-hint {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
+
+    .chat-starter-go {
+        flex-shrink: 0;
+        color: var(--text-subtle);
+        transition:
+            color 0.15s ease,
+            transform 0.15s ease;
+    }
+
+    .chat-starter:hover .chat-starter-go {
+        color: var(--accent);
+        transform: translateX(2px);
+    }
+
+    @media (min-width: 32rem) {
+        .chat-starters {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    /* A phone: the starters, not the badge and the line about them, get the first screen. */
+    @media (max-width: 39.99rem) {
+        .chat-empty-badge,
+        .chat-empty-hint {
+            display: none;
+        }
+
+        .chat-empty.chat-empty-topic {
+            padding: 0.75rem 0.25rem;
+        }
+
+        .chat-starters {
+            margin-top: 0.5rem;
+        }
+    }
+
+    /* What the tutor reads, beside the chat: shown from a laptop up, where the column has the room. */
+    .topic-page .topic-panel.topic-page-reads {
+        display: none;
+    }
+
+    .topic-page-reads-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+    }
+
+    .topic-page-reads-head .tsheet-label {
+        float: none;
+        width: auto;
+    }
+
+    .topic-page-reads-more {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--accent);
+        cursor: pointer;
+    }
+
+    .topic-page-reads-more:hover {
+        text-decoration: underline;
+    }
+
+    .topic-page-reads-empty {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.625rem;
+        padding: 0.75rem 0.5rem;
+        font-size: 0.8125rem;
+        text-align: center;
+        color: var(--text-muted);
+    }
+
+    .topic-page-reads-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-height: 0;
+        overflow-y: auto;
+        margin-inline: -0.375rem;
+    }
+
+    .topic-page-read {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.5rem;
+        border-radius: var(--radius-md);
+        font-size: 0.875rem;
+        color: var(--text);
+        text-decoration: none;
+    }
+
+    .topic-page-read > svg {
+        color: var(--text-muted);
+    }
+
+    .topic-page-read:hover {
+        background-color: var(--hover);
+    }
+
+    .topic-page-read:hover > svg {
+        color: var(--accent);
+    }
+
+    .topic-page-read:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: -2px;
+    }
+
+    .topic-page-read-kind {
+        flex-shrink: 0;
+        font-size: 0.75rem;
+        color: var(--text-subtle);
+    }
+
+    @media (min-width: 64rem) {
+        .topic-page-layout.is-chat .topic-page-main {
+            align-self: stretch;
+        }
+
+        /* The chat takes the window down to its bottom (but no less than a usable box), and no more than the column. */
+        .topic-tutor {
+            position: relative;
+            flex: 1 1 auto;
+            min-height: max(26rem, calc(100dvh - 17rem));
+        }
+
+        .topic-tutor .chat {
+            position: absolute;
+            inset: 0;
+            height: auto;
+        }
+    }
+
+    /* A window tall enough for it: what the tutor reads joins the column, taking its spare height so both end together. */
+    @media (min-width: 64rem) and (min-height: 50rem) {
+        .topic-page-layout.is-chat {
+            grid-template-rows: auto minmax(8.5rem, 1fr) auto;
+            grid-template-areas: 'main standing' 'main reads' 'main manage';
+        }
+
+        .topic-page .topic-panel.topic-page-reads {
+            grid-area: reads;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            align-self: stretch;
+            min-height: 0;
+            overflow: hidden;
+        }
+    }
+
+    /* From a wide screen the page's gutters narrow on a topic, so the chat and its column have the width. */
+    @media (min-width: 1280px) {
+        .app-main:has(.topic-page) {
+            padding-inline: 1.5rem;
+        }
+    }
+
+    /*
+    | The topic sheet (#topic-sheet): a bottom sheet on a phone and a full-height side panel from 640 px, like every
+    | dialog. Its head and foot stay put while the middle scrolls; each part is a labelled section with room around it.
+    | A status has one colour everywhere in it (--tone): neutral, accent, warning, success.
+    */
+    .tsheet .tsheet-panel {
+        min-height: 100%;
     }
 
     @media (min-width: 640px) {
-        .topic-sheet-modal.modal {
-            inset: 0.75rem 0 auto auto;
-            width: min(24rem, calc(100vw - 1.5rem));
-            height: auto;
-            max-height: calc(100dvh - 1.5rem);
-            border: 1px solid var(--border);
-            border-right: 0;
-            border-radius: var(--radius-xl) 0 0 var(--radius-xl);
+        .modal.tsheet {
+            width: min(27rem, calc(100vw - 2rem));
+        }
+    }
+
+    .tsheet-head {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 1rem 0.75rem 0.875rem 1.25rem;
+        border-bottom: 1px solid var(--divider);
+        background-color: var(--surface-raised);
+    }
+
+    .tsheet-icon {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--radius-lg);
+        background-color: color-mix(in oklab, var(--tone) 16%, transparent);
+        color: var(--tone);
+    }
+
+    .tsheet-eyebrow {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        overflow-wrap: anywhere;
+    }
+
+    .tsheet-title {
+        font-size: 1.0625rem;
+        font-weight: 650;
+        line-height: 1.3;
+        color: var(--text);
+        overflow-wrap: anywhere;
+    }
+
+    .tsheet-body {
+        flex: 1 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        padding: 1.125rem 1.25rem 1.5rem;
+    }
+
+    .tsheet-section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+    }
+
+    .tsheet-label {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        /* A floated legend is laid out like any child, so the fieldset's gap spaces it too. */
+        float: left;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .tsheet-count {
+        padding: 0 0.375rem;
+        border-radius: 9999px;
+        background-color: var(--surface-sunken);
+        font-size: 0.6875rem;
+        letter-spacing: 0;
+    }
+
+    /* The status of each choice, and of the head's icon, by one variable. */
+    :is(.tsheet, .tsheet-tones) .is-not_started { --tone: var(--text-muted); }
+    :is(.tsheet, .tsheet-tones) .is-covered { --tone: var(--accent); }
+    :is(.tsheet, .tsheet-tones) .is-confused { --tone: var(--warning); }
+    :is(.tsheet, .tsheet-tones) .is-understood { --tone: var(--success); }
+
+    .tsheet-choices {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+    }
+
+    .tsheet-choice {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        min-height: 3.5rem;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
+        cursor: pointer;
+        transition: border-color 150ms ease-out, background-color 150ms ease-out;
+    }
+
+    .tsheet-choice > svg:first-of-type {
+        margin-top: 0.0625rem;
+        color: var(--tone);
+    }
+
+    .tsheet-choice:hover {
+        border-color: var(--border-strong);
+        background-color: var(--hover);
+    }
+
+    .tsheet-choice:focus-visible,
+    .tsheet-choice:has(input:focus-visible) {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .tsheet-choice.is-active {
+        border-color: var(--tone);
+        background-color: color-mix(in oklab, var(--tone) 12%, var(--surface));
+        box-shadow: inset 0 0 0 1px var(--tone);
+    }
+
+    .tsheet-choice-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--text);
+    }
+
+    .tsheet-choice-hint {
+        display: block;
+        margin-top: 0.125rem;
+        font-size: 0.75rem;
+        line-height: 1.3;
+        color: var(--text-muted);
+    }
+
+    .tsheet-choice-mark {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        color: var(--tone);
+        opacity: 0;
+    }
+
+    .tsheet-choice.is-active .tsheet-choice-mark {
+        opacity: 1;
+    }
+
+    .tsheet-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
+
+    .tsheet-meta:empty {
+        display: none;
+    }
+
+    .tsheet-meta > span {
+        display: inline-flex;
+        align-items: flex-start;
+        gap: 0.375rem;
+    }
+
+    .tsheet-meta svg {
+        flex: none;
+        margin-top: 0.1875rem;
+    }
+
+    .tsheet-saved {
+        font-weight: 600;
+        color: var(--success);
+    }
+
+    .tsheet-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.5rem;
+    }
+
+    .tsheet-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        height: 100%;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+        text-decoration: none !important;
+    }
+
+    .tsheet-stat.is-link:hover {
+        border-color: var(--accent);
+    }
+
+    .tsheet-stat-value {
+        font-size: 1.25rem;
+        font-weight: 650;
+        line-height: 1.2;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .tsheet-stat-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    .tsheet-actions {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(0, 1fr);
+        gap: 0.5rem;
+    }
+
+    .tsheet-actions > .btn {
+        justify-content: center;
+        text-decoration: none !important;
+    }
+
+    .tsheet-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+    }
+
+    .tsheet-list > li {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.5rem 0.25rem 0.5rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background-color: var(--surface);
+        font-size: 0.875rem;
+    }
+
+    .tsheet-list-text {
+        flex: 1;
+        min-width: 0;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+
+    .tsheet-dot {
+        flex: none;
+        width: 0.375rem;
+        height: 0.375rem;
+        margin-top: 0.5rem;
+        border-radius: 9999px;
+        background-color: var(--accent);
+    }
+
+    .tsheet-remove {
+        flex: none;
+        width: 1.75rem;
+        height: 1.75rem;
+        margin-block: -0.125rem;
+    }
+
+    .tsheet-empty {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
+
+    .tsheet-inline-form {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .tsheet-inline-form > .input {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .tsheet-inline-form > .btn {
+        flex: none;
+    }
+
+    .tsheet-more {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+    }
+
+    .tsheet-more > summary {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 0.875rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text);
+        cursor: pointer;
+        list-style: none;
+        border-radius: var(--radius-lg);
+    }
+
+    .tsheet-more > summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .tsheet-more > summary:hover {
+        background-color: var(--hover);
+    }
+
+    .tsheet-more > summary:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .tsheet-more-chevron {
+        color: var(--text-muted);
+        transition: transform 150ms ease-out;
+    }
+
+    .tsheet-more[open] .tsheet-more-chevron {
+        transform: rotate(180deg);
+    }
+
+    .tsheet-more-body {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        padding: 0.25rem 0.875rem 0.875rem;
+    }
+
+    .tsheet-foot {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        padding: 0.625rem 1.25rem calc(0.625rem + env(safe-area-inset-bottom));
+        border-top: 1px solid var(--divider);
+        background-color: var(--surface-raised);
+    }
+
+    .tsheet-danger {
+        color: var(--danger);
+    }
+
+    .tsheet-danger:hover {
+        background-color: var(--danger-subtle);
+        color: var(--danger);
+    }
+
+    .tsheet-confirm {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--danger);
+    }
+
+    .tsheet-confirm p {
+        flex: 1 1 14rem;
+    }
+
+    .tsheet-confirm-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    /* A narrow phone: the stats stay three across but tighter, and the two buttons stack. */
+    @media (max-width: 379.98px) {
+        .tsheet-actions {
+            grid-auto-flow: row;
+        }
+
+        .tsheet-stat {
+            padding: 0.5rem 0.625rem;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .tsheet-choice,
+        .tsheet-more-chevron {
+            transition: none;
         }
     }
 
@@ -2993,6 +4299,33 @@
         }
     }
 
+    /*
+    | Every row that slides sideways (resources/js/strips.js): its scrollbar is hidden, so the edge that has more
+    | beyond it fades out, which is the sign to move it (a finger, a mouse drag, the wheel, or Tab). A focused item
+    | scrolls in clear of the fade.
+    */
+    :is(.page-tabs, .cal-filters, .session-pane-switcher, .guide-steps-list) {
+        overscroll-behavior-x: contain;
+        scroll-padding-inline: 2rem;
+    }
+
+    :is(.page-tabs, .cal-filters, .session-pane-switcher, .guide-steps-list)[data-more='end'] {
+        mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+    }
+
+    :is(.page-tabs, .cal-filters, .session-pane-switcher, .guide-steps-list)[data-more='start'] {
+        mask-image: linear-gradient(to left, #000 calc(100% - 1.75rem), transparent);
+    }
+
+    :is(.page-tabs, .cal-filters, .session-pane-switcher, .guide-steps-list)[data-more='both'] {
+        mask-image: linear-gradient(to right, transparent, #000 1.75rem, #000 calc(100% - 1.75rem), transparent);
+    }
+
+    :is(.page-tabs, .cal-filters, .session-pane-switcher, .guide-steps-list).is-dragging {
+        cursor: grabbing;
+        user-select: none;
+    }
+
     /* What the reader found in a file, on its row: Read, Reading…, Read now (above the row's own link). */
     .digest {
         position: relative;
@@ -3084,6 +4417,358 @@
     }
 
     /* The reader found topics: one line and two buttons (the module's Topics tab). */
+    /*
+    | The main topics to review (the owner's ask, 2026-10-12): one calm panel. A header with the one filled button
+    | (Accept all); then the topics as a list with hairlines between them, each with a small number, its name and an (i),
+    | a line on why it matters, one muted line of what it covers and where, and a quiet Accept with a menu for the rest.
+    | From a 320 px phone up: the actions go under a topic's words where there is no room beside them.
+    */
+    .topic-review {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
+        overflow-wrap: anywhere;
+    }
+
+    @media (min-width: 40rem) {
+        .topic-review {
+            padding: 1.125rem 1.25rem;
+        }
+    }
+
+    .topic-review-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem 1rem;
+    }
+
+    .topic-review-title {
+        flex: 1 1 16rem;
+        min-width: 0;
+    }
+
+    .topic-review-heading {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--fg);
+    }
+
+    .topic-review-status {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        margin-top: 0.125rem;
+        font-size: 0.8125rem;
+        color: var(--fg-muted);
+    }
+
+    .topic-review-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .topic-review-files-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--fg-muted);
+        font: inherit;
+        font-size: 0.8125rem;
+        cursor: pointer;
+    }
+
+    .topic-review-files-toggle:hover {
+        color: var(--fg);
+    }
+
+    .topic-review-chevron {
+        transition: transform 0.15s;
+    }
+
+    .topic-review-files-toggle[aria-expanded='true'] .topic-review-chevron {
+        transform: rotate(90deg);
+    }
+
+    .topic-review-file-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+        padding: 0.75rem;
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+        font-size: 0.8125rem;
+    }
+
+    .topic-review-file {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        color: var(--success);
+    }
+
+    .topic-review-file.is-skipped {
+        color: var(--fg-muted);
+    }
+
+    .topic-review-use {
+        color: var(--fg-muted);
+    }
+
+    /* The topics: a card each, in the order to study them; one across on a phone, two from a tablet, three when wide. */
+    .topic-grid {
+        display: grid;
+        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    }
+
+    .topic-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 1rem 1rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface);
+        transition: border-color 0.15s;
+    }
+
+    .topic-card:hover,
+    .topic-card:focus-within {
+        border-color: var(--accent);
+    }
+
+    .topic-card-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.625rem;
+    }
+
+    .topic-card-num {
+        display: inline-grid;
+        flex-shrink: 0;
+        place-items: center;
+        width: 1.625rem;
+        height: 1.625rem;
+        border-radius: var(--radius-md, 0.5rem);
+        background-color: var(--accent-subtle);
+        color: var(--accent-contrast);
+        font-size: 0.8125rem;
+        font-weight: 700;
+    }
+
+    .topic-card-title {
+        position: relative;
+        flex: 1;
+        min-width: 0;
+        font-size: 1.0625rem;
+        font-weight: 650;
+        line-height: 1.35;
+        color: var(--fg);
+    }
+
+    .topic-card-why {
+        font-size: 0.875rem;
+        line-height: 1.55;
+        color: var(--fg-muted);
+    }
+
+    .topic-card-file {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.375rem;
+        font-size: 0.75rem;
+        line-height: 1.4;
+        color: var(--fg-muted);
+    }
+
+    .topic-card-file .size-3\.5 {
+        margin-top: 0.0625rem;
+    }
+
+    .topic-card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-top: auto;
+        padding-top: 0.625rem;
+        border-top: 1px solid var(--divider);
+    }
+
+    .topic-card-rename {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    .topic-card-rename-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .topic-card {
+            transition: none;
+        }
+    }
+
+    /* The AI's note on why it chose a topic: an (i) beside the name, the note beneath the name on hover or tap. */
+    .topic-note-wrap {
+        display: inline-flex;
+        margin-left: 0.25rem;
+        vertical-align: -0.1875rem;
+    }
+
+    .topic-note-btn {
+        display: inline-grid;
+        place-items: center;
+        padding: 0.125rem;
+        border: 0;
+        border-radius: 999px;
+        background: none;
+        color: var(--fg-muted);
+        cursor: help;
+    }
+
+    .topic-note-btn:hover,
+    .topic-note-btn[aria-expanded='true'] {
+        color: var(--accent-contrast);
+    }
+
+    .topic-note-btn:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+    }
+
+    .topic-note {
+        position: absolute;
+        top: calc(100% + 0.375rem);
+        left: 0;
+        z-index: 30;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        width: min(22rem, 100%);
+        min-width: min(16rem, 80vw);
+        padding: 0.625rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-raised);
+        box-shadow: var(--elevation-lg);
+        color: var(--fg);
+        font-size: 0.8125rem;
+        font-weight: 400;
+        line-height: 1.45;
+    }
+
+    .topic-note-title {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--accent-contrast);
+    }
+
+    /* Choose again: what the student says the AI should change. */
+    .topic-again {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-lg);
+    }
+
+    .topic-files {
+        display: flex;
+        flex-direction: column;
+        gap: 0.375rem;
+        min-width: 0;
+    }
+
+    .topic-files-list {
+        display: grid;
+        gap: 0.375rem;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+    }
+
+    .topic-file {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        height: 100%;
+        padding: 0.5rem 0.625rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
+        cursor: pointer;
+    }
+
+    .topic-file:has(input:checked) {
+        border-color: var(--accent);
+        background-color: var(--accent-subtle);
+    }
+
+    .topic-file.is-unusable {
+        cursor: default;
+        opacity: 0.7;
+    }
+
+    .topic-file .checkbox-box {
+        margin-top: 0.0625rem;
+    }
+
+    .topic-file-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .topic-file-name {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--fg);
+    }
+
+    .topic-file-state {
+        font-size: 0.75rem;
+        color: var(--fg-muted);
+    }
+
+    .topic-again-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .topic-again-hint {
+        font-size: 0.75rem;
+        color: var(--fg-muted);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .topic-review-chevron {
+            transition: none;
+        }
+    }
+
     .suggestion-bar {
         display: flex;
         flex-wrap: wrap;
@@ -3359,6 +5044,30 @@
         align-self: flex-end;
         align-items: flex-end;
         max-width: 80%;
+    }
+
+    /* Where the student changed the session's topic: a quiet line across the chat. */
+    .chat-topic-change {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        align-self: stretch;
+        color: var(--text-muted);
+        font-size: 0.75rem;
+    }
+
+    .chat-topic-change::before,
+    .chat-topic-change::after {
+        content: '';
+        flex: 1 1 0;
+        border-top: 1px solid var(--divider);
+    }
+
+    .chat-topic-change-text {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        min-width: 0;
     }
 
     .chat-bubble {
@@ -3709,6 +5418,99 @@
     .chat-dictation-cancel-btn:hover {
         color: var(--text);
         background-color: var(--hover);
+    }
+
+    /*
+    | The tutor chat's voice typing (resources/js/dictation.js): the words are in the box itself, so the strip only
+    | says it is listening, for how long, and how to finish. The waves move while a voice is heard and rest between.
+    */
+    .chat-dictation-pill.is-quiet .chat-dictation-wave {
+        animation-play-state: paused;
+        opacity: 0.45;
+    }
+
+    .chat-dictation-time {
+        flex: none;
+        font-size: 0.75rem;
+        font-variant-numeric: tabular-nums;
+        color: var(--text-muted);
+    }
+
+    .chat-dictation-hint {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .chat-dictation-hint kbd {
+        padding: 0 0.3125rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background-color: var(--surface);
+        font-family: inherit;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .chat-dictation-pill .chat-dictation-actions {
+        margin-left: auto;
+    }
+
+    .chat-dictation-pill .chat-dictation-done-btn {
+        min-height: 1.75rem;
+        padding-inline: 0.625rem;
+    }
+
+    .chat-dictation-pill .chat-dictation-cancel-btn {
+        width: 1.75rem;
+        height: 1.75rem;
+    }
+
+    /* While listening, the box is marked so it is plain the words land there. */
+    .chat-box.is-dictating {
+        caret-color: var(--accent);
+    }
+
+    .chat-compose:has(.chat-box.is-dictating) {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
+    }
+
+    /* A phone: no keyboard hints, bigger buttons to tap, and Done keeps only its tick on the narrowest screens. */
+    @media (pointer: coarse) {
+        .chat-dictation-hint {
+            display: none;
+        }
+
+        .chat-dictation-pill .chat-dictation-done-btn,
+        .chat-dictation-pill .chat-dictation-cancel-btn {
+            min-height: 2.25rem;
+        }
+
+        .chat-dictation-pill .chat-dictation-cancel-btn {
+            width: 2.25rem;
+        }
+    }
+
+    @media (max-width: 379.98px) {
+        .chat-dictation-pill .chat-dictation-done-btn > span {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+            clip-path: inset(50%);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .chat-dictation-wave {
+            animation: none;
+        }
     }
 
     /* The tutor's Markdown, kept quiet: small headings, tight lists, code that scrolls, and the marks as quotes. */
@@ -4317,6 +6119,21 @@
         border: 1px dashed var(--border);
         border-radius: var(--radius-lg);
     }
+
+    /* Why it didn't answer, in the service's words, and the way to the models to try. */
+    .chat-retry-why {
+        flex-basis: 100%;
+        order: 3;
+        font-size: 0.8125rem;
+        color: var(--fg-muted);
+        overflow-wrap: anywhere;
+    }
+
+    .chat-retry-why a {
+        color: var(--accent-contrast);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
 }
 
 /* ---------- A module's topics (its page): the parts it is made of, and a box to add one ---------- */
@@ -4331,20 +6148,163 @@
         background-color: var(--surface-raised);
     }
 
+    /*
+    | A place's topics, always as a list: a row each, its name whole however long. With room (a desktop), name, how it
+    | stands and what to do sit on one line; with less, the name on top and the rest under it; on the narrowest, each on
+    | a line of its own. Laid out by the list's own width, so it fits a pane beside a file as well as a wide screen.
+    */
     .module-topic-list {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
-        gap: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
+        container-type: inline-size;
     }
 
     .module-topic {
+        display: grid;
+        grid-template-areas:
+            'name name'
+            'meta actions';
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        min-width: 0;
+        padding: 0.75rem 0.875rem 0.75rem 1rem;
+        border-left: 3px solid var(--border-strong);
+        transition: background-color 0.15s ease;
+    }
+
+    .module-topic + .module-topic {
+        border-top: 1px solid var(--divider);
+    }
+
+    .module-topic:hover {
+        background-color: var(--surface-raised);
+    }
+
+    /* The edge says how the topic stands, so a long list can be scanned at a glance. */
+    .module-topic.is-covered {
+        border-left-color: var(--accent);
+    }
+
+    .module-topic.is-understood,
+    .module-topic.is-mastered {
+        border-left-color: var(--success);
+    }
+
+    .module-topic.is-confused {
+        border-left-color: var(--danger);
+    }
+
+    .module-topic-name {
+        grid-area: name;
+        justify-self: start;
+        max-width: 100%;
+        padding: 0;
+        border: 0;
+        background: none;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        line-height: 1.4;
+        text-align: left;
+        color: var(--text);
+        overflow-wrap: anywhere;
+        cursor: pointer;
+    }
+
+    .module-topic-name:hover {
+        color: var(--accent);
+    }
+
+    .module-topic-name:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
+    }
+
+    .module-topic-meta {
+        grid-area: meta;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.375rem 0.75rem;
+        min-width: 0;
+    }
+
+    .module-topic-meta .status-chip {
+        cursor: pointer;
+        white-space: nowrap;
+    }
+
+    .module-topic-cards {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        white-space: nowrap;
+        text-decoration: none;
+    }
+
+    .module-topic-cards:hover {
+        color: var(--accent);
+    }
+
+    .module-topic-due {
+        margin-left: 0.25rem;
+        padding: 0 0.4375rem;
+        border-radius: 9999px;
+        background-color: var(--warning-subtle);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        line-height: 1.25rem;
+        color: var(--warning);
+    }
+
+    .module-topic-actions {
+        grid-area: actions;
         display: flex;
         align-items: center;
-        gap: 0.75rem;
-        min-width: 0;
-        padding: 0.625rem 0.75rem;
-        border: 1px solid var(--divider);
-        border-radius: var(--radius-lg);
+        justify-content: flex-end;
+        gap: 0.375rem;
+    }
+
+    .module-topic-actions .btn {
+        white-space: nowrap;
+        text-decoration: none;
+    }
+
+    /* A wide list: name, how it stands and what to do, on one line. */
+    @container (min-width: 44rem) {
+        .module-topic {
+            grid-template-areas: 'name meta actions';
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            column-gap: 1.25rem;
+        }
+
+        .module-topic-meta {
+            flex-wrap: nowrap;
+        }
+    }
+
+    /* The narrowest (a phone, a slim pane): each part on its own line. */
+    @container (max-width: 22rem) {
+        .module-topic {
+            grid-template-areas:
+                'name'
+                'meta'
+                'actions';
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .module-topic-actions {
+            justify-content: flex-start;
+            margin-left: -0.5rem;
+        }
     }
 
     .module-topic-add {
@@ -4425,6 +6385,18 @@
         font-weight: 600;
     }
 
+    /* How many topics the heading holds: the module's x/y adds up from them. */
+    .tree-folder-count {
+        min-width: 1.375rem;
+        padding: 0 0.375rem;
+        border-radius: 9999px;
+        background-color: var(--surface-sunken);
+        font-size: 0.75rem;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.25rem;
+        text-align: center;
+    }
+
     /* The Cards page showing one folder's cards, with the way back to the whole module. */
     .deck-folder {
         display: flex;
@@ -4486,7 +6458,8 @@
         display: none !important;
     }
 
-    :root[data-session-fullscreen] :is(.app-shell, .app-body, .app-main, .app-main > div) {
+    /* Only the frame around the page: the session page itself keeps its own flex layout (below). */
+    :root[data-session-fullscreen] :is(.app-shell, .app-body, .app-main) {
         display: block !important;
         width: 100% !important;
         max-width: none !important;
@@ -4679,42 +6652,174 @@
         gap: 0.625rem;
     }
 
-    .session-item-card {
-        padding: 0.75rem 0.875rem;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-lg);
-        background-color: var(--surface);
+    /* A question in the session's Questions pane: its status, the question, its answer, and one next step. */
+    .study-q {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+        padding: 0.75rem 0.875rem 0.875rem;
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--border-strong);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
         transition: border-color 0.15s ease;
     }
 
-    .session-item-card:hover {
-        border-color: var(--border-strong);
+    .study-q.is-pending {
+        border-left-color: var(--warning);
     }
 
-    .session-item-header {
+    .study-q.is-stuck {
+        border-left-color: var(--danger);
+    }
+
+    .study-q.is-answered {
+        border-left-color: var(--success);
+    }
+
+    .study-q-head {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        gap: 0.375rem;
+        min-width: 0;
+    }
+
+    .study-q-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    .study-q-status::before {
+        content: '';
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 9999px;
+        background-color: currentColor;
+    }
+
+    .study-q-status.is-pending {
+        color: var(--warning);
+    }
+
+    .study-q-status.is-stuck {
+        color: var(--danger);
+    }
+
+    .study-q-status.is-answered {
+        color: var(--success);
+    }
+
+    .study-q-tag {
+        padding: 0.0625rem 0.4375rem;
+        border-radius: 9999px;
+        background-color: var(--ws-subtle, var(--accent-subtle));
+        color: var(--ws, var(--accent));
+        font-size: 0.6875rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .study-q-menu {
+        position: relative;
+        margin-left: auto;
+    }
+
+    .study-menu {
+        position: absolute;
+        top: calc(100% + 0.25rem);
+        right: 0;
+        z-index: 20;
+        min-width: 12rem;
+        padding: 0.25rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-raised);
+        box-shadow: var(--elevation-lg);
+    }
+
+    .study-menu-item {
+        display: flex;
+        align-items: center;
         gap: 0.5rem;
-        flex-wrap: wrap;
+        width: 100%;
+        min-height: 2.25rem;
+        padding: 0 0.625rem;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: transparent;
+        font-size: 0.8125rem;
+        text-align: left;
+        color: var(--text);
+        cursor: pointer;
     }
 
-    .session-item-actions {
+    .study-menu-item:hover,
+    .study-menu-item:focus-visible {
+        background-color: var(--hover);
+        outline: none;
+    }
+
+    .study-menu-item.is-danger {
+        color: var(--danger);
+    }
+
+    .study-q-text {
+        margin: 0;
+        font-size: 0.875rem;
+        font-weight: 600;
+        line-height: 1.45;
+        color: var(--text);
+        overflow-wrap: anywhere;
+    }
+
+    .study-q-answer {
         display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        padding: 0.5rem 0.625rem;
+        border-radius: var(--radius-md);
+        background-color: var(--surface-sunken);
+    }
+
+    .study-q-answer p {
+        margin: 0;
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        color: var(--text);
+        overflow-wrap: anywhere;
+    }
+
+    .study-q-answer-label {
+        display: inline-flex;
         align-items: center;
+        gap: 0.25rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--success);
+    }
+
+    .study-q-actions {
+        display: flex;
+        flex-wrap: wrap;
         gap: 0.375rem;
     }
 
     .session-mini-btn {
         display: inline-flex;
         align-items: center;
-        gap: 0.25rem;
-        padding: 0.2rem 0.45rem;
-        font-size: 0.6875rem;
+        gap: 0.3rem;
+        min-height: 1.75rem;
+        padding: 0 0.625rem;
+        font-size: 0.75rem;
         font-weight: 500;
+        white-space: nowrap;
         border-radius: var(--radius-md);
         border: 1px solid var(--border);
         background-color: var(--surface-raised);
@@ -4732,24 +6837,6 @@
 
     .session-mini-btn.text-danger:hover {
         color: var(--danger);
-    }
-
-    .session-item-text {
-        font-size: 0.8125rem;
-        color: var(--text);
-        line-height: 1.45;
-        word-break: break-word;
-        margin: 0;
-    }
-
-    .session-item-answer {
-        padding: 0.5rem 0.625rem;
-        border-radius: var(--radius-md);
-        background-color: var(--surface-sunken);
-        border-left: 2.5px solid var(--ws, var(--accent));
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
     }
 
     .session-questions-toolbar {
@@ -4806,38 +6893,43 @@
         color: var(--text);
     }
 
+    /* All · Open · Answered: one segmented control. */
     .session-filter-chips {
         display: flex;
-        align-items: center;
-        gap: 0.375rem;
-        flex-wrap: wrap;
+        gap: 0.125rem;
+        padding: 0.1875rem;
+        border-radius: var(--radius-md);
+        background-color: var(--surface-sunken);
     }
 
     .session-filter-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.2rem 0.5rem;
-        font-size: 0.6875rem;
+        flex: 1 1 0;
+        min-width: max-content;
+        min-height: 1.875rem;
+        padding: 0 0.5rem;
+        font-size: 0.75rem;
         font-weight: 500;
-        border-radius: 9999px;
-        border: 1px solid var(--border);
-        background-color: var(--surface);
+        white-space: nowrap;
+        border: 0;
+        border-radius: calc(var(--radius-md) - 2px);
+        background: transparent;
         color: var(--text-muted);
         cursor: pointer;
-        transition: all 0.15s ease;
+        transition:
+            background-color 0.15s ease,
+            color 0.15s ease;
         user-select: none;
     }
 
     .session-filter-chip:hover {
         color: var(--text);
-        border-color: var(--border-strong);
     }
 
     .session-filter-chip.is-active {
-        background-color: var(--ws-subtle, var(--accent-subtle));
-        border-color: var(--ws, var(--accent));
-        color: var(--ws, var(--accent));
-        font-weight: 700;
+        background-color: var(--surface-raised);
+        color: var(--text);
+        font-weight: 600;
+        box-shadow: var(--elevation-sm);
     }
 
     .session-mini-btn.is-ai {
@@ -4892,9 +6984,13 @@
     .session-quiz-header {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
+        gap: 0.75rem;
+        width: 100%;
         padding: 0.75rem 0.875rem;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        text-align: left;
         cursor: pointer;
         user-select: none;
         transition: background-color 0.15s ease;
@@ -4904,13 +7000,45 @@
         background-color: var(--surface-sunken);
     }
 
+    .session-quiz-header:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: -2px;
+    }
+
+    .session-quiz-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .session-quiz-title {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .session-quiz-meta {
+        font-size: 0.75rem;
+        color: var(--text-subtle);
+        overflow-wrap: anywhere;
+    }
+
     .session-score-pill {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 0.25rem 0.5rem;
-        font-size: 0.75rem;
+        flex-shrink: 0;
+        min-width: 3.25rem;
+        min-height: 2.25rem;
+        padding: 0 0.5rem;
+        font-size: 0.875rem;
         font-weight: 700;
+        white-space: nowrap;
         border-radius: var(--radius-md);
     }
 
@@ -4955,28 +7083,59 @@
     /* ---------- Interactive In-Pane Quiz Experience ---------- */
     .session-quiz-top-actions {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
         gap: 0.5rem;
-        margin-bottom: 0.75rem;
     }
 
     .session-quiz-launch-card {
         display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        padding: 0.75rem;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 0.875rem;
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
         background-color: var(--surface);
+        color: inherit;
         text-align: left;
         cursor: pointer;
-        transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+        transition:
+            border-color 0.15s ease,
+            background-color 0.15s ease;
     }
 
     .session-quiz-launch-card:hover {
-        border-color: var(--border-strong);
+        border-color: var(--ws, var(--accent));
         background-color: var(--surface-raised);
-        transform: translateY(-1px);
+    }
+
+    .session-quiz-launch-card:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 1px;
+    }
+
+    .session-quiz-launch-icon {
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: var(--radius-md);
+        background-color: var(--ws-subtle, var(--accent-subtle));
+        color: var(--ws, var(--accent));
+    }
+
+    .session-quiz-launch-title {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text);
+    }
+
+    .session-quiz-launch-text {
+        display: block;
+        font-size: 0.75rem;
+        line-height: 1.35;
+        color: var(--text-muted);
     }
 
     .session-quiz-config-card {
@@ -5186,110 +7345,349 @@
         min-width: 0;
     }
 
-    .flashcard-study-container {
+    /*
+    | The session's flashcards: a deck with its progress, one card at a time in the course's colour, turned over with
+    | a tap (or Space), and rated once the answer shows: Again, Hard, Got it (or 1, 2, 3).
+    */
+    .study-deck {
         display: flex;
         flex-direction: column;
+        gap: 0.875rem;
+        width: 100%;
+        max-width: 36rem;
         height: 100%;
         min-height: 0;
-        gap: 0.75rem;
+        margin-inline: auto;
     }
 
-    .flashcard-study-topbar {
+    .study-deck-progress {
         display: flex;
         align-items: center;
-        justify-content: space-between;
         gap: 0.5rem;
         flex-shrink: 0;
     }
 
-    .flashcard-stage {
-        flex: 1 1 0%;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-        perspective: 1000px;
+    .study-deck-count {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+        white-space: nowrap;
     }
 
-    .flashcard-flipper {
-        flex: 1 1 0%;
-        min-height: 12rem;
+    .study-deck-bar {
+        flex: 1 1 auto;
+        height: 0.375rem;
+        overflow: hidden;
+        border-radius: 9999px;
+        background-color: var(--surface-sunken);
+    }
+
+    .study-deck-bar > span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--ws, var(--accent)), color-mix(in oklab, var(--ws, var(--accent)) 60%, var(--accent)));
+        transition: width 0.3s ease;
+    }
+
+    .study-card-stage {
+        display: flex;
+        flex-direction: column;
+        gap: 0.875rem;
+        flex: 1 1 auto;
+        min-height: 0;
+        perspective: 1400px;
+        container-type: inline-size;
+    }
+
+    .study-card {
         position: relative;
+        flex: 1 1 auto;
+        min-height: 15rem;
+        max-height: 28rem;
+        border-radius: var(--radius-2xl);
         cursor: pointer;
         transform-style: preserve-3d;
-        transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-        border-radius: var(--radius-xl);
+        transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
 
-    .flashcard-flipper.is-flipped {
+    .study-card.is-flipped {
         transform: rotateY(180deg);
     }
 
-    .flashcard-face {
+    .study-card:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 3px;
+    }
+
+    .study-card-face {
         position: absolute;
         inset: 0;
-        backface-visibility: hidden;
-        -webkit-backface-visibility: hidden;
-        border-radius: var(--radius-xl);
-        border: 1.5px solid var(--border);
-        background-color: var(--surface);
-        padding: 1.25rem;
         display: flex;
         flex-direction: column;
-        justify-content: space-between;
-        box-shadow: var(--elevation-sm);
-        transition: border-color 0.15s ease;
+        gap: 0.75rem;
+        padding: 1.125rem 1.25rem 1.25rem;
+        overflow: hidden;
+        border: 1px solid color-mix(in oklab, var(--ws, var(--accent)) 28%, var(--border));
+        border-radius: inherit;
+        background:
+            radial-gradient(120% 70% at 100% 0%, color-mix(in oklab, var(--ws, var(--accent)) 16%, transparent), transparent 60%),
+            var(--surface-raised);
+        box-shadow: var(--elevation-md, var(--elevation-lg));
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
     }
 
-    .flashcard-flipper:hover .flashcard-face {
-        border-color: var(--border-strong);
+    /* The course's colour along the top of the card, as on a printed index card. */
+    .study-card-face::before {
+        content: '';
+        position: absolute;
+        inset: 0 0 auto;
+        height: 0.3125rem;
+        background: linear-gradient(90deg, var(--ws, var(--accent)), color-mix(in oklab, var(--ws, var(--accent)) 55%, var(--accent)));
     }
 
-    .flashcard-back {
+    .study-card-back {
         transform: rotateY(180deg);
-        background-color: var(--surface-raised);
-        border-color: var(--ws, var(--accent));
+        border-color: color-mix(in oklab, var(--ws, var(--accent)) 50%, var(--border));
+        background:
+            radial-gradient(120% 80% at 0% 100%, color-mix(in oklab, var(--ws, var(--accent)) 20%, transparent), transparent 65%),
+            var(--surface-raised);
     }
 
-    .flashcard-face-header {
+    .study-card-top {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 0.5rem;
     }
 
-    .flashcard-face-content {
-        flex: 1 1 0%;
+    .study-card-badge {
+        padding: 0.1875rem 0.5625rem;
+        border-radius: 9999px;
+        background-color: var(--surface-sunken);
+        font-size: 0.6875rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+    }
+
+    .study-card-badge.is-answer {
+        background-color: var(--ws-subtle, var(--accent-subtle));
+        color: var(--ws, var(--accent));
+    }
+
+    .study-card-due {
+        font-size: 0.75rem;
+        color: var(--text-subtle);
+        white-space: nowrap;
+    }
+
+    .study-card-text {
+        flex: 1 1 auto;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 0.75rem 0;
-        text-align: center;
-        overflow-y: auto;
-    }
-
-    .flashcard-text {
-        font-size: 1rem;
-        font-weight: 500;
-        color: var(--text);
-        line-height: 1.55;
         margin: 0;
+        overflow-y: auto;
+        font-size: clamp(1.0625rem, 4.5cqi, 1.5rem);
+        font-weight: 600;
+        line-height: 1.4;
+        text-align: center;
+        text-wrap: balance;
+        overflow-wrap: anywhere;
+        color: var(--text);
     }
 
-    .flashcard-face-footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
+    .study-card-back .study-card-text {
+        font-size: clamp(1rem, 4cqi, 1.3125rem);
+        font-weight: 500;
     }
 
-    .flashcard-ratings {
+    /* On the answer side, the question it answers, small, so the two are read together. */
+    .study-card-asked {
+        margin: 0;
+        padding-bottom: 0.625rem;
+        border-bottom: 1px dashed var(--border);
+        font-size: 0.8125rem;
+        line-height: 1.4;
+        text-align: center;
+        color: var(--text-muted);
+        overflow-wrap: anywhere;
+    }
+
+    .study-card-hint {
         display: flex;
         align-items: center;
         justify-content: center;
+        gap: 0.375rem;
+        margin: 0;
+        font-size: 0.75rem;
+        color: var(--text-subtle);
+    }
+
+    .study-card-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        min-height: 1.75rem;
+        padding: 0 0.5rem;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: transparent;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--ws, var(--accent));
+        cursor: pointer;
+    }
+
+    .study-card-link:hover {
+        background-color: var(--ws-subtle, var(--accent-subtle));
+    }
+
+    .study-card-actions {
+        flex-shrink: 0;
+    }
+
+    .study-card-delete {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        min-height: 1.75rem;
+        margin: 0.5rem auto 0;
+        padding: 0 0.5rem;
+        border-radius: var(--radius-md);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+
+    .study-card-delete:hover {
+        background-color: var(--danger-subtle);
+        color: var(--danger);
+    }
+
+    .study-card-delete:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .study-card-reveal {
+        width: 100%;
+        min-height: 2.75rem;
+    }
+
+    .study-rate {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.5rem;
+    }
+
+    .study-rate-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.0625rem;
+        min-height: 3.25rem;
+        padding: 0.375rem 0.25rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        transition:
+            background-color 0.15s ease,
+            border-color 0.15s ease,
+            transform 0.1s ease;
+    }
+
+    .study-rate-btn:hover {
+        transform: translateY(-1px);
+    }
+
+    .study-rate-btn:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .study-rate-label {
+        font-size: 0.875rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .study-rate-sub {
+        font-size: 0.6875rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    .study-rate-btn.is-again {
+        border-color: color-mix(in oklab, var(--danger) 35%, var(--border));
+        background-color: var(--danger-subtle);
+    }
+
+    .study-rate-btn.is-again .study-rate-label {
+        color: var(--danger);
+    }
+
+    .study-rate-btn.is-hard {
+        border-color: color-mix(in oklab, var(--warning) 35%, var(--border));
+        background-color: var(--warning-subtle);
+    }
+
+    .study-rate-btn.is-hard .study-rate-label {
+        color: var(--warning);
+    }
+
+    .study-rate-btn.is-good {
+        border-color: color-mix(in oklab, var(--success) 35%, var(--border));
+        background-color: var(--success-subtle);
+    }
+
+    .study-rate-btn.is-good .study-rate-label {
+        color: var(--success);
+    }
+
+    .study-deck-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
         gap: 0.5rem;
         flex-shrink: 0;
-        padding-top: 0.25rem;
+    }
+
+    .study-deck-keys {
+        font-size: 0.6875rem;
+        color: var(--text-subtle);
+        white-space: nowrap;
+    }
+
+    .study-deck-keys kbd {
+        margin-inline: 0.0625rem;
+        padding: 0.0625rem 0.3125rem;
+        border: 1px solid var(--border);
+        border-radius: 0.25rem;
+        background-color: var(--surface);
+        font-family: inherit;
+        font-size: 0.625rem;
+    }
+
+    /* A phone has no keys to press. */
+    @media (pointer: coarse) {
+        .study-deck-keys {
+            display: none;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .study-card {
+            transition: none;
+        }
     }
 
     .session-split-handle {
@@ -5443,11 +7841,39 @@
             gap: 0.375rem;
         }
 
+        /*
+        | The title and the actions share one line whatever the actions hold (the clock's pill comes and goes): the
+        | title starts from nothing and takes what is left, cut short, rather than pushing the actions to a line alone.
+        */
         .session-focus-left {
             order: 1;
-            flex: 1 1 auto;
+            flex: 1 1 0;
             min-width: 0;
-            max-width: calc(100% - 9rem);
+            max-width: none;
+        }
+
+        .session-focus-right {
+            gap: 0.25rem;
+        }
+
+        /* The level is its sparkle (and the plugins' dot); the clock's pill is its countdown. */
+        .session-focus-level {
+            gap: 0.25rem;
+            padding-inline: 0.5rem;
+        }
+
+        .session-focus-level > svg:last-child,
+        .session-clock-pill > svg {
+            display: none;
+        }
+
+        .session-clock-pill {
+            padding-inline: 0.5rem;
+        }
+
+        /* The level keeps its sparkle and chevron, so the topic's name has the room. */
+        .session-focus-level-text {
+            display: none;
         }
 
         .session-focus-right {
@@ -5728,6 +8154,29 @@
         gap: 0.375rem;
         min-width: 0;
         flex: 1 1 auto;
+    }
+
+    /* A pane's name, whole, with its counts under it in small. */
+    .session-pane-heading {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        line-height: 1.2;
+    }
+
+    .session-pane-title {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--text);
+        white-space: nowrap;
+    }
+
+    .session-pane-meta {
+        overflow: hidden;
+        font-size: 0.6875rem;
+        color: var(--text-subtle);
+        white-space: nowrap;
+        text-overflow: ellipsis;
     }
 
     .session-note-select {
@@ -6305,14 +8754,24 @@
         color: inherit;
     }
 
-    .rail-tag {
+    .rail-check {
+        display: inline-grid;
         flex: none;
-        padding: 0 0.375rem;
-        border-radius: 9999px;
-        background-color: var(--surface-raised);
-        color: var(--text);
-        font-size: 0.6875rem;
-        font-weight: 600;
+        place-items: center;
+        width: 1rem;
+        height: 1rem;
+        border: 1.5px solid var(--border-strong);
+        border-radius: 0.25rem;
+        color: var(--text-on-accent);
+    }
+
+    .rail-row[aria-current='true'] .rail-check {
+        border-color: var(--accent);
+        background-color: var(--accent);
+    }
+
+    .rail-row:disabled .rail-check {
+        opacity: 0.5;
     }
 
     .rail-material {
@@ -6917,28 +9376,44 @@
         outline-offset: 1px;
     }
 
+    .session-tutor-backdrop {
+        display: none;
+    }
+
     .session-tutor-popover {
         position: absolute;
         top: calc(100% + 0.375rem);
         left: 0;
         z-index: 75;
-        width: min(20.5rem, calc(100vw - 1rem));
-        max-width: calc(100vw - 1rem);
-        max-height: min(28rem, calc(100dvh - 4rem));
-        overflow-y: auto;
-        padding: 0.75rem;
         display: flex;
         flex-direction: column;
-        gap: 0.625rem;
+        width: min(26rem, calc(100vw - 1rem));
+        max-height: min(38rem, calc(100dvh - 5rem));
+        overflow: hidden;
         border: 1px solid var(--border);
         border-radius: var(--radius-xl);
         background-color: var(--surface-raised);
         box-shadow: var(--elevation-lg);
     }
 
+    /* Phones: a bottom sheet, so the panel can never run off the side of the screen. */
     @media (max-width: 640px) {
+        .session-tutor-backdrop {
+            display: block;
+            position: fixed;
+            inset: 0;
+            z-index: 74;
+            background-color: var(--overlay);
+        }
+
         .session-tutor-popover {
-            left: min(0px, calc(100vw - 22rem));
+            position: fixed;
+            inset: auto 0 0 0;
+            width: auto;
+            max-height: 85dvh;
+            border-bottom-width: 0;
+            border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+            padding-bottom: env(safe-area-inset-bottom);
         }
     }
 
@@ -6946,125 +9421,278 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 0.5rem;
-        padding-bottom: 0.375rem;
+        gap: 0.75rem;
+        padding: 0.75rem 0.875rem;
         border-bottom: 1px solid var(--divider);
     }
 
-    .session-tutor-popover-more {
+    .session-tutor-popover-icon {
+        display: grid;
+        place-items: center;
+        flex-shrink: 0;
+        width: 2rem;
+        height: 2rem;
+        border-radius: var(--radius-md);
+        background-color: var(--ws-subtle, var(--accent-subtle));
+        color: var(--accent);
+    }
+
+    .session-tutor-popover-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        line-height: 1.25;
+        color: var(--text);
+    }
+
+    .session-tutor-popover-subtitle {
+        font-size: 0.75rem;
+        line-height: 1.35;
+        color: var(--text-subtle);
+    }
+
+    .session-tutor-popover-more,
+    .session-tutor-popover-close {
         display: inline-flex;
         align-items: center;
-        gap: 0.2rem;
-        font-size: 0.6875rem;
+        justify-content: center;
+        gap: 0.3rem;
+        min-height: 2rem;
+        border: 0;
+        border-radius: var(--radius-md);
+        background: transparent;
+        cursor: pointer;
+        transition:
+            background-color 0.12s ease,
+            color 0.12s ease;
+    }
+
+    .session-tutor-popover-more {
+        padding: 0 0.5rem;
+        font-size: 0.75rem;
         font-weight: 500;
         color: var(--accent);
-        background: transparent;
-        border: 0;
-        cursor: pointer;
-        padding: 0.125rem 0.375rem;
-        border-radius: var(--radius-sm);
-        transition: background-color 0.12s ease;
     }
 
     .session-tutor-popover-more:hover {
         background-color: var(--accent-subtle);
     }
 
+    /* Only the bottom sheet needs a close button; on desktop a click outside is enough. */
+    .session-tutor-popover-close {
+        display: none;
+        width: 2rem;
+        color: var(--text-muted);
+    }
+
+    .session-tutor-popover-close:hover {
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    @media (max-width: 640px) {
+        .session-tutor-popover-close {
+            display: inline-flex;
+        }
+
+        .session-tutor-popover-more {
+            width: 2rem;
+            padding: 0;
+        }
+
+        .session-tutor-popover-more-label {
+            display: none;
+        }
+    }
+
+    .session-tutor-popover-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1.125rem;
+        padding: 0.875rem;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        container-type: inline-size;
+    }
+
     .session-tutor-popover-section {
         display: flex;
         flex-direction: column;
-        gap: 0.25rem;
+        gap: 0.5rem;
+    }
+
+    .session-tutor-section-label {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-subtle);
+    }
+
+    .session-tutor-section-meta {
+        font-size: 0.75rem;
+        color: var(--text-subtle);
+    }
+
+    .session-tutor-section-hint {
+        font-size: 0.75rem;
+        line-height: 1.4;
+        color: var(--text-muted);
+        text-wrap: pretty;
+    }
+
+    /* Equal widths while the labels fit; a button never gets narrower than its label, so on a
+       small screen the row wraps instead of breaking a word like "Intermediate" in two. */
+    .session-tutor-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+
+    .session-tutor-options > * {
+        flex: 1 1 0;
+        min-width: max-content;
+    }
+
+    .session-tutor-options.is-wide > * {
+        flex-basis: calc(50% - 0.1875rem);
+    }
+
+    .session-tutor-plugins {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.375rem;
+    }
+
+    @container (min-width: 24rem) {
+        .session-tutor-plugins {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @container (min-width: 30rem) {
+        .session-tutor-options.is-wide > * {
+            flex-basis: 0;
+        }
+    }
+
+    .session-tutor-choice-btn,
+    .session-tutor-plugin-card {
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background-color: var(--surface);
+        color: var(--text-muted);
+        cursor: pointer;
+        transition:
+            border-color 0.12s ease,
+            background-color 0.12s ease,
+            box-shadow 0.12s ease,
+            color 0.12s ease;
+    }
+
+    .session-tutor-choice-btn:hover,
+    .session-tutor-plugin-card:hover {
+        border-color: var(--border-strong);
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    .session-tutor-choice-btn.is-active,
+    .session-tutor-plugin-card.is-active {
+        border-color: var(--ws, var(--accent));
+        background-color: var(--ws-subtle, var(--accent-subtle));
+        box-shadow: inset 0 0 0 1px var(--ws, var(--accent));
+        color: var(--text);
+    }
+
+    .session-tutor-choice-btn:focus-visible,
+    .session-tutor-plugin-card:focus-visible,
+    .session-tutor-popover-more:focus-visible,
+    .session-tutor-popover-close:focus-visible,
+    .session-tutor-popover-add-rules:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 1px;
     }
 
     .session-tutor-choice-btn {
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 0.3125rem 0.375rem;
-        font-size: 0.6875rem;
+        min-height: 2.25rem;
+        padding: 0.375rem 0.5rem;
+        font-size: 0.8125rem;
         font-weight: 500;
-        line-height: 1.25;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-md);
-        background-color: var(--surface);
-        color: var(--text-muted);
-        cursor: pointer;
-        transition:
-            border-color 0.12s ease,
-            background-color 0.12s ease,
-            color 0.12s ease;
-    }
-
-    .session-tutor-choice-btn:hover:not(:disabled) {
-        border-color: var(--border-strong);
-        background-color: var(--hover);
-        color: var(--text);
+        line-height: 1.2;
+        text-align: center;
+        text-wrap: balance;
     }
 
     .session-tutor-choice-btn.is-active {
-        border-color: var(--ws, var(--accent));
-        background-color: var(--ws-subtle, var(--accent-subtle));
-        color: var(--accent);
         font-weight: 600;
-    }
-
-    .session-tutor-choice-btn:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
     }
 
     .session-tutor-plugin-card {
         display: flex;
-        flex-direction: column;
         align-items: flex-start;
-        justify-content: space-between;
-        padding: 0.375rem 0.5rem;
-        font-size: 0.6875rem;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-md);
-        background-color: var(--surface);
-        color: var(--text-muted);
-        cursor: pointer;
+        gap: 0.5rem;
+        width: 100%;
+        padding: 0.5rem 0.625rem;
         text-align: left;
-        transition:
-            border-color 0.12s ease,
-            background-color 0.12s ease,
-            color 0.12s ease;
     }
 
-    .session-tutor-plugin-card:hover:not(:disabled) {
-        border-color: var(--border-strong);
-        background-color: var(--hover);
+    .session-tutor-plugin-icon {
+        flex-shrink: 0;
+        margin-top: 0.0625rem;
+        color: var(--text-subtle);
+    }
+
+    .session-tutor-plugin-name {
+        display: block;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        line-height: 1.3;
         color: var(--text);
     }
 
-    .session-tutor-plugin-card.is-active {
-        border-color: var(--ws, var(--accent));
-        background-color: var(--ws-subtle, var(--accent-subtle));
-        color: var(--accent);
-        font-weight: 500;
+    .session-tutor-plugin-badge {
+        display: -webkit-box;
+        margin-top: 0.125rem;
+        overflow: hidden;
+        font-size: 0.75rem;
+        line-height: 1.35;
+        color: var(--text-subtle);
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
     }
 
-    .session-tutor-plugin-card:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
+    .session-tutor-plugin-state {
+        flex-shrink: 0;
+        margin-top: 0.0625rem;
+        color: var(--border-strong);
+    }
+
+    .session-tutor-plugin-card.is-active :is(.session-tutor-plugin-icon, .session-tutor-plugin-state) {
+        color: var(--accent);
     }
 
     .session-tutor-popover-custom {
-        padding: 0.375rem 0.5rem;
+        padding: 0.625rem 0.75rem;
+        border: 1px dashed var(--border);
         border-radius: var(--radius-md);
         background-color: var(--surface);
-        border: 1px dashed var(--border);
     }
 
     .session-tutor-popover-add-rules {
-        display: inline-flex;
+        display: flex;
         align-items: center;
-        gap: 0.375rem;
+        gap: 0.5rem;
         width: 100%;
-        padding: 0.375rem 0.5rem;
-        font-size: 0.6875rem;
+        min-height: 2.25rem;
+        padding: 0.5rem 0.625rem;
+        font-size: 0.8125rem;
+        text-align: left;
         color: var(--text-muted);
         background-color: var(--surface);
         border: 1px dashed var(--border);
@@ -7086,18 +9714,66 @@
         display: flex;
         align-items: center;
         gap: 0.375rem;
-        font-size: 0.6875rem;
+        padding: 0.625rem 0.875rem;
+        font-size: 0.75rem;
+        line-height: 1.35;
         color: var(--text-subtle);
-        padding-top: 0.375rem;
         border-top: 1px solid var(--divider);
     }
 
-    /* Custom Rules Note Editor */
+    /* Custom tutor rules dialog: one editor at a time, built from the session-tutor-* pieces. */
+    .session-rules {
+        display: flex;
+        flex-direction: column;
+        gap: 1.125rem;
+    }
+
+    .session-rules-intro {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .session-rules-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        align-self: flex-start;
+        min-height: 2rem;
+        padding: 0 0.5rem 0 0.25rem;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--accent);
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-md);
+        cursor: pointer;
+    }
+
+    .session-rules-back:hover {
+        background-color: var(--accent-subtle);
+    }
+
+    .session-rules-tab {
+        gap: 0.5rem;
+    }
+
+    .session-rules-count {
+        min-width: 1.25rem;
+        padding: 0 0.375rem;
+        border-radius: 9999px;
+        background-color: var(--surface-sunken);
+        font-size: 0.75rem;
+        font-weight: 500;
+        line-height: 1.25rem;
+        color: var(--text-muted);
+    }
+
     .note-rule-card {
         display: flex;
         flex-direction: column;
         border: 1px solid var(--border);
-        border-radius: var(--radius-lg);
+        border-radius: var(--radius-md);
         background-color: var(--surface);
         overflow: hidden;
         transition: border-color 0.15s ease;
@@ -7105,58 +9781,14 @@
 
     .note-rule-card:focus-within {
         border-color: var(--accent);
-    }
-
-    .note-rule-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.5rem;
-        padding: 0.5rem 0.75rem;
-        background-color: var(--surface-raised);
-        border-bottom: 1px solid var(--divider);
-    }
-
-    .note-rule-toolbar {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.375rem;
-        padding: 0.375rem 0.625rem;
-        background-color: var(--surface);
-        border-bottom: 1px solid var(--divider);
-        flex-wrap: wrap;
-    }
-
-    .note-rule-tool-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.25rem;
-        padding: 0.2rem 0.45rem;
-        font-size: 0.75rem;
-        font-weight: 500;
-        color: var(--text-muted);
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: var(--radius-sm);
-        cursor: pointer;
-        transition:
-            background-color 0.12s ease,
-            color 0.12s ease,
-            border-color 0.12s ease;
-    }
-
-    .note-rule-tool-btn:hover {
-        background-color: var(--hover);
-        color: var(--text);
-        border-color: var(--border);
+        box-shadow: inset 0 0 0 1px var(--accent);
     }
 
     .note-rule-textarea {
         width: 100%;
-        min-height: 11rem;
+        min-height: 9rem;
         padding: 0.75rem;
-        font-size: 0.8125rem;
+        font-size: 0.875rem;
         line-height: 1.6;
         color: var(--text);
         background-color: transparent;
@@ -7174,21 +9806,57 @@
         opacity: 0.8;
     }
 
-    .note-rule-chips {
+    .note-rule-toolbar {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 0.375rem;
-        padding: 0.5rem 0.75rem;
-        background-color: var(--surface-sunken);
+        padding: 0.25rem 0.5rem;
         border-top: 1px solid var(--divider);
+        background-color: var(--surface-sunken);
+    }
+
+    .note-rule-tool-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        min-height: 2rem;
+        padding: 0 0.5rem;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        background: transparent;
+        border: 0;
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition:
+            background-color 0.12s ease,
+            color 0.12s ease;
+    }
+
+    .note-rule-tool-btn:hover {
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    .session-rules-suggestions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .note-rule-chips {
+        display: flex;
         flex-wrap: wrap;
+        gap: 0.375rem;
     }
 
     .note-rule-chip {
         display: inline-flex;
         align-items: center;
-        font-size: 0.6875rem;
-        padding: 0.125rem 0.45rem;
+        min-height: 2rem;
+        padding: 0 0.75rem;
+        font-size: 0.8125rem;
         border-radius: 9999px;
         border: 1px solid var(--border);
         background-color: var(--surface);
@@ -7206,6 +9874,40 @@
         background-color: var(--hover);
     }
 
+    .note-rule-tool-btn:focus-visible,
+    .note-rule-chip:focus-visible,
+    .session-rules-back:focus-visible,
+    .session-rules-preview-toggle:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 1px;
+    }
+
+    .session-rules-preview-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        min-height: 2rem;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--text);
+        background: transparent;
+        border: 0;
+        cursor: pointer;
+    }
+
+    .session-rules-preview {
+        margin-top: 0.5rem;
+        padding-top: 0.625rem;
+        border-top: 1px solid var(--divider);
+    }
+
+    .session-rules-preview-block {
+        padding: 0.5rem 0.625rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background-color: var(--surface-raised);
+    }
     @media (max-width: 640px) {
         .chat-model-btn {
             max-width: 8.5rem;
@@ -7863,6 +10565,61 @@
         }
     }
 
+    /* The kinds of course: a tile each, its icon and name, the chosen one with the accent. Two across on a phone. */
+    .kind-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+        gap: 0.5rem;
+    }
+
+    @media (max-width: 380px) {
+        .kind-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    .kind-option {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 2.75rem;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
+        color: var(--text);
+        font-size: 0.875rem;
+        line-height: 1.25;
+        cursor: pointer;
+        transition:
+            border-color 0.15s ease,
+            background-color 0.15s ease;
+    }
+
+    .kind-option svg {
+        color: var(--text-muted);
+    }
+
+    .kind-option:hover {
+        border-color: var(--border-strong);
+        background-color: var(--hover);
+    }
+
+    .kind-option:has(input:checked) {
+        border-color: var(--accent);
+        background-color: var(--accent-subtle);
+        box-shadow: inset 0 0 0 1px var(--accent);
+    }
+
+    .kind-option:has(input:checked) svg {
+        color: var(--accent);
+    }
+
+    .kind-option:has(input:focus-visible) {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
     /* A choice as a card: the whole card is the target, the chosen one has the accent and a tick. */
     .choice-card {
         position: relative;
@@ -7920,40 +10677,270 @@
 }
 
 /*
-| The course guide (docs/specs/vistud-2-blueprint.md, Phase 8): a talk that sets a course up, the proposal with a tick on every
-| part under it, and the box to answer in. A page, not a sheet: the talk and the proposal take the room they need.
+| The course guide (docs/specs/vistud-2-blueprint.md, Phase 8; DESIGN.md §5.11), in the tutor chat's format (.chat-*): the
+| talk with its answer buttons and Skip, the proposal card with a tick on every part, and the box at the foot. Setting a
+| course up, "What the AI knows" sits beside the talk from 1024 px, a line a question, and above it on smaller screens as a
+| row of pills that scrolls sideways. Calm surfaces throughout; the accent marks only the question being asked.
 */
 @layer components {
-    .guide-log {
-        display: flex;
-        flex-direction: column;
+    .guide {
+        display: grid;
+        gap: 1rem;
+        min-width: 0;
+    }
+
+    @media (min-width: 1024px) {
+        .guide.has-steps {
+            grid-template-columns: minmax(0, 1fr) 17rem;
+            align-items: start;
+        }
+
+        .guide.has-steps > .guide-chat {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        .guide.has-steps > .guide-steps {
+            grid-column: 2;
+            grid-row: 1;
+            position: sticky;
+            top: 5rem;
+        }
+    }
+
+    @media (min-width: 1536px) {
+        .guide.has-steps {
+            grid-template-columns: minmax(0, 1fr) 19rem;
+            gap: 1.5rem;
+        }
+    }
+
+    /* What the AI knows: a pill a question, its state as an icon and a word for screen readers. */
+    .guide-steps {
+        display: grid;
         gap: 0.625rem;
+        min-width: 0;
+        padding: 0.875rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-xl);
+        background-color: var(--surface-raised);
     }
 
-    .guide-line {
+    .guide-steps-head {
         display: flex;
-        align-items: flex-start;
+        align-items: baseline;
+        justify-content: space-between;
         gap: 0.5rem;
-        max-width: min(100%, 42rem);
-        padding: 0.625rem 0.875rem;
-        border: 1px solid var(--divider);
-        border-radius: var(--radius-lg);
-        background-color: var(--surface-sunken);
+        font-size: 0.875rem;
     }
 
-    .guide-line.is-you {
-        align-self: flex-end;
+    .guide-steps-list {
+        display: flex;
+        gap: 0.375rem;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        margin: 0 -0.25rem;
+        padding: 0.125rem 0.25rem;
+    }
+
+    .guide-steps-list::-webkit-scrollbar {
+        display: none;
+    }
+
+    .guide-step {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        min-height: 2rem;
+        max-width: 100%;
+        padding: 0.25rem 0.625rem;
+        border: 1px solid var(--border);
+        border-radius: 9999px;
+        background-color: var(--surface);
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+        white-space: nowrap;
+        cursor: pointer;
+        transition:
+            border-color 0.15s ease,
+            background-color 0.15s ease;
+    }
+
+    .guide-step:hover:not(:disabled) {
+        background-color: var(--hover);
+    }
+
+    .guide-step:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .guide-step:disabled {
+        cursor: progress;
+    }
+
+    .guide-step.is-done {
+        color: var(--text);
+    }
+
+    .guide-step.is-done svg {
+        color: var(--success);
+    }
+
+    .guide-step.is-skipped {
+        color: var(--text-subtle);
+    }
+
+    .guide-step.is-now {
         border-color: var(--accent);
         background-color: var(--accent-subtle);
+        color: var(--text);
     }
 
-    .guide-line.is-done {
-        border-color: var(--success);
-        background-color: var(--success-subtle);
+    .guide-steps-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.375rem;
+        color: var(--text-muted);
+        font-size: 0.8125rem;
     }
 
-    .guide-line.is-done svg {
-        color: var(--success);
+    @media (min-width: 1024px) {
+        .guide-steps-list {
+            flex-direction: column;
+            overflow: visible;
+            margin: 0;
+            padding: 0;
+        }
+
+        .guide-step {
+            display: flex;
+            width: 100%;
+            border-color: transparent;
+            border-radius: var(--radius-md);
+            background-color: transparent;
+        }
+
+        .guide-step.is-now {
+            border-color: var(--accent);
+        }
+    }
+
+    /*
+    | The talk fills the window from where it starts down to the bottom (above a phone's tab bar): only the talk scrolls,
+    | so the box to answer in is always in reach. --guide-top is where the talk starts, measured by guide-chat.js.
+    */
+    .guide-chat {
+        min-width: 0;
+        /* --guide-trim is what the page has below the talk (its padding), measured by guide-chat.js so the page itself never scrolls. */
+        height: calc(100dvh - var(--guide-top, 12rem) - var(--guide-below, 0px) - var(--guide-trim, 1rem));
+        min-height: 26rem;
+    }
+
+    body[data-tabbar] .guide-chat {
+        --guide-below: var(--tabbar-height, 4.5rem);
+    }
+
+    .guide-log-wrap {
+        display: flex;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    .guide-chat .chat-log {
+        flex: 1 1 auto;
+        max-height: none;
+        min-height: 0;
+    }
+
+    /* Long lines are hard to read on a wide screen: a turn keeps to a comfortable measure. */
+    .guide-chat .chat-turn {
+        max-width: min(88%, 48rem);
+    }
+
+    .guide-chat .chat-turn.is-me {
+        max-width: min(80%, 40rem);
+    }
+
+    .guide-proposal-turn {
+        width: min(100%, 48rem);
+        max-width: none;
+    }
+
+    .guide-proposal-turn > .guide-proposal {
+        width: 100%;
+    }
+
+    /* Under the box: the hint, and the ways out of the talk. */
+    .guide-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem 1rem;
+    }
+
+    /* The answers to a question: chips under the guide's line, the kinds of course in a grid with their icons. */
+    .guide-choices {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.375rem;
+    }
+
+    .guide-choices.is-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+        width: min(100%, 36rem);
+    }
+
+    .guide-choice {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-height: 2.25rem;
+        text-align: left;
+    }
+
+    .guide-choices.is-grid .guide-choice {
+        width: 100%;
+        border-radius: var(--radius-lg);
+    }
+
+    .guide-choice svg {
+        color: var(--accent);
+    }
+
+    .guide-choice.is-quiet {
+        border-style: dashed;
+        color: var(--text-muted);
+    }
+
+    .guide-choice.is-quiet svg {
+        color: var(--text-subtle);
+    }
+
+    .guide-choice:disabled {
+        opacity: 0.6;
+        cursor: progress;
+    }
+
+    @media (pointer: coarse) {
+        .guide-choice,
+        .guide-step {
+            min-height: 2.75rem;
+        }
+    }
+
+    /* What the guide proposes: a card inside the chat, a tick on every part. */
+    .guide-proposal {
+        display: grid;
+        gap: 1rem;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
     }
 
     .guide-part {
@@ -7995,6 +10982,121 @@
         margin-top: 0.25rem;
     }
 
+    /*
+    | A proposed module (the owner's ask, 2026-10-12): its tick and title, a line of what it is about, then its topics
+    | and parts as chips that are kept until tapped. An unticked module fades, and its chips with it.
+    */
+    .guide-module-note {
+        font-size: 0.8125rem;
+        color: var(--fg-muted);
+    }
+
+    .guide-modules {
+        display: grid;
+        gap: 0.625rem;
+    }
+
+    .guide-module {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.75rem 0.875rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
+        overflow-wrap: anywhere;
+    }
+
+    .guide-module.is-off {
+        border-style: dashed;
+    }
+
+    .guide-module.is-off > :not(:first-child) {
+        opacity: 0.55;
+    }
+
+    .guide-module-about {
+        margin-left: 1.75rem;
+        font-size: 0.875rem;
+        color: var(--fg-muted);
+    }
+
+    .guide-module-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.375rem 0.5rem;
+        margin-left: 1.75rem;
+    }
+
+    .guide-module-label {
+        min-width: 3.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--fg-muted);
+    }
+
+    .guide-picks {
+        display: flex;
+        flex: 1;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+
+    .guide-pick {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.25rem 0.625rem;
+        border: 1px dashed var(--border);
+        border-radius: 999px;
+        font-size: 0.8125rem;
+        color: var(--fg-muted);
+        text-decoration: line-through;
+        cursor: pointer;
+        transition: background-color 0.15s, border-color 0.15s;
+    }
+
+    .guide-pick:has(input:checked) {
+        border: 1px solid var(--accent);
+        background-color: var(--accent-subtle);
+        color: var(--fg);
+        text-decoration: none;
+    }
+
+    .guide-pick:has(input:focus-visible) {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+
+    .guide-pick:has(input:disabled) {
+        cursor: default;
+    }
+
+    .guide-pick-kind {
+        font-size: 0.75rem;
+        color: var(--fg-muted);
+    }
+
+    /* On a phone: the label above its chips, and the lines under the title use the whole width. */
+    @media (max-width: 39.99rem) {
+        .guide-module-about,
+        .guide-module-row {
+            margin-left: 0;
+        }
+
+        .guide-module-row {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .guide-pick {
+            transition: none;
+        }
+    }
+
     .guide-actions {
         display: flex;
         flex-wrap: wrap;
@@ -8004,7 +11106,7 @@
 
     .guide-form {
         display: grid;
-        gap: 0.75rem;
+        gap: 0.5rem;
     }
 
     /* The pictures waiting to go with a message: the chat's file pills, with a small look at each picture. */
@@ -8016,12 +11118,28 @@
         object-fit: cover;
     }
 
-    .guide-sent-pictures {
-        display: flex;
-        align-items: center;
-        gap: 0.375rem;
-        color: var(--text-muted);
-        font-size: 0.875rem;
+    @media (max-width: 639px) {
+        .guide-chat {
+            padding: 0.75rem;
+        }
+
+        .guide-chat .chat-turn {
+            max-width: 94%;
+        }
+
+        .guide-chat .chat-shortcut-hint,
+        .guide-hint {
+            display: none;
+        }
+
+        .guide-foot .guide-actions {
+            width: 100%;
+        }
+
+        .guide-foot .btn {
+            flex: 1 1 auto;
+            justify-content: center;
+        }
     }
 
     /* ---------- Session Dashboard (Folder page) ---------- */

@@ -201,17 +201,66 @@ final class Flashcards
         });
     }
 
-    /** Deletes a card. Its answers stay in the journal, as what happened. */
-    public function retire(Principal $by, string $id): void
+    /**
+     * Deletes a card for good: its row goes, its task is retired, and it no longer exercises its topic, so its answers
+     * stop counting for the topic and nothing the tutor reads names it again. The journal is append-only: the answers
+     * stay there as what happened, tied to a retired task.
+     */
+    public function delete(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
         DB::transaction(function () use ($scope, $by, $id) {
             $row = $this->row($scope, $id, lock: true);
             if ($this->journal->existingEntities($scope, [['task', self::taskId($id)]]) !== []) {
-                $this->memory->append($scope, [self::taskRecord($scope, $by, $id, $row->front, $row->back, (int) $row->revision, 'retired')], $row->workspace_id);
+                $specs = [self::taskRecord($scope, $by, $id, $row->front, $row->back, (int) $row->revision, 'retired')];
+                if ($row->topic_id !== null) {
+                    $specs[] = self::exercises($scope, $by, $id, (string) $row->topic_id, 'retired');
+                }
+                $this->memory->append($scope, $specs, $row->workspace_id);
             }
-            LearnerTables::query($scope, 'flashcards')->where('id', $id)->update(['retired_at' => now(), 'updated_at' => now()]);
+            LearnerTables::query($scope, 'flashcards')->where('id', $id)->delete();
         });
+    }
+
+    /**
+     * A topic deleted (Topics::retire): its cards stay in their module with no topic, and no longer exercise it, so
+     * their answers stop counting for a topic that is gone. Inside the caller's transaction.
+     */
+    public function leaveTopic(LearnerScope $scope, Principal $by, string $topicId): void
+    {
+        $cards = LearnerTables::query($scope, 'flashcards')->where('topic_id', $topicId)->get(['id', 'workspace_id']);
+        if ($cards->isEmpty()) {
+            return;
+        }
+        $tasks = $this->journal->existingEntities($scope, $cards->map(fn ($card) => ['task', self::taskId((string) $card->id)])->all());
+        $specs = $cards->filter(fn ($card) => isset($tasks['task:'.self::taskId((string) $card->id)]))
+            ->map(fn ($card) => self::exercises($scope, $by, (string) $card->id, $topicId, 'retired'))->values()->all();
+        if ($specs !== []) {
+            $this->memory->append($scope, $specs, (string) $cards->first()->workspace_id);
+        }
+        LearnerTables::query($scope, 'flashcards')->where('topic_id', $topicId)->update(['topic_id' => null, 'updated_at' => now()]);
+    }
+
+    /**
+     * The cards deleted before deleting was for good (they were only hidden, their task already retired): each goes as
+     * delete() takes a card now, its row and its link to its topic. For vistud:purge-deleted.
+     *
+     * @return int how many cards went
+     */
+    public function purgeHidden(LearnerScope $scope, Principal $by): int
+    {
+        $purged = 0;
+        foreach (LearnerTables::query($scope, 'flashcards')->whereNotNull('retired_at')->orderBy('id')->get() as $row) {
+            DB::transaction(function () use ($scope, $by, $row) {
+                if ($row->topic_id !== null && $this->journal->existingEntities($scope, [['task', self::taskId((string) $row->id)]]) !== []) {
+                    $this->memory->append($scope, [self::exercises($scope, $by, (string) $row->id, (string) $row->topic_id, 'retired')]);
+                }
+                LearnerTables::query($scope, 'flashcards')->where('id', $row->id)->delete();
+            });
+            $purged++;
+        }
+
+        return $purged;
     }
 
     /**

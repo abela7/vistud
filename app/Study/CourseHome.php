@@ -19,6 +19,7 @@ final class CourseHome
         private Rollups $rollups,
         private Sessions $sessions,
         private Activities $activities,
+        private Folders $folders,
     ) {}
 
     public function for(Principal $by, string $workspaceId): CourseHomeData
@@ -28,6 +29,11 @@ final class CourseHome
         $roll = $this->rollups->for($by, $workspaceId);
         $zone = $this->sessions->timezone($by);
         $open = $this->sessions->current($by);
+        // A topic in a folder is studied in it: the Next line names the folder.
+        $folderNames = [];
+        foreach ($this->folders->tree($by, $workspaceId) as $folder) {
+            $folderNames[$folder->id] = $folder->name;
+        }
 
         $states = [];
         $rows = [];
@@ -39,6 +45,7 @@ final class CourseHome
                 materials: $group->materials, topics: $group->total(), understood: $group->done(), studied: $group->studied(),
                 suggested: $group->suggested, suggestedFrom: $group->suggestedFrom,
                 nextTopicId: $next?->id(), nextTopicName: $next?->topic->name,
+                nextFolderName: $next?->topic->folderId !== null ? ($folderNames[$next->topic->folderId] ?? null) : null,
             );
             $rows[] = ['module' => $group->module, 'number' => $group->number, 'topics' => $group->total(), 'done' => $group->done(), 'tested' => $group->tested, 'current' => $group->id() === $roll->currentId, 'url' => $url];
         }
@@ -52,7 +59,7 @@ final class CourseHome
             cardsDue: $roll->cards['due'],
             reviewUrl: route('workspaces.flashcards.review', $workspaceId),
             modulesUrl: route('workspaces.show', [$workspaceId, 'modules']).'?new=1',
-            attention: array_map(fn (TopicRoll $topic) => ['topicId' => $topic->id(), 'topic' => $topic->topic->name, 'moduleId' => $topic->topic->moduleId], $roll->attention),
+            attention: array_map(fn (TopicRoll $topic) => ['topicId' => $topic->id(), 'topic' => $topic->topic->name, 'moduleId' => $topic->topic->moduleId, 'folder' => $topic->topic->folderId !== null ? ($folderNames[$topic->topic->folderId] ?? null) : null], $roll->attention),
             deadlines: $this->deadlines($by, $workspaceId, $zone),
         );
         $step = NextStep::of($state);

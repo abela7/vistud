@@ -73,6 +73,8 @@ final class QuestionsTool implements Tool
                 'module' => $q->moduleId !== null ? $modules[$q->moduleId] ?? null : null,
                 'folder' => $q->folderId !== null ? $folderNames[$q->folderId] ?? null : null,
                 'answer' => $q->answer,
+                // An answer the AI wrote that the student hasn't said makes sense yet: worth checking they get it.
+                'not_confirmed_by_student' => $q->answeredByAi() ?: null,
                 'for_the_teacher' => $q->askTeacher ?: null,
                 'asked' => CarbonImmutable::parse($q->askedAt)->setTimezone($context->zone)->toDateString(),
             ]);

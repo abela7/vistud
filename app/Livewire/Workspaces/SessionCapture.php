@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Workspaces;
 
+use App\Engine\Context\Stack;
+use App\Engine\SessionChat;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
@@ -45,7 +47,13 @@ final class SessionCapture extends Component
 
     public bool $note = true;
 
+    /** Whether the replies came from ViStud's own chat, whose model is known, rather than pasted from elsewhere. */
+    #[Locked]
+    public bool $fromChat = false;
+
     private WriteBack $writeBack;
+
+    private SessionChat $chat;
 
     private Topics $topics;
 
@@ -53,9 +61,10 @@ final class SessionCapture extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(WriteBack $writeBack, Topics $topics, Sessions $sessions, PrincipalFactory $principals): void
+    public function boot(WriteBack $writeBack, Topics $topics, Sessions $sessions, PrincipalFactory $principals, SessionChat $chat): void
     {
         $this->writeBack = $writeBack;
+        $this->chat = $chat;
         $this->topics = $topics;
         $this->sessions = $sessions;
         $this->principals = $principals;
@@ -74,6 +83,7 @@ final class SessionCapture extends Component
         $this->step = 'paste';
         if (is_string($text) && trim($text) !== '') {
             $this->text = $text;
+            $this->fromChat = true;
             $this->read();
         }
         $this->dispatch('capture-dialog-open');
@@ -105,6 +115,7 @@ final class SessionCapture extends Component
     public function back(): void
     {
         $this->step = 'paste';
+        $this->fromChat = false;
         $this->items = [];
     }
 
@@ -123,7 +134,7 @@ final class SessionCapture extends Component
     {
         foreach ($this->items as &$item) {
             if (! ($item['saved'] ?? false)) {
-                $item['include'] = $include && ($item['kind'] ?? '') !== 'status';
+                $item['include'] = $include && ! in_array($item['kind'] ?? '', ['status', 'remember'], true);
             }
         }
     }
@@ -135,11 +146,13 @@ final class SessionCapture extends Component
 
             return;
         }
-        $result = $this->writeBack->apply($this->principal(), $this->sessionId, $this->items, $this->note);
+        // Answers the built-in chat judged carry its model; pasted ones, the write-back's "unknown".
+        $judge = $this->fromChat ? ['model' => $this->chat->threadModel($this->principal(), $this->sessionId) ?: 'unknown', 'prompt' => Stack::promptVersion(), 'via' => 'chat'] : null;
+        $result = $this->writeBack->apply($this->principal(), $this->sessionId, $this->items, $this->note, $judge);
 
         $words = [
             'finding' => ['key point', 'key points'], 'question' => ['question', 'questions'], 'flashcard' => ['flashcard', 'flashcards'],
-            'attempt' => ['answer', 'answers'], 'status' => ['status', 'statuses'],
+            'attempt' => ['answer', 'answers'], 'status' => ['status', 'statuses'], 'remember' => ['thing to remember about you', 'things to remember about you'],
         ];
         $parts = [];
         foreach ($words as $kind => [$one, $many]) {
@@ -158,12 +171,12 @@ final class SessionCapture extends Component
 
         $this->dispatch('session-changed');
         $this->dispatch('capture-dialog-close');
-        $this->reset('step', 'text', 'items', 'note');
+        $this->reset('step', 'text', 'items', 'note', 'fromChat');
     }
 
     public function close(): void
     {
-        $this->reset('step', 'text', 'items', 'note');
+        $this->reset('step', 'text', 'items', 'note', 'fromChat');
         $this->resetErrorBag();
     }
 

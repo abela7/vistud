@@ -126,12 +126,80 @@ class QuizzesTest extends TestCase
         $this->assertSame(0, LearnerTables::query(LearnerScope::of($this->by), 'quizzes')->count());
     }
 
+    /** @return list<object> the journal's entries of a kind, in order */
+    private function entriesOf(string $kind): array
+    {
+        return array_values(array_filter(app(JournalReader::class)->entries($this->learnerScopeOf($this->ada)), fn ($e) => $e->kind->value === $kind));
+    }
+
+    private function attemptIdsOf(string $quizId): ?array
+    {
+        $ids = LearnerTables::query(LearnerScope::of($this->by), 'quizzes')->where('id', $quizId)->value('attempt_ids');
+
+        return $ids === null ? null : json_decode($ids, true);
+    }
+
+    public function test_a_deleted_quiz_is_gone_and_takes_back_exactly_its_own_answers(): void
+    {
+        $first = $this->quizzes->record($this->by, $this->session, ['kind' => 'quiz', 'questions' => [$this->q('What is a quantum?', 'correct'), $this->q('What is aging?', 'incorrect')]]);
+        $this->travel(10)->minutes();
+        // The same question asked again later is another answer, and another quiz's.
+        $second = $this->quizzes->record($this->by, $this->session, ['kind' => 'quiz', 'questions' => [$this->q('What is a quantum?', 'incorrect')]]);
+
+        $attempts = $this->entriesOf('attempt');
+        $this->assertCount(3, $attempts);
+        $this->assertSame([$attempts[0]->id, $attempts[1]->id], $this->attemptIdsOf($first->id), 'a quiz names the answers it wrote');
+        $this->assertSame([$attempts[2]->id], $this->attemptIdsOf($second->id));
+
+        $this->quizzes->delete($this->by, $first->id);
+
+        $this->assertSame([$second->id], array_map(fn ($q) => $q->id, $this->quizzes->forModule($this->by, $this->module)));
+        $this->assertSame(0, LearnerTables::query(LearnerScope::of($this->by), 'quizzes')->where('id', $first->id)->count(), 'the row is gone, not hidden');
+        $this->assertThrows(fn () => $this->quizzes->find($this->by, $first->id), NotFound::class);
+        // The journal keeps what happened, with a correction that takes back the first quiz's answers and no others.
+        $this->assertCount(3, $this->entriesOf('attempt'));
+        $corrections = $this->entriesOf('amendment');
+        $this->assertCount(1, $corrections);
+        $this->assertSame(['retract', 'learner_request', ["event:{$attempts[0]->id}", "event:{$attempts[1]->id}"]], [$corrections[0]->body['action'], $corrections[0]->body['reason'], $corrections[0]->body['targets']]);
+    }
+
+    public function test_a_quiz_made_before_attempts_were_named_still_takes_back_its_own_answers(): void
+    {
+        $first = $this->quizzes->record($this->by, $this->session, ['kind' => 'quiz', 'questions' => [$this->q('What is a quantum?', 'correct'), $this->q('What is aging?', 'incorrect')]]);
+        $this->travel(10)->minutes();
+        $second = $this->quizzes->record($this->by, $this->session, ['kind' => 'quiz', 'questions' => [$this->q('What is a quantum?', 'correct')]]);
+        $named = $this->attemptIdsOf($first->id);
+        // As a quiz recorded before the ids were kept: found by session, question, outcome and time.
+        LearnerTables::query(LearnerScope::of($this->by), 'quizzes')->update(['attempt_ids' => null]);
+
+        $this->quizzes->delete($this->by, $first->id);
+
+        $corrections = $this->entriesOf('amendment');
+        $this->assertCount(1, $corrections);
+        $this->assertSame(array_map(fn ($id) => "event:{$id}", $named), $corrections[0]->body['targets']);
+        $this->assertCount(1, $this->quizzes->forModule($this->by, $this->module));
+        $this->assertSame($second->id, $this->quizzes->forModule($this->by, $this->module)[0]->id);
+    }
+
+    public function test_a_quiz_with_no_answers_in_the_journal_is_deleted_without_a_correction(): void
+    {
+        // No topic on the session or the question: nothing was written as evidence, so nothing is taken back.
+        app(Sessions::class)->setTopic($this->by, $this->session, null);
+        $quiz = $this->quizzes->record($this->by, $this->session, ['kind' => 'quiz', 'questions' => [$this->q('Q', 'correct')]]);
+        $this->assertSame([], $this->attemptIdsOf($quiz->id));
+
+        $this->quizzes->delete($this->by, $quiz->id);
+
+        $this->assertSame([], $this->entriesOf('amendment'));
+        $this->assertSame(0, LearnerTables::query(LearnerScope::of($this->by), 'quizzes')->count());
+    }
+
     public function test_another_students_quizzes_are_not_found(): void
     {
         $quiz = $this->quizzes->record($this->by, $this->session, ['kind' => 'quiz', 'questions' => [$this->q('Q', 'correct')]]);
         $grace = $this->principal($this->student());
 
-        foreach ([fn () => $this->quizzes->find($grace, $quiz->id), fn () => $this->quizzes->forSession($grace, $this->session), fn () => $this->quizzes->forModule($grace, $this->module), fn () => $this->quizzes->record($grace, $this->session, ['kind' => 'quiz', 'questions' => [$this->q('Q', 'correct')]])] as $try) {
+        foreach ([fn () => $this->quizzes->delete($grace, $quiz->id), fn () => $this->quizzes->find($grace, $quiz->id), fn () => $this->quizzes->forSession($grace, $this->session), fn () => $this->quizzes->forModule($grace, $this->module), fn () => $this->quizzes->record($grace, $this->session, ['kind' => 'quiz', 'questions' => [$this->q('Q', 'correct')]])] as $try) {
             try {
                 $try();
                 $this->fail('Expected not found.');

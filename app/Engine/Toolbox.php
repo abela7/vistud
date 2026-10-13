@@ -25,6 +25,7 @@ use App\Engine\Tools\QuestionsTool;
 use App\Engine\Tools\ReadFileTool;
 use App\Engine\Tools\ReadNoteTool;
 use App\Engine\Tools\RecordQuizTool;
+use App\Engine\Tools\RememberTool;
 use App\Engine\Tools\RenameCourseTool;
 use App\Engine\Tools\RenameFolderTool;
 use App\Engine\Tools\RenameModuleTool;
@@ -78,6 +79,7 @@ final class Toolbox
         WriteNoteTool::class,
         EditNoteTool::class,
         RecordQuizTool::class,
+        RememberTool::class,
         RenameTopicTool::class,
         DeleteTopicTool::class,
         RenameFolderTool::class,
@@ -122,11 +124,13 @@ final class Toolbox
         'assignments' => 'your assignments', 'assignment_plan' => 'an assignment plan', 'calendar' => 'your calendar', 'notes' => 'your notes',
         'read_note' => 'a note', 'search_notes' => 'your notes', 'files' => 'your files', 'read_file' => 'a file', 'earlier_sessions' => 'earlier sessions',
         'plot_graph' => 'a function graph', 'calculate' => 'a calculation', 'create_snippet' => 'a copyable snippet',
+        // ViStud AI's (App\Engine\Vistud\VistudToolbox).
+        'courses' => 'your courses', 'study_time' => 'your study time', 'search_everything' => 'all your courses', 'memories' => 'what is remembered',
     ];
 
     /** What each tool that changes the course does, as the chat says it while it works ("Saving flashcards…"). */
     public const DOING = [
-        'set_topic' => 'Setting the topic', 'set_topic_status' => 'Marking a topic', 'record_quiz' => 'Recording the quiz', 'add_topics' => 'Adding topics', 'make_flashcards' => 'Saving flashcards', 'save_key_points' => 'Saving key points', 'add_questions' => 'Adding questions', 'answer_question' => 'Answering question', 'write_note' => 'Writing in your note',
+        'set_topic' => 'Setting the topic', 'set_topic_status' => 'Marking a topic', 'record_quiz' => 'Recording the quiz', 'remember' => 'Remembering', 'forget_memory' => 'Forgetting', 'add_topics' => 'Adding topics', 'make_flashcards' => 'Saving flashcards', 'save_key_points' => 'Saving key points', 'add_questions' => 'Adding questions', 'answer_question' => 'Answering question', 'write_note' => 'Writing in your note',
         'rename_topic' => 'Renaming topic', 'delete_topic' => 'Removing topic', 'rename_folder' => 'Renaming folder', 'rename_course' => 'Renaming course', 'rename_module' => 'Renaming module', 'rename_note' => 'Renaming note',
         'plot_graph' => 'Plotting function graph', 'calculate' => 'Calculating', 'create_snippet' => 'Creating copyable snippet',
     ];

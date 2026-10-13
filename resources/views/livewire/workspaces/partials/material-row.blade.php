@@ -13,13 +13,9 @@
     <div class="relative z-10 flex items-center gap-1.5 shrink-0" x-on:click.stop>
         <button type="button"
             class="session-icon-btn size-7 text-fg-subtle hover:text-danger hover:bg-danger-subtle hover:border-danger/30 transition-colors"
-            x-on:click.stop.prevent="
-                if (confirm('Delete {{ addslashes($item['name']) }} permanently from the platform? This cannot be undone.')) {
-                    $wire.{{ $isNote ? 'deleteMaterialNote' : 'deleteMaterialFile' }}('{{ $itemId }}');
-                }
-            "
-            title="Delete {{ $item['name'] }} from platform"
-            aria-label="Delete {{ $item['name'] }} from platform">
+            x-on:click.stop.prevent="$dispatch('session-confirm', { kind: @js($isNote ? 'note' : 'file'), id: @js($itemId), name: @js($item['name']) })"
+            title="{{ $isNote ? 'Move' : 'Delete' }} {{ $item['name'] }} {{ $isNote ? 'to trash' : 'from platform' }}"
+            aria-label="{{ $isNote ? 'Move' : 'Delete' }} {{ $item['name'] }} {{ $isNote ? 'to trash' : 'from platform' }}">
             <x-icon name="trash-2" class="size-3.5" />
         </button>
         @if ($open)

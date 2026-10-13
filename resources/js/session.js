@@ -130,7 +130,8 @@ function announce(key, words) {
     if (sound) chime();
     if ('Notification' in window && Notification.permission === 'granted' && words) {
         try {
-            new Notification('ViStud', { body: words, tag: 'vistud-pomodoro' });
+            // Without `silent` the system plays its own notification sound, even when the clock is muted.
+            new Notification('ViStud', { body: words, tag: 'vistud-pomodoro', silent: !sound });
         } catch {
             // Some browsers only notify from a service worker; the chime is enough.
         }

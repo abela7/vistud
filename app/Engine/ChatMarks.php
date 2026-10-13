@@ -11,7 +11,7 @@ use App\Study\Capture;
  */
 final class ChatMarks
 {
-    private const WORDS = ['summary' => 'Summary', 'finding' => 'Key point', 'question' => 'Question', 'flashcard' => 'Flashcard', 'attempt' => 'Your answer', 'checkpoint' => 'Where we are', 'status' => 'Status'];
+    private const WORDS = ['summary' => 'Summary', 'finding' => 'Key point', 'question' => 'Question', 'flashcard' => 'Flashcard', 'attempt' => 'Your answer', 'checkpoint' => 'Where we are', 'status' => 'Status', 'remember' => 'To remember about you'];
 
     /**
      * A reply still being written, cut before a mark that hasn't closed yet (and a tag cut in the middle), so the
@@ -53,6 +53,7 @@ final class ChatMarks
                     ($item['fix'] ?? '') !== '' ? '**To fix:** '.$item['fix'] : null,
                 ])),
                 'status' => array_values(array_filter(['Proposed: **'.$item['proposed'].'**', $item['why'] !== '' ? $item['why'] : null])),
+                'remember' => [$item['text'].($item['everywhere'] ? ' *(all courses)*' : '')],
                 default => [$item['text']],
             };
 

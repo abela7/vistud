@@ -14,7 +14,7 @@
 <div class="mx-auto max-w-7xl space-y-5" x-data="{ sure: false, adding: null, over: false }"
     x-on:dragover.prevent="over = true" x-on:dragleave.self="over = false"
     x-on:drop.prevent="over = false; Alpine.$data($el.querySelector('[data-section-upload]')).drop($event); $wire.showTab('files')">
-    <x-workspace.section-header :workspace="$workspace" :title="$section->title" :back-href="$back" :back-to="$assignment->title" :eyebrow="$workspace->name.' · '.$assignment->title">
+    <x-workspace.section-header :workspace="$workspace" :title="$section->title" :back-href="$back" :back-to="$assignment->title" :eyebrow="$workspace->name.' · '.$assignment->title" stack>
         <span @class(['plan-weight-chip', 'is-unset' => $section->weight === null]) title="Its weight in the assignment">{{ $section->weight === null ? 'No weight' : $section->weight.'%' }}</span>
         <a href="{{ route('workspaces.assignments.sections.edit', [$workspaceId, $activityId, $sectionId]) }}" class="btn btn-ghost btn-sm"><x-icon name="pencil" class="size-4" />Edit</a>
         @if ($section->folderId !== null)

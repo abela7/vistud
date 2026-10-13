@@ -28,6 +28,16 @@ final class FilePreviews
     /** The kinds that are turned into a PDF to show. */
     public const KINDS = ['document', 'slides', 'spreadsheet'];
 
+    /** The old kinds of file that are also turned into the modern kind, for the tutor to read: extension → [extension, LibreOffice's format]. */
+    private const MODERN = [
+        'doc' => ['docx', 'docx:MS Word 2007 XML'],
+        'odt' => ['docx', 'docx:MS Word 2007 XML'],
+        'ppt' => ['pptx', 'pptx:Impress MS PowerPoint 2007 XML'],
+        'odp' => ['pptx', 'pptx:Impress MS PowerPoint 2007 XML'],
+        'xls' => ['xlsx', 'xlsx:Calc MS Excel 2007 XML'],
+        'ods' => ['xlsx', 'xlsx:Calc MS Excel 2007 XML'],
+    ];
+
     /** How long LibreOffice gets for a note shared as PDF or Word, which the student waits for. */
     private const TIMEOUT_SECONDS = 120;
 
@@ -130,7 +140,14 @@ final class FilePreviews
             return null;
         }
         try {
-            if ($disk->exists($pdfKey) || $disk->exists("{$pdfKey}.failed") || ! $disk->exists($key) || ($converter = self::converter()) === null) {
+            // The PDF to show, and for an old kind of file its modern copy for the tutor: whichever isn't made yet.
+            $modern = self::MODERN[$extension] ?? null;
+            $wanted = array_filter(
+                [$pdfKey => self::pdfFormat($extension), ...($modern === null ? [] : [self::modernKey($key, $modern[0]) => $modern[1]])],
+                fn (string $target) => ! $disk->exists($target) && ! $disk->exists("{$target}.failed"),
+                ARRAY_FILTER_USE_KEY,
+            );
+            if ($wanted === [] || ! $disk->exists($key) || ($converter = self::converter()) === null) {
                 return null;
             }
 
@@ -144,17 +161,33 @@ final class FilePreviews
                 fclose($in);
                 fclose($out);
 
-                $pdf = self::convert($converter, $work, $source, 'pdf', null, $problem, waitSeconds: 0, timeoutSeconds: self::PREVIEW_SECONDS);
-                if ($pdf !== null && str_starts_with((string) file_get_contents($pdf, length: 5), '%PDF-')) {
-                    $stream = fopen($pdf, 'rb');
-                    $disk->writeStream($pdfKey, $stream);
-                    fclose($stream);
+                foreach ($wanted as $target => $format) {
+                    $problem = null;
+                    try {
+                        $made = self::convert($converter, $work, $source, $format, null, $problem, waitSeconds: 0, timeoutSeconds: self::PREVIEW_SECONDS);
+                    } catch (ProcessTimedOutException) {
+                        [$made, $problem] = [null, 'LibreOffice took more than '.intdiv(self::PREVIEW_SECONDS, 60).' minutes.'];
+                    }
+                    // A PDF starts %PDF-; a .docx, .pptx or .xlsx is a ZIP file, which starts PK.
+                    if ($made !== null && str_starts_with((string) file_get_contents($made, length: 5), $target === $pdfKey ? '%PDF-' : 'PK')) {
+                        $stream = fopen($made, 'rb');
+                        $disk->writeStream($target, $stream);
+                        fclose($stream);
+                        @unlink($made);
 
-                    return null;
+                        continue;
+                    }
+                    // Every slot taken is not the file's fault: the job comes back shortly for what is left.
+                    if ($problem === self::BUSY) {
+                        return 3;
+                    }
+                    // Not tried again on every visit: a file LibreOffice can't read won't read next time either.
+                    $problem ??= 'nothing made';
+                    Log::warning('A file preview could not be made.', ['file' => $id, 'made' => pathinfo($target, PATHINFO_EXTENSION), 'problem' => Str::limit($problem, 500)]);
+                    $disk->put("{$target}.failed", Str::limit($problem, 500));
                 }
-                $problem ??= 'no PDF';
-            } catch (ProcessTimedOutException) {
-                $problem = 'LibreOffice took more than '.intdiv(self::PREVIEW_SECONDS, 60).' minutes.';
+
+                return null;
             } catch (Throwable $e) {
                 // LibreOffice couldn't be started, or a file couldn't be written: this computer's fault, not the file's.
                 Log::warning('A file preview could not be made; it is tried again shortly.', ['file' => $id, 'problem' => Str::limit($e->getMessage(), 500)]);
@@ -163,19 +196,54 @@ final class FilePreviews
             } finally {
                 File::deleteDirectory($work);
             }
-            // Every slot taken is not the file's fault: the job comes back shortly.
-            if ($problem === self::BUSY) {
-                return 3;
-            }
-
-            // Not tried again on every visit: a file LibreOffice can't read won't read next time either.
-            Log::warning('A file preview could not be made.', ['file' => $id, 'problem' => Str::limit($problem, 500)]);
-            $disk->put("{$pdfKey}.failed", Str::limit($problem, 500));
-
-            return null;
         } finally {
             $lock->release();
         }
+    }
+
+    /**
+     * An old Word, PowerPoint or Excel file (.doc, .ppt, .xls, or OpenDocument) as the modern kind (.docx, .pptx,
+     * .xlsx), made by LibreOffice beside its preview, so the tutor reads it as one (App\Study\OfficeReader): its sheets,
+     * row numbers and formulas, a deck's slides in order. [its key, its extension] once made; PREPARING while it is
+     * being made (queued now if it isn't yet); null when it can't be made here, or the file needs no copy.
+     *
+     * @return array{0: string, 1: string}|string|null
+     */
+    public function modern(Principal $by, string $id): array|string|null
+    {
+        [$file, $key] = $this->files->content($by, $id);
+        $modern = self::MODERN[$file->extension] ?? null;
+        if ($modern === null) {
+            return null;
+        }
+        $disk = Files::disk();
+        $target = self::modernKey($key, $modern[0]);
+        if (! $disk->exists($target) && ! $disk->exists("{$target}.failed") && self::converter() !== null) {
+            // Queued once for a file (the job is unique); with the sync queue it has been made by now.
+            MakeFilePreview::dispatch($file->id, $key, $file->extension);
+        }
+
+        return match (true) {
+            $disk->exists($target) => [$target, $modern[0]],
+            $disk->exists("{$target}.failed") || self::converter() === null => null,
+            default => self::PREPARING,
+        };
+    }
+
+    private static function modernKey(string $storageKey, string $extension): string
+    {
+        return str_replace('/files/', '/previews/', $storageKey).'.'.$extension;
+    }
+
+    /**
+     * What to turn a file into for its preview. A spreadsheet's sheet is one page, however wide or long, as Excel in a
+     * browser shows it, instead of paper pages that cut its columns in two (and so the page number is the sheet's).
+     */
+    private static function pdfFormat(string $extension): string
+    {
+        return (FileTypes::TYPES[$extension][0] ?? '') === 'spreadsheet'
+            ? 'pdf:calc_pdf_Export:{"SinglePageSheets":{"type":"boolean","value":"true"}}'
+            : 'pdf';
     }
 
     /**
@@ -272,10 +340,15 @@ final class FilePreviews
         return null;
     }
 
-    /** Forgets the preview of a file whose bytes are at $storageKey (the file is deleted). */
+    /** Forgets the preview of a file whose bytes are at $storageKey, and its modern copy (the file is deleted). */
     public static function forget(string $storageKey): void
     {
-        Files::disk()->delete([self::key($storageKey), self::key($storageKey).'.failed']);
+        $keys = [self::key($storageKey), self::key($storageKey).'.failed'];
+        foreach (['docx', 'pptx', 'xlsx'] as $extension) {
+            $keys[] = self::modernKey($storageKey, $extension);
+            $keys[] = self::modernKey($storageKey, $extension).'.failed';
+        }
+        Files::disk()->delete($keys);
     }
 
     private static function key(string $storageKey): string

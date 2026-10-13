@@ -2,6 +2,7 @@
 
 namespace App\Engine\Tools;
 
+use App\Engine\Context\Stack;
 use App\Platform\Access\Principal;
 use App\Study\Activities;
 use App\Study\Files;
@@ -34,7 +35,7 @@ final class CourseOverview implements Tool
 
     public function description(): string
     {
-        return 'The course at a glance: every module with its dates, folders, how many of its topics are understood, confused or not started, and how many notes and files it holds; plus open questions, what is due in the next 14 days, and flashcards due. Start here when the student asks where they stand.';
+        return 'The course at a glance: every module with its dates, its topics by where they stand (not started, covered, understood, confusing, mastered) in all and in each folder, the topics in no folder, and how many notes and files it holds; plus open questions, what is due in the next 14 days, and flashcards due. Start here when the student asks where they stand.';
     }
 
     public function parameters(): array
@@ -53,20 +54,47 @@ final class CourseOverview implements Tool
         foreach ($tree as $f) {
             $folderNames[$f->id] = $f->name;
         }
+        // Each folder's topics count under the folder at the top of its branch, as the student's Progress page shows them.
+        $parentOf = [];
+        foreach ($tree as $f) {
+            $parentOf[$f->id] = $f->parentId;
+        }
+        $topOf = function (?string $id) use ($parentOf): ?string {
+            while ($id !== null && ($parentOf[$id] ?? null) !== null) {
+                $id = $parentOf[$id];
+            }
+
+            return $id;
+        };
+        // "10 topics: 0 understood, 10 not started", the words the tutor's other tools use.
+        $count = function (array $list): array {
+            $by = [];
+            foreach ($list as $topic) {
+                $word = Stack::word($topic->shown());
+                $by[$word] = ($by[$word] ?? 0) + 1;
+            }
+
+            return ['total' => count($list), ...$by];
+        };
         $modules = [];
         foreach ($this->modules->list($by, $w) as $i => $module) {
-            $statuses = [];
-            foreach ($topics as $topic) {
-                if ($topic->moduleId === $module->id) {
-                    $statuses[$topic->shown()] = ($statuses[$topic->shown()] ?? 0) + 1;
+            $mine = array_values(array_filter($topics, fn ($topic) => $topic->moduleId === $module->id));
+            $folders = [];
+            foreach ($tree as $folder) {
+                if ($folder->moduleId === $module->id && $folder->parentId === null) {
+                    $in = array_filter($mine, fn ($topic) => $topic->folderId !== null && $topOf($topic->folderId) === $folder->id);
+                    $folders[] = ['folder' => $folder->name, 'topics' => $count($in)];
                 }
             }
+            $own = array_filter($mine, fn ($topic) => $topic->folderId === null);
             $modules[] = array_filter([
                 'number' => $i + 1,
                 'title' => $module->title,
                 'runs' => $module->startsOn || $module->endsOn ? trim(($module->startsOn ?? '').' to '.($module->endsOn ?? ''), ' to') : null,
                 'current' => $context->moduleId === $module->id ? true : null,
-                'topics' => $statuses ?: null,
+                'topics' => $mine !== [] ? $count($mine) : null,
+                'folders' => $folders ?: null,
+                'topics_in_no_folder' => $folders !== [] && $own !== [] ? array_values(array_map(fn ($topic) => $topic->name, $own)) : null,
                 'notes' => count(array_filter($notes, fn ($n) => $n->moduleId === $module->id)) ?: null,
                 'files' => count(array_filter($files, fn ($f) => $f->moduleId === $module->id)) ?: null,
             ], fn ($v) => $v !== null);

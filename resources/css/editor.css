@@ -1948,6 +1948,85 @@
         min-height: 0 !important;
     }
 
+    /* Markdown grows by zooming each block (its sizes are in rem, which a font size wouldn't reach); it reflows. */
+    .file-markdown > * {
+        zoom: var(--doc-zoom, 1);
+    }
+
+    /* The zoom under a document: − · 100% · +, small and centred, bigger to touch on a phone. */
+    .file-zoom-bar {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0.5rem;
+        border-top: 1px solid var(--divider);
+        background-color: var(--surface-raised);
+    }
+
+    .file-zoom-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.125rem;
+        padding: 0.125rem;
+        border: 1px solid var(--border);
+        border-radius: 9999px;
+        background-color: var(--surface-sunken);
+    }
+
+    .file-zoom-btn,
+    .file-zoom-value {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 2rem;
+        border-radius: 9999px;
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+
+    .file-zoom-btn {
+        width: 2rem;
+    }
+
+    .file-zoom-value {
+        min-width: 3.75rem;
+        padding-inline: 0.5rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+    }
+
+    .file-zoom-btn:hover:not(:disabled),
+    .file-zoom-value:hover {
+        background-color: var(--hover);
+        color: var(--text);
+    }
+
+    .file-zoom-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .file-zoom-btn:focus-visible,
+    .file-zoom-value:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 1px;
+    }
+
+    @media (pointer: coarse) {
+        .file-zoom-btn,
+        .file-zoom-value {
+            height: 2.5rem;
+        }
+
+        .file-zoom-btn {
+            width: 2.5rem;
+        }
+    }
+
     .file-split-handle {
         width: 12px;
         margin: 0 1px;
@@ -2026,9 +2105,9 @@
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+        align-items: flex-start;
         padding: 0.5rem;
-        overflow-y: auto;
-        overflow-x: hidden;
+        overflow: auto;
         overscroll-behavior: contain;
         background-color: var(--surface-sunken);
     }
@@ -2039,9 +2118,14 @@
         opacity: 1 !important;
     }
 
+    /*
+    | Zoomed (--doc-zoom on .file-pane-doc), a page is that much wider than the frame. Auto side margins centre a
+    | narrower page and fall to nothing on a wider one, so a zoomed-in page scrolls sideways from its left edge.
+    */
     .pdf-page {
         flex: none;
-        width: 100%;
+        width: calc(100% * var(--doc-zoom, 1));
+        margin-inline: auto;
         border-radius: var(--radius-sm);
         background-color: var(--surface);
         box-shadow: var(--elevation-sm);
@@ -2191,7 +2275,7 @@
         overflow: auto;
         color: var(--text);
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 0.875rem;
+        font-size: calc(0.875rem * var(--doc-zoom, 1));
         line-height: 1.6;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
@@ -2554,10 +2638,12 @@
     }
 
     .session-time {
+        flex: none;
         font-size: 1.75rem;
         font-weight: 600;
         line-height: 1.1;
         letter-spacing: -0.01em;
+        white-space: nowrap;
     }
 
     /* The Pomodoro phase in a small ring that fills as it runs (an SVG stroke, in theme colours). */
@@ -2587,6 +2673,157 @@
 
     .is-break .pomodoro-arc {
         stroke: var(--success);
+    }
+
+    /*
+    | The compact clock (the default): one slim line, the ring, the phase, the countdown and the one button for now; the
+    | rounds, the other controls and the sound come back with the toggle at its end.
+    */
+    .clock-bar.is-compact {
+        flex-wrap: nowrap;
+        gap: 0.5rem 0.75rem;
+        padding: 0.3125rem 0.375rem 0.3125rem 0.625rem;
+        border-radius: var(--radius-lg);
+    }
+
+    .clock-bar.is-compact .clock-extra {
+        display: none;
+    }
+
+    .clock-bar.is-compact .clock-bar-main {
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+    }
+
+    .clock-bar.is-compact .pomodoro-ring {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+
+    .clock-bar.is-compact .session-time {
+        font-size: 1.125rem;
+    }
+
+    .clock-bar.is-compact .status-chip {
+        white-space: nowrap;
+    }
+
+    .clock-bar.is-compact .clock-bar-controls {
+        flex-wrap: nowrap;
+        gap: 0.25rem;
+    }
+
+    .clock-bar.is-compact .clock-bar-controls .btn {
+        min-height: 2rem;
+        padding: 0 0.75rem;
+        font-size: 0.8125rem;
+        white-space: nowrap;
+    }
+
+    .clock-toggle {
+        flex: none;
+    }
+
+    .clock-phase-words {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /*
+    | On a phone the compact clock must fit one line beside nothing else: the countdown never gives way, the phase
+    | words are cut short first, and the button for now keeps only its icon (its words stay its accessible name).
+    */
+    @media (max-width: 639.98px) {
+        .clock-bar.is-compact {
+            gap: 0.375rem;
+            padding: 0.25rem 0.25rem 0.25rem 0.5rem;
+        }
+
+        .clock-bar.is-compact .clock-bar-main {
+            flex: 1 1 auto;
+            gap: 0.375rem;
+        }
+
+        .clock-bar.is-compact .status-chip {
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        .clock-bar.is-compact .pomodoro-ring {
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+
+        .clock-bar.is-compact .session-time {
+            font-size: 1.0625rem;
+        }
+
+        .clock-bar.is-compact .clock-bar-controls {
+            flex: none;
+            gap: 0.125rem;
+        }
+
+        .clock-bar.is-compact .clock-bar-controls .btn {
+            width: 2rem;
+            min-height: 2rem;
+            padding: 0;
+            font-size: 0;
+            justify-content: center;
+        }
+
+        .clock-bar.is-compact .clock-toggle {
+            width: 2rem;
+            height: 2rem;
+        }
+
+        .clock-bar:not(.is-compact) {
+            gap: 0.625rem;
+            padding: 0.625rem 0.75rem;
+        }
+
+        .clock-bar:not(.is-compact) .session-time {
+            font-size: 1.5rem;
+        }
+
+        .clock-bar:not(.is-compact) .clock-bar-controls .btn {
+            min-height: 2.25rem;
+            padding: 0 0.75rem;
+            font-size: 0.8125rem;
+        }
+    }
+
+    /* The hidden clock's way back: its countdown in a small pill in the session's top bar. */
+    .session-clock-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        height: 1.75rem;
+        padding: 0 0.625rem;
+        border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--border));
+        border-radius: 9999px;
+        background-color: var(--accent-subtle);
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--accent);
+        white-space: nowrap;
+        cursor: pointer;
+    }
+
+    .session-clock-pill.is-break {
+        border-color: color-mix(in oklab, var(--success) 40%, var(--border));
+        background-color: var(--success-subtle);
+        color: var(--success);
+    }
+
+    .session-clock-pill:hover {
+        filter: brightness(1.08);
+    }
+
+    .session-clock-pill:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
     }
 
     .pomodoro-dots {

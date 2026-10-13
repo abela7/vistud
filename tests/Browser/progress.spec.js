@@ -50,9 +50,9 @@ test('Progress is a tree: the ring, the filters, and the module the student is i
     await expect(row(page, 'ACID')).toBeHidden();
 
     // A topic says where it stands, and the one confusing for a week says why it needs a look.
-    await expect(row(page, 'Primary and foreign keys')).toContainText('Still confusing');
+    await expect(row(page, 'Primary and foreign keys')).toContainText('Not understood');
     await expect(row(page, 'Primary and foreign keys')).toContainText(/since \d{1,2} [A-Z][a-z]{2}/);
-    await expect(row(page, 'Primary and foreign keys').locator('.tree-attention')).toContainText('Confusing for over a week');
+    await expect(row(page, 'Primary and foreign keys').locator('.tree-attention')).toContainText('Not understood for over a week');
     await expect(row(page, 'Joins')).not.toContainText('Evidence');
     await expect(row(page, 'Joins').locator('.status-chip')).toHaveAttribute('title', /.+/);
     await expect(page.getByText('Evidence:')).toHaveCount(0);
@@ -107,7 +107,7 @@ test('a topic opens its sheet: who set the status, key points, and removing it',
     await expect(sheet(page)).toContainText('Saved.');
     await expect(sheet(page)).not.toContainText('Set by the tutor');
     await sheet(page).getByRole('button', { name: 'Close', exact: true }).last().click();
-    await expect(row(page, 'ACID')).toContainText('Still confusing');
+    await expect(row(page, 'ACID')).toContainText('Not understood');
     await expect(page.getByRole('progressbar', { name: 'Topics understood', exact: true })).toHaveAttribute('aria-valuenow', '20');
 
     // Removing asks first, and says what stays.
@@ -145,9 +145,9 @@ test('a student adds a topic, selects several and tells the app they are covered
     await page.locator('.progress-head').getByRole('button', { name: 'Select', exact: true }).click();
     await row(page, 'Normalisation').getByTitle('Select Normalisation').click();
     await expect(row(page, 'Normalisation')).toHaveClass(/is-selected/);
-    await page.getByRole('button', { name: 'Covered', exact: true }).click();
-    await expect(page.getByRole('status').filter({ hasText: '1 topic marked Covered.' })).toBeVisible();
-    await expect(row(page, 'Normalisation')).toContainText('Covered');
+    await page.getByRole('button', { name: 'Studying', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: '1 topic marked Studying.' })).toBeVisible();
+    await expect(row(page, 'Normalisation')).toContainText('Studying');
     await page.locator('.progress-head').getByRole('button', { name: 'Done', exact: true }).click();
 
     // Questions are written down on their own page, one line at a time.

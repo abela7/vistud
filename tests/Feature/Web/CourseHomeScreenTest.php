@@ -8,6 +8,7 @@ use App\Platform\Access\Principal;
 use App\Study\Activities;
 use App\Study\CourseHome;
 use App\Study\Flashcards;
+use App\Study\Folders;
 use App\Study\LearnerProfiles;
 use App\Study\Modules;
 use App\Study\Notes;
@@ -92,6 +93,27 @@ class CourseHomeScreenTest extends TestCase
         app(Topics::class)->report($this->by, app(Topics::class)->list($this->by, $this->workspace)[1]->id, 'understood');
         $this->module('Processes');
         $this->home()->assertSeeInOrder(['Next:', 'Start Module 2']);
+    }
+
+    public function test_the_next_line_names_the_folder_the_next_topic_is_in(): void
+    {
+        $one = $this->module('Introduction');
+        app(Notes::class)->create($this->by, 'module', $one, 'Lecture 1');
+        $folder = app(Folders::class)->create($this->by, 'module', $one, 'Lecture 1 + Lab 1');
+        $processes = app(Topics::class)->create($this->by, $this->workspace, 'Processes', $one, $folder->id);
+        app(Topics::class)->create($this->by, $this->workspace, 'Threads', $one);
+        $step = fn () => app(CourseHome::class)->for($this->by, $this->workspace)->step;
+
+        $this->assertSame('Study Module 1, starting in Lecture 1 + Lab 1', $step()->text);
+        $this->home()->assertSeeInOrder(['Next:', 'Study Module 1, starting in Lecture 1 + Lab 1', 'Study']);
+        $this->assertSame([$one, $processes->id], [$step()->moduleId, $step()->topicId]);
+
+        // The next topic is in no folder: none is named.
+        app(Topics::class)->report($this->by, $processes->id, 'understood');
+        $this->assertSame('Threads: 1 topic left in Module 1', $step()->text);
+
+        // What the line says is what Study does: a session on a topic in a folder is in that folder.
+        $this->assertSame($folder->id, app(Sessions::class)->start($this->by, $this->workspace, $processes->id, $one)->folderId);
     }
 
     public function test_a_deadline_within_a_day_comes_first(): void

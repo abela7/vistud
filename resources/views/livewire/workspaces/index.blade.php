@@ -23,7 +23,7 @@
         <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" role="list">
             @foreach ($active as $workspace)
                 @php $wsCounts = $counts[$workspace->id] ?? ['modules' => 0, 'notes' => 0, 'files' => 0]; @endphp
-                <li wire:key="ws-{{ $workspace->id }}" class="workspace-card ws-colour-{{ $workspace->colour }} group">
+                <li wire:key="ws-{{ $workspace->id }}" class="workspace-card {{ $workspace->colourClass() }} group" @if ($workspace->colourStyle()) style="{{ $workspace->colourStyle() }}" @endif>
                     <div class="flex items-start justify-between gap-3">
                         <div class="flex min-w-0 items-start gap-3">
                             <x-workspace.chip :workspace="$workspace" size="lg" />

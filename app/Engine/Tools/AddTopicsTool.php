@@ -65,6 +65,7 @@ final class AddTopicsTool implements Tool
         }
 
         $added = [];
+        $addedIds = [];
         $there = [];
         $problems = [];
         foreach ($wanted as $one) {
@@ -89,7 +90,7 @@ final class AddTopicsTool implements Tool
                 [$moduleId, $folderId] = [$module->id, $module->id === $sessionModule ? $sessionFolder : null];
             }
             try {
-                $this->topics->create($by, $context->workspaceId, $name, $moduleId, $folderId);
+                $addedIds[] = $this->topics->create($by, $context->workspaceId, $name, $moduleId, $folderId)->id;
             } catch (Unprocessable $e) {
                 $problems[] = "{$name}: ".(array_values($e->details['fields'] ?? [])[0][0] ?? $e->getMessage());
 
@@ -98,7 +99,7 @@ final class AddTopicsTool implements Tool
             $known[mb_strtolower($name)] = true;
             $added[] = $name;
         }
-        $context->effects->saved('topic', count($added));
+        $context->effects->saved('topic', count($added), $addedIds);
 
         return implode(' ', array_filter([
             $added !== [] ? 'Added '.count($added).' '.(count($added) === 1 ? 'topic' : 'topics').': '.implode(', ', $added).'.' : 'No topics were added.',

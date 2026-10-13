@@ -56,15 +56,23 @@ final class Settings
             askTopics: (bool) ($row->ask_topics ?? false),
             autoReadFiles: (bool) ($row->auto_read_files ?? true),
             tutorMarksTopics: (bool) ($row->tutor_marks_topics ?? true),
+            tutorRemembers: (bool) ($row->tutor_remembers ?? true),
             copyPasteAi: (bool) ($row->copy_paste_ai ?? false),
             favoriteModels: $favoriteModels,
+            provider: $key === null ? null : self::providerOf($row),
         );
     }
 
-    /** The student's own key for the service, or null without one (or when it can't be read any more). */
+    /**
+     * The student's own key, as the engine takes it (App\Engine\Credential: its provider and the secret), or null
+     * without one (or when it can't be read any more).
+     */
     public function key(Principal $by): ?string
     {
-        return self::decrypt(LearnerTables::query(Guard::learner($by), 'engine_settings')->first());
+        $row = LearnerTables::query(Guard::learner($by), 'engine_settings')->first();
+        $secret = self::decrypt($row);
+
+        return $secret === null ? null : Credential::pack(self::providerOf($row), $secret);
     }
 
     /**
@@ -80,7 +88,7 @@ final class Settings
         $choices = $this->get($by);
         $key = $this->key($by);
         if ($key === null && ! $this->setup->keySet()) {
-            throw new Unprocessable('engine_key', 'Add your OpenRouter key in your AI settings first.');
+            throw new Unprocessable('engine_key', 'Add your key in your AI settings first.');
         }
         $model = $choices->modelFor($role);
         if ($model === '') {
@@ -99,23 +107,112 @@ final class Settings
         return $this->key($by) !== null || $this->setup->keySet();
     }
 
-    /** Keeps the student's own key, encrypted. */
-    public function setKey(Principal $by, mixed $key): Choices
+    /**
+     * Keeps the student's own key, encrypted, with whose it is (the owner's ask, 2026-10-12). $provider says where it is
+     * from: `openrouter` (one key, every model), a provider's id (App\Engine\Providers), or `own` to find out: each
+     * provider the key may belong to is asked for its models, most likely first (by how its keys look), and the first
+     * that takes it has it. With a provider's own key, the tutor gets that provider's strongest model and the reader and
+     * the helper its quick one, among the models the key can use; back on OpenRouter, the models are the owner's again.
+     *
+     * @throws Unprocessable a key that isn't one, or that no provider took
+     */
+    public function setKey(Principal $by, mixed $key, string $provider = Providers::OPENROUTER): Choices
     {
         $scope = Guard::learner($by);
         $key = is_string($key) ? trim($key) : '';
-        Input::refuse(preg_match('/^\S{16,300}$/', $key) === 1 ? [] : ['key' => 'Paste the whole key, with no spaces (it starts with "sk-or-" on OpenRouter).']);
+        Input::refuse(preg_match('/^\S{16,300}$/', $key) === 1 ? [] : ['key' => 'Paste the whole key, with no spaces.']);
+        Input::refuse($provider === 'own' || Providers::known($provider) ? [] : ['provider' => 'Choose where the key is from.']);
+
+        [$provider, $models] = $this->whose($key, $provider);
         $this->ensureRow($scope);
-        LearnerTables::query($scope, 'engine_settings')->update(['key_encrypted' => Crypt::encryptString($key), 'key_updated_at' => now(), 'updated_at' => now()]);
+        if (Providers::direct($provider)) {
+            $quick = $this->answering($provider, $key, 'quick', $models);
+            $tutor = $this->answering($provider, $key, 'tutor', $models);
+        }
+        $roles = Providers::direct($provider)
+            ? ['tutor_model' => $tutor, 'reader_model' => $quick, 'helper_model' => $quick, 'fallback_model' => $quick !== $tutor ? $quick : null, 'favorite_models' => null]
+            : (self::providerOf(LearnerTables::query($scope, 'engine_settings')->first()) !== Providers::OPENROUTER ? ['tutor_model' => null, 'reader_model' => null, 'helper_model' => null, 'fallback_model' => null, 'favorite_models' => null] : []);
+        LearnerTables::query($scope, 'engine_settings')->update($roles + [
+            'key_encrypted' => Crypt::encryptString($key), 'key_provider' => $provider === Providers::OPENROUTER ? null : $provider,
+            'key_updated_at' => now(), 'updated_at' => now(),
+        ]);
 
         return $this->get($by);
     }
 
+    /**
+     * The model for a role that answers with this key: a provider can list a model its plan won't run (Google's free
+     * plan lists Gemini Pro with a quota of none), so the provider's choices are asked in turn, a word each, and the
+     * first that answers has the role. A refused key or an empty account answers no better further down the list; with
+     * none answering, the first choice is kept and trying the models says why.
+     *
+     * @param  list<string>  $offered
+     */
+    private function answering(string $provider, string $key, string $role, array $offered): string
+    {
+        foreach (array_slice(Providers::choices($provider, $role, $offered), 0, 3) as $model) {
+            try {
+                app(Engine::class)->reply(new Request($model, 'Answer in one word.', [['role' => 'user', 'content' => 'Say OK.']], maxTokens: 400, key: Credential::pack($provider, $key)));
+
+                return $model;
+            } catch (EngineFailed $e) {
+                if (in_array($e->errorCode, ['engine_bad_key', 'engine_credit', 'engine_unreachable', 'engine_not_set_up'], true)) {
+                    break;
+                }
+            }
+        }
+
+        return Providers::pick($provider, $role, $offered);
+    }
+
+    /**
+     * Whose a key is, and the models it can use there: the provider named, or (`own`) the first of those it may belong
+     * to that takes it. A key for OpenRouter is kept as it is; its models are checked when the student tries it.
+     *
+     * @return array{0: string, 1: list<string>}
+     *
+     * @throws Unprocessable
+     */
+    private function whose(string $key, string $provider): array
+    {
+        if ($provider === Providers::OPENROUTER) {
+            return [Providers::OPENROUTER, []];
+        }
+        $tried = $provider === 'own' ? array_values(array_filter(Providers::candidates($key), fn (string $id) => $id !== Providers::OPENROUTER || str_starts_with($key, 'sk-or-'))) : [$provider];
+        foreach ($tried as $id) {
+            try {
+                $models = array_map(fn (Model $m) => $m->id, app(Engine::class)->models(Credential::pack($id, $key)));
+            } catch (EngineFailed) {
+                continue;
+            }
+            if ($models !== []) {
+                return [$id, $models];
+            }
+        }
+        Input::refuse(['key' => $provider === 'own'
+            ? 'None of the providers took this key. Check that it is whole and active, or choose its provider.'
+            : Providers::name($provider).' didn\'t take this key. Check that it is whole and active, and that it is a '.Providers::name($provider).' key.']);
+
+        return [$provider, []];
+    }
+
     public function removeKey(Principal $by): Choices
     {
-        LearnerTables::query(Guard::learner($by), 'engine_settings')->update(['key_encrypted' => null, 'key_updated_at' => null, 'updated_at' => now()]);
+        $scope = Guard::learner($by);
+        $row = LearnerTables::query($scope, 'engine_settings')->first();
+        // A provider's models mean nothing without its key: the owner's are the ones again.
+        $roles = self::providerOf($row) !== Providers::OPENROUTER ? ['tutor_model' => null, 'reader_model' => null, 'helper_model' => null, 'fallback_model' => null, 'favorite_models' => null] : [];
+        LearnerTables::query($scope, 'engine_settings')->update($roles + ['key_encrypted' => null, 'key_provider' => null, 'key_updated_at' => null, 'updated_at' => now()]);
 
         return $this->get($by);
+    }
+
+    /** Whose the stored key is: a provider's id, or OpenRouter's. */
+    private static function providerOf(?object $row): string
+    {
+        $provider = $row?->key_provider ?? null;
+
+        return is_string($provider) && Providers::known($provider) ? $provider : Providers::OPENROUTER;
     }
 
     /**
@@ -127,7 +224,7 @@ final class Settings
     {
         $key = $this->key($by);
         if ($key === null && ! $this->setup->keySet()) {
-            return ['ok' => false, 'message' => 'No key yet. Paste your OpenRouter key above.', 'models' => 0];
+            return ['ok' => false, 'message' => 'No key yet. Paste your key above.', 'models' => 0];
         }
         try {
             $count = count(app(Engine::class)->models($key));
@@ -135,18 +232,53 @@ final class Settings
             return ['ok' => false, 'message' => $e->getMessage(), 'models' => 0];
         }
         if ($count > 0) {
-            Cache::forget('vistud.engine.models');
+            Cache::forget(Models::cacheKey($key));
         }
 
         return $count > 0
-            ? ['ok' => true, 'message' => "It works: the service offers {$count} models.", 'models' => $count]
+            ? ['ok' => true, 'message' => 'It works: '.Providers::name(Credential::provider($key)).' offers '.$count.' models.', 'models' => $count]
             : ['ok' => false, 'message' => 'The service answered but listed no models.', 'models' => 0];
+    }
+
+    /**
+     * Sends one message to one model with the student's own key and nothing else (no fallback, no study material), so
+     * they see whether the model answers before a session leans on it (the owner's ask, 2026-10-12): a provider can list
+     * a model its plan won't run. Only with their own key: the one set up for everyone isn't for trying things out.
+     *
+     * @return array{ok: bool, model: string, reply: string, message: string, ms: int, cost: ?int}
+     */
+    public function tryModel(Principal $by, string $model, string $words = 'Reply with one word: OK.'): array
+    {
+        $model = trim($model);
+        $words = mb_substr(trim($words), 0, 500);
+        $result = fn (bool $ok, string $message, string $reply = '', int $ms = 0, ?int $cost = null) => ['ok' => $ok, 'model' => $model, 'reply' => $reply, 'message' => $message, 'ms' => $ms, 'cost' => $cost];
+        $key = $this->key($by);
+        if ($key === null) {
+            return $result(false, 'Add your own key first: trying a model uses it.');
+        }
+        if ($model === '' || preg_match(self::MODEL_ID, $model) !== 1) {
+            return $result(false, 'Choose a model first.');
+        }
+        if ($words === '') {
+            return $result(false, 'Write something first.');
+        }
+        $started = hrtime(true);
+        try {
+            $reply = app(Engine::class)->reply(new Request($model, 'You are being tried out from a settings page. Answer in a sentence or two.', [['role' => 'user', 'content' => $words]],
+                maxTokens: 800, noTraining: $this->get($by)->noTraining, key: $key));
+        } catch (EngineFailed $e) {
+            return $result(false, $e->getMessage(), ms: (int) ((hrtime(true) - $started) / 1_000_000));
+        }
+        $ms = (int) ((hrtime(true) - $started) / 1_000_000);
+        $text = trim($reply->text);
+
+        return $result(true, $text === '' ? 'It answered, but with no words (it may have spent them all thinking).' : 'It answered.', $text, $ms, $reply->costMicros);
     }
 
     /**
      * @param  array<string, mixed>  $input  tutor_model, reader_model, helper_model, fallback_model (ids or empty), session_cap
      *                                       and month_cap (dollars, "2.50"), no_training and consent (booleans); language,
-     *                                       ask_topics, auto_read_files, tutor_marks_topics and copy_paste_ai are kept as
+     *                                       ask_topics, auto_read_files, tutor_marks_topics, tutor_remembers and copy_paste_ai are kept as
      *                                       they are when left out
      */
     public function set(Principal $by, array $input): Choices
@@ -202,6 +334,7 @@ final class Settings
             'ask_topics' => filter_var($input['ask_topics'] ?? ($existing?->ask_topics ?? false), FILTER_VALIDATE_BOOL),
             'auto_read_files' => filter_var($input['auto_read_files'] ?? ($existing?->auto_read_files ?? true), FILTER_VALIDATE_BOOL),
             'tutor_marks_topics' => filter_var($input['tutor_marks_topics'] ?? ($existing?->tutor_marks_topics ?? true), FILTER_VALIDATE_BOOL),
+            'tutor_remembers' => filter_var($input['tutor_remembers'] ?? ($existing?->tutor_remembers ?? true), FILTER_VALIDATE_BOOL),
             'copy_paste_ai' => filter_var($input['copy_paste_ai'] ?? ($existing?->copy_paste_ai ?? false), FILTER_VALIDATE_BOOL),
             'consented_at' => $consent ? ($existing?->consented_at ?? now()) : null,
             'updated_at' => now(),

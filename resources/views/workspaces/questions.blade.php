@@ -4,7 +4,7 @@
     (App\Livewire\Workspaces\QuestionBoard). A question opens on a page of its own (App\Livewire\Workspaces\QuestionPage).
 --}}
 <x-layouts.app :title="'Questions · '.$module->title.' · '.$workspace->name" :workspace="$workspace" section="modules" :module-id="$module->id">
-    <div class="mx-auto max-w-6xl space-y-6">
+    <div class="page-frame space-y-6">
         <x-page :title="$module->title" :back-href="route('workspaces.show', [$workspace->id, 'modules'])" back-to="Modules" :eyebrow="$workspace->name" />
         <x-module.tabs :workspace-id="$workspace->id" :module-id="$module->id" current="questions" :counts="$counts" />
         <livewire:workspaces.question-board :workspace-id="$workspace->id" :module-id="$module->id" :page="true" />

@@ -3,9 +3,11 @@
 namespace App\Livewire\Study;
 
 use App\Engine\Models;
+use App\Engine\Providers;
 use App\Engine\Role as EngineRole;
 use App\Engine\Settings;
 use App\Engine\Setup;
+use App\Engine\Troubles;
 use App\Engine\Usage;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
@@ -29,6 +31,12 @@ final class EngineSettings extends Component
     use Notices;
 
     public string $key = '';
+
+    /** Where a key comes from (the owner's ask, 2026-10-12): `openrouter`, one key for every model, or `own`, a provider's. */
+    public string $source = 'openrouter';
+
+    /** For a provider's own key: `own` to find out whose it is, or a provider's id (App\Engine\Providers). */
+    public string $provider = 'own';
 
     public string $tutorModel = '';
 
@@ -56,6 +64,8 @@ final class EngineSettings extends Component
 
     public bool $tutorMarksTopics = true;
 
+    public bool $tutorRemembers = true;
+
     public bool $copyPasteAi = false;
 
     public bool $consent = false;
@@ -65,6 +75,18 @@ final class EngineSettings extends Component
 
     #[Locked]
     public ?array $result = null;
+
+    /** Each role's model tried with the key (Try all my models): role => what happened. */
+    #[Locked]
+    public ?array $checks = null;
+
+    /** The little chat to try one model: the last few messages and what each model answered. */
+    #[Locked]
+    public array $trial = [];
+
+    public string $tryModel = '';
+
+    public string $tryText = '';
 
     private Settings $settings;
 
@@ -96,21 +118,68 @@ final class EngineSettings extends Component
     {
         $this->resetErrorBag();
         try {
-            $this->settings->setKey($this->principal(), $this->key);
+            $choices = $this->settings->setKey($this->principal(), $this->key, $this->source === 'own' ? $this->provider : Providers::OPENROUTER);
         } catch (Unprocessable $e) {
-            $this->addError('key', $e->details['fields']['key'][0] ?? $e->getMessage());
+            $fields = $e->details['fields'] ?? [];
+            $this->addError(isset($fields['provider']) ? 'provider' : 'key', ($fields['key'] ?? $fields['provider'] ?? [$e->getMessage()])[0]);
 
             return;
         }
         $this->key = '';
         $this->result = $this->settings->test($this->principal());
-        $this->notify($this->result['ok'] ? 'Your key is saved and works.' : 'Your key is saved, but the service didn\'t answer as expected.', $this->result['ok'] ? 'success' : 'warning');
+        $whose = Providers::name($choices->provider ?? Providers::OPENROUTER);
+        $this->notify($this->result['ok'] ? "Your {$whose} key is saved and works." : 'Your key is saved, but the service didn\'t answer as expected.', $this->result['ok'] ? 'success' : 'warning');
         $this->load();
+        // Listing models isn't answering: a plan can list a model it won't run, so each role's model is asked once.
+        if ($this->result['ok']) {
+            $this->checkModels();
+        }
     }
 
     public function test(): void
     {
         $this->result = $this->settings->test($this->principal());
+    }
+
+    /**
+     * Sends a one-word ask to each role's saved model, so the student sees which answer with their key before a
+     * session leans on them (a provider can list a model its plan won't run). All answering clears the last problem.
+     */
+    public function checkModels(): void
+    {
+        $by = $this->principal();
+        $choices = $this->settings->get($by);
+        $models = [];
+        foreach (EngineRole::cases() as $role) {
+            $models[$role->label()] = $choices->modelFor($role);
+        }
+        $models['If the tutor fails'] = $choices->fallbackModel;
+        $tried = [];
+        $this->checks = [];
+        foreach (array_filter($models) as $label => $model) {
+            $tried[$model] ??= $this->settings->tryModel($by, $model);
+            $this->checks[$label] = $tried[$model];
+        }
+        if ($this->checks !== [] && ! in_array(false, array_column($this->checks, 'ok'), true)) {
+            app(Troubles::class)->clear($by);
+        }
+    }
+
+    /** One message to one model, its answer (or why there is none) added to the little chat. */
+    public function sendTry(): void
+    {
+        $by = $this->principal();
+        $model = trim($this->tryModel) !== '' ? trim($this->tryModel) : $this->settings->get($by)->tutorModel;
+        $result = $this->settings->tryModel($by, $model, $this->tryText);
+        $this->trial = array_slice([...$this->trial, ['you' => mb_substr(trim($this->tryText), 0, 500)] + $result], -6);
+        if ($result['ok']) {
+            $this->tryText = '';
+        }
+    }
+
+    public function clearTry(): void
+    {
+        $this->trial = [];
     }
 
     public function askRemove(): void
@@ -163,7 +232,7 @@ final class EngineSettings extends Component
                 'tutor_model' => $this->tutorModel, 'reader_model' => $this->readerModel, 'helper_model' => $this->helperModel, 'fallback_model' => $this->fallbackModel,
                 'favorite_models' => $this->favoriteModels,
                 'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language, 'ask_topics' => $this->askTopics,
-                'auto_read_files' => $this->autoReadFiles, 'tutor_marks_topics' => $this->tutorMarksTopics, 'copy_paste_ai' => $this->copyPasteAi,
+                'auto_read_files' => $this->autoReadFiles, 'tutor_marks_topics' => $this->tutorMarksTopics, 'tutor_remembers' => $this->tutorRemembers, 'copy_paste_ai' => $this->copyPasteAi,
             ]);
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
@@ -219,12 +288,19 @@ final class EngineSettings extends Component
             'fallbackWords' => $words($this->fallbackModel),
             'favDetails' => $favDetails,
             'suggested' => $suggested,
+            // The providers a key of their own can come from, by name (OpenRouter is the other option).
+            'providers' => collect(Providers::all())->except(Providers::OPENROUTER)->map(fn (array $p) => (string) $p['name'])->all(),
+            // The last time the service failed this student, and why (App\Engine\Troubles).
+            'trouble' => app(Troubles::class)->last($by),
+            'recommended' => Providers::recommended(),
         ])->title('AI settings');
     }
 
     private function load(): void
     {
         $choices = $this->settings->get($this->principal());
+        // The option the saved key belongs to is the one shown.
+        $this->source = $choices->provider !== null && Providers::direct($choices->provider) ? 'own' : 'openrouter';
         $this->tutorModel = $choices->tutorModel;
         $this->readerModel = $choices->readerModel;
         $this->helperModel = $choices->helperModel;
@@ -237,6 +313,7 @@ final class EngineSettings extends Component
         $this->askTopics = $choices->askTopics;
         $this->autoReadFiles = $choices->autoReadFiles;
         $this->tutorMarksTopics = $choices->tutorMarksTopics;
+        $this->tutorRemembers = $choices->tutorRemembers;
         $this->copyPasteAi = $choices->copyPasteAi;
         $this->consent = $choices->consentedAt !== null;
     }

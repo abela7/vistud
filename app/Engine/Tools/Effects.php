@@ -4,13 +4,17 @@ namespace App\Engine\Tools;
 
 /**
  * What a tool did in the course during a chat turn: how many of each thing it saved, the notes it wrote in (with
- * the version it left), the topic it gave the session, the statuses it set or proposed and the quizzes it recorded,
+ * the version it left), the topic it gave the session, the statuses it set or proposed, the quizzes it recorded and what
+ * it remembered about the student,
  * so the chat can say so, link to them, and tell an open note or the session page to show the change.
  */
 final class Effects
 {
     /** @var array<string, int> flashcard · finding · question · topic => how many */
     private array $saved = [];
+
+    /** @var array<string, list<string>> the same kinds => the ids of what was made, so a count can leave out what was deleted since */
+    private array $savedIds = [];
 
     private ?string $topic = null;
 
@@ -25,10 +29,20 @@ final class Effects
     /** @var list<array{id: string, kind: string, score: int, asked: int}> */
     private array $quizzes = [];
 
-    public function saved(string $kind, int $count): void
+    /** @var list<array{id: string, text: string, replaced: ?string}> */
+    private array $remembered = [];
+
+    /** @var list<string> the changes that can't be undone the student was asked to agree to (Agreement) */
+    private array $asked = [];
+
+    /** @param list<string> $ids what was made, one id each */
+    public function saved(string $kind, int $count, array $ids = []): void
     {
         if ($count > 0) {
             $this->saved[$kind] = ($this->saved[$kind] ?? 0) + $count;
+        }
+        if ($ids !== []) {
+            $this->savedIds[$kind] = [...$this->savedIds[$kind] ?? [], ...$ids];
         }
     }
 
@@ -60,15 +74,27 @@ final class Effects
         $this->quizzes[] = ['id' => $id, 'kind' => $kind, 'score' => $score, 'asked' => $asked];
     }
 
+    /** A line about the student was remembered (App\Study\TutorMemories), in place of `$replaced` when it was. */
+    public function remembered(string $id, string $text, ?string $replaced = null): void
+    {
+        $this->remembered[] = ['id' => $id, 'text' => $text, 'replaced' => $replaced];
+    }
+
+    /** The student is asked to agree to `$change` before it is made. */
+    public function asked(string $change): void
+    {
+        $this->asked[] = $change;
+    }
+
     /**
      * What was done since the last take, and nothing after.
      *
-     * @return array{saved?: array<string, int>, notes?: list<array{id: string, title: string, version: int}>, topic?: string, topic_id?: string, statuses?: list<array<string, mixed>>, quizzes?: list<array<string, mixed>>}
+     * @return array{saved?: array<string, int>, saved_ids?: array<string, list<string>>, notes?: list<array{id: string, title: string, version: int}>, topic?: string, topic_id?: string, statuses?: list<array<string, mixed>>, quizzes?: list<array<string, mixed>>, remembered?: list<array<string, mixed>>, asked?: list<string>}
      */
     public function take(): array
     {
-        $taken = array_filter(['saved' => $this->saved, 'notes' => array_values($this->notes), 'topic' => $this->topic, 'topic_id' => $this->topicId, 'statuses' => $this->statuses, 'quizzes' => $this->quizzes]);
-        [$this->saved, $this->notes, $this->topic, $this->topicId, $this->statuses, $this->quizzes] = [[], [], null, null, [], []];
+        $taken = array_filter(['saved' => $this->saved, 'saved_ids' => $this->savedIds, 'notes' => array_values($this->notes), 'topic' => $this->topic, 'topic_id' => $this->topicId, 'statuses' => $this->statuses, 'quizzes' => $this->quizzes, 'remembered' => $this->remembered, 'asked' => $this->asked]);
+        [$this->saved, $this->savedIds, $this->notes, $this->topic, $this->topicId, $this->statuses, $this->quizzes, $this->remembered, $this->asked] = [[], [], [], null, null, [], [], [], []];
 
         return $taken;
     }

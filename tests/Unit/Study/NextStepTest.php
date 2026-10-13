@@ -81,6 +81,22 @@ class NextStepTest extends TestCase
         $this->assertSame([true, 'm3', 't9', 'Study'], [$step->study, $step->moduleId, $step->topicId, $step->label]);
     }
 
+    public function test_a_topic_in_a_folder_is_named_with_its_folder(): void
+    {
+        $module = fn (array $with = []) => $this->module(3, ['materials' => 1, 'topics' => 7, 'nextTopicId' => 't9', 'nextTopicName' => 'Context switching', 'nextFolderName' => 'Lecture 1 + Lab 1'] + $with);
+
+        // Studying starts on that topic, and a topic in a folder is studied in the folder: the line says where.
+        $this->assertSame('Study Module 3, starting in Lecture 1 + Lab 1', $this->step($this->state([$module()]))[1]);
+        $this->assertSame('Context switching in Lecture 1 + Lab 1: 4 topics left in Module 3', $this->step($this->state([$module(['understood' => 3, 'studied' => true])]))[1]);
+        $step = NextStep::of($this->state([$module(['understood' => 3, 'studied' => true])]));
+        $this->assertSame([true, 'm3', 't9'], [$step->study, $step->moduleId, $step->topicId]);
+
+        $done = $this->module(1, ['materials' => 1, 'topics' => 2, 'understood' => 2, 'studied' => true]);
+        $attention = fn (?string $folder) => [['topicId' => 't5', 'topic' => 'Deadlocks', 'moduleId' => 'm1', 'folder' => $folder]];
+        $this->assertSame('Go over Deadlocks in Lecture 2 + Lab 2 again', NextStep::of($this->state([$done], ['attention' => $attention('Lecture 2 + Lab 2')]))->text);
+        $this->assertSame('Go over Deadlocks again', NextStep::of($this->state([$done], ['attention' => $attention(null)]))->text);
+    }
+
     public function test_ten_cards_due_say_to_review_with_a_time(): void
     {
         $done = $this->module(1, ['materials' => 1, 'topics' => 2, 'understood' => 2, 'studied' => true]);

@@ -18,7 +18,7 @@
     $kinds = ['notes' => ['note', 'file-text'], 'files' => ['file', 'file'], 'links' => ['link', 'link'], 'folders' => ['folder', 'folder']];
 @endphp
 <div class="space-y-5" x-data="selectable({ layout: $persist('grid').as('vistud.modules.layout') })" :class="{ 'is-selecting': isSelecting, 'is-selecting-container': isSelecting }" x-on:keydown.window="handleKeydown($event)" x-on:selection-clear.window="clearSelection()">
-    <x-workspace.section-header :workspace="$workspace" title="Modules" :count="$modules === [] ? null : count($modules)" :count-label="Str::plural('module', count($modules))">
+    <x-workspace.section-header :workspace="$workspace" title="Modules" :count="$modules === [] ? null : count($modules)" :count-label="Str::plural('module', count($modules))" stack>
         @if ($modules !== [])
             {{-- While selecting, the selection bar's Done ends it; the focus goes to its Select all. --}}
             <button type="button" class="btn btn-secondary" x-show="!isSelecting" x-on:click="toggleMode(); $nextTick(() => $root.querySelector('.selection-all-box input')?.focus())">
@@ -67,9 +67,9 @@
         <div class="empty-place">
             <span class="item-icon" aria-hidden="true"><x-icon name="layers" class="size-5" /></span>
             <p class="font-medium">No modules yet</p>
-            <p class="text-sm text-fg-muted">A module is a part of the course, like “Week 1” or “Chapter 3”: its notes, files and topics live in it. The AI reads what your course is about and helps you add them, a few weeks at a time.</p>
+            <p class="text-sm text-fg-muted">A module is any part of the course you study together: a week, a chapter, a unit or a lab block. Its notes, files, topics and sessions live in it. The AI reads your course and sets each one up with you.</p>
             <div class="flex flex-wrap items-center justify-center gap-2">
-                <a href="{{ route('workspaces.guide', [$workspaceId, 'for' => 'modules']) }}" class="btn btn-primary"><x-icon name="sparkles" class="size-4" />Add the weeks with the AI</a>
+                <a href="{{ route('workspaces.guide', [$workspaceId, 'for' => 'modules']) }}" class="btn btn-primary"><x-icon name="sparkles" class="size-4" />Add modules with the AI</a>
                 <x-button icon="plus" wire:click="newModule">Add one myself</x-button>
             </div>
         </div>

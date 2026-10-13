@@ -1,6 +1,7 @@
 {{--
     The instructions a study session starts from (App\Livewire\Workspaces\Instructions):
-    about the student, and for this course, in one dialog.
+    about the student, and for this course, in one dialog; and the way to what the tutor
+    remembers about the student (App\Livewire\Study\Memories).
 --}}
 <div>
     <div role="status" aria-live="polite" class="empty:hidden">
@@ -28,6 +29,14 @@
                         <textarea id="instructions-me" class="input" rows="4" maxlength="{{ \App\Study\Instructions::MAX_TEXT }}" wire:model="me" autofocus placeholder="I'm in my second year. Explain with everyday examples."></textarea>
                         @error('me') <p class="field-error">{{ $message }}</p> @enderror
                     </div>
+                    <button type="button" class="memory-link" x-on:click="$el.closest('dialog').close(); Livewire.dispatch('memories-open')">
+                        <x-icon name="brain" class="size-4 shrink-0" />
+                        <span class="min-w-0 flex-1">
+                            <span class="block font-medium">What your tutor remembers</span>
+                            <span class="block text-xs text-fg-muted">{{ $memoryCount === 0 ? 'Nothing yet. See and add.' : $memoryCount.' '.\Illuminate\Support\Str::plural('note', $memoryCount).'. See, change or add.' }}</span>
+                        </span>
+                        <x-icon name="chevron-right" class="size-4 shrink-0" />
+                    </button>
                     <div class="field">
                         <label for="instructions-course" class="field-label">This course</label>
                         <textarea id="instructions-course" class="input" rows="4" maxlength="{{ \App\Study\Instructions::MAX_TEXT }}" wire:model="course" placeholder="Go slide by slide. Ask me two questions after each section."></textarea>

@@ -14,6 +14,7 @@ use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Unprocessable;
+use Closure;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -60,11 +61,33 @@ final class Run
      */
     public function ask(string $system, string|array $messages, int $maxTokens = 1000, array $tools = []): Reply
     {
+        return $this->call($system, $messages, $maxTokens, $tools);
+    }
+
+    /**
+     * ask(), with the answer handed over as it is written: `$onText` hears each piece of words (a talk shows them as they
+     * come, as the tutor's chat does). Counted the same way.
+     *
+     * @param  string|list<array<string, mixed>>  $messages
+     * @param  Closure(string): void  $onText
+     */
+    public function stream(string $system, string|array $messages, Closure $onText, int $maxTokens = 1000): Reply
+    {
+        return $this->call($system, $messages, $maxTokens, [], $onText);
+    }
+
+    /**
+     * @param  string|list<array<string, mixed>>  $messages
+     * @param  list<array<string, mixed>>  $tools
+     */
+    private function call(string $system, string|array $messages, int $maxTokens, array $tools, ?Closure $onText = null): Reply
+    {
         $scope = Guard::learner($this->by);
         $this->usage->refuseOverMonthCap($scope, $this->choices, $this->zone);
         $messages = is_string($messages) ? [['role' => 'user', 'content' => $messages]] : $messages;
 
-        $reply = $this->engine->reply(new Request($this->model, $system, $messages, $tools, [], $maxTokens, $this->choices->noTraining, $this->key));
+        $request = new Request($this->model, $system, $messages, $tools, [], $maxTokens, $this->choices->noTraining, $this->key);
+        $reply = $onText === null ? $this->engine->reply($request) : $this->engine->stream($request, $onText);
 
         LearnerTables::query($scope, 'engine_jobs')->where('id', $this->id)->update([
             'model' => $reply->model !== '' ? $reply->model : $this->model,

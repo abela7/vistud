@@ -56,47 +56,39 @@ final class AnswerQuestionTool implements Tool
             return 'There are no questions recorded in this course yet.';
         }
 
-        // Find best matching open question first, then answered
-        $norm = fn (string $s) => preg_replace('/[^\p{L}\p{N}]+/u', ' ', mb_strtolower(trim($s)));
+        // Its exact words first; else the one question whose words contain these (open ones before answered ones). Never a
+        // guess between several: the tutor is told which match, to say the one it means.
+        $norm = fn (string $s) => trim((string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', mb_strtolower($s)));
         $wantedNorm = $norm($wanted);
-
-        $matched = null;
-        foreach ($allQuestions as $q) {
-            if ($q->id === $wanted || $norm($q->text) === $wantedNorm) {
-                $matched = $q;
+        if ($wantedNorm === '') {
+            return 'Say which question to answer, in its words.';
+        }
+        $matches = array_values(array_filter($allQuestions, fn ($q) => $q->id === $wanted || $norm($q->text) === $wantedNorm));
+        // The same words written down twice are the same question: an open one first.
+        usort($matches, fn ($a, $b) => ($a->status === 'answered') <=> ($b->status === 'answered'));
+        $matches = array_slice($matches, 0, 1);
+        foreach ([fn ($q) => $q->status !== 'answered', fn ($q) => true] as $which) {
+            if ($matches !== []) {
                 break;
             }
+            $matches = array_values(array_filter($allQuestions, fn ($q) => $which($q) && $norm($q->text) !== '' && str_contains($norm($q->text), $wantedNorm)));
         }
 
-        if ($matched === null) {
-            $open = array_filter($allQuestions, fn ($q) => $q->status !== 'answered');
-            foreach ($open as $q) {
-                if (str_contains($norm($q->text), $wantedNorm) || str_contains($wantedNorm, $norm($q->text))) {
-                    $matched = $q;
-                    break;
-                }
-            }
-        }
-
-        if ($matched === null) {
-            foreach ($allQuestions as $q) {
-                if (str_contains($norm($q->text), $wantedNorm) || str_contains($wantedNorm, $norm($q->text))) {
-                    $matched = $q;
-                    break;
-                }
-            }
-        }
-
-        if ($matched === null) {
+        if ($matches === []) {
             $openTexts = array_map(fn ($q) => "\"{$q->text}\"", array_slice(array_filter($allQuestions, fn ($q) => $q->status !== 'answered'), 0, 5));
             $available = $openTexts !== [] ? ' Available open questions: '.implode(', ', $openTexts) : '';
 
             return "Could not find a question matching \"{$wanted}\".{$available}";
         }
+        if (count($matches) > 1) {
+            return 'Several questions match "'.$wanted.'": '.implode(', ', array_map(fn ($q) => "\"{$q->text}\"", array_slice($matches, 0, 5))).'. Send the one you mean, in its exact words.';
+        }
 
+        $matched = $matches[0];
         $conciseAnswer = mb_substr($answer, 0, Questions::MAX_ANSWER);
-        $this->questions->setStatus($by, $matched->id, 'answered', $conciseAnswer);
+        // The tutor's answer answers it; whether it clicked is the student's to say.
+        $this->questions->setStatus($by, $matched->id, 'answered', $conciseAnswer, theirWord: false);
 
-        return "Saved answer to question \"{$matched->text}\": {$conciseAnswer}";
+        return "Saved answer to question \"{$matched->text}\": {$conciseAnswer}. It shows as answered by the AI until the student says it makes sense.";
     }
 }

@@ -2,7 +2,7 @@
 
 namespace App\Study;
 
-/** A module of a workspace, as the screens see it. */
+/** A module of a workspace, as the screens see it: any group studied together, with a line of what it is about. */
 final readonly class ModuleDetails
 {
     public function __construct(
@@ -12,5 +12,6 @@ final readonly class ModuleDetails
         public ?string $startsOn,
         public ?string $endsOn,
         public int $position,
+        public ?string $about = null,
     ) {}
 }

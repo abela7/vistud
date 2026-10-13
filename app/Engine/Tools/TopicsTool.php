@@ -2,10 +2,12 @@
 
 namespace App\Engine\Tools;
 
+use App\Engine\Context\Stack;
 use App\Platform\Access\Principal;
 use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\Topics;
+use Carbon\CarbonImmutable;
 
 /**
  * The topics of the course, or of one module, each with the student's own word on it and what their practice shows. In a
@@ -23,7 +25,7 @@ final class TopicsTool implements Tool
 
     public function description(): string
     {
-        return 'The topics of the course (or of one module), each with the status the student set (not started, covered, understood, confused, or mastered when their practice earned it) and the evidence. Use it to see what the student knows and what still confuses them. In a session in a folder it lists the folder\'s topics unless you ask for the whole course or a module.';
+        return 'The topics of the course (or of one module), each with where it stands (not started, covered, understood, confusing, or mastered when their practice earned it), who set that and when (the student or you; nobody, for a default), and the evidence. Use it to see what the student knows and what still confuses them. In a session in a folder it lists the folder\'s topics and the module\'s topics in no folder, unless you ask for the whole course or a module.';
     }
 
     public function parameters(): array
@@ -58,14 +60,17 @@ final class TopicsTool implements Tool
         }
         $rows = [];
         foreach ($this->topics->list($by, $context->workspaceId) as $topic) {
-            if (($only !== null && $topic->moduleId !== $only) || ($inFolder !== null && ! $topic->in($inFolder))) {
+            $own = $topic->folderId === null && $topic->moduleId !== null && $topic->moduleId === $context->moduleId;
+            if (($only !== null && $topic->moduleId !== $only) || ($inFolder !== null && ! $topic->in($inFolder) && ! $own)) {
                 continue;
             }
             $rows[] = array_filter([
                 'topic' => $topic->name,
                 'module' => $topic->moduleId !== null ? ($titles[$topic->moduleId] ?? null) : null,
                 'folder' => $topic->folderId !== null ? ($folderNames[$topic->folderId] ?? null) : null,
-                'status' => str_replace('_', ' ', $topic->shown()),
+                'status' => Stack::word($topic->shown()),
+                'set_by' => $topic->status === null ? 'nobody yet' : ($topic->byTutor() ? 'you' : 'the student'),
+                'set_at' => $topic->status !== null && $topic->statusAt !== null ? CarbonImmutable::parse($topic->statusAt, 'UTC')->setTimezone($context->zone)->format('Y-m-d H:i') : null,
                 'evidence' => $topic->evidence(),
             ]);
         }

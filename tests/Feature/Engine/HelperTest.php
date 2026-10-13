@@ -98,7 +98,7 @@ class HelperTest extends TestCase
                 // The look-up's result went back after the helper's own call.
                 $this->assertSame('tool', $request->messages[2]['role']);
                 $this->assertStringContainsString('"topic":"Joins"', $request->messages[2]['content']);
-                $this->assertStringContainsString('confused', $request->messages[2]['content']);
+                $this->assertStringContainsString('confusing', $request->messages[2]['content']);
 
                 return Fake::says('Joins is the one you find confusing.', 3_000, 'fake/quick');
             },
@@ -111,7 +111,7 @@ class HelperTest extends TestCase
         // Only the read-only tools were offered, and the module came with the rules.
         $this->assertSame(Helper::TOOLS, array_map(fn (array $t) => $t['function']['name'], $first->tools));
         $this->assertStringContainsString('## The module: Week 2: SQL joins', $first->system);
-        $this->assertStringContainsString('- Joins: confused', $first->system);
+        $this->assertStringContainsString('- Joins: confusing', $first->system);
         $this->assertSame($first->system, $second->system);
         // Both calls are on one row, with the module as its target and the course on it.
         [$job] = $this->jobs();

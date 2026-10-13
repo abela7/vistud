@@ -16,6 +16,8 @@ final readonly class FolderDetails
         public string $name,
         public int $depth,
         public int $position,
+        /** What kind of part of its module it is (AppStudyModuleParts), or null for just a folder. */
+        public ?string $kind = null,
     ) {}
 
     /** The list this folder sits in: its parent folder, its module, or its workspace's top level. */

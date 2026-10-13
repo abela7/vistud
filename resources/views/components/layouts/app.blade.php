@@ -49,7 +49,7 @@
                 <x-icon name="menu" />
             </button>
             <a href="{{ route($homeRoute) }}" class="app-brand" aria-label="{{ $area === 'admin' ? 'ViStud admin overview' : 'ViStud home' }}">
-                <x-logo variant="knockout" class="h-7" alt="" />
+                <x-logo variant="knockout" class="h-6 sm:h-7" alt="" />
             </a>
             @if ($area === 'admin')
                 <x-admin.marker />
@@ -126,6 +126,8 @@
                 @if ($area === 'student' && $isStudent)
                     {{-- The pinned notes' button in the corner, on every student page (`pinnedCurrent`: the note this page shows). --}}
                     <livewire:study.pinned-notes :current="$pinnedCurrent" />
+                    {{-- What the tutor remembers: opened from a chat's chip, Settings or a course's Instructions for the AI. --}}
+                    <livewire:study.memories :workspace-id="$workspace?->id" :key="'memories-'.($workspace?->id ?? 'all')" />
                     @if ($workspace)
                         {{-- Ask's sheet: in the page, not the top bar, which re-points the text colours. --}}
                         <livewire:workspaces.ask

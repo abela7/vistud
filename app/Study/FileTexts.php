@@ -3,18 +3,21 @@
 namespace App\Study;
 
 use App\Platform\Access\Principal;
+use DateTimeImmutable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Smalot\PdfParser\Parser;
 use Throwable;
-use ZipArchive;
 
 /**
  * What a file says, page by page, for the tutor (docs/specs/study-memory.md §6): a PDF's pages; a PowerPoint's
- * slides (with the speaker's notes) and a Word document's text read straight from the file, so they need no
- * LibreOffice; other Word, PowerPoint and Excel files through their preview PDF (App\Study\FilePreviews); a text
- * file cut into parts. Read the first time it is asked for and kept beside the file on the files disk
- * (texts/{id}.json), deleted with it. A picture has no text: it is seen, when attached in the chat.
+ * slides (with the speaker's notes), a Word document's pages and an Excel workbook's sheets read straight from the
+ * file (App\Study\OfficeReader), so they need no LibreOffice; the old kinds (.doc, .ppt, .xls, OpenDocument) the
+ * same way, through the modern copy LibreOffice makes of them, or through their preview PDF where it can't
+ * (App\Study\FilePreviews); a text file cut into parts. With each: what it is called, what each page
+ * is, and what the file says about itself (its author, dates, page and slide counts). Read the first time it is
+ * asked for and kept beside the file on the files disk (texts/{id}.json), deleted with it. A picture has no text:
+ * it is seen, when attached in the chat.
  */
 final class FileTexts
 {
@@ -27,7 +30,8 @@ final class FileTexts
     /** Files bigger than this aren't read (the parser holds a PDF in memory). */
     public const MAX_BYTES = 40 * 1024 * 1024;
 
-    private const VERSION = 1;
+    /** Bumped when what is kept changes, so each file is read again the next time it is asked for. */
+    private const VERSION = 3;
 
     public function __construct(private Files $files, private FilePreviews $previews) {}
 
@@ -42,7 +46,14 @@ final class FileTexts
         if ($disk->exists($textKey)) {
             $kept = json_decode((string) $disk->get($textKey), true);
             if (is_array($kept) && ($kept['v'] ?? null) === self::VERSION && is_array($kept['pages'] ?? null)) {
-                return new FileText($file, FileText::READY, array_values(array_map('strval', $kept['pages'])), (string) ($kept['unit'] ?? 'page'));
+                return new FileText(
+                    $file,
+                    FileText::READY,
+                    array_values(array_map('strval', $kept['pages'])),
+                    (string) ($kept['unit'] ?? 'page'),
+                    array_values(array_map('strval', (array) ($kept['captions'] ?? []))),
+                    is_array($kept['facts'] ?? null) ? $kept['facts'] : [],
+                );
             }
         }
         if ($file->size > self::MAX_BYTES) {
@@ -52,32 +63,34 @@ final class FileTexts
         $local = null;
         try {
             $path = fn () => $local ??= self::local($key);
-            [$pages, $unit] = match (true) {
-                $file->extension === 'pdf' => [$this->pdf($path()), 'page'],
-                $file->extension === 'pptx' => [$this->slides($path()), 'slide'],
-                $file->extension === 'docx' => [self::parts($this->word($path())), 'part'],
-                $file->kind === 'text' => [self::parts((string) $this->files->textPreview($by, $id, 400_000)), 'part'],
+            $read = match (true) {
+                $file->extension === 'pdf' => $this->pdf($path()),
+                $file->extension === 'pptx' => OfficeReader::pptx($path()),
+                $file->extension === 'docx' => OfficeReader::docx($path()),
+                $file->extension === 'xlsx' => OfficeReader::xlsx($path()),
+                $file->kind === 'text' => new OfficeRead(self::parts((string) $this->files->textPreview($by, $id, 400_000)), 'part'),
                 FilePreviews::converts($file) => $this->viaPreview($by, $id),
-                default => [null, 'page'],
+                default => null,
             };
         } catch (Throwable $e) {
             Log::warning('A file could not be read for the tutor.', ['file' => $file->id, 'problem' => Str::limit($e->getMessage(), 300)]);
-            [$pages, $unit] = [null, 'page'];
+            $read = null;
         } finally {
             if ($local !== null && str_starts_with($local, sys_get_temp_dir())) {
                 @unlink($local);
             }
         }
-        if ($pages === FilePreviews::PREPARING) {
+        if ($read === FilePreviews::PREPARING) {
             return new FileText($file, FileText::PREPARING);
         }
-        if (! is_array($pages)) {
+        if (! $read instanceof OfficeRead) {
             return new FileText($file, FileText::NONE);
         }
-        $pages = array_values(array_map(fn (string $page) => mb_substr(self::tidy($page), 0, self::PAGE_CHARS), $pages));
-        $disk->put($textKey, (string) json_encode(['v' => self::VERSION, 'unit' => $unit, 'pages' => $pages]));
+        $pages = array_values(array_map(fn (string $page) => mb_substr(self::tidy($page), 0, self::PAGE_CHARS), $read->pages));
+        $captions = count($read->captions) === count($pages) ? array_map(fn (string $caption) => mb_substr(self::tidy($caption), 0, 160), $read->captions) : [];
+        $disk->put($textKey, (string) json_encode(['v' => self::VERSION, 'unit' => $read->unit, 'pages' => $pages, 'captions' => $captions, 'facts' => $read->facts]));
 
-        return new FileText($file, FileText::READY, $pages, $unit);
+        return new FileText($file, FileText::READY, $pages, $read->unit, $captions, $read->facts);
     }
 
     /** Deletes what was read from the file at this storage key (called when the file is deleted). */
@@ -91,15 +104,18 @@ final class FileTexts
         return str_replace('/files/', '/texts/', $storageKey).'.json';
     }
 
-    /** @return list<string> */
-    private function pdf(string $path): array
+    /** A PDF's pages, with its title, author and dates when it says them. */
+    private function pdf(string $path): OfficeRead
     {
         $limit = ini_get('memory_limit');
         if ($limit !== false && $limit !== '-1' && self::bytes($limit) < 512 * 1024 * 1024) {
             @ini_set('memory_limit', '512M');
         }
         try {
-            return array_map(fn ($page) => (string) $page->getText(), (new Parser)->parseFile($path)->getPages());
+            $pdf = (new Parser)->parseFile($path);
+            $pages = array_map(fn ($page) => (string) $page->getText(), $pdf->getPages());
+
+            return new OfficeRead($pages, 'page', facts: self::pdfFacts($pdf->getDetails()));
         } finally {
             if ($limit !== false) {
                 @ini_set('memory_limit', $limit);
@@ -108,73 +124,80 @@ final class FileTexts
     }
 
     /**
-     * A PowerPoint's slides in order, each with its speaker's notes.
+     * What a PDF says about itself.
      *
-     * @return list<string>
+     * @param  array<string, mixed>  $details
+     * @return array<string, string>
      */
-    private function slides(string $path): array
+    private static function pdfFacts(array $details): array
     {
-        $zip = self::open($path);
-        try {
-            $slides = [];
-            for ($i = 0; $i < $zip->numFiles; $i++) {
-                if (preg_match('#^ppt/slides/slide(\d+)\.xml$#', (string) $zip->getNameIndex($i), $m) === 1) {
-                    $slides[(int) $m[1]] = $m[0];
-                }
+        $say = fn (string $key) => trim((string) (is_array($details[$key] ?? null) ? implode(', ', $details[$key]) : ($details[$key] ?? '')));
+        $date = function (string $key) use ($say): string {
+            try {
+                return $say($key) !== '' ? (new DateTimeImmutable($say($key)))->format('Y-m-d H:i') : '';
+            } catch (Throwable) {
+                return '';
             }
-            ksort($slides);
-            $pages = [];
-            foreach ($slides as $number => $name) {
-                $text = self::paragraphs(self::read($zip, $name), 'a');
-                $rels = self::read($zip, "ppt/slides/_rels/slide{$number}.xml.rels");
-                if (preg_match('#Target="\.\./notesSlides/(notesSlide\d+\.xml)"#', $rels, $n) === 1) {
-                    // The notes slide repeats the slide's number placeholder; what's left is the speaker's words.
-                    $notes = trim((string) preg_replace('/^\d+$/m', '', self::paragraphs(self::read($zip, "ppt/notesSlides/{$n[1]}"), 'a')));
-                    if ($notes !== '') {
-                        $text .= "\n\nSpeaker's notes: ".$notes;
-                    }
-                }
-                $pages[] = $text;
-            }
+        };
 
-            return $pages;
-        } finally {
-            $zip->close();
-        }
-    }
-
-    private function word(string $path): string
-    {
-        $zip = self::open($path);
-        try {
-            return self::paragraphs(self::read($zip, 'word/document.xml'), 'w');
-        } finally {
-            $zip->close();
-        }
+        return array_filter([
+            'title' => mb_substr($say('Title'), 0, 150),
+            'author' => mb_substr($say('Author'), 0, 150),
+            'created' => $date('CreationDate'),
+            'modified' => $date('ModDate'),
+            'application' => mb_substr($say('Creator'), 0, 80),
+        ], fn (string $value) => $value !== '');
     }
 
     /**
-     * Another Word, PowerPoint or Excel file: through its preview PDF, made by LibreOffice.
-     *
-     * @return array{0: list<string>|string|null, 1: string}
+     * An old Word, PowerPoint or Excel file (.doc, .ppt, .xls, OpenDocument): through the modern copy LibreOffice makes
+     * of it, read as one (its sheets and formulas, its slides in order); through its preview PDF's text where that
+     * copy can't be made.
      */
-    private function viaPreview(Principal $by, string $id): array
+    private function viaPreview(Principal $by, string $id): OfficeRead|string|null
     {
+        $modern = $this->previews->modern($by, $id);
+        if ($modern === FilePreviews::PREPARING) {
+            return FilePreviews::PREPARING;
+        }
+        if (is_array($modern)) {
+            [$key, $extension] = $modern;
+            $path = self::local($key);
+            try {
+                $read = match ($extension) {
+                    'docx' => OfficeReader::docx($path),
+                    'pptx' => OfficeReader::pptx($path),
+                    default => OfficeReader::xlsx($path),
+                };
+                // LibreOffice made the copy, not the program that made the student's file.
+                $facts = $read->facts;
+                unset($facts['application']);
+
+                return new OfficeRead($read->pages, $read->unit, $read->captions, $facts);
+            } catch (Throwable $e) {
+                Log::warning('The modern copy of a file could not be read; its PDF is read instead.', ['file' => $id, 'problem' => Str::limit($e->getMessage(), 300)]);
+            } finally {
+                if (str_starts_with($path, sys_get_temp_dir())) {
+                    @unlink($path);
+                }
+            }
+        }
+
         $pdf = $this->previews->pdf($by, $id);
 
         return match ($pdf) {
-            null => [null, 'page'],
-            FilePreviews::PREPARING => [FilePreviews::PREPARING, 'page'],
-            default => [$this->readPreview($pdf), 'page'],
+            null => null,
+            FilePreviews::PREPARING => FilePreviews::PREPARING,
+            default => $this->readPreview($pdf),
         };
     }
 
-    /** @return list<string> */
-    private function readPreview(string $pdfKey): array
+    private function readPreview(string $pdfKey): OfficeRead
     {
         $path = self::local($pdfKey);
         try {
-            return $this->pdf($path);
+            // What the program that made the PDF says is no use: it is LibreOffice, not the student's file.
+            return new OfficeRead($this->pdf($path)->pages, 'page');
         } finally {
             if (str_starts_with($path, sys_get_temp_dir())) {
                 @unlink($path);
@@ -204,47 +227,12 @@ final class FileTexts
         return $copy;
     }
 
-    private static function open(string $path): ZipArchive
-    {
-        $zip = new ZipArchive;
-        if ($zip->open($path, ZipArchive::RDONLY) !== true) {
-            throw new \RuntimeException('Not a readable Office file.');
-        }
-
-        return $zip;
-    }
-
-    /** One part of an Office file, if it isn't unreasonably big once unpacked. */
-    private static function read(ZipArchive $zip, string $name): string
-    {
-        $stat = $zip->statName($name);
-        if ($stat === false || $stat['size'] > 20 * 1024 * 1024) {
-            return '';
-        }
-
-        return (string) $zip->getFromName($name);
-    }
-
-    /** The text of an Office XML part, a line per paragraph: `a` for PowerPoint's, `w` for Word's. */
-    private static function paragraphs(string $xml, string $ns): string
-    {
-        $lines = [];
-        preg_match_all('#<'.$ns.':p\b[^>]*>(.*?)</'.$ns.':p>#s', $xml, $paragraphs);
-        foreach ($paragraphs[1] as $paragraph) {
-            $paragraph = (string) preg_replace('#<'.$ns.':(tab|br)\b[^>]*/>#', ' ', $paragraph);
-            preg_match_all('#<'.$ns.':t(?:\s[^>]*)?>(.*?)</'.$ns.':t>#s', $paragraph, $runs);
-            $lines[] = html_entity_decode(implode('', $runs[1]), ENT_QUOTES | ENT_XML1, 'UTF-8');
-        }
-
-        return implode("\n", $lines);
-    }
-
     /**
      * A long text cut into parts of about PART_CHARS, at a line where possible.
      *
      * @return list<string>
      */
-    private static function parts(string $text): array
+    public static function parts(string $text): array
     {
         $text = self::tidy($text);
         $parts = [];
