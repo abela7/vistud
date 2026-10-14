@@ -136,6 +136,7 @@ class TopicsTest extends TestCase
         $this->assertSame(['Normalisation'], array_map(fn ($t) => $t->name, $this->topics->list($this->by, $this->databases->id)));
         $this->assertNull($this->questions->find($this->by, $question->id)->topicId);
         $this->assertThrows(fn () => $this->topics->find($this->by, $joins->id), NotFound::class);
+        $this->assertSame(0, LearnerTables::query(Guard::learner($this->by), 'topics')->where('id', $joins->id)->count(), 'gone, not hidden');
         // Nothing points at it: the card stays with no topic and no longer counts for it, its key points go, and the
         // open session has no topic now (and says the student took it off).
         $this->assertNull(app(Flashcards::class)->find($this->by, $card)->topicId);

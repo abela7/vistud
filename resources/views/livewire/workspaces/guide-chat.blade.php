@@ -8,6 +8,7 @@
 --}}
 @php
     use App\Engine\CourseGuide;
+    use App\Livewire\Workspaces\GuideChat;
     use App\Study\CourseTypes;
     use App\Study\MarkdownPreview;
     use App\Study\ModuleParts;
@@ -28,8 +29,9 @@
         'tools' => implode(', ', (array) $value),
         default => (string) $value,
     };
+    $fresh = collect($talk)->where('from', 'you')->isEmpty();
 @endphp
-<div @class(['guide', 'has-steps' => $questions !== []]) x-data="guideChat()">
+<div @class(['guide', 'has-steps' => $questions !== []]) x-data="guideChat()" data-fresh="{{ $fresh ? '1' : '0' }}" x-bind:class="{ 'is-fullscreen': fullscreen }" x-on:keydown.window="onKey($event)">
     <div role="status" aria-live="polite" class="empty:hidden"><x-toast :message="$notice" :tone="$noticeTone" /></div>
 
     @if ($questions !== [])
@@ -56,7 +58,22 @@
     @endif
 
     <section class="chat guide-chat" aria-labelledby="guide-talk-title">
-        <h2 id="guide-talk-title" class="sr-only">The talk with the guide</h2>
+        <div class="guide-bar">
+            <h2 id="guide-talk-title" class="guide-bar-title">{{ $for === 'modules' ? 'Add modules' : 'Set up the course' }}</h2>
+            <button type="button" class="session-icon-btn" x-bind:class="{ 'is-active': fullscreen }" x-on:click="fullscreen = ! fullscreen" x-bind:aria-pressed="fullscreen.toString()" x-bind:title="fullscreen ? 'Exit full screen (Esc)' : 'Full screen'" aria-label="Toggle full screen">
+                <x-icon name="maximize-2" class="size-3.5" x-show="! fullscreen" />
+                <x-icon name="minimize-2" class="size-3.5" x-show="fullscreen" x-cloak />
+            </button>
+        </div>
+
+        @if ($fresh)
+            <div class="guide-fullscreen-offer" x-show="offerFullscreen && ! fullscreen" x-cloak role="status">
+                <x-icon name="maximize-2" class="size-4 shrink-0 text-fg-muted" />
+                <p>Full screen gives this talk more room.</p>
+                <button type="button" class="btn btn-primary btn-sm" x-on:click="useFullscreen()">Use full screen</button>
+                <button type="button" class="btn btn-ghost btn-sm" x-on:click="dismissFullscreen()">Not now</button>
+            </div>
+        @endif
 
         <div class="guide-log-wrap" role="log" aria-label="Talk with the guide" aria-live="polite">
         <ol class="chat-log guide-log" role="list" aria-label="The talk" tabindex="0" x-ref="log" x-on:scroll.passive="onScroll()">
@@ -68,6 +85,9 @@
                         @if ($line['text'] !== '')<p class="chat-bubble">{{ $line['text'] }}</p>@endif
                         @if (($line['pictures'] ?? 0) > 0)
                             <p class="chat-meta"><x-icon name="image" class="inline size-3.5" /> {{ $line['pictures'] === 1 ? 'A picture' : $line['pictures'].' pictures' }} went with this.</p>
+                        @endif
+                        @if (($line['files'] ?? 0) > 0)
+                            <p class="chat-meta"><x-icon name="file-text" class="inline size-3.5" /> {{ $line['files'] === 1 ? 'A file' : $line['files'].' files' }} went with this.</p>
                         @endif
                     </li>
                 @elseif ($line['from'] === 'done')
@@ -102,9 +122,10 @@
             @endforeach
 
             {{-- The turn under way: the student's words at once, then the guide's answer as it streams in. --}}
-            <li class="chat-turn is-me" x-show="live && (pending !== '' || pendingPictures > 0)" x-cloak>
+            <li class="chat-turn is-me" x-show="live && (pending !== '' || pendingPictures > 0 || pendingFiles > 0)" x-cloak>
                 <p class="chat-bubble" x-show="pending !== ''" x-text="pending"></p>
                 <p class="chat-meta" x-show="pendingPictures > 0"><x-icon name="image" class="inline size-3.5" /> <span x-text="pendingPictures === 1 ? 'A picture' : pendingPictures + ' pictures'"></span> went with this.</p>
+                <p class="chat-meta" x-show="pendingFiles > 0"><x-icon name="file-text" class="inline size-3.5" /> <span x-text="pendingFiles === 1 ? 'A file' : pendingFiles + ' files'"></span> went with this.</p>
             </li>
             <li class="chat-turn is-tutor" x-show="live" x-cloak wire:key="guide-live">
                 <div class="chat-bubble chat-markdown chat-live" wire:stream.replace="guide-answer"><span class="ai-dots" aria-hidden="true"><span></span><span></span><span></span></span><span class="sr-only">Thinking…</span></div>
@@ -252,29 +273,29 @@
             @endif
 
             <div class="chat-compose">
-                <div class="chat-dictation-pill" x-show="transcribing" x-cloak role="status" aria-live="polite">
-                    <div class="chat-dictation-waves" aria-hidden="true">
+                <div class="chat-dictation-pill" x-show="transcribing" x-cloak x-bind:class="{ 'is-quiet': ! hearing }" role="status">
+                    <span class="chat-dictation-waves" aria-hidden="true">
                         <span class="chat-dictation-wave"></span><span class="chat-dictation-wave"></span><span class="chat-dictation-wave"></span><span class="chat-dictation-wave"></span><span class="chat-dictation-wave"></span>
-                    </div>
-                    <div class="chat-dictation-body">
-                        <span class="chat-dictation-status">Listening…</span>
-                        <span class="chat-dictation-preview" x-text="interimSpeech || 'Speak now…'"></span>
-                    </div>
+                    </span>
+                    <span class="chat-dictation-status" aria-live="polite" x-text="hearing ? 'Hearing you…' : 'Listening…'">Listening…</span>
+                    <span class="chat-dictation-time" x-text="dictationTime" aria-hidden="true">0:00</span>
+                    <span class="chat-dictation-hint"><kbd>Enter</kbd> sends · <kbd>Esc</kbd> or <kbd>Alt+S</kbd> stops</span>
                     <div class="chat-dictation-actions">
-                        <button type="button" class="chat-dictation-done-btn" x-on:click="stopDictation(true)" aria-label="Done speaking"><x-icon name="check" class="size-3" /><span>Done</span></button>
-                        <button type="button" class="chat-dictation-cancel-btn" x-on:click="stopDictation(false)" aria-label="Stop and leave it out"><x-icon name="x" class="size-3.5" /></button>
+                        <button type="button" class="chat-dictation-done-btn" x-on:click="stopDictation(true)" title="Stop listening and keep the words (Esc)"><x-icon name="check" class="size-3" /><span>Done</span></button>
+                        <button type="button" class="chat-dictation-cancel-btn" x-on:click="stopDictation(false)" title="Stop and take out what you said" aria-label="Discard what you said"><x-icon name="x" class="size-3.5" /></button>
                     </div>
                 </div>
 
-                {{-- Pictures of the course page or the timetable: a screenshot pasted, dropped or chosen goes with the next message. --}}
+                {{-- A picture or a document of the course page or the timetable: pasted, dropped or chosen, it goes with the next message. --}}
                 @if ($pictures !== [])
-                    <ul class="chat-files guide-pictures" role="list" aria-label="Pictures to send" x-show="! live">
+                    <ul class="chat-files guide-pictures" role="list" aria-label="Files to send" x-show="! live">
                         @foreach ($pictures as $i => $picture)
-                            <li class="chat-file" wire:key="guide-picture-{{ $i }}">
-                                @if (method_exists($picture, 'isPreviewable') && $picture->isPreviewable())
+                            @php $isPicture = GuideChat::isPicture($picture); @endphp
+                            <li class="chat-file" data-kind="{{ $isPicture ? 'picture' : 'file' }}" wire:key="guide-picture-{{ $i }}">
+                                @if ($isPicture && method_exists($picture, 'isPreviewable') && $picture->isPreviewable())
                                     <img src="{{ $picture->temporaryUrl() }}" alt="" class="guide-thumb">
                                 @else
-                                    <x-icon name="image" class="size-4 shrink-0" />
+                                    <x-icon :name="$isPicture ? 'image' : 'file-text'" class="size-4 shrink-0" />
                                 @endif
                                 <span class="truncate">{{ $picture->getClientOriginalName() }}</span>
                                 <button type="button" class="chat-file-remove" wire:click="removePicture({{ $i }})" aria-label="Take {{ $picture->getClientOriginalName() }} off"><x-icon name="x" class="size-3.5" /></button>
@@ -283,23 +304,22 @@
                     </ul>
                 @endif
 
+                @php $boxWords = $for === 'modules' ? 'Paste the timetable or syllabus, tell me the modules, or ask me to suggest some…' : 'Answer, or paste the course page…'; @endphp
                 <label for="guide-text" class="sr-only">Your message</label>
                 <textarea id="guide-text" class="chat-box" rows="2" wire:model="text" maxlength="{{ CourseGuide::MAX_MESSAGE }}" x-ref="box"
-                    placeholder="{{ $for === 'modules' ? 'Paste the timetable or syllabus, tell me the modules, or ask me to suggest some…' : 'Answer, or paste the course page…' }}"
+                    placeholder="{{ $boxWords }}"
                     enterkeyhint="send" autocapitalize="sentences" x-bind:disabled="live"
+                    x-bind:class="{ 'is-dictating': transcribing }"
+                    x-bind:placeholder="transcribing ? 'Speak now. Your words appear here as you say them.' : @js($boxWords)"
                     x-on:paste="take($event); $nextTick(() => resize())" x-on:drop="take($event)" x-on:dragover.prevent
-                    x-on:input="resize()" x-on:keydown="keydown($event)"></textarea>
+                    x-on:input="onInput($event)" x-on:keydown="keydown($event)"></textarea>
 
                 <div class="chat-compose-bar">
-                    <div class="chat-compose-tools" role="toolbar" aria-label="Pictures and formatting">
-                        <label class="chat-tool-btn" title="Attach pictures">
-                            <x-icon name="paperclip" class="size-4" /><span class="sr-only">Attach pictures</span>
-                            <input type="file" class="sr-only" multiple accept="image/png,image/jpeg,image/webp,image/gif" wire:model="pictures">
+                    <div class="chat-compose-tools" role="toolbar" aria-label="Files and formatting">
+                        <label class="chat-tool-btn" title="Attach a picture or a file">
+                            <x-icon name="paperclip" class="size-4" /><span class="sr-only">Attach a picture or a file</span>
+                            <input type="file" class="sr-only" multiple accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.docx,.pptx,.xlsx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" wire:model="pictures">
                         </label>
-                        <button type="button" class="chat-tool-btn chat-mic-btn" :class="{ 'is-active': transcribing }" x-on:click="toggleDictation()" x-bind:title="transcribing ? 'Stop speaking' : 'Speak instead of typing'" aria-label="Speak instead of typing">
-                            <x-icon name="mic" class="size-4" x-show="!transcribing" />
-                            <x-icon name="mic-off" class="size-4" x-show="transcribing" x-cloak />
-                        </button>
                         <button type="button" class="chat-tool-btn" :class="{ 'is-active': formatOpen }" x-on:click="formatOpen = !formatOpen" title="Formatting" aria-label="Formatting" :aria-expanded="formatOpen.toString()">
                             <span class="text-xs leading-none font-semibold">Aa</span>
                         </button>
@@ -314,7 +334,40 @@
                     </div>
 
                     <div class="chat-compose-actions">
-                        <span class="chat-shortcut-hint">Shift+Enter new line</span>
+                        <div class="chat-model-picker" x-data="{ modelOpen: false }" x-on:keydown.escape.stop="modelOpen = false" x-on:click.outside="modelOpen = false">
+                            <button type="button" class="chat-model-btn" x-on:click="modelOpen = ! modelOpen" x-bind:aria-expanded="modelOpen.toString()" aria-label="Switch AI model" title="Current model: {{ $activeModelName }} (click to change)" x-bind:disabled="live">
+                                <span class="chat-model-btn-name">{{ $activeModelName }}</span>
+                                <x-icon name="chevron-down" class="size-3 text-fg-muted transition-transform" ::class="{ 'rotate-180': modelOpen }" />
+                            </button>
+                            <div class="chat-model-popover" x-show="modelOpen" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" role="dialog" aria-label="Choose AI model">
+                                <div class="chat-model-popover-head">
+                                    <span class="text-xs font-semibold text-fg">AI model</span>
+                                    <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-xs text-link">Settings</a>
+                                </div>
+                                <div class="chat-model-popover-list" role="menu">
+                                    @foreach ($chatModels as $m)
+                                        <button type="button" role="menuitem" class="chat-model-option {{ $activeModel === $m['id'] ? 'is-active' : '' }}" wire:click="switchModel('{{ $m['id'] }}')" x-on:click="modelOpen = false">
+                                            <div class="chat-model-option-text">
+                                                <span class="chat-model-option-name">{{ $m['name'] }}</span>
+                                                @if ($m['priceWords'])
+                                                    <span class="chat-model-option-price">{{ $m['priceWords'] }}</span>
+                                                @endif
+                                            </div>
+                                            @if ($activeModel === $m['id'])
+                                                <x-icon name="check" class="size-3.5 text-accent flex-none" />
+                                            @endif
+                                        </button>
+                                    @endforeach
+                                </div>
+                                <div class="chat-model-popover-foot" role="status">
+                                    <span class="chat-model-usage">{{ $activeModel }} · {{ $spentWords }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="chat-mic-btn" :class="{ 'is-active': transcribing }" x-show="speechSupported" x-cloak x-on:click="toggleDictation()" :title="transcribing ? 'Stop listening and keep the words (Esc or Alt+S)' : 'Speak instead of typing (Alt+S)'" :aria-label="transcribing ? 'Stop listening' : 'Speak instead of typing'" aria-keyshortcuts="Alt+S" :aria-pressed="transcribing.toString()" x-bind:disabled="live">
+                            <span x-show="! transcribing"><x-icon name="mic" class="size-4" /></span>
+                            <span x-show="transcribing" x-cloak><x-icon name="mic-off" class="size-4" /></span>
+                        </button>
                         <button type="submit" class="btn btn-primary chat-send" x-bind:aria-busy="live.toString()" x-bind:disabled="live" title="Send" aria-label="Send">
                             <span x-show="!live"><x-icon name="arrow-up" class="size-4" /></span>
                             <span x-show="live" x-cloak><x-icon name="loader-circle" class="size-4 animate-spin" /></span>
@@ -326,11 +379,11 @@
             @error('text')
                 <p class="field-error">{{ $message }}@if ($problem !== null) <a href="{{ route('settings', ['part' => 'ai']) }}" class="inline-link">AI settings</a>@endif</p>
             @enderror
-            <p class="chat-meta" wire:loading wire:target="pictures" role="status"><x-icon name="loader-circle" class="inline size-4 animate-spin" /> Getting the picture…</p>
+            <p class="chat-meta" wire:loading wire:target="pictures" role="status"><x-icon name="loader-circle" class="inline size-4 animate-spin" /> Getting the file…</p>
             @error('pictures')<p class="field-error">{{ $message }}</p>@enderror
             @error('pictures.*')<p class="field-error">{{ $message }}</p>@enderror
             <div class="guide-foot">
-                <p class="chat-meta guide-hint">You can paste or drop a screenshot of the course page{{ $for === 'modules' ? ' or timetable' : '' }}. Nothing is added until you tick it.</p>
+                <p class="chat-meta guide-hint">You can paste or drop a screenshot, or attach a Word, PDF or text file{{ $for === 'modules' ? ' of the timetable or syllabus' : ' of the course page' }}. Nothing is added until you tick it.</p>
                 <div class="guide-actions">
                     @if ($toModules)
                         <a href="{{ route('workspaces.show', [$workspace->id, 'modules']) }}" class="btn btn-secondary btn-sm"><x-icon name="layers" class="size-4" />Go to Modules</a>

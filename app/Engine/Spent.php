@@ -39,6 +39,24 @@ final class Spent
         $jobs()->delete();
     }
 
+    /**
+     * Deletes a target's AI runs; their cost stays in the month's usage.
+     *
+     * @param  string|list<string>  $targetIds
+     */
+    public static function forgetTargetJobs(LearnerScope $scope, string $targetType, string|array $targetIds): void
+    {
+        $ids = is_array($targetIds) ? array_values(array_unique($targetIds)) : [$targetIds];
+        if ($ids === []) {
+            return;
+        }
+        $jobs = fn () => LearnerTables::query($scope, 'engine_jobs')->where('target_type', $targetType)->whereIn('target_id', $ids);
+        self::keep($scope, $jobs()->where('cost_micros', '>', 0)
+            ->selectRaw("role, DATE_FORMAT(created_at, '%Y-%m') as month, sum(cost_micros) as cost, max(created_at) as last")
+            ->groupBy('role', 'month')->get()->all());
+        $jobs()->delete();
+    }
+
     /** @param list<object{role: string, cost: int|string, last: string}> $sums */
     private static function keep(LearnerScope $scope, array $sums): void
     {

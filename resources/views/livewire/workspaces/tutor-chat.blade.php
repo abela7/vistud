@@ -12,7 +12,7 @@
     use Illuminate\Support\Str;
 @endphp
 <section class="chat" aria-labelledby="chat-heading-{{ $this->getId() }}"
-    x-data="tutorChat(@js(['upload' => $upload, 'account' => $account, 'mentionItems' => $attachable['items'] ?? [], 'mentions' => ! $vistud]))"
+    x-data="tutorChat(@js(['upload' => $upload, 'account' => $account, 'mentionItems' => $attachable['items'] ?? [], 'mentions' => ! $vistud, 'review' => ($activity ?? null) !== null]))"
     x-on:chat-done.window="done($event.detail.restore)"
     x-on:notes-changed.window="noteChanged($event.detail.notes)"
     x-on:session-toggle-tools.window="toggleTools()"
@@ -37,6 +37,9 @@
             <a href="{{ route('settings', ['part' => 'ai']) }}" class="btn btn-primary"><x-icon name="brain" class="size-4" />AI settings</a>
         </div>
     @else
+        @if (($pendingReview ?? []) !== [])
+            <div wire:init="reviewFiles" class="sr-only" role="status">Reviewing what you uploaded.</div>
+        @endif
         @if ($turns === [] && (($onTopic ?? null) || $vistud || ($activity ?? null)))
             {{-- A topic's empty chat, ViStud AI's, or an assignment companion's: what it is about, and ways in as cards. --}}
             <div class="chat-empty chat-empty-topic" x-show="! live">
@@ -46,12 +49,14 @@
                     <p class="chat-empty-hint">I see all your courses, deadlines and sessions, and what your tutors remember about you.</p>
                 @elseif ($activity ?? null)
                     <p class="chat-empty-title">{{ $activity->title }}</p>
-                    <p class="chat-empty-hint">{{ ($assignmentGoal ?? '') !== '' ? $assignmentGoal : 'Work through your assignment with your companion tutor.' }}</p>
+                    @if (($pendingReview ?? []) !== [])
+                        <p class="chat-empty-hint">Reading what you uploaded.</p>
+                    @endif
                 @else
                     <p class="chat-empty-title">Ask anything about {{ $onTopic }}</p>
                     <p class="chat-empty-hint">Taught from this topic's notes, files and key points, at your level.</p>
                 @endif
-                @if ($open)
+                @if ($open && ! ($activity ?? null))
                     <ul class="chat-starters" role="list">
                         @foreach ($starters as $starter)
                             <li>
@@ -219,13 +224,22 @@
                                 @endforeach
                             </ul>
                         @endif
-                        @if ((($turn['sources_kept'] ?? []) !== []) || (($turn['stages_changed'] ?? []) !== []) || (($turn['log_entries'] ?? []) !== []))
+                        @if ((($turn['sources_kept'] ?? []) !== []) || (($turn['stages_changed'] ?? []) !== []) || (($turn['log_entries'] ?? []) !== []) || (($turn['understandings_confirmed'] ?? []) !== []) || (($turn['plans_saved'] ?? []) !== []) || (($turn['plan_items_updated'] ?? []) !== []))
                             <ul class="chat-files chat-did" role="list" aria-label="Assignment progress">
                                 @foreach ($turn['sources_kept'] ?? [] as $source)
                                     <li><span class="chat-file"><x-icon name="file-text" class="size-4" /><span class="truncate">Saved source: {{ $source['title'] }}</span></span></li>
                                 @endforeach
+                                @foreach ($turn['understandings_confirmed'] ?? [] as $confirmed)
+                                    <li><span class="chat-file"><x-icon name="circle-check" class="size-4" /><span class="truncate">Confirmed understanding (version {{ $confirmed['revision'] }})</span></span></li>
+                                @endforeach
+                                @foreach ($turn['plans_saved'] ?? [] as $savedPlan)
+                                    <li><span class="chat-file"><x-icon name="list-todo" class="size-4" /><span class="truncate">Saved assignment plan ({{ $savedPlan['added'] }} {{ $savedPlan['added'] === 1 ? 'item' : 'items' }})</span></span></li>
+                                @endforeach
+                                @foreach ($turn['plan_items_updated'] ?? [] as $updatedItem)
+                                    <li><span class="chat-file"><x-icon name="circle-check" class="size-4" /><span class="truncate">Marked {{ $updatedItem['kind'] }} “{{ $updatedItem['title'] }}” as {{ $updatedItem['state'] }}</span></span></li>
+                                @endforeach
                                 @foreach ($turn['stages_changed'] ?? [] as $stage)
-                                    <li><span class="chat-file"><x-icon name="arrow-right-circle" class="size-4" /><span class="truncate">Moved to stage: {{ ucfirst($stage['stage']) }}</span></span></li>
+                                    <li><span class="chat-file"><x-icon name="arrow-right-circle" class="size-4" /><span class="truncate">Moved to stage: {{ ucfirst((string) ($stage['to'] ?? $stage['stage'] ?? '')) }}</span></span></li>
                                 @endforeach
                                 @foreach ($turn['log_entries'] ?? [] as $log)
                                     <li class="chat-mark" wire:key="log-{{ $i }}-{{ $log['id'] }}">
@@ -718,6 +732,7 @@
                             <span x-show="! transcribing"><x-icon name="mic" class="size-4" /></span>
                             <span x-show="transcribing" x-cloak><x-icon name="mic-off" class="size-4" /></span>
                         </button>
+                        <button type="button" class="btn btn-secondary btn-sm" x-show="review && attached.length > 0 && ! live" x-cloak x-on:click="reviewAttached()" x-bind:disabled="busy">Review</button>
                         <button type="submit" class="btn btn-primary chat-send" x-bind:disabled="busy" aria-label="Send">
                             <span x-show="! live"><x-icon name="arrow-up" class="size-4" /></span>
                             <span x-show="live" x-cloak><x-icon name="loader-circle" class="size-4 animate-spin" /></span>

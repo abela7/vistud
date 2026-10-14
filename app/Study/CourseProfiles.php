@@ -271,6 +271,28 @@ final class CourseProfiles
         LearnerTables::query($scope, 'course_profiles')->where('workspace_id', $workspaceId)->delete();
     }
 
+    /** Clears an assignment's link in the course profile's assessment rows when the assignment is deleted. */
+    public static function forgetActivity(LearnerScope $scope, string $workspaceId, string $activityId): void
+    {
+        $row = LearnerTables::query($scope, 'course_profiles')->where('workspace_id', $workspaceId)->lockForUpdate()->first();
+        if ($row === null || $row->assessment === null) {
+            return;
+        }
+        $assessment = self::decode($row->assessment);
+        $changed = false;
+        foreach ($assessment as &$item) {
+            if (($item['activity_id'] ?? null) === $activityId) {
+                $item['activity_id'] = null;
+                $changed = true;
+            }
+        }
+        unset($item);
+        if ($changed) {
+            LearnerTables::query($scope, 'course_profiles')->where('workspace_id', $workspaceId)
+                ->update(['assessment' => json_encode($assessment), 'updated_at' => now()]);
+        }
+    }
+
     // ---------- Inside ----------
 
     private function setSkipped(Principal $by, string $workspaceId, string $question, bool $skipped): void

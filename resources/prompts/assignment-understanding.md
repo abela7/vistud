@@ -41,6 +41,15 @@ When you are given your earlier understanding
 - In `changes`, say in two or three plain sentences what changed from it and which source changed it. For a first
   understanding, say what it was made from.
 
+Keep it tight: the answer has a size limit, and one that is cut off is lost. Write each item as one short sentence, give
+a list only the items that matter (usually 3 to 8), and never copy long passages from a source: say what it says and
+cite it.
+
+The standard lists below are optional: leave any of them empty when it does not apply. When important material genuinely
+does not fit any standard list, add an assignment-specific section to `extra_sections`. Use no more than three, give
+each a short concrete title (for example "Data provided", "Experiment setup" or "Presentation format"), and do not use
+one to rename, repeat or split a standard list.
+
 Answer with one JSON object and nothing else, with these keys (an empty list when there is nothing to say):
 
 {
@@ -59,6 +68,7 @@ Answer with one JSON object and nothing else, with these keys (an empty list whe
   "risks": [{"text": "", "source": "inferred"}],
   "gaps": [{"text": "what is missing or unclear", "source": "inferred"}],
   "questions": [{"text": "a question to ask the teacher", "source": "inferred"}],
+  "extra_sections": [{"title": "a short assignment-specific heading", "items": [{"text": "one important point", "source": "S1"}]}],
   "confidence": "high, medium or low: how complete the picture is",
   "changes": "what changed from the earlier understanding, and why"
 }

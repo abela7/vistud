@@ -14,7 +14,9 @@ use App\Study\ActivityDetails;
 use App\Study\AssignmentLog;
 use App\Study\AssignmentSources;
 use App\Study\AssignmentUnderstandings;
+use App\Study\Files;
 use App\Study\Modules;
+use App\Study\Plans;
 use App\Study\Workspaces;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
@@ -66,6 +68,29 @@ class AssignmentCompanionScreenTest extends TestCase
         ]);
     }
 
+    private function keepUnderstanding(): void
+    {
+        $source = app(AssignmentSources::class)->add($this->by, $this->assignment->id, [
+            'kind' => 'brief',
+            'title' => 'Brief',
+            'text' => 'Design a 3NF schema for an airline.',
+        ]);
+        app(AssignmentUnderstandings::class)->keep(
+            $this->by,
+            $this->assignment->id,
+            [
+                'summary' => 'Airline schema design.',
+                'goal' => 'Create a 3NF schema.',
+                'confidence' => 'medium',
+                'criteria' => [['criterion' => 'Normalization', 'weight' => 40, 'source' => 'S1']],
+            ],
+            changes: 'First reading.',
+            sources: ['S1' => ['type' => 'source', 'id' => $source->id, 'title' => 'Brief']],
+            fingerprint: app(AssignmentSources::class)->fingerprint($this->by, $this->assignment->id),
+            model: 'fake/tutor',
+        );
+    }
+
     public function test_route_renders_with_header_chat_and_rail_sections(): void
     {
         $this->actingAs($this->ada);
@@ -79,6 +104,10 @@ class AssignmentCompanionScreenTest extends TestCase
         $response->assertSee('The picture');
         $response->assertSee('Plan');
         $response->assertSee('Log');
+        $response->assertSee('Full screen gives this talk more room');
+        $response->assertSee('Use full screen');
+        $response->assertSee('Switch AI model');
+        $response->assertSee('Speak instead of typing');
     }
 
     public function test_route_returns_404_for_another_student_or_wrong_workspace(): void
@@ -105,13 +134,44 @@ class AssignmentCompanionScreenTest extends TestCase
             'activityId' => $this->assignment->id,
         ]);
 
-        $chat->assertSee('Explain the assignment to me');
-        $chat->assertSee('What will the teacher look for?');
+        $chat->assertDontSee('Here is what I was given');
+        $chat->assertDontSee('Explain the assignment to me');
+        $chat->assertDontSee('What will the teacher look for?');
+        $chat->assertDontSee('wire:init="reviewFiles"', false);
 
         $this->engine->will(Fake::says('Here is an explanation of the assignment.'));
 
-        $chat->call('say', 'Explain the assignment to me');
+        $chat->call('send', 'What is this assignment?');
         $chat->assertSee('Here is an explanation of the assignment.');
+    }
+
+    public function test_opening_the_tutor_with_a_file_asks_it_to_review_and_a_later_visit_does_not_ask_again(): void
+    {
+        app(Files::class)->upload($this->by, 'folder', (string) $this->assignment->folderId, $this->temp("Design a 3NF schema.\n"), 'Brief.txt');
+        $this->actingAs($this->ada);
+        $this->engine->will(Fake::says('This asks for a 3NF schema. The due date is the one thing still missing.'));
+
+        $chat = Livewire::test(TutorChat::class, [
+            'workspaceId' => $this->workspaceId,
+            'activityId' => $this->assignment->id,
+        ]);
+        $chat->assertSee('wire:init="reviewFiles"', false);
+        $chat->assertDontSee('Here is what I was given');
+        $chat->call('reviewFiles');
+        $chat->assertSee('Review what I uploaded');
+        $chat->assertSee('Brief.txt');
+        $chat->assertSee('This asks for a 3NF schema.');
+        $this->assertCount(1, $this->engine->requests);
+
+        Livewire::test(TutorChat::class, [
+            'workspaceId' => $this->workspaceId,
+            'activityId' => $this->assignment->id,
+        ])->call('reviewFiles');
+        $this->assertCount(1, $this->engine->requests);
+
+        $this->get(route('workspaces.assignments.show', [$this->workspaceId, $this->assignment->id]))
+            ->assertOk()
+            ->assertSee('Review with the tutor');
     }
 
     public function test_stage_stepper_sets_the_stage(): void
@@ -128,6 +188,43 @@ class AssignmentCompanionScreenTest extends TestCase
 
         $companion->call('setStage', 'do');
         $this->assertSame('do', app(Activities::class)->find($this->by, $this->assignment->id)->stage);
+    }
+
+    public function test_the_student_confirms_an_up_to_date_understanding_then_continues_to_planning(): void
+    {
+        $this->keepUnderstanding();
+        $this->actingAs($this->ada);
+
+        $companion = Livewire::test(AssignmentCompanion::class, [
+            'workspaceId' => $this->workspaceId,
+            'activityId' => $this->assignment->id,
+        ]);
+
+        $companion->assertSee('Clarify anything in the chat')
+            ->assertSee('Normalization')
+            ->assertSee('40%')
+            ->assertSee('This is right')
+            ->call('confirmUnderstanding')
+            ->assertSee('Understanding confirmed')
+            ->assertSee('Continue to planning');
+        $this->assertTrue(app(AssignmentUnderstandings::class)->latest($this->by, $this->assignment->id)->confirmed());
+    }
+
+    public function test_an_out_of_date_understanding_cannot_be_confirmed(): void
+    {
+        $this->keepUnderstanding();
+        app(AssignmentSources::class)->add($this->by, $this->assignment->id, [
+            'kind' => 'correction',
+            'text' => 'The teacher now requires BCNF.',
+        ]);
+        $this->actingAs($this->ada);
+
+        Livewire::test(AssignmentCompanion::class, [
+            'workspaceId' => $this->workspaceId,
+            'activityId' => $this->assignment->id,
+        ])->call('confirmUnderstanding')->assertSee('Read the latest changes before confirming.');
+
+        $this->assertFalse(app(AssignmentUnderstandings::class)->latest($this->by, $this->assignment->id)->confirmed());
     }
 
     public function test_log_add_and_delete(): void
@@ -190,11 +287,42 @@ class AssignmentCompanionScreenTest extends TestCase
 
     public function test_assignment_page_has_work_on_it_with_the_tutor_button(): void
     {
+        $this->keepUnderstanding();
         $this->actingAs($this->ada);
 
         $response = $this->get(route('workspaces.assignments.show', [$this->workspaceId, $this->assignment->id]));
         $response->assertOk();
         $response->assertSee('Work on it with the tutor');
+        $response->assertDontSee('The full picture');
         $response->assertSee(route('workspaces.assignments.work', [$this->workspaceId, $this->assignment->id]));
+    }
+
+    public function test_companion_rail_shows_and_cycles_plan_steps_and_criteria(): void
+    {
+        $this->actingAs($this->ada);
+        $plans = app(Plans::class);
+        $part = $plans->addPart($this->by, $this->assignment->id, 'Part 1: Schema', 50);
+        $step = $plans->addStep($this->by, $this->assignment->id, 'Identify entities', $part->id);
+        $crit = $plans->addCriterion($this->by, $this->assignment->id, '3NF Normalization', 50);
+
+        $companion = Livewire::test(AssignmentCompanion::class, [
+            'workspaceId' => $this->workspaceId,
+            'activityId' => $this->assignment->id,
+        ]);
+
+        $companion->assertSee('Identify entities');
+        $companion->assertSee('3NF Normalization');
+
+        $companion->call('cyclePlanItem', $step->id);
+        $this->assertSame('doing', $plans->get($this->by, $this->assignment->id)->item($step->id)?->state);
+
+        $companion->call('cyclePlanItem', $step->id);
+        $this->assertSame('done', $plans->get($this->by, $this->assignment->id)->item($step->id)?->state);
+
+        $companion->call('cyclePlanItem', $crit->id);
+        $this->assertSame('partly', $plans->get($this->by, $this->assignment->id)->item($crit->id)?->state);
+
+        $companion->call('cyclePlanItem', $crit->id);
+        $this->assertSame('met', $plans->get($this->by, $this->assignment->id)->item($crit->id)?->state);
     }
 }

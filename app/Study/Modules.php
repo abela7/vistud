@@ -3,6 +3,7 @@
 namespace App\Study;
 
 use App\Brain\Writer\JournalWriter;
+use App\Engine\Spent;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
@@ -115,8 +116,17 @@ final class Modules
                     && ! LearnerTables::query($scope, 'files')->where('folder_id', $folderId)->whereNull('trashed_at')->exists()
                     && ! LearnerTables::query($scope, 'links')->where('folder_id', $folderId)->exists())
                 ->values()->all();
-            LearnerTables::query($scope, 'folders')->whereIn('id', $empty)->delete();
-            LearnerTables::query($scope, 'activities')->whereIn('folder_id', $empty)->update(['folder_id' => null]);
+            if ($empty !== []) {
+                foreach (Folders::STUDIED as $table) {
+                    LearnerTables::query($scope, $table)->whereIn('folder_id', $empty)->update(['folder_id' => null]);
+                }
+                LearnerTables::query($scope, 'notes')->whereIn('folder_id', $empty)->update(['folder_id' => null]);
+                LearnerTables::query($scope, 'files')->whereIn('folder_id', $empty)->update(['folder_id' => null]);
+                LearnerTables::query($scope, 'folder_briefs')->whereIn('folder_id', $empty)->delete();
+                Spent::forgetTargetJobs($scope, 'folder', $empty);
+                LearnerTables::query($scope, 'folders')->whereIn('id', $empty)->delete();
+                LearnerTables::query($scope, 'activities')->whereIn('folder_id', $empty)->update(['folder_id' => null]);
+            }
             if (LearnerTables::query($scope, 'folders')->where('module_id', $id)->exists()
                 || LearnerTables::query($scope, 'notes')->where('module_id', $id)->whereNull('trashed_at')->exists()
                 || LearnerTables::query($scope, 'files')->where('module_id', $id)->whereNull('trashed_at')->exists()
@@ -125,11 +135,17 @@ final class Modules
             }
             // Its topics and tasks stay in the course, outside every module; its instructions go.
             LearnerTables::query($scope, 'topics')->where('module_id', $id)->update(['module_id' => null]);
+            LearnerTables::query($scope, 'questions')->where('module_id', $id)->update(['module_id' => null]);
             LearnerTables::query($scope, 'flashcards')->where('module_id', $id)->update(['module_id' => null]);
             LearnerTables::query($scope, 'activities')->where('module_id', $id)->update(['module_id' => null]);
+            LearnerTables::query($scope, 'study_sessions')->where('module_id', $id)->update(['module_id' => null]);
+            LearnerTables::query($scope, 'class_sessions')->where('module_id', $id)->update(['module_id' => null]);
+            LearnerTables::query($scope, 'notes')->where('module_id', $id)->update(['module_id' => null]);
+            LearnerTables::query($scope, 'files')->where('module_id', $id)->update(['module_id' => null]);
             LearnerTables::query($scope, 'instructions')->where('scope', "module:{$id}")->delete();
             LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $id)->delete();
             LearnerTables::query($scope, 'module_briefs')->where('module_id', $id)->delete();
+            Spent::forgetTargetJobs($scope, 'module', $id);
             LearnerTables::query($scope, 'quizzes')->where('module_id', $id)->update(['module_id' => null]);
             LearnerTables::query($scope, 'modules')->where('id', $id)->delete();
             $row->revision++;

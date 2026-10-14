@@ -202,10 +202,21 @@ final class Workspaces
             if ($fileIds !== []) {
                 LearnerTables::query($scope, 'file_digests')->whereIn('file_id', $fileIds)->delete();
             }
+            $folderIds = LearnerTables::query($scope, 'folders')->where('workspace_id', $id)->pluck('id')->all();
+            if ($folderIds !== []) {
+                LearnerTables::query($scope, 'folder_briefs')->whereIn('folder_id', $folderIds)->delete();
+            }
             if ($moduleIds !== []) {
                 LearnerTables::query($scope, 'topic_suggestions')->whereIn('module_id', $moduleIds)->delete();
                 LearnerTables::query($scope, 'module_briefs')->whereIn('module_id', $moduleIds)->delete();
             }
+            $audioPaths = LearnerTables::query($scope, 'class_recordings')->where('workspace_id', $id)->whereNotNull('path')->pluck('path')->all();
+            $storageKeys = [...$storageKeys, ...$audioPaths];
+            LearnerTables::query($scope, 'class_reviews')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'class_materials')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'class_transcripts')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'class_recordings')->where('workspace_id', $id)->delete();
+            LearnerTables::query($scope, 'class_sessions')->where('workspace_id', $id)->delete();
             LearnerTables::query($scope, 'quizzes')->where('workspace_id', $id)->delete();
             TutorMemories::forgetCourse($scope, $id);
             LearnerTables::query($scope, 'files')->where('workspace_id', $id)->delete();
@@ -252,6 +263,7 @@ final class Workspaces
         foreach ($storageKeys as $key) {
             Files::disk()->delete($key);
             FilePreviews::forget($key);
+            FileTexts::forget($key);
         }
     }
 

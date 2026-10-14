@@ -367,6 +367,7 @@ final class Notes
             if ($note->trashed_at === null) {
                 // A note in the trash isn't pinned: what comes back from it is an ordinary note.
                 LearnerTables::query($scope, 'notes')->where('id', $id)->update(['trashed_at' => now(), 'pinned_at' => null]);
+                LearnerTables::query($scope, 'engine_threads')->where('note_id', $id)->update(['note_id' => null]);
                 $this->tombstone($scope, $id, 'trashed');
             }
         });
@@ -425,6 +426,9 @@ final class Notes
 
     private function delete(LearnerScope $scope, string $id): void
     {
+        LearnerTables::query($scope, 'engine_threads')->where('note_id', $id)->update(['note_id' => null]);
+        LearnerTables::query($scope, 'findings')->where('source_type', 'note')->where('source_id', $id)
+            ->update(['source_type' => null, 'source_id' => null, 'locator' => null]);
         LearnerTables::query($scope, 'note_versions')->where('note_id', $id)->delete();
         LearnerTables::query($scope, 'notes')->where('id', $id)->delete();
         $this->tombstone($scope, $id, 'deleted');

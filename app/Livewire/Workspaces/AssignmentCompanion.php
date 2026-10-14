@@ -14,6 +14,8 @@ use App\Study\AssignmentLog;
 use App\Study\AssignmentSources;
 use App\Study\AssignmentUnderstandings;
 use App\Study\Modules;
+use App\Study\NoteDetails;
+use App\Study\Notes;
 use App\Study\Plans;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
@@ -100,6 +102,7 @@ final class AssignmentCompanion extends Component
         $this->activityId = $activityId;
         $activity = $this->activities->find($this->principal(), $activityId);
         $activity->workspaceId === $workspaceId || throw new NotFound;
+        $this->jobId = $this->runner->pending($this->principal(), 'understand_assignment', 'activity', $activityId);
     }
 
     private function principal(): Principal
@@ -173,6 +176,22 @@ final class AssignmentCompanion extends Component
         $this->check();
     }
 
+    /** Confirms the current, up-to-date understanding before planning starts. */
+    public function confirmUnderstanding(): void
+    {
+        $by = $this->principal();
+        $latest = $this->understandings->latest($by, $this->activityId);
+        if ($latest === null || $this->sources->outOfDate($by, $this->activityId, $latest)) {
+            $this->notify('Read the latest changes before confirming.', 'danger');
+
+            return;
+        }
+
+        $this->understandings->confirm($by, $this->activityId);
+        $this->notify('Understanding confirmed. You can continue to planning.');
+        $this->dispatch('assignment-changed');
+    }
+
     /** Polls the reading status. */
     public function check(): void
     {
@@ -207,6 +226,35 @@ final class AssignmentCompanion extends Component
         $this->dispatch('assignment-changed');
     }
 
+    /** Cycles the state of a plan step, section, or criterion directly from the companion rail. */
+    public function cyclePlanItem(string $itemId): void
+    {
+        $by = $this->principal();
+        $plan = $this->plans->get($by, $this->activityId);
+        $item = $plan->item($itemId);
+        if ($item === null) {
+            return;
+        }
+
+        $next = match ($item->kind) {
+            'criterion' => match ($item->state) {
+                'not_yet' => 'partly',
+                'partly' => 'met',
+                default => 'not_yet',
+            },
+            'milestone' => $item->state === 'achieved' ? 'pending' : 'achieved',
+            default => match ($item->state) {
+                'todo' => 'doing',
+                'doing' => 'done',
+                'stuck' => 'doing',
+                default => 'todo',
+            },
+        };
+
+        $this->plans->setState($by, $item->id, $next);
+        $this->dispatch('assignment-changed');
+    }
+
     /** Clears the assignment companion chat. */
     public function startOver(): void
     {
@@ -219,7 +267,9 @@ final class AssignmentCompanion extends Component
     #[On('assignment-changed')]
     public function assignmentChanged(): void
     {
-        // Re-renders the component
+        // A fact agreed in chat is kept as a source and starts a background re-read. Follow that job here so the rail
+        // updates from "reading" to the new understanding without the student refreshing the page.
+        $this->jobId = $this->runner->pending($this->principal(), 'understand_assignment', 'activity', $this->activityId);
     }
 
     public function render(): View
@@ -236,6 +286,11 @@ final class AssignmentCompanion extends Component
         $health = $plan->health($activity);
         $logs = $this->log->list($by, $this->activityId, limit: 50);
         $module = $activity->moduleId !== null ? app(Modules::class)->find($by, $activity->moduleId) : null;
+        $folder = $this->activities->folder($by, $this->activityId);
+        $assignmentNotes = array_values(array_filter(
+            app(Notes::class)->list($by, $this->workspaceId),
+            fn (NoteDetails $n) => $n->trashedAt === null && $n->folderId === $folder->id,
+        ));
 
         return view('livewire.workspaces.assignment-companion', [
             'activity' => $activity,
@@ -248,10 +303,13 @@ final class AssignmentCompanion extends Component
             'planProgress' => $progress->percent,
             'planHealth' => $health,
             'sections' => $plan->parts(),
+            'standaloneSteps' => $plan->steps(null),
             'criteria' => $plan->criteria(),
+            'assignmentNotes' => $assignmentNotes,
             'logs' => $logs,
             'stages' => Activities::STAGES,
             'reading' => $this->jobId !== null,
+            'fresh' => $this->chat->assignmentTranscript($by, $this->activityId) === [],
         ]);
     }
 }

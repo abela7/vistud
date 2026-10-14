@@ -2,10 +2,14 @@
 
 namespace App\Livewire\Workspaces;
 
+use App\Engine\Jobs\PlanAssignment;
+use App\Engine\Jobs\Runner;
+use App\Engine\ModelChoices;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\EditsPlan;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
+use App\Platform\Errors\AppError;
 use App\Study\Activities;
 use App\Study\Files;
 use App\Study\Notes;
@@ -88,9 +92,16 @@ final class AssignmentPlan extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(Plans $plans, PlanMaker $maker, Activities $activities, Files $files, Notes $notes, Workspaces $workspaces, PrincipalFactory $principals): void
+    private Runner $runner;
+
+    private ModelChoices $modelChoices;
+
+    /** The model picked to make this plan, or '' for the tutor's model. Only for this plan: it isn't kept. */
+    public string $planModel = '';
+
+    public function boot(Plans $plans, PlanMaker $maker, Activities $activities, Files $files, Notes $notes, Workspaces $workspaces, PrincipalFactory $principals, Runner $runner, ModelChoices $modelChoices): void
     {
-        [$this->plans, $this->maker, $this->activities, $this->files, $this->notes, $this->workspaces, $this->principals] = [$plans, $maker, $activities, $files, $notes, $workspaces, $principals];
+        [$this->plans, $this->maker, $this->activities, $this->files, $this->notes, $this->workspaces, $this->principals, $this->runner, $this->modelChoices] = [$plans, $maker, $activities, $files, $notes, $workspaces, $principals, $runner, $modelChoices];
     }
 
     public function mount(string $workspaceId, string $activityId): void
@@ -180,13 +191,44 @@ final class AssignmentPlan extends Component
         $this->reading = false;
     }
 
+    /**
+     * ViStud's own AI makes the plan from everything it knows of the assignment, and it is shown to look over like a
+     * pasted reply is. Nothing is kept until the student adds it.
+     */
+    public function makePlan(): void
+    {
+        $by = $this->principal();
+        $this->resetErrorBag(['aiRun', 'reply']);
+        if (! $this->modelChoices->allows($by, $this->planModel)) {
+            $this->planModel = '';
+        }
+        // A model that thinks first can take a while; the engine's own timeout (120 s) is what ends a call.
+        @set_time_limit(180);
+        try {
+            $this->reply = $this->runner->answer($by, new PlanAssignment($this->workspaceId, $this->activityId, $this->brief), $this->planModel !== '' ? $this->planModel : null);
+        } catch (AppError $e) {
+            $this->reading = false;
+            $this->addError('aiRun', $e->getMessage());
+
+            return;
+        }
+        $this->readReply();
+    }
+
     public function readReply(): void
     {
         $this->resetErrorBag('reply');
+        $raw = PlanMaker::read($this->reply);
+        if ($raw['parts'] === [] && $raw['steps'] === [] && $raw['criteria'] === [] && $raw['milestones'] === []) {
+            $this->reading = false;
+            $this->addError('reply', 'No parts, steps or criteria found in it. Paste the AI\'s whole reply, with the marks it wrote.');
+
+            return;
+        }
         $read = $this->readOfReply();
         if ($read['parts'] === [] && $read['steps'] === [] && $read['criteria'] === [] && $read['milestones'] === []) {
             $this->reading = false;
-            $this->addError('reply', 'No parts, steps or criteria found in it. Paste the AI\'s whole reply, with the marks it wrote.');
+            $this->addError('reply', 'Everything in it is already in your plan.');
 
             return;
         }
@@ -205,15 +247,22 @@ final class AssignmentPlan extends Component
         }
     }
 
-    /** What the AI's reply holds; its milestones only for a course with project tools, which is the only one that shows them. */
+    /**
+     * What the AI's reply holds, checked (PlanMaker::tidy): without what the plan has, with marks and dates that hold
+     * together, and its milestones only for a course with project tools, which is the only one that shows them.
+     *
+     * @return array<string, mixed>
+     */
     private function readOfReply(): array
     {
-        $read = PlanMaker::read($this->reply);
-        if (! $this->workspaces->find($this->principal(), $this->workspaceId)->projectTools) {
-            $read['milestones'] = [];
-        }
+        $by = $this->principal();
 
-        return $read;
+        return PlanMaker::tidy(
+            PlanMaker::read($this->reply),
+            $this->activities->find($by, $this->activityId),
+            $this->plans->get($by, $this->activityId),
+            $this->workspaces->find($by, $this->workspaceId)->projectTools,
+        );
     }
 
     // ---------- Ticking, editing, ordering ----------
@@ -314,6 +363,8 @@ final class AssignmentPlan extends Component
             'today' => now($assignment->zone)->toDateString(),
             'prompt' => $this->aiOpen ? $this->maker->prompt($by, $this->activityId, $this->brief) : '',
             'read' => $read,
+            'models' => $this->aiOpen ? $this->modelChoices->options($by, $this->planModel) : [],
+            'defaultModel' => $this->aiOpen ? $this->modelChoices->defaultName($by) : '',
         ]);
     }
 

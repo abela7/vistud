@@ -21,6 +21,11 @@ use Illuminate\Support\Facades\DB;
  */
 final class AssignmentUnderstandings
 {
+    /** The most assignment-specific sections and items the AI may add beyond the standard understanding. */
+    public const EXTRA_SECTIONS = 3;
+
+    public const EXTRA_ITEMS = 12;
+
     /** The parts that are lists, with the most items each keeps and the fields of an item: name => [max, [field => limit]]. */
     public const LISTS = [
         'deliverables' => [12, ['what' => 300, 'format' => 200, 'length' => 120]],
@@ -172,6 +177,39 @@ final class AssignmentUnderstandings
             $out[$part] = $items;
         }
 
+        $reserved = array_flip([
+            'what to hand in', 'must do', 'limits', 'what it is marked on', 'what the teacher wants to see', 'dates',
+            'ask your teacher', 'missing or unclear', 'topics it draws on', 'modules it draws on', 'risks',
+            'good practice', 'how the ai reads it',
+        ]);
+        $seen = [];
+        $out['extra_sections'] = [];
+        foreach (is_array($data['extra_sections'] ?? null) ? array_values($data['extra_sections']) : [] as $section) {
+            if (! is_array($section) || count($out['extra_sections']) >= self::EXTRA_SECTIONS) {
+                continue;
+            }
+            $title = $text($section['title'] ?? null, 80);
+            $key = mb_strtolower($title);
+            if ($title === '' || isset($reserved[$key]) || isset($seen[$key])) {
+                continue;
+            }
+            $items = [];
+            foreach (is_array($section['items'] ?? null) ? array_values($section['items']) : [] as $item) {
+                $item = is_string($item) ? ['text' => $item] : $item;
+                if (! is_array($item) || count($items) >= self::EXTRA_ITEMS) {
+                    continue;
+                }
+                $itemText = $text($item['text'] ?? null, 300);
+                if ($itemText !== '') {
+                    $items[] = ['text' => $itemText, 'source' => $source($item['source'] ?? null)];
+                }
+            }
+            if ($items !== []) {
+                $seen[$key] = true;
+                $out['extra_sections'][] = ['title' => $title, 'items' => $items];
+            }
+        }
+
         return $out;
     }
 
@@ -187,7 +225,7 @@ final class AssignmentUnderstandings
             }
         }
 
-        return false;
+        return ($body['extra_sections'] ?? []) !== [];
     }
 
     private static function details(object $row): AssignmentUnderstanding

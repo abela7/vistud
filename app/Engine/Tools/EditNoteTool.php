@@ -7,6 +7,7 @@ use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Gone;
 use App\Platform\Errors\NotFound;
+use App\Study\Activities;
 use App\Study\Folders;
 use App\Study\Modules;
 use App\Study\NoteDetails;
@@ -31,7 +32,8 @@ final class EditNoteTool implements Tool
         private Sessions $sessions,
         private Topics $topics,
         private Modules $modules,
-        private Folders $folders
+        private Folders $folders,
+        private Activities $activities,
     ) {}
 
     public function name(): string
@@ -81,7 +83,7 @@ final class EditNoteTool implements Tool
 
     public function run(Principal $by, Context $context, array $input): string
     {
-        if ($context->sessionId === null) {
+        if ($context->sessionId === null && $context->activityId === null) {
             return 'Editing notes needs a study session: ask the student to start one.';
         }
 
@@ -103,13 +105,17 @@ final class EditNoteTool implements Tool
         $mode = Lookup::text($input, 'mode') ?? ($search !== null && trim($search) !== '' ? 'replace_text' : 'append');
         $all = (bool) ($input['all'] ?? false);
 
+        $folderIds = $context->activityId !== null
+            ? [$this->activities->folder($by, $context->activityId)->id]
+            : Lookup::folder($this->folders, $by, $context);
+
         $note = null;
         if (($wanted = Lookup::text($input, 'note')) !== null) {
             $normalized = mb_strtolower(trim($wanted));
-            if (in_array($normalized, ['the note', 'my note', 'current note', 'opened note', 'open note', 'this note', 'notes', 'study note', 'study notes'], true)) {
+            if (in_array($normalized, ['the note', 'my note', 'current note', 'opened note', 'open note', 'this note', 'notes', 'study note', 'study notes', 'assignment note', 'assignment notes'], true)) {
                 $note = $this->studyNote($by, $context);
             } else {
-                $note = Lookup::here($this->notes->list($by, $context->workspaceId), Lookup::folder($this->folders, $by, $context), $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
+                $note = Lookup::here($this->notes->list($by, $context->workspaceId), $folderIds, $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
                 if (is_string($note)) {
                     return $note;
                 }
@@ -168,7 +174,10 @@ final class EditNoteTool implements Tool
 
     private function studyNote(Principal $by, Context $context): ?NoteDetails
     {
-        $id = LearnerTables::query(Guard::learner($by), 'engine_threads')->where('session_id', $context->sessionId)->value('note_id');
+        $query = LearnerTables::query(Guard::learner($by), 'engine_threads');
+        $id = $context->sessionId !== null
+            ? $query->where('session_id', $context->sessionId)->value('note_id')
+            : $query->where('activity_id', $context->activityId)->value('note_id');
         if ($id !== null) {
             try {
                 $note = $this->notes->find($by, (string) $id);
@@ -179,6 +188,14 @@ final class EditNoteTool implements Tool
                 // Deleted since
             }
         }
+        if ($context->activityId !== null && $context->sessionId === null) {
+            $activity = $this->activities->find($by, $context->activityId);
+            $title = mb_substr('Assignment notes · '.$activity->title, 0, 200);
+            $folder = $this->activities->folder($by, $context->activityId);
+
+            return collect($this->notes->list($by, $context->workspaceId))->first(fn (NoteDetails $n) => $n->trashedAt === null && ($n->displayTitle() === $title || $n->folderId === $folder->id));
+        }
+
         $session = $this->sessions->find($by, $context->sessionId);
         $on = null;
         try {

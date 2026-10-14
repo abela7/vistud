@@ -212,8 +212,6 @@ final class AssignmentPage extends Component
     {
         if ($uploaded > 0) {
             $this->notify(($uploaded === 1 ? '1 file' : "{$uploaded} files").' added.');
-            // The full picture says it is out of date, for the student to read again once the files are ready.
-            $this->dispatch('assignment-files-changed');
         }
     }
 
@@ -225,11 +223,8 @@ final class AssignmentPage extends Component
         $by = $this->principal();
         try {
             $assignment = $this->assignment();
-            $folder = $this->folderOf($assignment);
             $this->activities->delete($by, $assignment->id);
-            session()->flash('workspace-notice', $folder === null
-                ? "“{$assignment->title}” is deleted."
-                : "“{$assignment->title}” is deleted. Its folder “{$folder->name}” and its files stay where they were.");
+            session()->flash('workspace-notice', "“{$assignment->title}” is deleted.");
         } catch (NotFound) {
             // Already gone: the same end.
         }

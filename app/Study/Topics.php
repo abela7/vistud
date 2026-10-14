@@ -2,6 +2,7 @@
 
 namespace App\Study;
 
+use App\Engine\Spent;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
@@ -220,30 +221,36 @@ final class Topics
 
     /**
      * Retires the topic: it leaves the screens, and its evidence stays in the journal. Nothing is left pointing at it:
-     * its questions, quizzes and cards stay with no topic (the cards no longer count for it), its key points go with it,
-     * and an open session on it has no topic now (Sessions::setTopic, so the tutor is told). `$who` took it out: student
-     * or tutor.
+     * its questions, quizzes and cards stay with no topic (the cards no longer count for it), its key points and chat
+     * go with it, and an open session on it has no topic now (Sessions::setTopic, so the tutor is told). `$who` took it
+     * out: student or tutor.
      */
     public function retire(Principal $by, string $id, string $who = 'student'): void
     {
         $scope = Guard::learner($by);
+
+        $open = LearnerTables::query($scope, 'study_sessions')->where('topic_id', $id)->where('state', '!=', 'ended')->pluck('id');
+        foreach ($open as $sessionId) {
+            $this->sessions->setTopic($by, (string) $sessionId, null, $who);
+        }
 
         DB::transaction(function () use ($scope, $by, $id) {
             $row = $this->row($scope, $id, lock: true);
             $this->memory->append($scope, [
                 Memory::claim($scope, $by, 'defines', ["topic:{$id}"], ['entity_type' => 'topic', 'status' => 'retired', 'kind' => 'concept', 'aliases' => []], ['label' => $row->name]),
             ], $row->workspace_id);
-            LearnerTables::query($scope, 'topics')->where('id', $id)->update(['retired_at' => now(), 'updated_at' => now()]);
             LearnerTables::query($scope, 'questions')->where('topic_id', $id)->update(['topic_id' => null]);
             LearnerTables::query($scope, 'quizzes')->where('topic_id', $id)->update(['topic_id' => null]);
+            LearnerTables::query($scope, 'study_sessions')->where('topic_id', $id)->update(['topic_id' => null]);
+            LearnerTables::query($scope, 'tutor_memories')->where('topic_id', $id)->update(['topic_id' => null]);
             $this->flashcards->leaveTopic($scope, $by, $id);
             LearnerTables::query($scope, 'findings')->where('topic_id', $id)->delete();
+            $threads = LearnerTables::query($scope, 'engine_threads')->where('topic_id', $id);
+            Spent::forgetMessages($scope, (clone $threads)->pluck('id')->all());
+            $threads->delete();
+            Spent::forgetTargetJobs($scope, 'topic', $id);
+            LearnerTables::query($scope, 'topics')->where('id', $id)->delete();
         });
-
-        $open = LearnerTables::query($scope, 'study_sessions')->where('topic_id', $id)->where('state', '!=', 'ended')->pluck('id');
-        foreach ($open as $sessionId) {
-            $this->sessions->setTopic($by, (string) $sessionId, null, $who);
-        }
     }
 
     /**

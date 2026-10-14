@@ -26,13 +26,14 @@ use App\Study\Topics;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
 use Tests\Concerns\CreatesAccounts;
+use Tests\Concerns\MakesOfficeFiles;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
 /** The course guide: a talk that proposes what to add to a course, and writes only what the student ticks (docs/specs/vistud-2-blueprint.md, Phase 8). */
 class CourseGuideTest extends TestCase
 {
-    use CreatesAccounts, RefreshesDatabase;
+    use CreatesAccounts, MakesOfficeFiles, RefreshesDatabase;
 
     private User $ada;
 
@@ -181,7 +182,7 @@ class CourseGuideTest extends TestCase
     public function test_too_many_pictures_something_that_is_not_a_picture_and_a_model_that_cannot_see_are_refused_and_nothing_is_sent(): void
     {
         $five = array_fill(0, 5, ['name' => 'a.png', 'bytes' => $this->picture()]);
-        foreach ([[$five, 'Attach up to 4'], [[['name' => 'notes.txt', 'bytes' => 'Week 1: Introduction']], '"notes.txt" couldn\'t be read as a picture'], [[['name' => 'empty.png', 'bytes' => '']], 'couldn\'t be read as a picture']] as [$pictures, $words]) {
+        foreach ([[$five, 'Attach up to 4'], [[['name' => 'notes.exe', 'bytes' => 'Week 1: Introduction']], '"notes.exe" couldn\'t be read'], [[['name' => 'empty.png', 'bytes' => '']], 'couldn\'t be read'], [[['name' => 'blank.docx', 'bytes' => 'not a word file']], '"blank.docx" couldn\'t be read']] as [$pictures, $words]) {
             try {
                 $this->guide()->turn($this->by, $this->workspace, [], 'Here.', '', $pictures);
                 $this->fail('A refusal was expected.');
@@ -197,10 +198,19 @@ class CourseGuideTest extends TestCase
         } catch (Unprocessable $e) {
             $this->assertStringContainsString('can\'t see pictures', $e->details['fields']['pictures'][0]);
         }
-        // The same words, without a picture, go to that model.
+        // The same words, without a picture, go to that model. A Word file does too: it is read as text, so a model
+        // that cannot see pictures can still read it.
         $this->says(['reply' => 'Fine.', 'proposal' => null]);
         $this->guide()->turn($this->by, $this->workspace, [], 'Here.');
-        $this->assertCount(1, $this->engine->requests);
+        $docx = $this->docxBytes($this->wPara('Week 1: Database systems').$this->wPara('Relational design and SQL.'));
+        $this->guide()->turn($this->by, $this->workspace, [], 'The module guide.', 'modules', [['name' => 'Module Guide DBSyS.docx', 'bytes' => $docx]]);
+        $sent = $this->engine->requests[1]->messages[0]['content'];
+        $this->assertIsString($sent);
+        $this->assertStringContainsString('The module guide.', $sent);
+        $this->assertStringContainsString('[Attached: the file "Module Guide DBSyS.docx"', $sent);
+        $this->assertStringContainsString('Week 1: Database systems', $sent);
+        $this->assertStringContainsString('Relational design and SQL.', $sent);
+        $this->assertCount(2, $this->engine->requests);
     }
 
     public function test_the_modules_talk_has_read_the_course_and_knows_the_modules_already_there(): void

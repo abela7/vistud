@@ -18,13 +18,14 @@ use Illuminate\Http\UploadedFile;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
+use Tests\Concerns\MakesOfficeFiles;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
 /** The course guide's page: a talk that proposes, ticks, and adds only what is ticked (docs/specs/vistud-2-blueprint.md, Phase 8). */
 class GuideScreenTest extends TestCase
 {
-    use CreatesAccounts, RefreshesDatabase;
+    use CreatesAccounts, MakesOfficeFiles, RefreshesDatabase;
 
     private User $ada;
 
@@ -172,8 +173,8 @@ class GuideScreenTest extends TestCase
         $this->says(['reply' => 'I read the page. Tick what to add.', 'proposal' => self::PROPOSAL]);
 
         // (The file's name is shown too; Livewire's test uploads don't carry it, so the browser test checks that.)
-        $page = $this->guide()->set('pictures', [UploadedFile::fake()->image('canvas-page.png', 300, 200)])->assertSee('Pictures to send')->assertSeeHtml('wire:click="removePicture(0)"')
-            ->assertSee('Attach pictures')->assertSee('paste or drop a screenshot');
+        $page = $this->guide()->set('pictures', [UploadedFile::fake()->image('canvas-page.png', 300, 200)])->assertSee('Files to send')->assertSeeHtml('wire:click="removePicture(0)"')
+            ->assertSee('Attach a picture or a file')->assertSee('paste or drop a screenshot');
         $this->fill($page);
         // A picture alone is a message; it goes to the model as a picture, and the talk says so.
         $page->call('send')->assertSet('pictures', [])->assertSee('A picture went with this.')->assertSee('I read the page.')->assertSee('I would add')->assertDontSee('Pictures to send');
@@ -197,11 +198,44 @@ class GuideScreenTest extends TestCase
         $page->call('removePicture', 0)->assertDontSeeHtml('wire:click="removePicture(1)"')->assertSeeHtml('wire:click="removePicture(0)"');
         $this->assertCount(1, $page->get('pictures'));
 
-        $five = $this->guide()->set('pictures', array_map(fn ($n) => UploadedFile::fake()->image("p{$n}.png"), range(1, 5)))->assertSee('Attach up to 4 pictures to one message.');
+        $five = $this->guide()->set('pictures', array_map(fn ($n) => UploadedFile::fake()->image("p{$n}.png"), range(1, 5)))->assertSee('Attach up to 4 files to one message.');
         $this->assertCount(4, $five->get('pictures'));
-        $pdf = $this->guide()->set('pictures', [UploadedFile::fake()->createWithContent('notes.pdf', '%PDF-1.4')])->assertHasErrors('pictures')->assertSee('Attach a PNG, JPG, GIF or WebP picture.');
-        $this->assertSame([], $pdf->get('pictures'));
+        $zip = $this->guide()->set('pictures', [UploadedFile::fake()->createWithContent('notes.zip', 'PK')])->assertHasErrors('pictures')->assertSee('Attach a PNG, JPG, GIF or WebP picture, or a Word, PDF, PowerPoint, Excel or text file.');
+        $this->assertSame([], $zip->get('pictures'));
         $this->assertSame([], $this->engine->requests);
+    }
+
+    public function test_the_talk_can_fill_the_screen_and_use_another_model(): void
+    {
+        $page = $this->guide()->assertSee('Full screen')->assertSee('Full screen gives this talk more room.')->assertSee('Use full screen')->assertSee('Not now')
+            ->assertSee('Switch AI model')->assertSee('Speak instead of typing')
+            ->assertSee('fake/tutor');
+
+        $page->call('switchModel', 'not-a-model')->assertSet('model', '');
+        $page->call('switchModel', 'openai/gpt-4o')->assertSet('model', 'openai/gpt-4o')->assertSee('openai/gpt-4o');
+
+        $this->says(['reply' => 'Noted.', 'proposal' => null]);
+        $page->set('text', 'It is about operating systems.')->call('send');
+        $this->assertSame('openai/gpt-4o', $this->engine->requests[0]->model);
+
+        $this->guide()->assertSet('model', 'openai/gpt-4o')->assertSee('openai/gpt-4o');
+    }
+
+    public function test_a_word_file_is_read_with_the_message_and_not_kept(): void
+    {
+        $this->says(['reply' => 'I read the module guide. Tick the weeks to add.', 'proposal' => self::WEEKS]);
+
+        $page = $this->guide('modules')->set('pictures', [UploadedFile::fake()->create('Module Guide DBSyS.docx', 20, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')])
+            ->assertHasNoErrors()->assertSee('Files to send')->assertSee('Module Guide DBSyS.docx')->assertSeeHtml('data-kind="file"');
+        file_put_contents($page->get('pictures')[0]->getRealPath(), $this->docxBytes($this->wPara('Week 1: Database systems').$this->wPara('Relational design and SQL.')));
+
+        $page->call('send')->assertSet('pictures', [])->assertSee('A file went with this.')->assertSee('I read the module guide.')->assertDontSee('Files to send');
+        $sent = $this->engine->requests[0]->messages[0]['content'];
+        $this->assertIsString($sent);
+        $this->assertStringContainsString('Week 1: Database systems', $sent);
+        $this->assertStringContainsString('Relational design and SQL.', $sent);
+        $this->assertStringContainsString('Module Guide DBSyS.docx', $sent);
+        $this->assertSame([], app(Files::class)->list($this->principal($this->ada), $this->os->id));
     }
 
     public function test_a_model_that_cannot_see_pictures_says_so_and_keeps_what_was_attached(): void
@@ -239,7 +273,7 @@ class GuideScreenTest extends TestCase
 
     public function test_an_empty_message_a_failed_answer_and_a_missing_key_say_what_to_do_and_keep_what_was_written(): void
     {
-        $this->guide()->call('send')->assertHasErrors('text')->assertSee('Write something first, or attach a picture.');
+        $this->guide()->call('send')->assertHasErrors('text')->assertSee('Write something first, or attach a picture or a file.');
         $this->assertSame([], $this->engine->requests);
 
         $this->engine->will(Fake::says('   '));

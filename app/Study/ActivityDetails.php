@@ -26,6 +26,8 @@ final readonly class ActivityDetails
         public ?string $folderId = null,
         public string $zone = 'UTC',
         public string $stage = 'understand',
+        /** The model the student chose to read this assignment, or null for their tutor's model. */
+        public ?string $aiModel = null,
     ) {}
 
     public function kindLabel(): string

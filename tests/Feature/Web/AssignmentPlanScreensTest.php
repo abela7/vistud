@@ -50,7 +50,7 @@ class AssignmentPlanScreensTest extends TestCase
 
     public function test_an_empty_plan_is_calm_the_pre_made_ones_wait_to_be_asked_for_and_the_page_shows_the_plan_only_once_it_exists(): void
     {
-        $this->plan()->assertSee('Split the work into sections')->assertSee('Plan with an AI')->assertSee('New section')->assertSee('Pre-made')->assertDontSee('Actions for the plan')->assertDontSee('Clear the plan')
+        $this->plan()->assertSee('Split the work into sections')->assertDontSee('Plan with an AI')->assertSee('New section')->assertSee('Pre-made')->assertDontSee('Actions for the plan')->assertDontSee('Clear the plan')
             ->assertDontSee('Essay or report')->assertDontSee('Also track')->assertDontSee('Marking criteria')
             ->call('toggleStarters')->assertSet('showStarters', true)->assertSee('Essay or report')->assertSee('Problem set')->assertSee('Group project')
             ->call('toggleStarters')->assertDontSee('Essay or report');
@@ -143,7 +143,7 @@ class AssignmentPlanScreensTest extends TestCase
         $sectionFolder = app(Plans::class)->folder($by, $section->id);
 
         $page = Livewire::test(AssignmentPage::class, ['workspaceId' => $this->databases->id, 'activityId' => $this->essay->id])
-            ->assertSee('Nothing here yet')->assertSee('Add the brief or your files, or write a note')->assertSee('Upload files')->assertSee('Write a note')->assertSee('New folder')
+            ->assertSee('Nothing here yet')->assertSee('Add a file or write a note')->assertSee('Upload files')->assertSee('Write a note')->assertSee('New folder')
             ->call('addFolder')->assertHasErrors(['folderName'])
             ->set('folderName', 'Brief and rubric')->call('addFolder')->assertHasNoErrors()->assertSee('Folder “Brief and rubric” added.')->assertSee('Brief and rubric')->assertSet('folderName', '');
         // A section's folder is on the section's page, not here.
@@ -219,11 +219,11 @@ class AssignmentPlanScreensTest extends TestCase
     {
         $by = $this->principal($this->ada);
         $component = $this->plan()->call('toggleAi')->assertSet('aiOpen', true)
-            ->set('brief', 'Write 2000 words on membranes.')->assertSee('Write 2000 words on membranes.')->assertSee('Cell essay')
+            ->set('brief', 'Write 2000 words on membranes.')
             ->call('readReply')->assertHasErrors(['reply']);
 
         $component->set('reply', "Sure!\n<part title=\"Research\" marks=\"30\"><step>Find 5 sources</step></part><step>Email the tutor</step><criterion marks=\"40\">Analysis</criterion>")
-            ->call('readReply')->assertHasNoErrors()->assertSet('reading', true)->assertSee('Look it over, then add it')->assertSee('Find 5 sources')->assertSee('Analysis');
+            ->call('readReply')->assertHasNoErrors()->assertSet('reading', true);
         $this->assertSame([], app(Plans::class)->get($by, $this->essay->id)->items);
 
         $component->call('addRead')->assertSet('aiOpen', false)->assertSet('reply', '')->assertSee('4 things added to your plan.');

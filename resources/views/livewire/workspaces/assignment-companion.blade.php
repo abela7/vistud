@@ -17,17 +17,55 @@
 
 <div class="assignment-companion-page space-y-4"
     @if ($reading) wire:poll.3s="check" @endif
+    data-fresh="{{ $fresh ? '1' : '0' }}"
     x-data="{
-        railOpen: false,
+        railOpen: true,
+        fullscreen: false,
+        offerFullscreen: false,
         init() {
             try {
-                this.railOpen = localStorage.getItem('vistud-assignment-rail-open') === 'true';
+                const saved = localStorage.getItem('vistud-assignment-rail-open');
+                this.railOpen = saved === null ? true : saved === 'true';
             } catch {}
             this.$watch('railOpen', (open) => {
                 try {
                     localStorage.setItem('vistud-assignment-rail-open', String(open));
                 } catch {}
             });
+            let pref = null;
+            try { pref = localStorage.getItem('vistud.assignment-fullscreen'); } catch {}
+            if (pref === 'on') this.fullscreen = true;
+            this.offerFullscreen = this.$root.dataset.fresh === '1' && pref !== 'on' && pref !== 'off';
+            const frame = (on) => {
+                document.documentElement.toggleAttribute('data-session-fullscreen', on);
+                document.documentElement.toggleAttribute('data-companion-fullscreen', on);
+            };
+            frame(this.fullscreen);
+            this.$watch('fullscreen', (on) => {
+                frame(on);
+                try {
+                    if (on) localStorage.setItem('vistud.assignment-fullscreen', 'on');
+                    else if (localStorage.getItem('vistud.assignment-fullscreen') === 'on') localStorage.removeItem('vistud.assignment-fullscreen');
+                } catch {}
+            });
+        },
+        useFullscreen() {
+            this.offerFullscreen = false;
+            this.railOpen = false;
+            this.fullscreen = true;
+        },
+        dismissFullscreen() {
+            this.offerFullscreen = false;
+            try { localStorage.setItem('vistud.assignment-fullscreen', 'off'); } catch {}
+        },
+        onKey(event) {
+            if (event.key !== 'Escape' || ! this.fullscreen) return;
+            if (event.target.closest('textarea, input, [contenteditable=true], dialog[open]')) return;
+            this.fullscreen = false;
+        },
+        destroy() {
+            document.documentElement.removeAttribute('data-session-fullscreen');
+            document.documentElement.removeAttribute('data-companion-fullscreen');
         },
         toggleRail() {
             if (window.innerWidth < 768) {
@@ -39,7 +77,9 @@
             }
             this.railOpen = ! this.railOpen;
         }
-    }">
+    }"
+    x-bind:class="{ 'is-fullscreen': fullscreen }"
+    x-on:keydown.window="onKey($event)">
 
     {{-- Top header bar --}}
     <x-page :title="$activity->title" :back-href="$backUrl" back-to="Assignment" :eyebrow="$eyebrow" :context="$context">
@@ -52,6 +92,10 @@
             </a>
         </x-slot:menu>
         <x-slot:action>
+            <button type="button" class="session-icon-btn" x-bind:class="{ 'is-active': fullscreen }" x-on:click="fullscreen = ! fullscreen" x-bind:aria-pressed="fullscreen.toString()" x-bind:title="fullscreen ? 'Exit full screen (Esc)' : 'Full screen'" aria-label="Toggle full screen">
+                <x-icon name="maximize-2" class="size-3.5" x-show="! fullscreen" />
+                <x-icon name="minimize-2" class="size-3.5" x-show="fullscreen" x-cloak />
+            </button>
             <button type="button" class="btn btn-secondary btn-sm"
                 x-on:click="toggleRail()"
                 x-bind:aria-pressed="railOpen.toString()"
@@ -63,16 +107,25 @@
         </x-slot:action>
     </x-page>
 
+    @if ($fresh)
+        <div class="guide-fullscreen-offer" x-show="offerFullscreen && ! fullscreen" x-cloak role="status">
+            <x-icon name="maximize-2" class="size-4 shrink-0 text-fg-muted" />
+            <p>Full screen gives this talk more room.</p>
+            <button type="button" class="btn btn-primary btn-sm" x-on:click="useFullscreen()">Use full screen</button>
+            <button type="button" class="btn btn-ghost btn-sm" x-on:click="dismissFullscreen()">Not now</button>
+        </div>
+    @endif
+
     {{-- Main content: Chat + Rail --}}
-    <div class="flex gap-4 items-start relative min-h-[calc(100vh-12rem)]">
+    <div class="companion-body flex gap-4 items-start relative min-h-[calc(100vh-12rem)]">
         {{-- Chat column --}}
-        <div class="flex-1 min-w-0">
+        <div class="companion-chat flex-1 min-w-0">
             <livewire:workspaces.tutor-chat :workspace-id="$workspaceId" :activity-id="$activityId" :key="'companion-chat-'.$activityId" />
         </div>
 
         {{-- Desktop Rail --}}
         <div class="session-rail-backdrop" wire:ignore.self x-show="railOpen" x-cloak x-on:click="railOpen = false" aria-hidden="true"></div>
-        <aside class="session-rail" wire:ignore.self x-show="railOpen" x-cloak x-on:keydown.escape.window="if (railOpen) railOpen = false" aria-label="Assignment companion details">
+        <aside class="session-rail" wire:ignore.self x-show="railOpen" x-cloak x-on:keydown.escape.window="if (! fullscreen && railOpen) railOpen = false" aria-label="Assignment companion details">
             <div class="session-rail-head" wire:ignore>
                 <span class="text-xs font-semibold text-fg truncate">Assignment companion</span>
                 <button type="button" class="topbar-button size-7" x-on:click="railOpen = false" title="Close details" aria-label="Close details">
@@ -163,4 +216,6 @@
             </div>
         </div>
     </dialog>
+
+    <x-toast :message="$notice" :tone="$noticeTone" />
 </div>

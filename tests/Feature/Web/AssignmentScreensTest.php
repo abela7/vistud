@@ -89,10 +89,12 @@ class AssignmentScreensTest extends TestCase
             ->assertSee(route('workspaces.folders.show', [$this->databases->id, $folder->id]), false);
     }
 
-    public function test_its_page_saves_its_details_and_where_the_student_is_and_deleting_it_keeps_its_files(): void
+    public function test_its_page_saves_its_details_and_where_the_student_is_and_deleting_it_clears_its_folder_and_files(): void
     {
+        Storage::fake('local');
         $by = $this->principal($this->ada);
         $essay = app(Activities::class)->create($by, $this->databases->id, ['title' => 'ER diagram', 'due_on' => '2026-10-01']);
+        $file = app(Files::class)->upload($by, 'folder', $essay->folderId, $this->temp($this->pdf()), 'Brief.pdf');
         $this->actingAs($this->ada)->get(route('workspaces.assignments.show', [$this->databases->id, $essay->id]))
             ->assertOk()->assertSee('ER diagram')->assertSee('Was due 1 Oct');
 
@@ -105,8 +107,10 @@ class AssignmentScreensTest extends TestCase
         $this->assertSame('ER diagram (group)', app(Folders::class)->find($by, $essay->folderId)->name);
 
         $page->call('delete')->assertRedirect(route('workspaces.show', [$this->databases->id, 'assignments']));
-        $this->assertSame('“ER diagram (group)” is deleted. Its folder “ER diagram (group)” and its files stay where they were.', session('workspace-notice'));
-        $this->assertSame('ER diagram (group)', app(Folders::class)->find($by, $essay->folderId)->name);
+        $this->assertSame('“ER diagram (group)” is deleted.', session('workspace-notice'));
+        $this->assertSame([], app(Folders::class)->tree($by, $this->databases->id));
+        $this->assertSame([], app(Files::class)->list($by, $this->databases->id));
+        $this->assertFalse(Files::disk()->exists("learners/{$by->learnerId}/files/{$file->id}"));
     }
 
     public function test_only_the_owner_in_that_workspace_sees_it_and_the_browser_cant_change_which_one(): void
@@ -205,8 +209,8 @@ class AssignmentScreensTest extends TestCase
         $reply = '<part title="Research" marks="30"><step>Read chapter 3</step></part><milestone date="2026-10-12">Proposal signed off</milestone>';
 
         Livewire::test(AssignmentPlan::class, ['workspaceId' => $this->databases->id, 'activityId' => $essay->id])
-            ->call('toggleAi')->set('reply', $reply)->call('readReply')->assertSet('reading', true)->assertSee('Research')->assertDontSee('Proposal signed off')
-            ->call('addRead');
+            ->call('toggleAi')->set('reply', $reply)->call('readReply')->assertSet('reading', true)->assertDontSee('Proposal signed off')
+            ->call('addRead')->assertSee('Research');
         $this->assertSame([], app(Plans::class)->get($by, $essay->id)->milestones());
         $this->assertCount(1, app(Plans::class)->get($by, $essay->id)->parts());
     }

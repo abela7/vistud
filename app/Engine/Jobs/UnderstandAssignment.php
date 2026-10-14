@@ -24,8 +24,9 @@ use Carbon\CarbonImmutable;
  * The tutor's model understands an assignment (the owner's ask, 2026-10-13): everything the student gave about it (its
  * written sources and the files in its folder, each with a label it must cite), the course and its modules and topics
  * (to link the assignment to them), and its earlier understanding (to update rather than start again) in; a new
- * revision of its understanding out (App\Study\AssignmentUnderstandings). The tutor's model, not the reader's: this is
- * what every later step of the assignment stands on. Everything is read when the job runs, from where the student left it.
+ * revision of its understanding out (App\Study\AssignmentUnderstandings). The tutor's model, not the reader's, unless
+ * the student chose another for this assignment (ActivityDetails::$aiModel): this is what every later step of the
+ * assignment stands on. Everything is read when the job runs, from where the student left it.
  */
 final class UnderstandAssignment extends Job
 {
@@ -37,8 +38,11 @@ final class UnderstandAssignment extends Job
     /** The most of one file it carries. */
     public const FILE_LIMIT = 50_000;
 
-    /** The longest answer, in tokens: a full understanding of a big assignment. */
-    public const ANSWER_TOKENS = 6_000;
+    /**
+     * The longest answer, in tokens: a full understanding of a big assignment. It was 6,000, and a real one (about
+     * 15,000 tokens of sources) filled it and was cut off, unreadable. A model that thinks first spends some of this too.
+     */
+    public const ANSWER_TOKENS = 16_000;
 
     public function __construct(string $workspaceId, string $activityId)
     {
@@ -53,6 +57,16 @@ final class UnderstandAssignment extends Job
     public function role(): Role
     {
         return Role::Tutor;
+    }
+
+    /** The model the student chose to read this assignment; none (their tutor's model) when they haven't, or it is gone. */
+    public function model(Principal $by): ?string
+    {
+        try {
+            return app(Activities::class)->find($by, (string) $this->targetId)->aiModel;
+        } catch (NotFound) {
+            return null;
+        }
     }
 
     public function handle(Principal $by, Run $run): void
@@ -78,7 +92,7 @@ final class UnderstandAssignment extends Job
             "## Its sources\n".$material,
             $earlier === null ? null : "## Your earlier understanding (revision {$earlier->revision}): update it\n".json_encode($earlier->body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT),
         ]));
-        $reply = $run->ask(self::rules(), $message, self::ANSWER_TOKENS);
+        $reply = $run->ask(self::rules(), $message, self::ANSWER_TOKENS)->whole();
         $data = JsonAnswer::object($reply->text);
         $body = AssignmentUnderstandings::clean($data, array_keys($labels), $modules, $topics);
         if (! AssignmentUnderstandings::saysSomething($body)) {

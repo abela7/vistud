@@ -14,6 +14,7 @@ use App\Study\AssignmentUnderstandings;
 use App\Study\Files;
 use App\Study\Folders;
 use App\Study\Modules;
+use App\Study\Notes;
 use App\Study\Workspaces;
 use Illuminate\Support\Facades\DB;
 use Tests\Concerns\CreatesAccounts;
@@ -125,9 +126,22 @@ class AssignmentSourcesTest extends TestCase
     {
         $this->sources->add($this->by, $this->assignment->id, ['text' => 'Write 1,500 words on joins.']);
         app(AssignmentUnderstandings::class)->keep($this->by, $this->assignment->id, ['summary' => 'A report.'], null, [], str_repeat('a', 40), 'fake/tutor');
+        $section = app(Folders::class)->create($this->by, 'folder', (string) $this->assignment->folderId, 'Part A');
+        app(Files::class)->upload($this->by, 'folder', $section->id, $this->temp("Analysis 40%.\n"), 'Rubric.txt');
+        app(Notes::class)->create($this->by, 'folder', (string) $this->assignment->folderId, 'Draft');
 
         app(Activities::class)->delete($this->by, $this->assignment->id);
 
-        $this->assertSame([0, 0], [DB::table('activity_sources')->count(), DB::table('activity_understandings')->count()]);
+        $this->assertSame(
+            [0, 0, 0, 0, 0, 0],
+            [
+                DB::table('activity_sources')->count(),
+                DB::table('activity_understandings')->count(),
+                DB::table('folders')->count(),
+                DB::table('files')->count(),
+                DB::table('notes')->count(),
+                DB::table('note_versions')->count(),
+            ]
+        );
     }
 }

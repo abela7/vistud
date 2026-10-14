@@ -31,7 +31,10 @@ final class AssignmentPlanTool implements Tool
 
     public function run(Principal $by, Context $context, array $input): string
     {
-        $activity = Lookup::one($this->activities->list($by, $context->workspaceId), Lookup::text($input, 'assignment') ?? '', fn ($a) => $a->title, 'assignment');
+        $wanted = Lookup::text($input, 'assignment') ?? '';
+        $activity = ($wanted === '' && $context->activityId !== null)
+            ? $this->activities->find($by, $context->activityId)
+            : Lookup::one($this->activities->list($by, $context->workspaceId), $wanted, fn ($a) => $a->title, 'assignment');
         if (is_string($activity)) {
             return $activity;
         }

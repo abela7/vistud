@@ -105,8 +105,6 @@
     </form>
 
     @unless ($new)
-        {{-- First the full picture (what it is, from everything the student was given), then the plan to do it. --}}
-        <livewire:workspaces.assignment-picture :workspace-id="$workspace->id" :activity-id="$assignment->id" :key="'picture-'.$assignment->id" />
         <livewire:workspaces.assignment-plan :workspace-id="$workspace->id" :activity-id="$assignment->id" :key="'plan-'.$assignment->id" />
     @endunless
 
@@ -131,9 +129,12 @@
                         <span class="count-pill">{{ $kept }}</span>
                     @endif
                 </h2>
-                <p class="panel-hint">The brief, your files, notes and folders for this assignment.</p>
+                <p class="panel-hint">Drop anything you were given. A new file is read straight away, and the tutor updates from it.</p>
             </div>
             <div class="panel-head-actions">
+                @if (! $new && count($files) > 0)
+                    <a href="{{ route('workspaces.assignments.work', [$workspace->id, $assignment->id]) }}" class="btn btn-primary btn-sm"><x-icon name="sparkles" class="size-4" />Review with the tutor</a>
+                @endif
                 @if ($folder)
                     <a href="{{ route('workspaces.folders.show', [$workspace->id, $folder->id]) }}" class="btn btn-secondary btn-sm" title="Open its folder"><x-icon name="folder-open" class="size-4" /><span class="max-sm:sr-only">Its folder</span></a>
                 @endif
@@ -193,7 +194,7 @@
             <div class="empty-place empty-place-slim" x-bind:class="{ 'is-over': over }">
                 <span class="item-icon" aria-hidden="true"><x-icon name="file-up" class="size-5" /></span>
                 <p class="font-medium">Nothing here yet</p>
-                <p class="max-w-md text-sm text-fg-muted">Add the brief or your files, or write a note<span class="only-fine-pointer">. You can also drop files here</span>.</p>
+                <p class="max-w-md text-sm text-fg-muted">Add a file or write a note<span class="only-fine-pointer">. You can also drop files here</span>.</p>
                 <button type="button" class="btn btn-secondary btn-sm" x-on:click="$dispatch('assignment-files')"><x-icon name="file-up" class="size-4" />Upload files</button>
             </div>
         @endif
@@ -223,8 +224,8 @@
         <section class="asg-delete" aria-labelledby="assignment-delete-heading">
             <div class="min-w-0">
                 <h2 id="assignment-delete-heading" class="font-semibold">Delete this assignment</h2>
-                <p class="text-sm text-fg-muted" x-show="! sure">Its plan goes. Its folder and files stay where they are.</p>
-                <p class="text-sm" x-show="sure" x-cloak>Really delete it? This can't be undone.</p>
+                <p class="text-sm text-fg-muted" x-show="! sure">Its plan, files and notes go with it.</p>
+                <p class="text-sm" x-show="sure" x-cloak>Really delete it and all its files and notes? This can't be undone.</p>
             </div>
             <div class="asg-delete-actions">
                 <button type="button" class="btn btn-secondary btn-sm" x-show="! sure" x-on:click="sure = true"><x-icon name="trash-2" class="size-4" />Delete</button>

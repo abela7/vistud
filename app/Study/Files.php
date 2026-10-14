@@ -2,6 +2,7 @@
 
 namespace App\Study;
 
+use App\Engine\Spent;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
@@ -140,8 +141,10 @@ final class Files
     public function move(Principal $by, string $id, string $placeType, string $placeId): void
     {
         $scope = Guard::learner($by);
+        $from = null;
+        $to = null;
 
-        DB::transaction(function () use ($scope, $id, $placeType, $placeId) {
+        DB::transaction(function () use ($scope, $id, $placeType, $placeId, &$from, &$to) {
             $file = $this->row($scope, $id, lock: true);
             [$workspaceId, $moduleId, $folderId] = Input::place($scope, $placeType, $placeId);
             if ($workspaceId !== $file->workspace_id) {
@@ -160,14 +163,27 @@ final class Files
                 LearnerTables::query($scope, 'topic_suggestions')->where('source_file_id', $id)->where('module_id', $moduleId)
                     ->where('status', 'suggested')->update(['folder_id' => $folderId]);
             }
+            $from = is_string($file->folder_id) ? $file->folder_id : null;
+            $to = $folderId;
         });
+        if ($from !== $to) {
+            $this->reread($by, $from);
+            $this->reread($by, $to);
+        }
     }
 
     public function trash(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
-        $this->row($scope, $id);
+        $file = $this->row($scope, $id);
         LearnerTables::query($scope, 'files')->where('id', $id)->whereNull('trashed_at')->update(['trashed_at' => now()]);
+        if ($file->folder_id !== null) {
+            LearnerTables::query($scope, 'folder_briefs')->where('folder_id', $file->folder_id)->delete();
+        }
+        if ($file->module_id !== null) {
+            LearnerTables::query($scope, 'module_briefs')->where('module_id', $file->module_id)->delete();
+        }
+        $this->reread($by, is_string($file->folder_id) ? $file->folder_id : null);
     }
 
     /** Takes a file out of the trash, back to its place, or to the top level if its place has gone. */
@@ -193,7 +209,10 @@ final class Files
             ]);
         });
 
-        return $this->find($by, $id);
+        $file = $this->find($by, $id);
+        $this->reread($by, $file->folderId);
+
+        return $file;
     }
 
     /** Deletes a file in the trash for good, its bytes included. */
@@ -268,6 +287,18 @@ final class Files
         // What the AI read in it goes too; a topic it suggested stays, now from a file that is gone.
         LearnerTables::query($scope, 'file_digests')->where('file_id', $row->id)->delete();
         LearnerTables::query($scope, 'topic_suggestions')->where('source_file_id', $row->id)->update(['source_file_id' => null]);
+        LearnerTables::query($scope, 'findings')->where('source_type', 'file')->where('source_id', $row->id)
+            ->update(['source_type' => null, 'source_id' => null, 'locator' => null]);
+        LearnerTables::query($scope, 'course_profiles')->where('workspace_id', $row->workspace_id)->where('syllabus_file_id', $row->id)
+            ->update(['syllabus_file_id' => null]);
+        LearnerTables::query($scope, 'class_materials')->where('file_id', $row->id)->delete();
+        if (($row->folder_id ?? null) !== null) {
+            LearnerTables::query($scope, 'folder_briefs')->where('folder_id', $row->folder_id)->delete();
+        }
+        if (($row->module_id ?? null) !== null) {
+            LearnerTables::query($scope, 'module_briefs')->where('module_id', $row->module_id)->delete();
+        }
+        Spent::forgetTargetJobs($scope, 'file', $row->id);
         self::disk()->delete($row->storage_key);
         FilePreviews::forget($row->storage_key);
         FileTexts::forget($row->storage_key);
@@ -319,5 +350,11 @@ final class Files
             $row->trashed_at === null ? null : $time($row->trashed_at),
             $row->sha256,
         );
+    }
+
+    /** A file landed in, left, or came back to a folder: re-read the assignment that owns it, if one does. */
+    private function reread(Principal $by, ?string $folderId): void
+    {
+        app(AssignmentReading::class)->afterFile($by, $folderId);
     }
 }

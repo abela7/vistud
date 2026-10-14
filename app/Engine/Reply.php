@@ -28,6 +28,22 @@ final readonly class Reply
         public array $reasoning = [],
     ) {}
 
+    /**
+     * This reply, once it is known to be whole. An answer that stopped at the length limit is cut off mid-way (a JSON
+     * object without its end, a plan without its last part): reading what is left would keep half an answer as if it
+     * were all of it, so it is a failure with its own reason instead.
+     *
+     * @throws EngineFailed when the answer was cut off
+     */
+    public function whole(): self
+    {
+        if ($this->finish === 'length') {
+            throw new EngineFailed('engine_cut_off', 'The AI ran out of room before it finished its answer. Try again, or choose a model that can write more.');
+        }
+
+        return $this;
+    }
+
     public function wantsTools(): bool
     {
         return $this->toolCalls !== [];

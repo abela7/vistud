@@ -3675,8 +3675,100 @@
 
     .picture-empty {
         display: grid;
-        gap: 0.625rem;
-        justify-items: start;
+        gap: 0.75rem;
+        padding: 0.875rem;
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+    }
+
+    .picture-empty-text {
+        max-width: 60ch;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+
+    /* Quick starts: two to a row on a phone, four on a wide screen, each a full-size tap target. */
+    .picture-starts {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+        gap: 0.5rem;
+    }
+
+    .picture-start {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.375rem;
+        min-height: 2.5rem;
+        padding: 0.375rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background-color: var(--surface);
+        color: var(--text);
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-align: center;
+        cursor: pointer;
+    }
+
+    .picture-start:hover {
+        border-color: var(--accent);
+        background-color: var(--hover);
+    }
+
+    .picture-start:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: 2px;
+    }
+
+    .picture-tutor {
+        flex: none;
+    }
+
+    .picture-block-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    /* Which AI reads it: the label above its choice and the note under, never squeezed in one row. */
+    .picture-model {
+        display: grid;
+        gap: 0.375rem;
+        max-width: 28rem;
+    }
+
+    .picture-model .input {
+        width: 100%;
+    }
+
+    .picture-model-hint {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    @media (max-width: 639px) {
+        .picture-tutor,
+        .picture-block-head > .btn,
+        .picture-block-actions {
+            width: 100%;
+        }
+
+        .picture-block-actions > .btn {
+            flex: 1 1 auto;
+            justify-content: center;
+        }
+
+        .picture-tutor,
+        .picture-block-head > .btn {
+            justify-content: center;
+        }
+
+        .picture-model {
+            max-width: none;
+        }
     }
 
     .picture-sources {
@@ -3744,6 +3836,15 @@
         gap: 0.75rem;
     }
 
+    .picture-brief {
+        display: grid;
+        gap: 0.75rem;
+        padding: 1rem 1.125rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+    }
+
     .picture-reading,
     .picture-status {
         display: flex;
@@ -3755,7 +3856,7 @@
     }
 
     .picture-confidence {
-        padding: 0.0625rem 0.5rem;
+        padding: 0.125rem 0.625rem;
         border-radius: 9999px;
         font-weight: 600;
     }
@@ -3792,7 +3893,35 @@
     }
 
     .picture-summary {
+        max-width: 70ch;
+        color: var(--text);
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+
+    .picture-goal {
+        display: grid;
+        gap: 0.25rem;
+        padding-top: 0.625rem;
+        border-top: 1px solid var(--divider);
+    }
+
+    .picture-goal-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        color: var(--accent-contrast);
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+
+    .picture-goal-text {
+        max-width: 70ch;
+        color: var(--text);
         font-size: 0.9375rem;
+        font-weight: 500;
         line-height: 1.55;
     }
 
@@ -3804,78 +3933,250 @@
         font-size: 0.8125rem;
     }
 
-    /* The questions to ask the teacher come first: they are what the student can act on today. */
-    .picture-questions {
+    .picture-parts-wrap {
         display: grid;
         gap: 0.5rem;
-        padding: 0.75rem 0.875rem;
-        border: 1px solid var(--warning);
-        border-radius: var(--radius-lg);
-        background-color: var(--warning-subtle);
     }
 
-    .picture-questions ul {
-        display: grid;
-        gap: 0.25rem;
-        padding-left: 1.25rem;
-        list-style: disc;
-        font-size: 0.875rem;
+    .picture-parts-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0 0.125rem;
     }
 
+    /* The understanding as an accordion: one section a row, read one at a time. */
     .picture-parts {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
-        gap: 1rem 1.5rem;
-        align-items: start;
+        gap: 0.5rem;
+        overflow-anchor: none;
     }
 
     .picture-part {
-        display: grid;
-        gap: 0.375rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface);
+        overflow: hidden;
+        overflow-anchor: none;
+        scroll-margin-top: 4.5rem;
+    }
+
+    /* The questions for the teacher are what the student can act on today: they stand out even when closed. */
+    .picture-part.is-ask {
+        border-color: var(--warning);
+        background-color: var(--warning-subtle);
+    }
+
+    .picture-part-head {
+        margin: 0;
+    }
+
+    .picture-part-toggle {
+        display: flex;
+        width: 100%;
+        min-height: 3rem;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.75rem 1rem;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        text-align: left;
+    }
+
+    .picture-part-toggle:hover {
+        background-color: var(--hover);
+    }
+
+    .picture-part-toggle:focus-visible {
+        outline: 2px solid var(--focus-ring);
+        outline-offset: -2px;
+    }
+
+    .picture-part-icon {
+        display: inline-flex;
+        flex: none;
+        width: 1.875rem;
+        height: 1.875rem;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-md);
+        background-color: var(--surface-sunken);
+        color: var(--accent-contrast);
+    }
+
+    .picture-part-toggle[aria-expanded='true'] .picture-part-icon {
+        background-color: var(--accent-subtle);
+        color: var(--accent-contrast);
     }
 
     .picture-part-title {
-        display: flex;
-        align-items: center;
-        gap: 0.375rem;
-        font-size: 0.875rem;
-        font-weight: 600;
+        flex: 1;
+        min-width: 0;
     }
 
-    .picture-part ul {
+    .picture-part-count {
+        min-width: 1.625rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: 999px;
+        background-color: var(--surface-sunken);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+    }
+
+    .picture-part-chevron {
+        color: var(--text-muted);
+        transition: transform 150ms ease;
+    }
+
+    .picture-part-toggle[aria-expanded='true'] .picture-part-chevron {
+        transform: rotate(180deg);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .picture-part-chevron {
+            transition: none;
+        }
+    }
+
+    .picture-part-body {
         display: grid;
+        gap: 0.75rem;
+        padding: 0.875rem 1rem 1rem;
+        border-top: 1px solid var(--divider);
+        background-color: var(--surface-sunken);
+    }
+
+    .picture-reading-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
         gap: 0.5rem;
+        padding-bottom: 0.25rem;
+    }
+
+    .picture-reading-actions {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .picture-part-list,
+    .picture-part-body ul {
+        display: grid;
+        gap: 0.625rem;
+        counter-reset: picture-item;
     }
 
     .picture-item {
-        display: grid;
-        gap: 0.125rem;
-        padding-left: 0.75rem;
-        border-left: 2px solid var(--divider);
-        font-size: 0.875rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.875rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-raised);
+        font-size: 0.9375rem;
+        line-height: 1.55;
         overflow-wrap: anywhere;
+        counter-increment: picture-item;
+    }
+
+    .picture-item::before {
+        content: counter(picture-item);
+        display: inline-flex;
+        flex: none;
+        width: 1.625rem;
+        height: 1.625rem;
+        margin-top: 0.0625rem;
+        align-items: center;
+        justify-content: center;
+        border-radius: var(--radius-sm);
+        background-color: var(--accent-subtle);
+        color: var(--accent-contrast);
+        font-size: 0.75rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .picture-item-body {
+        display: grid;
+        flex: 1;
+        min-width: 0;
+        max-width: 70ch;
+        gap: 0.25rem;
+    }
+
+    .picture-item-lead {
+        color: var(--text);
+        font-size: 0.9375rem;
+        font-weight: 600;
+        line-height: 1.5;
+    }
+
+    .picture-item-detail {
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        font-weight: 400;
+        line-height: 1.6;
     }
 
     .picture-item-more {
         color: var(--text-muted);
         font-size: 0.8125rem;
+        line-height: 1.5;
     }
 
     .picture-weight {
-        margin-left: 0.25rem;
+        display: inline-flex;
+        align-items: center;
+        margin-left: 0.375rem;
+        padding: 0.0625rem 0.4375rem;
+        border-radius: 999px;
+        background-color: var(--accent-subtle);
         color: var(--accent-contrast);
-        font-weight: 700;
+        font-size: 0.75rem;
+        font-weight: 600;
         font-variant-numeric: tabular-nums;
     }
 
     /* Where each point came from: a source the student gave, or, said plainly, the AI's own reading. */
     .picture-from {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        margin-top: 0.25rem;
+        padding: 0.125rem 0.5rem;
+        border-radius: var(--radius-sm);
+        background-color: var(--surface-sunken);
         color: var(--text-subtle);
         font-size: 0.75rem;
+        line-height: 1.3;
     }
 
     .picture-from.is-inferred {
         font-style: italic;
+    }
+
+    .picture-stepper {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding-top: 0.25rem;
+    }
+
+    .picture-more-bar {
+        display: flex;
+        justify-content: center;
+        padding-top: 0.25rem;
     }
 
     .picture-history {
@@ -11068,6 +11369,131 @@
         /* --guide-trim is what the page has below the talk (its padding), measured by guide-chat.js so the page itself never scrolls. */
         height: calc(100dvh - var(--guide-top, 12rem) - var(--guide-below, 0px) - var(--guide-trim, 1rem));
         min-height: 26rem;
+    }
+
+    .guide-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        min-height: 2rem;
+    }
+
+    .guide-fullscreen-offer {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-sunken);
+    }
+
+    .guide-fullscreen-offer p {
+        flex: 1 1 12rem;
+        min-width: 0;
+        margin: 0;
+        font-size: 0.875rem;
+    }
+
+    .guide-bar-title {
+        min-width: 0;
+        overflow: hidden;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Full screen: the app frame hides (data-session-fullscreen) and the talk fills the window. */
+    :root[data-guide-fullscreen] .app-main > div:has(> .guide.is-fullscreen) {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: none;
+        height: 100dvh;
+        margin: 0;
+        padding: 0.5rem 0.75rem max(0.5rem, env(safe-area-inset-bottom));
+        gap: 0.5rem;
+    }
+
+    :root[data-guide-fullscreen] .section-header.is-page {
+        display: none;
+    }
+
+    .guide.is-fullscreen {
+        flex: 1 1 auto;
+        grid-template-rows: minmax(0, 1fr);
+        height: 100%;
+        min-height: 0;
+        gap: 0.5rem;
+    }
+
+    .guide.is-fullscreen .guide-chat {
+        height: 100%;
+        min-height: 0;
+    }
+
+    /* The assignment companion fills the window the same way a study session does. */
+    .assignment-companion-page.is-fullscreen {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+        margin: 0;
+        padding: 0.375rem 0.625rem max(0.5rem, env(safe-area-inset-bottom));
+        gap: 0.5rem;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    .assignment-companion-page.is-fullscreen > .companion-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: auto;
+    }
+
+    .assignment-companion-page.is-fullscreen .companion-chat {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+    }
+
+    .assignment-companion-page.is-fullscreen .chat {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .assignment-companion-page.is-fullscreen :is(.chat-log, .chat-empty) {
+        flex: 1 1 auto;
+        max-height: none;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    .assignment-companion-page.is-fullscreen .chat-dock {
+        position: relative;
+        bottom: auto;
+    }
+
+    .guide.is-fullscreen .guide-steps {
+        max-height: 8rem;
+        overflow: auto;
+    }
+
+    @media (min-width: 1024px) {
+        .guide.is-fullscreen.has-steps {
+            align-items: stretch;
+        }
+
+        .guide.is-fullscreen .guide-steps {
+            position: static;
+            max-height: none;
+        }
     }
 
     body[data-tabbar] .guide-chat {

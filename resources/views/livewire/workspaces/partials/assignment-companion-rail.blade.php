@@ -96,8 +96,23 @@
             @if ($reading)
                 <p class="text-xs text-fg-muted flex items-center gap-1.5" role="status">
                     <x-icon name="loader-circle" class="size-3.5 animate-spin" />
-                    <span>The AI is reading your assignment...</span>
+                    <span>The AI is updating its understanding...</span>
                 </p>
+            @endif
+
+            @if (! $understanding->confirmed())
+                <div class="p-2.5 rounded-lg bg-accent-subtle text-xs space-y-2">
+                    <p class="text-fg-muted">Clarify anything in the chat. Agreed facts are saved only after you approve them, then the AI updates this picture.</p>
+                    @if (! $stale && ! $reading)
+                        <button type="button" class="btn btn-primary btn-sm" wire:click="confirmUnderstanding">
+                            <x-icon name="circle-check" class="size-3.5" />This is right
+                        </button>
+                    @endif
+                </div>
+            @elseif ($currentStage === 'understand')
+                <button type="button" class="btn btn-primary btn-sm w-full justify-center" x-on:click="$dispatch('stage-confirm', { stage: 'plan' })">
+                    Continue to planning<x-icon name="arrow-right" class="size-3.5" />
+                </button>
             @endif
 
             @if ($understanding->text('goal') !== '')
@@ -114,9 +129,9 @@
                     <ul class="space-y-1" role="list">
                         @foreach ($critItems as $c)
                             <li class="p-1.5 rounded bg-surface-sunken flex items-start justify-between gap-2 text-xs">
-                                <span class="min-w-0 flex-1 truncate">{{ $c['title'] ?? $c['text'] ?? 'Criterion' }}</span>
+                                <span class="min-w-0 flex-1 truncate">{{ $c['criterion'] ?? $c['title'] ?? $c['text'] ?? 'Criterion' }}</span>
                                 @if (! empty($c['weight']))
-                                    <span class="font-semibold shrink-0 text-fg-muted">{{ $c['weight'] }}</span>
+                                    <span class="font-semibold shrink-0 text-fg-muted">{{ $c['weight'] }}%</span>
                                 @endif
                             </li>
                         @endforeach
@@ -145,7 +160,7 @@
                 </a>
             </div>
         @else
-            <p class="rail-empty text-xs">Not read yet. Add your brief and criteria on the assignment page.</p>
+            <p class="rail-empty text-xs">Not read yet. Drop a file in the chat, or paste what you were told.</p>
             @if (! $reading)
                 <button type="button" class="btn btn-primary btn-sm" wire:click="understand">
                     <x-icon name="sparkles" class="size-3.5" />Understand it
@@ -175,25 +190,95 @@
             <div class="h-1.5 w-full bg-surface-sunken rounded-full overflow-hidden">
                 <div class="h-full bg-accent transition-all duration-300" style="width: {{ $planProgress }}%"></div>
             </div>
-            <div class="flex items-center justify-between pt-1 text-xs">
-                <span class="text-fg-muted">Health</span>
-                <span class="badge badge-sm {{ $planHealth === 'on_track' ? 'badge-success' : ($planHealth === 'at_risk' ? 'badge-warning' : 'badge-danger') }}">
-                    {{ str_replace('_', ' ', $planHealth) }}
-                </span>
-            </div>
+            @php
+                $healthState = is_array($planHealth) ? ($planHealth['state'] ?? null) : (is_string($planHealth) ? $planHealth : null);
+            @endphp
+            @if ($healthState)
+                <div class="flex items-center justify-between pt-1 text-xs">
+                    <span class="text-fg-muted">Health</span>
+                    <span class="badge badge-sm {{ $healthState === 'on track' || $healthState === 'on_track' ? 'badge-success' : ($healthState === 'tight' || $healthState === 'at_risk' ? 'badge-warning' : 'badge-danger') }}">
+                        {{ str_replace('_', ' ', $healthState) }}
+                    </span>
+                </div>
+            @endif
         </div>
 
-        @if ($sections !== [])
-            <ul class="space-y-1 text-xs" role="list">
+        @if ($sections !== [] || ($standaloneSteps ?? []) !== [])
+            <ul class="space-y-2 text-xs" role="list">
                 @foreach ($sections as $sec)
-                    <li class="flex items-center justify-between p-1.5 rounded bg-surface-sunken">
-                        <span class="min-w-0 flex-1 truncate">{{ $sec->title }} ({{ $sec->weight }}%)</span>
-                        <span class="text-[10px] uppercase font-semibold text-fg-muted shrink-0">{{ $sec->state }}</span>
+                    @php $secSteps = $plan->steps($sec->id); @endphp
+                    <li class="p-2 rounded-lg bg-surface-sunken space-y-1.5" wire:key="rail-sec-{{ $suffix }}-{{ $sec->id }}">
+                        <div class="flex items-center justify-between gap-2">
+                            <button type="button" wire:click="cyclePlanItem('{{ $sec->id }}')" class="min-w-0 flex-1 text-left font-medium hover:text-accent truncate">
+                                {{ $sec->title }}@if ($sec->weight !== null) <span class="text-fg-muted">({{ $sec->weight }}%)</span>@endif
+                            </button>
+                            <button type="button" wire:click="cyclePlanItem('{{ $sec->id }}')" class="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-surface text-fg-muted shrink-0">
+                                {{ str_replace('_', ' ', $plan->stateOf($sec)) }}
+                            </button>
+                        </div>
+                        @if ($secSteps !== [])
+                            <ul class="space-y-1 pl-2 border-l border-border/60" role="list">
+                                @foreach ($secSteps as $step)
+                                    <li class="flex items-center justify-between gap-2" wire:key="rail-step-{{ $suffix }}-{{ $step->id }}">
+                                        <button type="button" wire:click="cyclePlanItem('{{ $step->id }}')" class="min-w-0 flex-1 text-left truncate {{ $step->state === 'done' ? 'line-through text-fg-muted' : 'text-fg' }}">
+                                            {{ $step->title }}
+                                        </button>
+                                        <button type="button" wire:click="cyclePlanItem('{{ $step->id }}')" class="text-[10px] uppercase font-semibold text-fg-muted shrink-0">
+                                            {{ str_replace('_', ' ', $step->state) }}
+                                        </button>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @endif
+                    </li>
+                @endforeach
+                @foreach ($standaloneSteps ?? [] as $step)
+                    <li class="flex items-center justify-between p-1.5 rounded bg-surface-sunken gap-2" wire:key="rail-step-free-{{ $suffix }}-{{ $step->id }}">
+                        <button type="button" wire:click="cyclePlanItem('{{ $step->id }}')" class="min-w-0 flex-1 text-left truncate {{ $step->state === 'done' ? 'line-through text-fg-muted' : 'text-fg' }}">
+                            {{ $step->title }}
+                        </button>
+                        <button type="button" wire:click="cyclePlanItem('{{ $step->id }}')" class="text-[10px] uppercase font-semibold text-fg-muted shrink-0">
+                            {{ str_replace('_', ' ', $step->state) }}
+                        </button>
                     </li>
                 @endforeach
             </ul>
         @else
-            <p class="rail-empty text-xs">No plan sections created yet.</p>
+            <p class="rail-empty text-xs">No plan sections created yet. Ask the AI in chat to build your plan and pick a tracking method.</p>
+        @endif
+
+        @if (($criteria ?? []) !== [])
+            <div class="space-y-1.5 pt-1 text-xs">
+                <span class="font-semibold text-fg">Marking criteria tracker ({{ count($criteria) }})</span>
+                <ul class="space-y-1" role="list">
+                    @foreach ($criteria as $criterion)
+                        <li class="flex items-center justify-between p-1.5 rounded bg-surface-sunken gap-2" wire:key="rail-crit-{{ $suffix }}-{{ $criterion->id }}">
+                            <button type="button" wire:click="cyclePlanItem('{{ $criterion->id }}')" class="min-w-0 flex-1 text-left truncate {{ $criterion->state === 'met' ? 'text-success font-medium' : 'text-fg' }}">
+                                {{ $criterion->title }}@if ($criterion->weight !== null) <span class="text-fg-muted">({{ $criterion->weight }}%)</span>@endif
+                            </button>
+                            <button type="button" wire:click="cyclePlanItem('{{ $criterion->id }}')" class="text-[10px] uppercase font-semibold text-fg-muted shrink-0">
+                                {{ str_replace('_', ' ', $criterion->state) }}
+                            </button>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
+        @if (($assignmentNotes ?? []) !== [])
+            <div class="space-y-1.5 pt-1 text-xs">
+                <span class="font-semibold text-fg">Saved assignment notes ({{ count($assignmentNotes) }})</span>
+                <ul class="space-y-1" role="list">
+                    @foreach ($assignmentNotes as $note)
+                        <li>
+                            <a href="{{ route('workspaces.notes.show', [$workspaceId, $note->id]) }}" class="flex items-center gap-1.5 p-1.5 rounded bg-surface-sunken hover:text-accent truncate">
+                                <x-icon name="notebook-pen" class="size-3.5 shrink-0" />
+                                <span class="truncate">{{ $note->displayTitle() }}</span>
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
         @endif
 
         <div class="pt-1">

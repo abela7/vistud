@@ -3,9 +3,12 @@
 namespace App\Livewire\Workspaces;
 
 use App\Engine\Attachments;
+use App\Engine\Choices;
 use App\Engine\CourseGuide;
+use App\Engine\Models;
 use App\Engine\Role;
 use App\Engine\Settings;
+use App\Engine\Usage;
 use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
@@ -36,11 +39,14 @@ final class GuideChat extends Component
 {
     use Notices, WithFileUploads;
 
-    /** The most one picture can weigh, in kilobytes (the guide shows the model a smaller copy). */
+    /** The most one picture or document can weigh, in kilobytes (a picture is shown smaller; a document is read as text). */
     public const PICTURE_KB = 10_240;
 
-    /** The kinds of picture that can be attached, by name; the bytes are checked again when the message goes. */
-    public const PICTURE_TYPES = 'png,jpg,jpeg,gif,webp';
+    /** What can be attached, by name. A picture's bytes are checked again when the message goes; a document is read as text. */
+    public const PICTURE_TYPES = 'png,jpg,jpeg,gif,webp,pdf,docx,pptx,xlsx,txt,md';
+
+    /** Extensions that are pictures. Anything else in PICTURE_TYPES is a document the guide reads. */
+    private const PICTURE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
 
     /** How long a talk is kept when the student leaves and comes back, in seconds. */
     public const KEPT_FOR = 7_200;
@@ -53,9 +59,10 @@ final class GuideChat extends Component
     public string $for = '';
 
     /**
-     * @var list<array{from: string, text: string, pictures?: int, ask?: string}> from is you, guide or done; pictures is how many
-     *                                                                            went with a message of yours; ask is the question a
-     *                                                                            line of the guide's asks (CourseProfiles::QUESTIONS)
+     * @var list<array{from: string, text: string, pictures?: int, files?: int, ask?: string}> from is you, guide or done; pictures
+     *                                                                                         and files are how many went with a message of yours;
+     *                                                                                         ask is the question a line of the guide's asks
+     *                                                                                         (CourseProfiles::QUESTIONS)
      */
     #[Locked]
     public array $talk = [];
@@ -74,9 +81,14 @@ final class GuideChat extends Component
 
     public string $text = '';
 
+    /** The model for this talk. Empty uses the tutor model from settings. */
+    #[Locked]
+    public string $model = '';
+
     /**
-     * Pictures of the course's page or timetable, chosen, pasted or dropped, waiting to go with the next message. They
-     * are shown to the model once and not kept: the course only gets what is ticked.
+     * Pictures or documents (a Word file, PDF, slides, a spreadsheet or text) of the course's page or timetable, chosen,
+     * pasted or dropped, waiting to go with the next message. A picture is shown and a document is read, once, and not
+     * kept: the course only gets what is ticked.
      *
      * @var list<TemporaryUploadedFile>
      */
@@ -98,9 +110,13 @@ final class GuideChat extends Component
 
     private ChatStream $stream;
 
-    public function boot(CourseGuide $guide, Settings $settings, Workspaces $workspaces, CourseProfiles $profiles, PrincipalFactory $principals, ChatStream $stream): void
+    private Models $models;
+
+    private Usage $usage;
+
+    public function boot(CourseGuide $guide, Settings $settings, Workspaces $workspaces, CourseProfiles $profiles, PrincipalFactory $principals, ChatStream $stream, Models $models, Usage $usage): void
     {
-        [$this->guide, $this->settings, $this->workspaces, $this->profiles, $this->principals, $this->stream] = [$guide, $settings, $workspaces, $profiles, $principals, $stream];
+        [$this->guide, $this->settings, $this->workspaces, $this->profiles, $this->principals, $this->stream, $this->models, $this->usage] = [$guide, $settings, $workspaces, $profiles, $principals, $stream, $models, $usage];
     }
 
     public function mount(string $workspaceId, string $for = ''): void
@@ -112,6 +128,7 @@ final class GuideChat extends Component
             $this->talk = $kept['talk'];
             $this->proposal = $kept['proposal'] ?? null;
             $this->ticks = $kept['ticks'] ?? [];
+            $this->model = is_string($kept['model'] ?? null) ? $kept['model'] : '';
         } else {
             $this->talk = $this->opening();
         }
@@ -130,7 +147,7 @@ final class GuideChat extends Component
         $this->text = $words;
         $files = array_values(array_filter($this->pictures, fn ($file) => $file instanceof TemporaryUploadedFile));
         if ($words === '' && $files === []) {
-            $this->addError('text', 'Write something first, or attach a picture.');
+            $this->addError('text', 'Write something first, or attach a picture or a file.');
 
             return;
         }
@@ -144,8 +161,10 @@ final class GuideChat extends Component
             $pictures = array_map(fn (TemporaryUploadedFile $file) => ['name' => $file->getClientOriginalName(), 'bytes' => (string) file_get_contents($file->getRealPath())], $files);
             // The reply streams in as it is written, as the tutor's does.
             @set_time_limit(120);
-            $answer = $this->guide->turn($this->principal(), $this->workspaceId, $this->history(), $words, $this->for, $pictures,
-                fn (string $reply) => $this->stream->push($this, 'guide-answer', MarkdownPreview::html($reply)));
+            $by = $this->principal();
+            $chosen = $this->chosenModel($this->settings->get($by));
+            $answer = $this->guide->turn($by, $this->workspaceId, $this->history(), $words, $this->for, $pictures,
+                fn (string $reply) => $this->stream->push($this, 'guide-answer', MarkdownPreview::html($reply)), $chosen);
         } catch (AppError $e) {
             $this->problem($e);
 
@@ -158,7 +177,12 @@ final class GuideChat extends Component
         foreach ($files as $file) {
             $file->delete();
         }
-        $this->talk[] = ['from' => 'you', 'text' => $words] + ($files !== [] ? ['pictures' => count($files)] : []);
+        $pictureCount = count(array_filter($files, fn (TemporaryUploadedFile $file) => self::isPicture($file)));
+        $fileCount = count($files) - $pictureCount;
+        $this->talk[] = ['from' => 'you', 'text' => $words] + array_filter([
+            'pictures' => $pictureCount > 0 ? $pictureCount : null,
+            'files' => $fileCount > 0 ? $fileCount : null,
+        ]);
         $this->talk[] = ['from' => 'guide', 'text' => $answer['reply']];
         if ($answer['proposal'] !== null) {
             $this->proposal = $answer['proposal'];
@@ -168,17 +192,17 @@ final class GuideChat extends Component
     }
 
     /**
-     * Keeps the pictures that can go: at most one message's worth, of a kind that is a picture and not too big; the others
-     * are dropped with a word each on why. (The bytes are checked as a picture when the message goes.)
+     * Keeps the files that can go: at most one message's worth, of a kind the guide can read and not too big; the others
+     * are dropped with a word each on why. (A picture's bytes are checked when the message goes; a document is read then.)
      */
     public function updatedPictures(): void
     {
         $this->resetErrorBag('pictures');
         $kept = [];
         foreach ($this->pictures as $file) {
-            $why = ! $file instanceof TemporaryUploadedFile ? 'That is not a picture.' : self::refusal($file);
+            $why = ! $file instanceof TemporaryUploadedFile ? 'That is not a file.' : self::refusal($file);
             if ($why === null && count($kept) >= Attachments::MOST) {
-                $why = 'Attach up to '.Attachments::MOST.' pictures to one message.';
+                $why = 'Attach up to '.Attachments::MOST.' files to one message.';
             }
             if ($why === null) {
                 $kept[] = $file;
@@ -193,18 +217,36 @@ final class GuideChat extends Component
         $this->pictures = $kept;
     }
 
-    /** Why a chosen file can't go as a picture, in a few words; null when it can. */
+    /** Why a chosen file can't go, in a few words; null when it can. */
     private static function refusal(TemporaryUploadedFile $file): ?string
     {
         $check = Validator::make(['picture' => $file], ['picture' => ['extensions:'.self::PICTURE_TYPES, 'max:'.self::PICTURE_KB]], [
-            'picture.extensions' => 'Attach a PNG, JPG, GIF or WebP picture.',
-            'picture.max' => 'That picture is too big. Attach one under 10 MB.',
+            'picture.extensions' => 'Attach a PNG, JPG, GIF or WebP picture, or a Word, PDF, PowerPoint, Excel or text file.',
+            'picture.max' => 'That file is too big. Attach one under 10 MB.',
         ]);
 
         return $check->fails() ? (string) $check->errors()->first('picture') : null;
     }
 
-    /** Takes one picture off the message it was going with. */
+    /** Whether an attached file is a picture (the guide shows it) rather than a document (the guide reads it). */
+    public static function isPicture(TemporaryUploadedFile $file): bool
+    {
+        return in_array(strtolower($file->getClientOriginalExtension()), self::PICTURE_EXTENSIONS, true);
+    }
+
+    /** Uses another of the student's models for the next reply in this talk. */
+    public function switchModel(string $model): void
+    {
+        $model = trim($model);
+        $choices = $this->settings->get($this->principal());
+        if (! in_array($model, $choices->chatModels(), true)) {
+            return;
+        }
+        $this->model = $model;
+        $this->keep();
+    }
+
+    /** Takes one attached file off the message it was going with. */
     public function removePicture(int $index): void
     {
         $file = $this->pictures[$index] ?? null;
@@ -332,10 +374,17 @@ final class GuideChat extends Component
         $last = $this->talk === [] ? null : $this->talk[array_key_last($this->talk)];
         $profile = $this->profiles->get($by, $this->workspaceId);
 
+        $choices = $this->settings->get($by);
+        $activeModel = $this->chosenModel($choices);
+
         return view('livewire.workspaces.guide-chat', [
             'workspace' => $workspace,
             // Once the course has its About text, its modules are the next step: a way there sits beside "I'm done for now".
             'toModules' => $this->for === '' && $profile->about !== '',
+            'chatModels' => $this->modelChoices($by, $choices),
+            'activeModel' => $activeModel,
+            'activeModelName' => self::modelName($this->models->find($activeModel, $this->settings->key($by))?->name, $activeModel),
+            'spentWords' => self::spentWords($this->usage->month($by)['tutor'], $choices->monthCapMicros),
             // What the AI knows about the course, question by question (setting it up only).
             'questions' => $this->for === '' ? $this->guide->questions($by, $this->workspaceId) : [],
             // The question the guide's last line asks, answered with its buttons or in words, with Skip either way.
@@ -360,8 +409,8 @@ final class GuideChat extends Component
 
         if ($this->for === 'modules') {
             return [['from' => 'guide', 'text' => $about
-                ? "I have read what {$name} is about. Which modules do you want to add now: weeks, chapters, units, whatever the course is split into? Paste the timetable or syllabus, tell me, or ask me to suggest some. I set each one up with its topics and parts, and you tick what to keep."
-                : "Which modules of {$name} do you want to add now: weeks, chapters, units, whatever the course is split into? Paste the timetable or syllabus, or tell me. The rest can come later."]];
+                ? "I have read what {$name} is about. Which modules do you want to add now: weeks, chapters, units, whatever the course is split into? Paste the timetable or syllabus, attach the Word or PDF file, tell me, or ask me to suggest some. I set each one up with its topics and parts, and you tick what to keep."
+                : "Which modules of {$name} do you want to add now: weeks, chapters, units, whatever the course is split into? Paste the timetable or syllabus, attach the file, or tell me. The rest can come later."]];
         }
         if ($this->guide->next($by, $this->workspaceId) === null) {
             return [$this->next()];
@@ -398,8 +447,7 @@ final class GuideChat extends Component
         $turns = [];
         foreach ($this->talk as $line) {
             if ($line['from'] === 'you') {
-                $pictures = (int) ($line['pictures'] ?? 0);
-                $turns[] = ['role' => 'user', 'content' => trim($line['text'].($pictures > 0 ? "\n[Attached earlier: ".($pictures === 1 ? 'a picture' : "{$pictures} pictures").', shown with that message.]' : ''))];
+                $turns[] = ['role' => 'user', 'content' => trim($line['text'].self::earlier($line))];
             } elseif ($line['from'] === 'guide') {
                 $turns[] = ['role' => 'assistant', 'content' => $line['text']];
             } elseif ($line['from'] === 'done') {
@@ -408,6 +456,26 @@ final class GuideChat extends Component
         }
 
         return $turns;
+    }
+
+    /**
+     * What a later turn is told about files that went with an earlier message. The bytes themselves are not kept.
+     *
+     * @param  array{text?: string, pictures?: int, files?: int}  $line
+     */
+    private static function earlier(array $line): string
+    {
+        $parts = [];
+        $pictures = (int) ($line['pictures'] ?? 0);
+        $files = (int) ($line['files'] ?? 0);
+        if ($pictures > 0) {
+            $parts[] = $pictures === 1 ? 'a picture' : "{$pictures} pictures";
+        }
+        if ($files > 0) {
+            $parts[] = $files === 1 ? 'a file' : "{$files} files";
+        }
+
+        return $parts === [] ? '' : "\n[Attached earlier: ".implode(' and ', $parts).', shown with that message.]';
     }
 
     private function problem(AppError $e): void
@@ -445,10 +513,51 @@ final class GuideChat extends Component
         };
     }
 
+    /** The model this talk uses: the one picked here, or the tutor model when that pick is no longer offered. */
+    private function chosenModel(Choices $choices): string
+    {
+        return in_array($this->model, $choices->chatModels(), true) ? $this->model : $choices->tutorModel;
+    }
+
+    /**
+     * The models the student can switch to, as the picker shows them.
+     *
+     * @return list<array{id: string, name: string, priceWords: ?string}>
+     */
+    private function modelChoices(Principal $by, Choices $choices): array
+    {
+        $byId = [];
+        foreach ($this->models->all(key: $this->settings->key($by)) as $model) {
+            $byId[$model->id] = $model;
+        }
+        $out = [];
+        foreach ($choices->chatModels() as $id) {
+            $model = $byId[$id] ?? null;
+            $out[] = ['id' => $id, 'name' => self::modelName($model?->name, $id), 'priceWords' => $model?->priceWords()];
+        }
+
+        return $out;
+    }
+
+    private static function modelName(?string $name, string $id): string
+    {
+        $clean = preg_replace('/^(Anthropic|Google|OpenAI|Meta|DeepSeek|Mistral|Cohere|Qwen):\s*/i', '', trim((string) $name));
+        if (is_string($clean) && $clean !== '') {
+            return $clean;
+        }
+
+        return str_contains($id, '/') ? explode('/', $id, 2)[1] : $id;
+    }
+
+    private static function spentWords(int $month, int $cap): string
+    {
+        return Choices::dollars($month).($cap > 0 ? ' of '.Choices::dollars($cap) : '').' this month';
+    }
+
     private function keep(): void
     {
         $this->talk = array_slice($this->talk, -40);
-        session([$this->key() => ['talk' => $this->talk, 'proposal' => $this->proposal, 'ticks' => $this->ticks, 'at' => now()->timestamp]]);
+        session([$this->key() => ['talk' => $this->talk, 'proposal' => $this->proposal, 'ticks' => $this->ticks, 'model' => $this->model, 'at' => now()->timestamp]]);
     }
 
     private function key(): string

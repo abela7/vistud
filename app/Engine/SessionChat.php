@@ -158,7 +158,7 @@ final class SessionChat
      * questions belongs to a study session's write-back (the topic's page has its own); renaming, deleting and moving
      * topics, the session's topic and its note are a session's or the page's.
      */
-    public const TOPIC_TOOLS = ['notes', 'read_note', 'search_notes', 'files', 'read_file', 'module_files', 'findings', 'questions', 'topics', 'earlier_sessions', 'calculate', 'plot_graph', 'answer_question', 'set_topic_status', 'remember', 'assignments', 'assignment_plan'];
+    public const TOPIC_TOOLS = ['notes', 'read_note', 'search_notes', 'files', 'read_file', 'module_files', 'findings', 'questions', 'topics', 'earlier_sessions', 'calculate', 'plot_graph', 'answer_question', 'set_topic_status', 'remember', 'assignments', 'assignment_plan', 'assignment_source', 'save_to_assignment'];
 
     /**
      * The chat on a topic's own page (the owner's ask, 2026-10-12): the same tutor, model, look-ups, history and stream as a
@@ -285,7 +285,10 @@ final class SessionChat
     /**
      * The tools an assignment companion chat may use.
      */
-    public const ASSIGNMENT_TOOLS = ['assignment_source', 'add_assignment_source', 'log_progress', 'set_stage', 'assignment_plan', 'assignments', 'notes', 'read_note', 'search_notes', 'files', 'read_file', 'module_files', 'topics', 'findings', 'questions', 'earlier_sessions', 'calculate', 'remember'];
+    public const ASSIGNMENT_TOOLS = [
+        'assignment_source', 'add_assignment_source', 'confirm_assignment_understanding', 'save_assignment_plan', 'update_assignment_plan_item', 'save_to_assignment', 'log_progress', 'set_stage', 'assignment_plan', 'assignments',
+        'notes', 'read_note', 'search_notes', 'write_note', 'edit_note', 'files', 'read_file', 'module_files', 'topics', 'set_topic_status', 'findings', 'questions', 'earlier_sessions', 'calculate', 'remember', 'create_snippet', 'plot_graph',
+    ];
 
     /**
      * Sends the student's words to the tutor for an assignment, and returns the engine's reply.
@@ -589,6 +592,9 @@ final class SessionChat
         $pendingSourcesKept = [];
         $pendingLogEntries = [];
         $pendingStagesChanged = [];
+        $pendingUnderstandingsConfirmed = [];
+        $pendingPlansSaved = [];
+        $pendingPlanItemsUpdated = [];
         $rows = $this->rows($scope, $thread->id);
         $changes = $this->topicChangesBefore($by, $thread, $rows);
         foreach ($rows as $row) {
@@ -613,6 +619,9 @@ final class SessionChat
                 array_push($pendingSourcesKept, ...array_values(array_filter(is_array($effects['sources_kept'] ?? null) ? $effects['sources_kept'] : [], 'is_array')));
                 array_push($pendingLogEntries, ...array_values(array_filter(is_array($effects['log_entries'] ?? null) ? $effects['log_entries'] : [], 'is_array')));
                 array_push($pendingStagesChanged, ...array_values(array_filter(is_array($effects['stages_changed'] ?? null) ? $effects['stages_changed'] : [], 'is_array')));
+                array_push($pendingUnderstandingsConfirmed, ...array_values(array_filter(is_array($effects['understandings_confirmed'] ?? null) ? $effects['understandings_confirmed'] : [], 'is_array')));
+                array_push($pendingPlansSaved, ...array_values(array_filter(is_array($effects['plans_saved'] ?? null) ? $effects['plans_saved'] : [], 'is_array')));
+                array_push($pendingPlanItemsUpdated, ...array_values(array_filter(is_array($effects['plan_items_updated'] ?? null) ? $effects['plan_items_updated'] : [], 'is_array')));
 
                 continue;
             }
@@ -637,6 +646,9 @@ final class SessionChat
                 'sources_kept' => $row->role === 'assistant' ? $pendingSourcesKept : [],
                 'log_entries' => $row->role === 'assistant' ? $pendingLogEntries : [],
                 'stages_changed' => $row->role === 'assistant' ? $pendingStagesChanged : [],
+                'understandings_confirmed' => $row->role === 'assistant' ? $pendingUnderstandingsConfirmed : [],
+                'plans_saved' => $row->role === 'assistant' ? $pendingPlansSaved : [],
+                'plan_items_updated' => $row->role === 'assistant' ? $pendingPlanItemsUpdated : [],
                 // The student's own topic change on the session page, just before these words of theirs.
                 'topicChange' => $changes[(int) $row->position] ?? null,
                 'cost_micros' => (int) $row->cost_micros + ($row->role === 'assistant' ? $pendingCost : 0),
@@ -644,12 +656,12 @@ final class SessionChat
                 'at' => (string) $row->created_at,
             ];
             if ($row->role === 'assistant') {
-                [$pendingTools, $pendingCost, $pendingSaved, $pendingNotes, $pendingTopic, $pendingStatuses, $pendingQuizzes, $pendingRemembered, $pendingSourcesKept, $pendingLogEntries, $pendingStagesChanged] = [[], 0, [], [], null, [], [], [], [], [], []];
+                [$pendingTools, $pendingCost, $pendingSaved, $pendingNotes, $pendingTopic, $pendingStatuses, $pendingQuizzes, $pendingRemembered, $pendingSourcesKept, $pendingLogEntries, $pendingStagesChanged, $pendingUnderstandingsConfirmed, $pendingPlansSaved, $pendingPlanItemsUpdated] = [[], 0, [], [], null, [], [], [], [], [], [], [], [], []];
             }
         }
         if ($pendingTools !== []) {
             // A turn that ended in look-ups without an answer (the engine failed after them).
-            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'saved' => $pendingSaved, 'notes' => array_values($pendingNotes), 'topic' => $pendingTopic, 'statuses' => $pendingStatuses, 'quizzes' => $pendingQuizzes, 'remembered' => $pendingRemembered, 'sources_kept' => $pendingSourcesKept, 'log_entries' => $pendingLogEntries, 'stages_changed' => $pendingStagesChanged, 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
+            $turns[] = ['role' => 'assistant', 'text' => '', 'attachments' => [], 'tools' => $pendingTools, 'saved' => $pendingSaved, 'notes' => array_values($pendingNotes), 'topic' => $pendingTopic, 'statuses' => $pendingStatuses, 'quizzes' => $pendingQuizzes, 'remembered' => $pendingRemembered, 'sources_kept' => $pendingSourcesKept, 'log_entries' => $pendingLogEntries, 'stages_changed' => $pendingStagesChanged, 'understandings_confirmed' => $pendingUnderstandingsConfirmed, 'plans_saved' => $pendingPlansSaved, 'plan_items_updated' => $pendingPlanItemsUpdated, 'cost_micros' => $pendingCost, 'folded' => false, 'at' => ''];
         }
 
         return $turns;

@@ -109,6 +109,7 @@ class AssignmentCompanionChatTest extends TestCase
                 'risks' => [],
                 'gaps' => [],
                 'questions' => [['text' => 'Do we include views?']],
+                'extra_sections' => [['title' => 'Data provided', 'items' => [['text' => 'Use airline.csv.', 'source' => 'S1']]]],
             ],
             changes: null,
             sources: ['S1' => ['type' => 'brief', 'id' => 'src-1', 'title' => 'Brief doc']],
@@ -141,12 +142,16 @@ class AssignmentCompanionChatTest extends TestCase
 
         // Companion prompt present
         $this->assertStringContainsStringIgnoringCase('You are the student\'s companion for this assignment', $req->system);
+        $this->assertStringContainsString('never silently', $req->system);
+        $this->assertStringContainsString('will do the work is a decision', $req->system);
 
         // Assignment layer present
         $this->assertStringContainsString('Coursework 1: Relational Schema', $req->system);
         $this->assertStringContainsString('Stage: understand', $req->system);
         $this->assertStringContainsString('Airline schema design in 3NF.', $req->system);
         $this->assertStringContainsString('Do we include views?', $req->system);
+        $this->assertStringContainsString('Data provided:', $req->system);
+        $this->assertStringContainsString('Use airline.csv. [S1]', $req->system);
         $this->assertStringContainsString('Part 1: Schema Design', $req->system);
         $this->assertStringContainsString('Selected PostgreSQL.', $req->system);
 
@@ -486,5 +491,236 @@ class AssignmentCompanionChatTest extends TestCase
 
         $this->assertStringContainsString('- Coursework 1: Relational Schema (Assignment):', $system);
         $this->assertStringNotContainsString('What this study feeds', $system);
+    }
+
+    public function test_confirm_assignment_understanding_tool_confirms_latest_and_moves_to_plan(): void
+    {
+        $sources = app(AssignmentSources::class);
+        $sources->add($this->by, $this->assignment->id, [
+            'kind' => 'brief',
+            'title' => 'Brief doc',
+            'text' => 'Design a 3NF schema.',
+        ]);
+        app(AssignmentUnderstandings::class)->keep(
+            $this->by,
+            $this->assignment->id,
+            ['summary' => 'Airline 3NF schema.', 'confidence' => 'high'],
+            changes: null,
+            sources: ['S1' => ['type' => 'source', 'id' => '1', 'title' => 'Brief doc']],
+            fingerprint: $sources->fingerprint($this->by, $this->assignment->id),
+            model: 'fake/tutor',
+        );
+
+        $this->engine->will(
+            Fake::calls('confirm_assignment_understanding', ['move_to_plan' => true], 'call_confirm'),
+            Fake::says('Confirmed your understanding and moved to planning.')
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'This understanding is right.');
+
+        $latest = app(AssignmentUnderstandings::class)->latest($this->by, $this->assignment->id);
+        $this->assertNotNull($latest);
+        $this->assertTrue($latest->confirmed());
+        $this->assertSame('plan', app(Activities::class)->find($this->by, $this->assignment->id)->stage);
+
+        $turns = $this->chat()->assignmentTranscript($this->by, $this->assignment->id);
+        $lastTurn = end($turns);
+        $this->assertNotEmpty($lastTurn['understandings_confirmed']);
+        $this->assertSame(1, $lastTurn['understandings_confirmed'][0]['revision']);
+    }
+
+    public function test_save_assignment_plan_tool_requires_agreement_then_saves_sections_steps_criteria_and_tracking(): void
+    {
+        $planInput = [
+            'tracking' => 'both',
+            'replace' => true,
+            'sections' => [
+                [
+                    'title' => 'Part 1: Conceptual ERD',
+                    'marks' => 40,
+                    'steps' => ['Identify entities and keys', 'Draw Chen ERD'],
+                ],
+                [
+                    'title' => 'Part 2: 3NF Relations',
+                    'marks' => 60,
+                    'steps' => ['Write functional dependencies', 'Normalize to 3NF'],
+                ],
+            ],
+            'criteria' => [
+                ['title' => 'Correct 3NF decomposition', 'marks' => 60],
+            ],
+        ];
+
+        $this->engine->will(
+            Fake::calls('save_assignment_plan', $planInput, 'call_plan_1'),
+            function (Request $request) {
+                $lastMsg = $request->messages[array_key_last($request->messages)];
+                $this->assertStringContainsString('Not done yet', $lastMsg['content']);
+                $this->assertStringContainsString('both plan steps and marking criteria', $lastMsg['content']);
+
+                return Fake::says('Here is the proposed plan and tracking method. Shall I save it?');
+            }
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Let\'s build the plan.');
+        $this->assertTrue(app(Plans::class)->get($this->by, $this->assignment->id)->empty());
+
+        $this->engine->will(
+            Fake::calls('save_assignment_plan', $planInput, 'call_plan_2'),
+            Fake::says('Saved your plan and tracking method.')
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Yes, save that plan.');
+
+        $plan = app(Plans::class)->get($this->by, $this->assignment->id);
+        $this->assertCount(2, $plan->parts());
+        $this->assertCount(2, $plan->steps($plan->parts()[0]->id));
+        $this->assertCount(1, $plan->criteria());
+        $this->assertSame('do', app(Activities::class)->find($this->by, $this->assignment->id)->stage);
+
+        $logs = app(AssignmentLog::class)->list($this->by, $this->assignment->id);
+        $this->assertStringContainsString('Tracking method: plan steps and marking criteria', $logs[0]->text);
+    }
+
+    public function test_update_assignment_plan_item_tool_marks_steps_and_criteria_as_work_progresses(): void
+    {
+        $plans = app(Plans::class);
+        $part = $plans->addPart($this->by, $this->assignment->id, 'Part 1: Conceptual ERD', 40);
+        $step = $plans->addStep($this->by, $this->assignment->id, 'Identify entities and keys', $part->id);
+        $crit = $plans->addCriterion($this->by, $this->assignment->id, 'Correct 3NF decomposition', 60);
+
+        $this->engine->will(
+            Fake::calls('update_assignment_plan_item', [
+                'item' => 'Identify entities',
+                'state' => 'done',
+            ], 'call_step_done'),
+            Fake::calls('update_assignment_plan_item', [
+                'item' => 'Correct 3NF',
+                'state' => 'partly',
+            ], 'call_crit_partly'),
+            Fake::says('Marked that step as done and the 3NF criterion as partly met.')
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'I finished identifying the entities and keys.');
+
+        $updatedPlan = $plans->get($this->by, $this->assignment->id);
+        $this->assertSame('done', $updatedPlan->item($step->id)?->state);
+        $this->assertSame('partly', $updatedPlan->item($crit->id)?->state);
+        $this->assertSame('doing', app(Activities::class)->find($this->by, $this->assignment->id)->status);
+    }
+
+    public function test_write_note_and_persistent_memory_survive_clearing_the_assignment_chat(): void
+    {
+        $plans = app(Plans::class);
+        $part = $plans->addPart($this->by, $this->assignment->id, 'Part 1: Schema', 50);
+        $step1 = $plans->addStep($this->by, $this->assignment->id, 'Identify entities', $part->id);
+        $plans->addStep($this->by, $this->assignment->id, 'Write SQL DDL', $part->id);
+        $plans->setState($this->by, $step1->id, 'done');
+
+        $this->engine->will(
+            Fake::calls('write_note', [
+                'title' => 'Schema Draft Notes',
+                'text' => "## Entities\n\n- Flight\n- Passenger",
+            ], 'call_write_note'),
+            Fake::says('Saved your schema draft notes.')
+        );
+
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Save these entities in a note.');
+
+        // Clear the chat completely
+        $this->chat()->clearAssignmentChat($this->by, $this->assignment->id);
+        $this->assertSame([], $this->chat()->assignmentTranscript($this->by, $this->assignment->id));
+
+        // Start a brand-new conversation on the same assignment: standing context still has the step states and saved note
+        $this->engine->will(Fake::says('Picking up right where we left off on Write SQL DDL.'));
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Where are we?');
+
+        $system = $this->engine->last()->system;
+        $this->assertStringContainsString('[done] Identify entities', $system);
+        $this->assertStringContainsString('[to do] Write SQL DDL', $system);
+        $this->assertStringContainsString('“Schema Draft Notes”', $system);
+    }
+
+    public function test_study_session_hears_unassigned_open_assignment_and_saves_notes_to_it(): void
+    {
+        // Student creates an assignment before linking it to any module or topic
+        $earlyAssignment = app(Activities::class)->create($this->by, $this->workspaceId, [
+            'title' => 'Final Capstone Project',
+            'kind' => 'project',
+            'module_id' => null,
+            'due_on' => '2026-11-15',
+        ]);
+        app(AssignmentUnderstandings::class)->keep(
+            $this->by,
+            $earlyAssignment->id,
+            [
+                'summary' => 'Build a distributed database prototype.',
+                'confidence' => 'high',
+                'requirements' => [['text' => 'Include replication and ACID transactions', 'source' => 'S1']],
+            ],
+            changes: null,
+            sources: [],
+            fingerprint: 'fp-early',
+            model: 'fake/tutor',
+        );
+
+        $session = app(Sessions::class)->start($this->by, $this->workspaceId, null, $this->moduleId);
+        $system = app(Stack::class)->build($this->by, $session, null, true)->system;
+
+        // The study session tutor hears about the unassigned open assignment and its requirements
+        $this->assertStringContainsString('Final Capstone Project, because it is an open course assignment not tied to a single module yet.', $system);
+        $this->assertStringContainsString('Include replication and ACID transactions', $system);
+        $this->assertStringContainsString('save_to_assignment', $system);
+
+        // And the study session tutor can save useful study notes directly into the assignment's folder and log
+        $this->engine->will(
+            Fake::calls('save_to_assignment', [
+                'assignment' => 'Final Capstone Project',
+                'title' => 'ACID & Replication Notes',
+                'text' => "## Key points for Capstone\n\n- Use write-ahead logging for durability.",
+            ], 'call_save_to_assign'),
+            Fake::says('Saved those notes directly to your Final Capstone Project.')
+        );
+
+        $this->chat()->send($this->by, $session->id, 'Save these ACID notes to my capstone project.');
+
+        $companionSystem = app(Stack::class)->forAssignment(
+            $this->by,
+            app(Activities::class)->find($this->by, $earlyAssignment->id),
+            null,
+            true
+        )->system;
+
+        $this->assertStringContainsString('“ACID & Replication Notes”', $companionSystem);
+        $this->assertStringContainsString('Saved study note "ACID & Replication Notes" to this assignment.', $companionSystem);
+    }
+
+    public function test_save_assignment_plan_tool_supports_pre_made_starters(): void
+    {
+        $companionSystem = app(Stack::class)->forAssignment($this->by, $this->assignment, null, true)->system;
+        $this->assertStringContainsString('Pre-made plan starters available', $companionSystem);
+        $this->assertStringContainsString('coding (Coding project: Plan → Build → Test → Hand in)', $companionSystem);
+
+        $input = [
+            'tracking' => 'steps',
+            'starter' => 'coding',
+        ];
+
+        $this->engine->will(
+            Fake::calls('save_assignment_plan', $input, 'call_starter_ask'),
+            Fake::says('Should I start your plan from the Coding project template and track by plan steps?')
+        );
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Use the coding project starter.');
+        $this->assertTrue(app(Plans::class)->get($this->by, $this->assignment->id)->empty());
+
+        $this->engine->will(
+            Fake::calls('save_assignment_plan', $input, 'call_starter_ok'),
+            Fake::says('Saved the Coding project plan.')
+        );
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Yes, apply it.');
+
+        $plan = app(Plans::class)->get($this->by, $this->assignment->id);
+        $this->assertSame(['Plan', 'Build', 'Test', 'Hand in'], array_map(fn ($p) => $p->title, $plan->parts()));
+        $this->assertSame('do', app(Activities::class)->find($this->by, $this->assignment->id)->stage);
     }
 }

@@ -73,7 +73,7 @@ final class Runner
     /** Runs a started job (the queue's worker, or the end of the request). Whatever goes wrong is on the row. */
     public function execute(string $id, Principal $by, Job $job): void
     {
-        $this->perform($by, $id, $job->role(), fn (Run $run) => $job->handle($by, $run), swallow: true);
+        $this->perform($by, $id, $job->role(), fn (Run $run) => $job->handle($by, $run), swallow: true, modelOverride: $job->model($by));
     }
 
     /**
@@ -101,17 +101,18 @@ final class Runner
      */
     public function now(Principal $by, Job $job): void
     {
-        $this->run($by, $job->role(), $job->kind(), $job->workspaceId, $job->targetType, $job->targetId, fn (Run $run) => $job->handle($by, $run));
+        $this->run($by, $job->role(), $job->kind(), $job->workspaceId, $job->targetType, $job->targetId, fn (Run $run) => $job->handle($by, $run), $job->model($by));
     }
 
     /**
-     * Runs a job the student waits for, now, and returns what it came to.
+     * Runs a job the student waits for, now, and returns what it came to. $model is the one the student picked on the
+     * screen for this run; without it the job's own choice (Job::model) or the role's model is used.
      *
      * @throws AppError when the run isn't set up, is over the limit, or the job fails with one
      */
-    public function answer(Principal $by, Answering $job): mixed
+    public function answer(Principal $by, Answering $job, ?string $model = null): mixed
     {
-        return $this->run($by, $job->role(), $job->kind(), $job->workspaceId, $job->targetType, $job->targetId, fn (Run $run) => $job->answer($by, $run));
+        return $this->run($by, $job->role(), $job->kind(), $job->workspaceId, $job->targetType, $job->targetId, fn (Run $run) => $job->answer($by, $run), $model ?? $job->model($by));
     }
 
     /**

@@ -31,6 +31,15 @@ abstract class Job
     }
 
     /**
+     * The model the student chose for this one piece of work, or null for the role's model. Looked up when the job
+     * runs (never carried in its payload), so a queued job uses the choice as it stands then.
+     */
+    public function model(Principal $by): ?string
+    {
+        return null;
+    }
+
+    /**
      * The work, as the student. A refusal or an engine failure raised here is recorded on the run; `$run->skip()`
      * ends it as skipped.
      */

@@ -7,6 +7,7 @@ use App\Engine\EngineFailed;
 use App\Engine\Fake;
 use App\Engine\Jobs\Runner;
 use App\Engine\Jobs\UnderstandAssignment;
+use App\Engine\Reply;
 use App\Engine\Request;
 use App\Engine\Settings;
 use App\Models\User;
@@ -20,6 +21,7 @@ use App\Study\Modules;
 use App\Study\Topics;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\UploadedFile;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\MakesStudyFiles;
 use Tests\Concerns\RefreshesDatabase;
@@ -151,6 +153,61 @@ class UnderstandAssignmentTest extends TestCase
         $this->assertFalse($understandings->history($this->by, $this->assignment->id)[1]->confirmed());
     }
 
+    public function test_the_ai_may_add_a_few_clean_assignment_specific_sections_without_repeating_standard_ones(): void
+    {
+        app(AssignmentSources::class)->add($this->by, $this->assignment->id, ['kind' => 'brief', 'text' => 'Use the supplied dataset to give a presentation.']);
+        $this->engine->will(function (Request $request) {
+            $this->assertStringContainsString('add an assignment-specific section to `extra_sections`', $request->system);
+            $this->assertStringContainsString('rename, repeat or split a standard list', $request->system);
+
+            return Fake::says($this->answer(['extra_sections' => [
+                ['title' => 'Data provided', 'items' => [['text' => 'Use students.csv.', 'source' => 'S1'], 'Use codes.csv.']],
+                ['title' => 'Limits', 'items' => ['A duplicate standard section.']],
+                ['title' => 'Data provided', 'items' => ['A duplicate custom section.']],
+                ['title' => 'Experiment setup', 'items' => [['text' => 'Run three trials.', 'source' => 'not-a-source']]],
+                ['title' => 'Presentation format', 'items' => ['Use six slides.']],
+                ['title' => 'A fourth extra section', 'items' => ['This is over the limit.']],
+                ['title' => 'Empty', 'items' => []],
+            ]]));
+        });
+
+        $this->understand();
+
+        $sections = app(AssignmentUnderstandings::class)->latest($this->by, $this->assignment->id)->extraSections();
+        $this->assertSame(['Data provided', 'Experiment setup', 'Presentation format'], array_column($sections, 'title'));
+        $this->assertSame(['Use students.csv.', 'Use codes.csv.'], array_column($sections[0]['items'], 'text'));
+        $this->assertSame(['S1', 'inferred'], array_column($sections[0]['items'], 'source'));
+        $this->assertSame('inferred', $sections[1]['items'][0]['source']);
+    }
+
+    public function test_the_model_the_student_chose_for_this_assignment_reads_it_every_time_however_the_reading_starts(): void
+    {
+        app(AssignmentSources::class)->add($this->by, $this->assignment->id, ['kind' => 'brief', 'text' => 'Write 1,500 words on joins.']);
+        $used = [];
+        $record = function (Request $request) use (&$used) {
+            $used[] = $request->model;
+
+            return Fake::says($this->answer());
+        };
+        $this->engine->will($record, $record, $record, $record);
+
+        // Nothing chosen: the tutor's model, from the AI settings.
+        $this->understand();
+
+        // Chosen: read now, and read by the queue or at the end of a request, which is how a changed source starts it.
+        app(Activities::class)->setAiModel($this->by, $this->assignment->id, ' fake/quick ');
+        $this->assertSame('fake/quick', app(Activities::class)->find($this->by, $this->assignment->id)->aiModel);
+        $this->understand();
+        app(Runner::class)->start($this->by, new UnderstandAssignment($this->workspace, $this->assignment->id));
+
+        // Back to the tutor's model.
+        app(Activities::class)->setAiModel($this->by, $this->assignment->id, '');
+        $this->assertNull(app(Activities::class)->find($this->by, $this->assignment->id)->aiModel);
+        $this->understand();
+
+        $this->assertSame(['fake/tutor', 'fake/quick', 'fake/quick', 'fake/tutor'], $used);
+    }
+
     public function test_nothing_to_read_is_skipped_and_an_answer_that_says_nothing_fails(): void
     {
         $this->understand();
@@ -162,5 +219,33 @@ class UnderstandAssignmentTest extends TestCase
         $this->assertThrows(fn () => $this->understand(), EngineFailed::class);
         $this->assertThrows(fn () => $this->understand(), EngineFailed::class);
         $this->assertNull(app(AssignmentUnderstandings::class)->latest($this->by, $this->assignment->id));
+    }
+
+    public function test_an_answer_cut_off_at_the_length_limit_fails_as_cut_off_and_keeps_nothing(): void
+    {
+        app(AssignmentSources::class)->add($this->by, $this->assignment->id, ['text' => 'Write 1,500 words on joins.']);
+        // A real one: the object is still open when the model runs out of room, and what came before is a good start.
+        $this->engine->will(new Reply('{"summary": "A report on joins.", "criteria": [{"criterion": "Analysis", "weight": 40, "source": "S1"}', model: 'fake/tutor', tokensOut: 16_000, finish: 'length'));
+
+        $this->assertThrows(fn () => $this->understand(), EngineFailed::class);
+
+        $this->assertDatabaseHas('engine_jobs', ['kind' => 'understand_assignment', 'status' => 'failed', 'error_code' => 'engine_cut_off']);
+        $this->assertSame(UnderstandAssignment::ANSWER_TOKENS, $this->engine->requests[0]->maxTokens);
+        $this->assertNull(app(AssignmentUnderstandings::class)->latest($this->by, $this->assignment->id));
+    }
+
+    public function test_a_file_added_to_its_folder_is_read_straight_away(): void
+    {
+        $this->engine->will(Fake::says($this->answer()));
+        $this->actingAs($this->ada)->post(route('api.v1.files.store'), [
+            'file' => UploadedFile::fake()->createWithContent('Brief.txt', "Write a 1,500-word report comparing joins.\n"),
+            'place_type' => 'folder',
+            'place_id' => $this->assignment->folderId,
+        ], ['Accept' => 'application/json'])->assertCreated();
+
+        $latest = app(AssignmentUnderstandings::class)->latest($this->by, $this->assignment->id);
+        $this->assertNotNull($latest);
+        $this->assertSame('A 1,500-word report comparing inner and outer joins.', $latest->text('summary'));
+        $this->assertStringContainsString('Brief.txt', $this->engine->requests[0]->messages[0]['content']);
     }
 }

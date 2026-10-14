@@ -660,12 +660,16 @@ final class Sessions
         DB::transaction(function () use ($scope, $by, $id) {
             $row = $this->lock($scope, $id);
             LearnerTables::query($scope, 'session_segments')->where('session_id', $id)->delete();
-            // What was recorded in it stays: a quiz, a test.
+            // What was recorded in it stays: a quiz, a test, a question, a card, a memory.
             LearnerTables::query($scope, 'quizzes')->where('session_id', $id)->update(['session_id' => null]);
+            LearnerTables::query($scope, 'questions')->where('session_id', $id)->update(['session_id' => null]);
+            LearnerTables::query($scope, 'flashcards')->where('session_id', $id)->update(['session_id' => null]);
+            LearnerTables::query($scope, 'tutor_memories')->where('session_id', $id)->update(['session_id' => null]);
             // Its chat goes with it; what the chat cost stays in the month's usage.
             $threads = LearnerTables::query($scope, 'engine_threads')->where('session_id', $id);
             Spent::forgetMessages($scope, (clone $threads)->pluck('id')->all());
             $threads->delete();
+            Spent::forgetTargetJobs($scope, 'session', $id);
             LearnerTables::query($scope, 'study_sessions')->where('id', $id)->delete();
             $row->revision++;
             $this->record($scope, $by, $row, deleted: true);

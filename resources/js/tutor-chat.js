@@ -47,7 +47,7 @@ function uploadOne(upload, file) {
     });
 }
 
-export function tutorChat({ upload, account, mentionItems = [], mentions = true }) {
+export function tutorChat({ upload, account, mentionItems = [], mentions = true, review = false }) {
     return {
         draft: '',
         quoteText: '',
@@ -63,6 +63,7 @@ export function tutorChat({ upload, account, mentionItems = [], mentions = true 
         mentionItems: Array.isArray(mentionItems) ? mentionItems : [],
         // Whether @ mentions a note or a file (not in ViStud AI's chat, which is in no one course).
         mentions: mentions !== false,
+        review: review === true,
         mentionOpen: false,
         mentionQuery: '',
         mentionIndex: -1,
@@ -919,6 +920,15 @@ export function tutorChat({ upload, account, mentionItems = [], mentions = true 
                 this.resize();
                 this.$refs.box?.focus();
             });
+        },
+
+        /** An assignment file is in the box: ask the tutor to read it and speak first. */
+        reviewAttached() {
+            if (!this.review || this.busy || this.attached.length === 0) return;
+            if (this.draft.trim() === '') {
+                this.draft = 'Review what I uploaded. Tell me what this assignment is asking, and the one thing still missing.';
+            }
+            this.submit();
         },
 
         submit() {

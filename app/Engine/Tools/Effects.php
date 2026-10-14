@@ -44,6 +44,15 @@ final class Effects
     /** @var list<array{from: string, to: string}> */
     private array $stagesChanged = [];
 
+    /** @var list<array{revision: int}> */
+    private array $understandingsConfirmed = [];
+
+    /** @var list<array{added: int, tracking: string}> */
+    private array $plansSaved = [];
+
+    /** @var list<array{id: string, kind: string, title: string, state: string}> */
+    private array $planItemsUpdated = [];
+
     /** @param list<string> $ids what was made, one id each */
     public function saved(string $kind, int $count, array $ids = []): void
     {
@@ -110,10 +119,25 @@ final class Effects
         $this->stagesChanged[] = ['from' => $from, 'to' => $to];
     }
 
+    public function understandingConfirmed(int $revision): void
+    {
+        $this->understandingsConfirmed[] = ['revision' => $revision];
+    }
+
+    public function planSaved(int $added, string $tracking): void
+    {
+        $this->plansSaved[] = ['added' => $added, 'tracking' => $tracking];
+    }
+
+    public function planItemUpdated(string $id, string $kind, string $title, string $state): void
+    {
+        $this->planItemsUpdated[] = ['id' => $id, 'kind' => $kind, 'title' => $title, 'state' => $state];
+    }
+
     /**
      * What was done since the last take, and nothing after.
      *
-     * @return array{saved?: array<string, int>, saved_ids?: array<string, list<string>>, notes?: list<array{id: string, title: string, version: int}>, topic?: string, topic_id?: string, statuses?: list<array<string, mixed>>, quizzes?: list<array<string, mixed>>, remembered?: list<array<string, mixed>>, asked?: list<string>, sources_kept?: list<array{title: string}>, log_entries?: list<array{id: string, stage: string, kind: string, text: string}>, stages_changed?: list<array{from: string, to: string}>}
+     * @return array{saved?: array<string, int>, saved_ids?: array<string, list<string>>, notes?: list<array{id: string, title: string, version: int}>, topic?: string, topic_id?: string, statuses?: list<array<string, mixed>>, quizzes?: list<array<string, mixed>>, remembered?: list<array<string, mixed>>, asked?: list<string>, sources_kept?: list<array{title: string}>, log_entries?: list<array{id: string, stage: string, kind: string, text: string}>, stages_changed?: list<array{from: string, to: string}>, understandings_confirmed?: list<array{revision: int}>, plans_saved?: list<array{added: int, tracking: string}>, plan_items_updated?: list<array{id: string, kind: string, title: string, state: string}>}
      */
     public function take(): array
     {
@@ -130,8 +154,11 @@ final class Effects
             'sources_kept' => $this->sourcesKept,
             'log_entries' => $this->logEntries,
             'stages_changed' => $this->stagesChanged,
+            'understandings_confirmed' => $this->understandingsConfirmed,
+            'plans_saved' => $this->plansSaved,
+            'plan_items_updated' => $this->planItemsUpdated,
         ]);
-        [$this->saved, $this->savedIds, $this->notes, $this->topic, $this->topicId, $this->statuses, $this->quizzes, $this->remembered, $this->asked, $this->sourcesKept, $this->logEntries, $this->stagesChanged] = [[], [], [], null, null, [], [], [], [], [], [], []];
+        [$this->saved, $this->savedIds, $this->notes, $this->topic, $this->topicId, $this->statuses, $this->quizzes, $this->remembered, $this->asked, $this->sourcesKept, $this->logEntries, $this->stagesChanged, $this->understandingsConfirmed, $this->plansSaved, $this->planItemsUpdated] = [[], [], [], null, null, [], [], [], [], [], [], [], [], [], []];
 
         return $taken;
     }

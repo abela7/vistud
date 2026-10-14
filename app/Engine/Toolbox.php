@@ -11,6 +11,7 @@ use App\Engine\Tools\AssignmentSourceTool;
 use App\Engine\Tools\AssignmentsTool;
 use App\Engine\Tools\CalculateTool;
 use App\Engine\Tools\CalendarTool;
+use App\Engine\Tools\ConfirmAssignmentUnderstandingTool;
 use App\Engine\Tools\Context;
 use App\Engine\Tools\CourseOverview;
 use App\Engine\Tools\CreateSnippetTool;
@@ -34,13 +35,16 @@ use App\Engine\Tools\RenameFolderTool;
 use App\Engine\Tools\RenameModuleTool;
 use App\Engine\Tools\RenameNoteTool;
 use App\Engine\Tools\RenameTopicTool;
+use App\Engine\Tools\SaveAssignmentPlanTool;
 use App\Engine\Tools\SaveKeyPointsTool;
+use App\Engine\Tools\SaveToAssignmentTool;
 use App\Engine\Tools\SearchNotesTool;
 use App\Engine\Tools\SetStageTool;
 use App\Engine\Tools\SetTopicStatusTool;
 use App\Engine\Tools\SetTopicTool;
 use App\Engine\Tools\Tool;
 use App\Engine\Tools\TopicsTool;
+use App\Engine\Tools\UpdateAssignmentPlanItemTool;
 use App\Engine\Tools\WriteNoteTool;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\AppError;
@@ -67,6 +71,10 @@ final class Toolbox
         AssignmentPlanTool::class,
         AssignmentSourceTool::class,
         AddAssignmentSourceTool::class,
+        ConfirmAssignmentUnderstandingTool::class,
+        SaveAssignmentPlanTool::class,
+        UpdateAssignmentPlanItemTool::class,
+        SaveToAssignmentTool::class,
         LogProgressTool::class,
         SetStageTool::class,
         CalendarTool::class,
@@ -141,7 +149,9 @@ final class Toolbox
         'set_topic' => 'Setting the topic', 'set_topic_status' => 'Marking a topic', 'record_quiz' => 'Recording the quiz', 'remember' => 'Remembering', 'forget_memory' => 'Forgetting', 'add_topics' => 'Adding topics', 'make_flashcards' => 'Saving flashcards', 'save_key_points' => 'Saving key points', 'add_questions' => 'Adding questions', 'answer_question' => 'Answering question', 'write_note' => 'Writing in your note',
         'rename_topic' => 'Renaming topic', 'delete_topic' => 'Removing topic', 'rename_folder' => 'Renaming folder', 'rename_course' => 'Renaming course', 'rename_module' => 'Renaming module', 'rename_note' => 'Renaming note',
         'plot_graph' => 'Plotting function graph', 'calculate' => 'Calculating', 'create_snippet' => 'Creating copyable snippet',
-        'add_assignment_source' => 'Adding assignment source', 'log_progress' => 'Logging progress', 'set_stage' => 'Updating assignment stage',
+        'add_assignment_source' => 'Adding assignment source', 'confirm_assignment_understanding' => 'Confirming assignment understanding',
+        'save_assignment_plan' => 'Saving assignment plan', 'update_assignment_plan_item' => 'Updating assignment plan',
+        'save_to_assignment' => 'Saving to assignment', 'log_progress' => 'Logging progress', 'set_stage' => 'Updating assignment stage',
     ];
 
     public static function words(string $tool): string

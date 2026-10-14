@@ -7,19 +7,54 @@
 */
 
 import { decorateReplies } from './chat-markdown.js';
+import { joinSpeech, listen, speechSupported } from './dictation.js';
+import { toast } from './toasts.js';
+
+/** Whether this browser starts the guide in full screen, or has been asked not to suggest it. */
+const FULLSCREEN = 'vistud.guide-fullscreen';
 
 export function guideChat() {
     return {
         formatOpen: false,
         pending: '',
         pendingPictures: 0,
+        pendingFiles: 0,
         live: false,
         follow: true,
+        fullscreen: false,
+        offerFullscreen: false,
+        speechSupported: false,
         transcribing: false,
+        hearing: false,
         interimSpeech: '',
-        recognition: null,
+        dictationStart: '',
+        dictationBase: '',
+        dictationSeconds: 0,
+        dictationTimer: null,
+        stopListening: null,
+
+        get dictationTime() {
+            return `${Math.floor(this.dictationSeconds / 60)}:${String(this.dictationSeconds % 60).padStart(2, '0')}`;
+        },
 
         init() {
+            this.speechSupported = speechSupported();
+            const pref = storedFullscreen();
+            if (pref === 'on') this.fullscreen = true;
+            this.offerFullscreen = this.$root.dataset.fresh === '1' && pref !== 'on' && pref !== 'off';
+            const frame = (on) => {
+                document.documentElement.toggleAttribute('data-session-fullscreen', on);
+                document.documentElement.toggleAttribute('data-guide-fullscreen', on);
+            };
+            frame(this.fullscreen);
+            this.$watch('fullscreen', (on) => {
+                frame(on);
+                try {
+                    if (on) localStorage.setItem(FULLSCREEN, 'on');
+                    else if (localStorage.getItem(FULLSCREEN) === 'on') localStorage.removeItem(FULLSCREEN);
+                } catch {}
+                this.$nextTick(() => this.measure());
+            });
             // The talk fills the window from where it starts: measured now, and again when the window or what is above it changes.
             const measure = () => this.measure();
             window.addEventListener('resize', measure, { passive: true });
@@ -41,13 +76,34 @@ export function guideChat() {
             });
         },
 
+        /** The opening offer: full screen for this talk, and the next ones, until they leave it. */
+        useFullscreen() {
+            this.offerFullscreen = false;
+            this.fullscreen = true;
+        },
+
+        /** Leaves the talk as it is, and doesn't ask again in this browser. */
+        dismissFullscreen() {
+            this.offerFullscreen = false;
+            try { localStorage.setItem(FULLSCREEN, 'off'); } catch {}
+        },
+
+        destroy() {
+            document.documentElement.removeAttribute('data-session-fullscreen');
+            document.documentElement.removeAttribute('data-guide-fullscreen');
+            this.stopListening?.();
+            clearInterval(this.dictationTimer);
+        },
+
         /** Sends what is in the box: shown at once, then the guide's answer as it streams in. */
         submit() {
             if (this.live) return;
             this.stopDictation(true);
             const words = (this.$wire.text || '').trim();
             this.pending = words;
-            this.pendingPictures = this.$root.querySelectorAll('.guide-pictures > li').length;
+            const waiting = [...this.$root.querySelectorAll('.guide-pictures > li')];
+            this.pendingPictures = waiting.filter((item) => item.dataset.kind === 'picture').length;
+            this.pendingFiles = waiting.length - this.pendingPictures;
             this.live = true;
             this.follow = true;
             // The box empties at once: the words show in the talk, not left waiting in the box. If they can't go, the
@@ -87,6 +143,7 @@ export function guideChat() {
         settle() {
             this.pending = '';
             this.pendingPictures = 0;
+            this.pendingFiles = 0;
             this.live = false;
             this.$nextTick(() => {
                 this.decorate();
@@ -215,13 +272,78 @@ export function guideChat() {
             }
         },
 
-        /** A screenshot pasted or dropped on the box goes with the next message. */
+        onInput(event) {
+            if (this.transcribing) [this.dictationBase, this.interimSpeech] = [event.target.value, ''];
+            this.resize();
+        },
+
+        /** A screenshot, or a Word, PDF or text file, pasted or dropped on the box goes with the next message. */
         take(event) {
-            const files = [...((event.clipboardData ?? event.dataTransfer)?.files ?? [])].filter((file) => file.type.startsWith('image/'));
+            const files = [...((event.clipboardData ?? event.dataTransfer)?.files ?? [])].filter((file) => file.type.startsWith('image/') || /\.(pdf|docx|pptx|xlsx|txt|md)$/i.test(file.name));
             if (files.length > 0) {
                 event.preventDefault();
                 this.$wire.uploadMultiple('pictures', files);
             }
+        },
+
+        /** Starts voice typing: what is said shows in the box as it is said. Enter sends it, Esc stops. */
+        startDictation() {
+            if (this.live || this.transcribing) return;
+            if (!speechSupported()) {
+                toast('Voice typing is not available in this browser. Try Chrome, Edge or Safari.', 'warning');
+                return;
+            }
+            const now = this.$refs.box?.value || this.$wire.text || '';
+            [this.dictationStart, this.dictationBase, this.interimSpeech] = [now, now, ''];
+            [this.transcribing, this.hearing, this.dictationSeconds] = [true, false, 0];
+            clearInterval(this.dictationTimer);
+            this.dictationTimer = setInterval(() => { this.dictationSeconds += 1; }, 1000);
+            this.stopListening = listen({
+                lang: document.documentElement.lang || navigator.language || 'en-US',
+                onWords: (sure, stillHearing) => this.showSpeech(sure, stillHearing),
+                onHearing: (on) => { this.hearing = on; },
+                onStop: (reason) => {
+                    const why = {
+                        denied: 'ViStud can\'t hear you. Allow the microphone for this site, then try again.',
+                        network: 'Voice typing needs the internet. Check the connection and try again.',
+                        failed: 'Voice typing could not start. Try again.',
+                    }[reason];
+                    if (why) toast(why, 'warning');
+                    this.stopDictation(true);
+                },
+            });
+            this.$nextTick(() => this.focusBoxEnd());
+        },
+
+        /** The box: the text kept so far, then the phrase still being heard. */
+        showSpeech(sure, stillHearing) {
+            if (!this.transcribing) return;
+            if (sure !== '') this.dictationBase = joinSpeech(this.dictationBase, sure);
+            this.interimSpeech = stillHearing;
+            this.writeBox(joinSpeech(this.dictationBase, stillHearing));
+        },
+
+        writeBox(words) {
+            this.$wire.text = words;
+            const box = this.$refs.box;
+            if (box && box.value !== words) box.value = words;
+            this.$nextTick(() => {
+                this.resize();
+                if (box) box.scrollTop = box.scrollHeight;
+            });
+        },
+
+        /** Stops voice typing, keeping what was said (or, with keep false, putting the box back as it was). */
+        stopDictation(keep = true) {
+            const stop = this.stopListening;
+            this.stopListening = null;
+            stop?.();
+            clearInterval(this.dictationTimer);
+            this.dictationTimer = null;
+            if (!this.transcribing) return;
+            if (!keep) this.writeBox(this.dictationStart);
+            [this.transcribing, this.hearing, this.interimSpeech] = [false, false, ''];
+            this.$nextTick(() => this.focusBoxEnd());
         },
 
         toggleDictation() {
@@ -229,72 +351,46 @@ export function guideChat() {
             else this.startDictation();
         },
 
-        startDictation() {
-            const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!Recognition) {
-                window.alert?.('Speaking into the box isn\'t supported in this browser.');
+        /**
+         * Alt+S starts or stops voice typing. While speaking, Enter sends and Esc stops.
+         * Esc with nothing being said leaves full screen.
+         */
+        onKey(event) {
+            if (event.isComposing) return;
+            if (event.code === 'KeyS' && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+                event.preventDefault();
+                if (!event.repeat) this.toggleDictation();
                 return;
             }
-            try {
-                this.recognition?.abort();
-            } catch {}
-            const recognition = new Recognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = document.documentElement.lang || navigator.language || 'en-US';
-            recognition.onstart = () => {
-                this.transcribing = true;
-                this.interimSpeech = '';
-            };
-            recognition.onresult = (event) => {
-                let interim = '';
-                let final = '';
-                for (let i = event.resultIndex; i < event.results.length; i++) {
-                    const words = event.results[i][0]?.transcript || '';
-                    if (event.results[i].isFinal) final += words;
-                    else interim += words;
-                }
-                if (final.trim()) this.append(final.trim());
-                this.interimSpeech = interim.trim();
-            };
-            recognition.addEventListener('error', () => this.stopDictation(false));
-            recognition.onend = () => {
-                if (this.transcribing) {
-                    this.commitInterim();
-                    this.transcribing = false;
-                }
-                this.recognition = null;
-            };
-            this.recognition = recognition;
-            try {
-                recognition.start();
-            } catch {
-                this.transcribing = false;
+            if (this.transcribing && event.key === 'Escape') {
+                const target = event.target;
+                if (target !== this.$refs.box && target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+                event.preventDefault();
+                this.stopDictation(true);
+                return;
+            }
+            if (event.key === 'Escape' && this.fullscreen && !this.transcribing) {
+                this.fullscreen = false;
             }
         },
 
-        stopDictation(keep = true) {
-            if (keep) this.commitInterim();
-            else this.interimSpeech = '';
-            this.transcribing = false;
-            try {
-                this.recognition?.stop();
-            } catch {}
-            this.recognition = null;
-            this.$nextTick(() => this.resize());
-        },
-
-        commitInterim() {
-            if (this.interimSpeech.trim()) this.append(this.interimSpeech.trim());
-            this.interimSpeech = '';
-        },
-
-        append(words) {
-            const now = (this.$wire.text || '').trim();
-            this.$wire.text = now ? `${now} ${words}` : words;
-            this.$nextTick(() => this.resize());
+        focusBoxEnd() {
+            const box = this.$refs.box;
+            if (!box || box.disabled) return;
+            box.focus();
+            const end = box.value.length;
+            box.setSelectionRange(end, end);
+            this.resize();
         },
     };
+}
+
+function storedFullscreen() {
+    try {
+        return localStorage.getItem(FULLSCREEN);
+    } catch {
+        return null;
+    }
 }
 
 const register = () => window.Alpine?.data('guideChat', guideChat);

@@ -8,6 +8,7 @@ use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Gone;
 use App\Platform\Errors\NotFound;
 use App\Platform\Ids;
+use App\Study\Activities;
 use App\Study\Folders;
 use App\Study\MarkdownDoc;
 use App\Study\Modules;
@@ -31,7 +32,14 @@ final class WriteNoteTool implements Tool
     /** The most one write may add, in characters. */
     public const MAX_TEXT = 12_000;
 
-    public function __construct(private Notes $notes, private Sessions $sessions, private Topics $topics, private Modules $modules, private Folders $folders) {}
+    public function __construct(
+        private Notes $notes,
+        private Sessions $sessions,
+        private Topics $topics,
+        private Modules $modules,
+        private Folders $folders,
+        private Activities $activities,
+    ) {}
 
     public function name(): string
     {
@@ -56,7 +64,7 @@ final class WriteNoteTool implements Tool
 
     public function run(Principal $by, Context $context, array $input): string
     {
-        if ($context->sessionId === null) {
+        if ($context->sessionId === null && $context->activityId === null) {
             return 'Writing notes needs a study session: ask the student to start one.';
         }
         $text = trim(Lookup::text($input, 'text') ?? '');
@@ -71,13 +79,17 @@ final class WriteNoteTool implements Tool
             return 'Nothing to write: the text had no words.';
         }
 
+        $folderIds = $context->activityId !== null
+            ? [$this->activities->folder($by, $context->activityId)->id]
+            : Lookup::folder($this->folders, $by, $context);
+
         $note = null;
         if (($wanted = Lookup::text($input, 'note')) !== null) {
             $normalized = mb_strtolower(trim($wanted));
-            if (in_array($normalized, ['the note', 'my note', 'current note', 'opened note', 'open note', 'this note', 'notes', 'study note', 'study notes'], true)) {
+            if (in_array($normalized, ['the note', 'my note', 'current note', 'opened note', 'open note', 'this note', 'notes', 'study note', 'study notes', 'assignment note', 'assignment notes'], true)) {
                 $note = $this->studyNote($by, $context);
             } else {
-                $note = Lookup::here($this->notes->list($by, $context->workspaceId), Lookup::folder($this->folders, $by, $context), $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
+                $note = Lookup::here($this->notes->list($by, $context->workspaceId), $folderIds, $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
                 if (is_string($note)) {
                     return $note.' Or give a title to start a new note.';
                 }
@@ -135,7 +147,10 @@ final class WriteNoteTool implements Tool
     /** This session's study note, if the tutor has started one and it is still there: kept on the chat, or found by its title. */
     private function studyNote(Principal $by, Context $context): ?NoteDetails
     {
-        $id = LearnerTables::query(Guard::learner($by), 'engine_threads')->where('session_id', $context->sessionId)->value('note_id');
+        $query = LearnerTables::query(Guard::learner($by), 'engine_threads');
+        $id = $context->sessionId !== null
+            ? $query->where('session_id', $context->sessionId)->value('note_id')
+            : $query->where('activity_id', $context->activityId)->value('note_id');
         if ($id !== null) {
             try {
                 $note = $this->notes->find($by, (string) $id);
@@ -154,6 +169,18 @@ final class WriteNoteTool implements Tool
     /** @param list<array<string, mixed>> $blocks */
     private function create(Principal $by, Context $context, string $title, array $blocks, bool $remember = false): NoteDetails
     {
+        if ($context->activityId !== null && $context->sessionId === null) {
+            $folder = $this->activities->folder($by, $context->activityId);
+            $note = $this->notes->createWritten($by, 'folder', $folder->id, [
+                'create_id' => Ids::new(), 'title' => $title, 'doc' => ['type' => 'doc', 'content' => $blocks],
+            ]);
+            if ($remember) {
+                LearnerTables::query(Guard::learner($by), 'engine_threads')->where('activity_id', $context->activityId)->update(['note_id' => $note->id, 'updated_at' => now()]);
+            }
+
+            return $note;
+        }
+
         $session = $this->sessions->find($by, $context->sessionId);
         $module = $this->moduleOf($by, $session->moduleId, $session->topicId);
         $folder = $this->folderOf($by, $session->folderId);
@@ -175,6 +202,12 @@ final class WriteNoteTool implements Tool
     /** "Study notes · Joins · Mon 5 Oct": the session's topic, else its folder, else its module. */
     private function studyTitle(Principal $by, Context $context): string
     {
+        if ($context->activityId !== null && $context->sessionId === null) {
+            $activity = $this->activities->find($by, $context->activityId);
+
+            return mb_substr('Assignment notes · '.$activity->title, 0, 200);
+        }
+
         $session = $this->sessions->find($by, $context->sessionId);
         $on = null;
         try {

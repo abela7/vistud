@@ -71,6 +71,33 @@ final class Activities
         return self::details($this->row($scope, $id), self::zone($scope));
     }
 
+    /**
+     * The assignment whose folder this is, or a folder inside it.
+     * Null when the folder belongs to no assignment.
+     */
+    public function forFolder(Principal $by, string $folderId): ?ActivityDetails
+    {
+        $scope = Guard::learner($by);
+        $zone = self::zone($scope);
+        $seen = [];
+        $current = $folderId;
+
+        while (! isset($seen[$current]) && count($seen) < 20) {
+            $seen[$current] = true;
+            $row = LearnerTables::query($scope, 'activities')->where('folder_id', $current)->first();
+            if ($row !== null) {
+                return self::details($row, $zone);
+            }
+            $parent = LearnerTables::query($scope, 'folders')->where('id', $current)->value('parent_id');
+            if (! is_string($parent) || $parent === '') {
+                return null;
+            }
+            $current = $parent;
+        }
+
+        return null;
+    }
+
     /** @param array{kind?: mixed, title?: mixed, due_on?: mixed, due_time?: mixed, module_id?: mixed} $input */
     public function create(Principal $by, string $workspaceId, array $input): ActivityDetails
     {
@@ -152,6 +179,21 @@ final class Activities
         });
     }
 
+    /** The model that reads this assignment; null goes back to the tutor's model. The caller checks the model is one on offer. */
+    public function setAiModel(Principal $by, string $id, ?string $model): void
+    {
+        $scope = Guard::learner($by);
+        $model = $model === null ? null : trim($model);
+        $model = $model === '' ? null : mb_substr((string) $model, 0, 120);
+
+        DB::transaction(function () use ($scope, $id, $model) {
+            $row = $this->row($scope, $id, lock: true);
+            if (($row->ai_model ?? null) !== $model) {
+                LearnerTables::query($scope, 'activities')->where('id', $id)->update(['ai_model' => $model, 'updated_at' => now()]);
+            }
+        });
+    }
+
     /** The study companion stage: understand, plan, do, review, submit (never written to journal). */
     public function setStage(Principal $by, string $id, string $stage): void
     {
@@ -169,9 +211,18 @@ final class Activities
     public function delete(Principal $by, string $id): void
     {
         $scope = Guard::learner($by);
+        $workspaceId = '';
+        $folderRoots = [];
 
-        DB::transaction(function () use ($scope, $by, $id) {
+        DB::transaction(function () use ($scope, $by, $id, &$workspaceId, &$folderRoots): void {
             $row = $this->row($scope, $id, lock: true);
+            $workspaceId = (string) $row->workspace_id;
+            $sectionFolders = LearnerTables::query($scope, 'activity_items')->where('activity_id', $id)->whereNotNull('folder_id')->pluck('folder_id')->all();
+            $folderRoots = array_values(array_unique(array_filter([
+                is_string($row->folder_id) ? $row->folder_id : null,
+                ...array_map('strval', $sectionFolders),
+            ])));
+
             LearnerTables::query($scope, 'activity_items')->where('activity_id', $id)->delete();
             LearnerTables::query($scope, 'activity_members')->where('activity_id', $id)->delete();
             LearnerTables::query($scope, 'activity_sources')->where('activity_id', $id)->delete();
@@ -180,10 +231,17 @@ final class Activities
             $threads = LearnerTables::query($scope, 'engine_threads')->where('activity_id', $id);
             Spent::forgetMessages($scope, (clone $threads)->pluck('id')->all());
             $threads->delete();
+            Spent::forgetTargetJobs($scope, 'activity', $id);
+            CourseProfiles::forgetActivity($scope, $workspaceId, $id);
+            if ($row->module_id !== null) {
+                LearnerTables::query($scope, 'module_briefs')->where('module_id', $row->module_id)->delete();
+            }
             LearnerTables::query($scope, 'activities')->where('id', $id)->delete();
             $row->revision++;
             $this->record($scope, $by, $row, deleted: true);
         });
+
+        $this->folders->purgeSubtrees($scope, $workspaceId, $folderRoots);
     }
 
     private function change(LearnerScope $scope, Principal $by, object $row, array $fields): void
@@ -297,6 +355,7 @@ final class Activities
             folderId: $row->folder_id,
             zone: $zone,
             stage: $row->stage ?? 'understand',
+            aiModel: $row->ai_model ?? null,
         );
     }
 }

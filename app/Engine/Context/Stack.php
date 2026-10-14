@@ -27,9 +27,11 @@ use App\Study\ModuleBriefs;
 use App\Study\ModuleDetails;
 use App\Study\ModuleParts;
 use App\Study\Modules;
+use App\Study\NoteDetails;
 use App\Study\NoteDoc;
 use App\Study\Notes;
 use App\Study\Plans;
+use App\Study\PlanStarters;
 use App\Study\PluginDetails;
 use App\Study\Plugins;
 use App\Study\SessionDetails;
@@ -437,7 +439,7 @@ final class Stack
                 $left = $work->timeLeft();
                 $due[] = "{$work->title} ({$work->kindLabel()}): ".($work->dueWords() ?? 'no deadline set').($left !== null ? ", {$left}" : '')."; stage: {$work->stage}";
             }
-            if (count($linked) < self::ASSIGNMENTS_LINKED && $module !== null) {
+            if (count($linked) < self::ASSIGNMENTS_LINKED) {
                 $lines = self::fed($work, $this->assignmentUnderstandings->latest($by, $work->id), $module, $topic, $moduleTopics);
                 if ($lines !== []) {
                     $linked[] = $lines;
@@ -455,16 +457,17 @@ final class Stack
      * @param  list<string>  $moduleTopics
      * @return list<array{0: string, 1: bool}>
      */
-    private static function fed(ActivityDetails $work, ?AssignmentUnderstanding $understanding, ModuleDetails $module, ?TopicDetails $topic, array $moduleTopics): array
+    private static function fed(ActivityDetails $work, ?AssignmentUnderstanding $understanding, ?ModuleDetails $module, ?TopicDetails $topic, array $moduleTopics): array
     {
         $drawsOn = $understanding?->items('topics') ?? [];
         $onTopic = $topic === null ? null : (array_values(array_filter($drawsOn, fn (array $item) => ($item['id'] ?? null) === $topic->id))[0] ?? null);
-        $inModule = array_column(array_filter($drawsOn, fn (array $item) => in_array($item['id'] ?? null, $moduleTopics, true)), 'topic');
+        $inModule = $module === null ? [] : array_column(array_filter($drawsOn, fn (array $item) => in_array($item['id'] ?? null, $moduleTopics, true)), 'topic');
         $why = match (true) {
             $onTopic !== null => "it draws on the session's topic, {$topic->name}".(($onTopic['why'] ?? '') !== '' ? ": {$onTopic['why']}" : ''),
             $inModule !== [] => 'it draws on this module\'s '.implode(', ', array_slice($inModule, 0, 4)),
-            in_array($module->id, array_column($understanding?->items('modules') ?? [], 'id'), true) => 'it draws on this module',
-            $work->moduleId === $module->id => 'it is set in this module',
+            $module !== null && in_array($module->id, array_column($understanding?->items('modules') ?? [], 'id'), true) => 'it draws on this module',
+            $module !== null && $work->moduleId === $module->id => 'it is set in this module',
+            $understanding !== null && $work->moduleId === null && $understanding->items('modules') === [] && $understanding->items('topics') === [] => 'it is an open course assignment not tied to a single module yet',
             default => null,
         };
         if ($why === null) {
@@ -680,7 +683,7 @@ final class Stack
             }
         }
         if ($f->assignmentsLinked !== []) {
-            $lines[] = ['What this study feeds, from each assignment\'s reading ([S1], [F2]: its sources). When what you teach is asked for in one, say so ("On Coursework 1 you are asked to…") and tie it to what is marked. Help them learn it; never write the graded work.', true];
+            $lines[] = ['What this study feeds, from each assignment\'s reading ([S1], [F2]: its sources). When what you teach is asked for in one, say so ("On Coursework 1 you are asked to…"), tie it to what is marked, and offer to save useful study notes or examples directly to that assignment with save_to_assignment. Help them learn it; never write the graded work.', true];
             array_push($lines, ...$f->assignmentsLinked);
         }
 
@@ -772,7 +775,7 @@ final class Stack
         // Latest understanding
         $understanding = $this->assignmentUnderstandings->latest($by, $a->id);
         if ($understanding === null) {
-            $lines[] = ['Understanding: There is no stored understanding of this assignment yet; ask the student to add the brief and criteria on the assignment page first (you may still help in general terms, marked as such).', true];
+            $lines[] = ['Understanding: There is no stored understanding of this assignment yet. Ask the student to drop a file in this chat or paste what they were told. Any file counts. You may still help in general terms, marked as such, until they do.', true];
         } else {
             $confirmed = $understanding->confirmed() ? " (confirmed by the student at {$understanding->confirmedAt})" : ' (not confirmed yet)';
             $lines[] = ["### The AI's understanding (revision {$understanding->revision}){$confirmed}", true];
@@ -802,6 +805,12 @@ final class Stack
                 foreach ($items as $item) {
                     $topic = $part === 'topics' ? ($standing[$item['id'] ?? ''] ?? null) : null;
                     $lines[] = ['- '.self::understood($part, $item).($topic !== null ? ' — where the student stands: '.self::status($topic) : ''), $kept];
+                }
+            }
+            foreach ($understanding->extraSections() as $section) {
+                $lines[] = [$section['title'].':', false];
+                foreach ($section['items'] as $item) {
+                    $lines[] = ['- '.AssignmentUnderstanding::line('extra', $item), false];
                 }
             }
 
@@ -837,32 +846,78 @@ final class Stack
         $lines[] = ["\n### Plan", true];
         if ($plan->empty()) {
             $lines[] = ['No plan yet.', true];
+            $starters = [];
+            foreach (PlanStarters::ALL as $key => $starter) {
+                $partNames = implode(' → ', array_map(fn (array $part) => $part[0], $starter['parts']));
+                $starters[] = "{$key} ({$starter['label']}: {$partNames})";
+            }
+            $lines[] = ['Pre-made plan starters available (via save_assignment_plan `starter`, or tailored with custom sections/steps/criteria): '.implode('; ', $starters).'.', true];
         } else {
             $progress = $plan->progress();
             $health = $plan->health($a);
             $healthText = $health !== null ? " · Health: {$health['state']}".($health['reasons'] !== [] ? ' ('.implode(', ', $health['reasons']).')' : '') : '';
             $lines[] = ["Progress: {$progress->done} of {$progress->total} done, {$progress->percent}%{$healthText}", true];
 
-            // The plan's detail can be cut (assignment_plan has it all); its standing above always stays.
             $parts = $plan->parts();
             if ($parts !== []) {
-                $lines[] = ['Sections:', false];
+                $lines[] = ['Sections and steps:', true];
                 foreach ($parts as $part) {
                     $weight = $part->weight !== null ? " ({$part->weight}%)" : '';
                     $state = AssignmentPlanTool::state($plan, $part);
-                    $lines[] = ["- {$part->title}{$weight}: {$state}", false];
+                    $lines[] = ["- {$part->title}{$weight}: {$state}", true];
+                    foreach ($plan->steps($part->id) as $step) {
+                        $stepState = AssignmentPlanTool::state($plan, $step);
+                        $dueStep = $step->dueOn !== null ? " (due {$step->dueOn})" : '';
+                        $lines[] = ["  - [{$stepState}] {$step->title}{$dueStep}", true];
+                    }
+                }
+            }
+
+            $standalone = $plan->steps(null);
+            if ($standalone !== []) {
+                $lines[] = ['Tasks outside sections:', true];
+                foreach ($standalone as $step) {
+                    $stepState = AssignmentPlanTool::state($plan, $step);
+                    $dueStep = $step->dueOn !== null ? " (due {$step->dueOn})" : '';
+                    $lines[] = ["- [{$stepState}] {$step->title}{$dueStep}", true];
                 }
             }
 
             $criteria = $plan->criteria();
             if ($criteria !== []) {
-                $lines[] = ['Marking criteria in the plan:', false];
+                $lines[] = ['Marking criteria in the plan:', true];
                 foreach ($criteria as $criterion) {
                     $state = AssignmentPlanTool::words($criterion->state);
                     $marks = $criterion->weight !== null ? " ({$criterion->weight} marks)" : '';
-                    $lines[] = ["- {$criterion->title}{$marks}: {$state}", false];
+                    $lines[] = ["- [{$state}] {$criterion->title}{$marks}", true];
                 }
             }
+
+            $milestones = $plan->milestones();
+            if ($milestones !== []) {
+                $lines[] = ['Milestones:', false];
+                foreach ($milestones as $milestone) {
+                    $dueM = $milestone->dueOn !== null ? " ({$milestone->dueOn})" : '';
+                    $lines[] = ["- [{$milestone->state}] {$milestone->title}{$dueM}", false];
+                }
+            }
+        }
+
+        // Notes saved in the assignment's folder (either written in this chat or saved from study sessions via save_to_assignment)
+        try {
+            $folder = $this->activities->folder($by, $a->id);
+            $folderNotes = array_values(array_filter(
+                $this->notes->list($by, $a->workspaceId),
+                fn (NoteDetails $n) => $n->trashedAt === null && $n->folderId === $folder->id
+            ));
+            if ($folderNotes !== []) {
+                $lines[] = ["\n### Notes saved for this assignment (read with read_note; write or update with write_note / edit_note)", true];
+                foreach ($folderNotes as $n) {
+                    $lines[] = ["- “{$n->displayTitle()}”", true];
+                }
+            }
+        } catch (NotFound) {
+            // Folder not created yet
         }
 
         // What was decided and done, newest first: always kept (it is how a new model knows where things stand), at
@@ -883,18 +938,7 @@ final class Stack
     /** One item of the understanding as the tutor reads it: all it says, and where it came from. */
     private static function understood(string $part, array $item): string
     {
-        $text = fn (string ...$keys) => (string) (array_values(array_filter(array_map(fn ($key) => $item[$key] ?? null, $keys), fn ($v) => is_string($v) && $v !== ''))[0] ?? '');
-        $weight = $item['weight'] ?? null;
-        $line = match ($part) {
-            'deliverables' => $text('what', 'text').(($more = implode(', ', array_filter([$text('format'), $text('length'), ($item['on'] ?? null) ? "by {$item['on']}" : '']))) !== '' ? " ({$more})" : ''),
-            'criteria' => $text('criterion', 'title', 'text').($weight !== null && $weight !== '' ? ' ('.$weight.(is_int($weight) ? '%' : '').')' : '').($text('looks_like') !== '' ? " — full marks: {$text('looks_like')}" : ''),
-            'dates' => $text('what', 'text').(($item['on'] ?? null) ? ": {$item['on']}" : ''),
-            'modules' => $text('module').($text('why') !== '' ? ": {$text('why')}" : ''),
-            'topics' => $text('topic').($text('why') !== '' ? ": {$text('why')}" : ''),
-            default => $text('text'),
-        };
-
-        return $line.(is_string($item['source'] ?? null) && $item['source'] !== '' ? " [{$item['source']}]" : '');
+        return AssignmentUnderstanding::line($part, $item);
     }
 
     // ---------- Gathering ----------

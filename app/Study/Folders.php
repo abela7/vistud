@@ -2,6 +2,7 @@
 
 namespace App\Study;
 
+use App\Engine\Spent;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
@@ -232,6 +233,112 @@ final class Folders
         });
     }
 
+    /**
+     *Deletes a folder and every folder, file, note and link inside it, for when an assignment or section is deleted.
+     * What was studied in it moves out to the folder around it (or the module), and stored file bytes are removed
+     * once the transaction finishes.
+     *
+     * @param  string|list<string>  $rootIds
+     */
+    public function purgeSubtrees(LearnerScope $scope, string $workspaceId, string|array $rootIds): void
+    {
+        $roots = array_values(array_unique(array_filter(is_array($rootIds) ? $rootIds : [$rootIds], 'is_string')));
+        if ($roots === []) {
+            return;
+        }
+
+        $storageKeys = DB::transaction(function () use ($scope, $workspaceId, $roots) {
+            $all = $this->rows($scope, $workspaceId);
+            $byId = [];
+            foreach ($all as $row) {
+                $byId[$row->id] = $row;
+            }
+
+            $inside = [];
+            foreach ($roots as $rootId) {
+                if (isset($byId[$rootId])) {
+                    $inside[$rootId] = true;
+                }
+            }
+            if ($inside === []) {
+                return [];
+            }
+
+            do {
+                $added = false;
+                foreach ($all as $row) {
+                    if ($row->parent_id !== null && isset($inside[$row->parent_id]) && ! isset($inside[$row->id])) {
+                        $inside[$row->id] = true;
+                        $added = true;
+                    }
+                }
+            } while ($added);
+
+            $folderIds = array_keys($inside);
+            $outsideParent = function (string $folderId) use ($byId, $inside): ?string {
+                $parent = $byId[$folderId]->parent_id ?? null;
+                while ($parent !== null && isset($inside[$parent])) {
+                    $parent = $byId[$parent]->parent_id ?? null;
+                }
+
+                return $parent;
+            };
+
+            foreach ($folderIds as $folderId) {
+                $dest = $outsideParent($folderId);
+                foreach (self::STUDIED as $table) {
+                    LearnerTables::query($scope, $table)->where('folder_id', $folderId)->update(['folder_id' => $dest]);
+                }
+            }
+
+            $noteIds = LearnerTables::query($scope, 'notes')->whereIn('folder_id', $folderIds)->pluck('id')->all();
+            foreach ($noteIds as $noteId) {
+                LearnerTables::insert($scope, 'content_tombstones', ['entity_type' => 'note', 'entity_id' => $noteId, 'kind' => 'deleted', 'at' => now()]);
+            }
+            if ($noteIds !== []) {
+                LearnerTables::query($scope, 'engine_threads')->whereIn('note_id', $noteIds)->update(['note_id' => null]);
+                LearnerTables::query($scope, 'findings')->where('source_type', 'note')->whereIn('source_id', $noteIds)
+                    ->update(['source_type' => null, 'source_id' => null, 'locator' => null]);
+                LearnerTables::query($scope, 'note_versions')->whereIn('note_id', $noteIds)->delete();
+                LearnerTables::query($scope, 'notes')->whereIn('id', $noteIds)->delete();
+            }
+
+            $files = LearnerTables::query($scope, 'files')->whereIn('folder_id', $folderIds)->get(['id', 'storage_key']);
+            $fileIds = $files->pluck('id')->all();
+            $keys = $files->pluck('storage_key')->all();
+            if ($fileIds !== []) {
+                LearnerTables::query($scope, 'file_digests')->whereIn('file_id', $fileIds)->delete();
+                LearnerTables::query($scope, 'topic_suggestions')->whereIn('source_file_id', $fileIds)->where('status', 'suggested')->delete();
+                LearnerTables::query($scope, 'topic_suggestions')->whereIn('source_file_id', $fileIds)->update(['source_file_id' => null]);
+                LearnerTables::query($scope, 'findings')->where('source_type', 'file')->whereIn('source_id', $fileIds)
+                    ->update(['source_type' => null, 'source_id' => null, 'locator' => null]);
+                LearnerTables::query($scope, 'course_profiles')->where('workspace_id', $workspaceId)->whereIn('syllabus_file_id', $fileIds)
+                    ->update(['syllabus_file_id' => null]);
+                LearnerTables::query($scope, 'class_materials')->whereIn('file_id', $fileIds)->delete();
+                Spent::forgetTargetJobs($scope, 'file', $fileIds);
+                LearnerTables::query($scope, 'files')->whereIn('id', $fileIds)->delete();
+            }
+
+            LearnerTables::query($scope, 'links')->whereIn('folder_id', $folderIds)->delete();
+            LearnerTables::query($scope, 'folder_briefs')->whereIn('folder_id', $folderIds)->delete();
+            Spent::forgetTargetJobs($scope, 'folder', $folderIds);
+            LearnerTables::query($scope, 'folders')->whereIn('id', $folderIds)->delete();
+
+            $moduleIds = array_values(array_unique(array_filter(array_map(fn ($id) => $byId[$id]->module_id ?? null, $folderIds))));
+            if ($moduleIds !== []) {
+                LearnerTables::query($scope, 'module_briefs')->whereIn('module_id', $moduleIds)->delete();
+            }
+
+            return $keys;
+        });
+
+        foreach ($storageKeys as $key) {
+            Files::disk()->delete($key);
+            FilePreviews::forget($key);
+            FileTexts::forget($key);
+        }
+    }
+
     /** Only an empty folder can go: its folders, notes, files and links must be moved or deleted first. What's in the trash doesn't count. */
     public function delete(Principal $by, string $id): void
     {
@@ -249,7 +356,10 @@ final class Folders
             foreach (self::STUDIED as $table) {
                 LearnerTables::query($scope, $table)->where('folder_id', $id)->update(['folder_id' => $folder->parent_id]);
             }
+            LearnerTables::query($scope, 'notes')->where('folder_id', $id)->update(['folder_id' => $folder->parent_id]);
+            LearnerTables::query($scope, 'files')->where('folder_id', $id)->update(['folder_id' => $folder->parent_id]);
             LearnerTables::query($scope, 'folder_briefs')->where('folder_id', $id)->delete();
+            Spent::forgetTargetJobs($scope, 'folder', $id);
             LearnerTables::query($scope, 'folders')->where('id', $id)->delete();
         });
     }

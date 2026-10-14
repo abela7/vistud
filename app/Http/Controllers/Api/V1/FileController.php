@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Identity\PrincipalFactory;
+use App\Study\AssignmentReading;
 use App\Study\FileReading;
 use App\Study\Files;
 use App\Study\Folders;
@@ -21,7 +22,13 @@ use Illuminate\Support\Number;
  */
 class FileController
 {
-    public function __construct(private Files $files, private Folders $folders, private PrincipalFactory $principals, private FileReading $reading) {}
+    public function __construct(
+        private Files $files,
+        private Folders $folders,
+        private PrincipalFactory $principals,
+        private FileReading $reading,
+        private AssignmentReading $assignments,
+    ) {}
 
     public function store(Request $request): JsonResponse
     {
@@ -47,6 +54,8 @@ class FileController
 
         // A file in a module is read by the reader at once, if the student's settings say so (docs/specs/vistud-2-blueprint.md §3.6.6).
         $this->reading->afterUpload($by, $file);
+        // A file in an assignment's folder updates what the tutor understands from it.
+        $this->assignments->afterFile($by, $file->folderId);
 
         return response()->json([
             'id' => $file->id,

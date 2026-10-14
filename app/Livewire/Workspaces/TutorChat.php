@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Appearance\Icons;
+use App\Engine\Attachments;
 use App\Engine\ChatMarks;
 use App\Engine\Choices;
 use App\Engine\EngineFailed;
@@ -18,6 +19,7 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Activities;
 use App\Study\AssignmentLog;
+use App\Study\AssignmentSources;
 use App\Study\AssignmentUnderstandings;
 use App\Study\Files;
 use App\Study\FileTypes;
@@ -57,7 +59,15 @@ final class TutorChat extends Component
         'Quiz me on what I should know by now.',
     ];
 
+    /** What the tutor is asked when files are handed over for it to start, or to pick up, the conversation. */
+    public const REVIEW = 'Review what I uploaded. Tell me what this assignment is asking, and the one thing still missing.';
+
+    public const REVIEW_MORE = 'I added another file. Review it and continue from where we are.';
+
     public const ASSIGNMENT_STARTERS = [
+        ['title' => 'Here is what I was given', 'hint' => 'Drop a file in the box, or paste what you were told', 'icon' => 'paperclip', 'prompt' => 'I am adding what I was given. Ask me for anything still missing, one thing at a time, and update your reading whenever I add a file.'],
+        ['title' => 'Build my step-by-step plan & tracking', 'hint' => 'Confirm understanding, make the roadmap, and pick how to track progress', 'icon' => 'list-todo', 'prompt' => 'This understanding is right. Let\'s build my step-by-step plan and agree on how we will track my progress (by steps, marking criteria, or both), one step at a time.'],
+        ['title' => 'Guide me through the next step', 'hint' => 'Work through the current step in my plan one piece at a time', 'icon' => 'compass', 'prompt' => 'Look at my plan and where I stand on this assignment, and guide me through the next step one piece at a time.'],
         ['title' => 'Explain the assignment to me', 'hint' => 'In plain words from what you were given', 'icon' => 'sparkles', 'prompt' => 'Explain the assignment to me'],
         ['title' => 'What will the teacher look for?', 'hint' => 'Criteria and expectations', 'icon' => 'eye', 'prompt' => 'What will the teacher look for?'],
         ['title' => 'What should I ask my teacher?', 'hint' => 'Gaps and unclear requirements', 'icon' => 'message-square-text', 'prompt' => 'What should I ask my teacher?'],
@@ -101,6 +111,10 @@ final class TutorChat extends Component
      */
     #[Locked]
     public ?string $activityId = null;
+
+    /** A file review is asked once per visit, so opening the chat does not send it twice. */
+    #[Locked]
+    public bool $reviewed = false;
 
     /**
      * ViStud AI's chat (App\Engine\VistudAi) on the main dashboard, above every course: the same chat, another AI. Its
@@ -167,6 +181,10 @@ final class TutorChat extends Component
             $activity = $this->activities->find($by, $activityId);
             $activity->workspaceId === $workspaceId || throw new NotFound;
             $this->activeModel = $this->chat->assignmentThreadModel($by, $activityId) ?: $this->settings->get($by)->tutorModel;
+            $say = trim((string) request()->query('say'));
+            if ($say !== '' && $this->chat->assignmentTranscript($by, $activityId) === []) {
+                $this->text = mb_substr($say, 0, 500);
+            }
 
             return;
         }
@@ -245,6 +263,54 @@ final class TutorChat extends Component
         $this->turn(fn (Closure $on) => $this->topicId !== null
             ? $this->chat->sendOnTopic($this->principal(), $this->topicId, $words, $on, $attach, $this->activeModel)
             : $this->chat->send($this->principal(), $this->sessionId, $words, $on, $attach, $this->activeModel), $words);
+    }
+
+    /**
+     * Hands the assignment's new files to the tutor so it speaks first.
+     * Files already sent stay in the conversation; a later visit only sends what is new.
+     */
+    public function reviewFiles(): void
+    {
+        if ($this->activityId === null || $this->reviewed) {
+            return;
+        }
+        $this->reviewed = true;
+        $by = $this->principal();
+        $refs = $this->unreviewedFiles($by);
+        if ($refs === []) {
+            return;
+        }
+        $continuing = $this->chat->assignmentTranscript($by, $this->activityId) !== [];
+        $words = $continuing ? self::REVIEW_MORE : self::REVIEW;
+        $extra = count($refs) - Attachments::MOST;
+        if ($extra > 0) {
+            $words .= ' '.($extra === 1 ? 'One more file is' : "{$extra} more files are").' in this assignment\'s folder. Read those too.';
+        }
+        $this->send($words, array_slice($refs, 0, Attachments::MOST));
+    }
+
+    /**
+     * Files in the assignment's folder that have not gone with a message yet.
+     *
+     * @return list<string>
+     */
+    private function unreviewedFiles(Principal $by): array
+    {
+        $seen = [];
+        foreach ($this->chat->assignmentTranscript($by, (string) $this->activityId) as $turn) {
+            foreach ($turn['attachments'] ?? [] as $item) {
+                $seen[] = (string) ($item['ref'] ?? '');
+            }
+        }
+        $refs = [];
+        foreach (app(AssignmentSources::class)->files($by, (string) $this->activityId) as $file) {
+            $ref = 'file:'.$file->id;
+            if (! in_array($ref, $seen, true)) {
+                $refs[] = $ref;
+            }
+        }
+
+        return $refs;
     }
 
     /** Switches the AI model to use for the next response in this session. */
@@ -619,8 +685,9 @@ final class TutorChat extends Component
                 $activity !== null => $this->assignmentSuggestions(),
                 default => array_merge(self::SUGGESTIONS, $pluginStarters),
             },
-            'starters' => $ai !== null ? self::VISTUD_STARTERS : ($onTopic !== null ? self::TOPIC_STARTERS : ($activity !== null ? self::ASSIGNMENT_STARTERS : [])),
+            'starters' => $ai !== null ? self::VISTUD_STARTERS : ($onTopic !== null ? self::TOPIC_STARTERS : []),
             'activity' => $activity,
+            'pendingReview' => $activity !== null && $ready && ! $this->reviewed ? $this->unreviewedFiles($by) : [],
             'assignmentGoal' => $activity !== null ? (app(AssignmentUnderstandings::class)->latest($by, $activity->id)?->text('goal') ?: '') : null,
             'actions' => $onTopic !== null || $ai !== null || $activity !== null ? [] : array_filter(self::ACTIONS, fn (string $key) => ! isset(self::ACTION_PLUGINS[$key]) || in_array(self::ACTION_PLUGINS[$key], $tutoring['plugins'] ?? [], true), ARRAY_FILTER_USE_KEY),
             'testAsk' => self::TEST_ASK,

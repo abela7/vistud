@@ -81,7 +81,6 @@
                 </div>
             @endunless
             <button type="button" @class(['btn btn-secondary btn-sm', 'ring-1 ring-accent' => $showStarters]) wire:click="toggleStarters" aria-expanded="{{ $showStarters ? 'true' : 'false' }}" title="Add a pre-made plan"><x-icon name="layout-grid" class="size-4" />Pre-made</button>
-            <button type="button" class="quiet-link" wire:click="toggleAi" aria-expanded="{{ $aiOpen ? 'true' : 'false' }}"><x-icon name="brain" class="size-4" />Plan with an AI</button>
             <a href="{{ route('workspaces.assignments.sections.create', [$workspaceId, $activityId]) }}" class="btn btn-primary btn-sm"><x-icon name="plus" class="size-4" />New section</a>
             @unless ($blank)
                 @include('livewire.workspaces.partials.row-menu', ['id' => 'plan-head', 'label' => 'the plan', 'items' => [
@@ -119,81 +118,6 @@
                     </li>
                 @endforeach
             </ul>
-        </div>
-    @endif
-
-    @if ($aiOpen)
-        <div class="plan-ai question-panel space-y-4" x-data="{ copied: false }">
-            <div class="flex items-center justify-between gap-2">
-                <p class="font-semibold">Plan it with an AI</p>
-                <button type="button" class="btn btn-ghost btn-sm" wire:click="toggleAi">Close</button>
-            </div>
-
-            <div class="field">
-                <label for="plan-brief" class="field-label">The assignment brief <span class="font-normal text-fg-muted">(optional)</span></label>
-                <textarea id="plan-brief" class="input mt-2" rows="3" wire:model.live.debounce.500ms="brief" placeholder="Paste the brief or the rubric here, for a better plan"></textarea>
-            </div>
-
-            <section class="space-y-2" aria-labelledby="plan-ai-1">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <h3 id="plan-ai-1" class="font-semibold"><span class="step-number" aria-hidden="true">1</span>Copy the prompt into an AI</h3>
-                    <x-button icon="copy" x-on:click="
-                        const text = $refs.prompt.textContent;
-                        const done = () => { copied = true; setTimeout(() => copied = false, 2500); };
-                        const select = () => {
-                            const range = document.createRange();
-                            range.selectNodeContents($refs.prompt);
-                            const selection = window.getSelection();
-                            selection.removeAllRanges();
-                            selection.addRange(range);
-                            try { if (document.execCommand('copy')) done(); } catch (e) {}
-                        };
-                        navigator.clipboard && window.isSecureContext ? navigator.clipboard.writeText(text).then(done, select) : select();
-                    "><span x-show="! copied">Copy the prompt</span><span x-show="copied" x-cloak>Copied</span></x-button>
-                </div>
-                <details class="plan-prompt">
-                    <summary>See the prompt</summary>
-                    <pre class="briefing-text card-maker-prompt" tabindex="0" aria-label="The prompt" x-ref="prompt" wire:loading.class="opacity-60" wire:target="brief">{{ $prompt }}</pre>
-                </details>
-                <p class="sr-only" role="status" x-text="copied ? 'Copied to the clipboard.' : ''"></p>
-            </section>
-
-            <section class="space-y-2" aria-labelledby="plan-ai-2">
-                <h3 id="plan-ai-2" class="font-semibold"><span class="step-number" aria-hidden="true">2</span>Paste its reply here</h3>
-                <div class="field">
-                    <label for="plan-reply" class="sr-only">The AI's reply</label>
-                    <textarea id="plan-reply" class="input capture-paste" rows="4" wire:model="reply"></textarea>
-                    @error('reply') <p class="field-error">{{ $message }}</p> @enderror
-                </div>
-                <x-button wire:click="readReply" icon="scan-text" wire:loading.attr="aria-busy" wire:target="readReply" busy-label="Reading…">Read the reply</x-button>
-            </section>
-
-            @if ($read)
-                <section class="space-y-3" aria-labelledby="plan-ai-3">
-                    <h3 id="plan-ai-3" class="font-semibold"><span class="step-number" aria-hidden="true">3</span>Look it over, then add it</h3>
-                    <div class="plan-preview">
-                        @foreach ($read['parts'] as $part)
-                            <p class="font-medium">{{ $part['title'] }}@if ($part['marks'] !== null) <span class="plan-marks-chip">{{ $part['marks'] }}%</span>@endif</p>
-                            @if ($part['steps'] !== [])
-                                <ul class="plan-preview-steps">@foreach ($part['steps'] as $step)<li>{{ $step }}</li>@endforeach</ul>
-                            @endif
-                        @endforeach
-                        @if ($read['steps'] !== [])
-                            <p class="font-medium">Other steps</p>
-                            <ul class="plan-preview-steps">@foreach ($read['steps'] as $step)<li>{{ $step }}</li>@endforeach</ul>
-                        @endif
-                        @if ($read['milestones'] !== [])
-                            <p class="font-medium">Milestones</p>
-                            <ul class="plan-preview-steps">@foreach ($read['milestones'] as $milestone)<li>{{ $milestone['title'] }}@if ($milestone['due_on'] !== null) <span class="plan-marks-chip">{{ \Illuminate\Support\Carbon::parse($milestone['due_on'])->format('j M') }}</span>@endif</li>@endforeach</ul>
-                        @endif
-                        @if ($read['criteria'] !== [])
-                            <p class="font-medium">Marking criteria</p>
-                            <ul class="plan-preview-steps">@foreach ($read['criteria'] as $criterion)<li>{{ $criterion['title'] }}@if ($criterion['marks'] !== null) <span class="plan-marks-chip">{{ $criterion['marks'] }}%</span>@endif</li>@endforeach</ul>
-                        @endif
-                    </div>
-                    <x-button variant="primary" icon="plus" wire:click="addRead" wire:loading.attr="aria-busy" wire:target="addRead" busy-label="Adding…">Add to my plan</x-button>
-                </section>
-            @endif
         </div>
     @endif
 
