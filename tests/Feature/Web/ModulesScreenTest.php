@@ -173,7 +173,7 @@ class ModulesScreenTest extends TestCase
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id]))
             ->assertOk()->assertSee('<title>Cells · Biology', false)
             // The page template, then the tabs; Folders is the one open by default, showing each session folder with its Study.
-            ->assertSeeInOrder(['Modules', 'Cells', 'Folders', 'Files', 'Notes', 'Topics', 'Questions', 'Sessions', 'Labs', 'Study Labs'])
+            ->assertSeeInOrder(['Modules', 'Cells', 'Folders', 'Files', 'Notes', 'Topics', 'Questions', 'Sessions', 'Classes', 'Labs', 'Study Labs'])
             ->assertDontSee('Whole module')
             ->assertDontSee('Week 2');
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->biology->id, $cells->id, 'tab' => 'topics']))

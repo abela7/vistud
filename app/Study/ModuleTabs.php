@@ -6,12 +6,12 @@ use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 
-/** The numbers beside a module's tabs (docs/specs/vistud-2-blueprint.md §3.5.3): its topics, files, notes, open questions and study sessions. */
+/** The numbers beside a module's tabs: topics, files, notes, open questions, study sessions, and classes. */
 final class ModuleTabs
 {
     public function __construct(private Questions $questions, private Sessions $sessions) {}
 
-    /** @return array{folders: int, files: int, notes: int, topics: int, questions: int, sessions: int} */
+    /** @return array{folders: int, files: int, notes: int, topics: int, questions: int, sessions: int, classes: int} */
     public function counts(Principal $by, string $workspaceId, string $moduleId): array
     {
         $scope = Guard::learner($by);
@@ -24,6 +24,7 @@ final class ModuleTabs
             'topics' => $in('topics')->whereNull('retired_at')->count(),
             'questions' => count(array_filter($this->questions->list($by, $workspaceId, $moduleId), fn (QuestionDetails $q) => $q->status !== 'answered')),
             'sessions' => count($this->sessions->forModule($by, $workspaceId, $moduleId)),
+            'classes' => $in('class_sessions')->count(),
         ];
     }
 }

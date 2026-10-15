@@ -15,6 +15,7 @@ use App\Platform\Errors\AppError;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\ClassSessions;
 use App\Study\FileDetails;
 use App\Study\FileDigests;
 use App\Study\FileReading;
@@ -164,6 +165,8 @@ final class Contents extends Component
 
     private Sessions $sessions;
 
+    private ClassSessions $classes;
+
     private Flashcards $flashcards;
 
     private FileDigests $digests;
@@ -176,8 +179,9 @@ final class Contents extends Component
 
     private Rollups $rollups;
 
-    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, Questions $questions, Flashcards $flashcards, FileDigests $digests, FileReading $reading, TopicSuggestions $suggestions, Rollups $rollups, PrincipalFactory $principals): void
+    public function boot(Modules $modules, Folders $folders, Notes $notes, Files $files, Links $links, Instructions $instructions, Workspaces $workspaces, Topics $topics, Sessions $sessions, ClassSessions $classes, Questions $questions, Flashcards $flashcards, FileDigests $digests, FileReading $reading, TopicSuggestions $suggestions, Rollups $rollups, PrincipalFactory $principals): void
     {
+        $this->classes = $classes;
         $this->rollups = $rollups;
         $this->digests = $digests;
         $this->reading = $reading;
@@ -1280,6 +1284,7 @@ final class Contents extends Component
                 'place' => $module, 'placeName' => $module->title, 'key' => "module:{$module->id}", 'trail' => $trail,
                 'topicNames' => collect($topics)->pluck('name', 'id')->all(), 'questions' => $questions,
                 'sessionsCount' => count($this->sessions->forModule($by, $this->workspaceId, $module->id)),
+                'classesCount' => count($this->classes->forModule($by, $this->workspaceId, $module->id)),
                 // The module's flashcards are in the deck, shown by module: how many, and how many are due.
                 'cards' => $cards = $this->flashcards->counts($by, $this->workspaceId, null, $module->id),
                 // Its topics, in order, each with its status and its cards; on the Topics tab, under the folders they are in.

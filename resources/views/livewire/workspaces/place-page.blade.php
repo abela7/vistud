@@ -29,6 +29,7 @@
             'topics' => count($placeTopics),
             'questions' => $questions['open'],
             'sessions' => $sessionsCount,
+            'classes' => $classesCount,
         ],
         $studyPlace => [
             'dashboard' => 0,

@@ -3,6 +3,7 @@
 use App\Brain\Store\JournalReader;
 use App\Http\Controllers\Api\V1\NoteImageController;
 use App\Http\Controllers\AssignmentPageController;
+use App\Http\Controllers\ClassRecordingController;
 use App\Http\Controllers\CourseGuidePageController;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
@@ -125,6 +126,18 @@ Route::middleware('auth')->group(function () {
     Route::get('/courses/{workspace}/modules/{module}/sessions', [PlacePageController::class, 'sessions'])
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'module' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.modules.sessions');
+    Route::get('/courses/{workspace}/modules/{module}/classes', [PlacePageController::class, 'classes'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'module' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.modules.classes');
+    Route::get('/courses/{workspace}/modules/{module}/classes/{classSession}', [PlacePageController::class, 'classSession'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'module' => '[A-Za-z0-9-]{1,64}', 'classSession' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.modules.classes.show');
+    Route::post('/courses/{workspace}/modules/{module}/classes/{classSession}/recordings/{recording}/chunks', [ClassRecordingController::class, 'chunk'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'module' => '[A-Za-z0-9-]{1,64}', 'classSession' => '[A-Za-z0-9-]{1,64}', 'recording' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.modules.classes.chunks');
+    Route::get('/courses/{workspace}/modules/{module}/classes/{classSession}/recordings/{recording}/audio', [ClassRecordingController::class, 'audio'])
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'module' => '[A-Za-z0-9-]{1,64}', 'classSession' => '[A-Za-z0-9-]{1,64}', 'recording' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.modules.classes.audio');
     Route::get('/courses/{workspace}/folders/{folder}', [PlacePageController::class, 'folder'])
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'folder' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.folders.show');

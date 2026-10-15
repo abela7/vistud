@@ -93,7 +93,7 @@ class ModulePageScreenTest extends TestCase
             ->assertSeeInOrder(['Edit module', 'Tell the tutor about this module', 'Delete module'])
             ->assertSeeInOrder(['Study this', 'Whole module', 'Pick a topic', 'Quiz me', 'Test me'])
             // The tabs, with the topic count and the open questions; Questions and Sessions are their own pages.
-            ->assertSeeInOrder(['Folders', 'Files', 'Notes', 'Topics', '2', 'Questions', '1', 'Sessions'])
+            ->assertSeeInOrder(['Folders', 'Files', 'Notes', 'Topics', '2', 'Questions', '1', 'Sessions', 'Classes'])
             ->assertSee('aria-current="page"', false)->assertSee(route('workspaces.modules.questions', [$this->workspace, $this->module]), false);
 
         $this->actingAs($this->ada)->get(route('workspaces.modules.show', [$this->workspace, $this->module, 'tab' => 'topics']))->assertOk()

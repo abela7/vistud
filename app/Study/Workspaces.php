@@ -262,6 +262,10 @@ final class Workspaces
 
         foreach ($storageKeys as $key) {
             Files::disk()->delete($key);
+            // A class recording's pieces sit beside the finished file until it is assembled.
+            if (str_contains($key, '/classes/')) {
+                Files::disk()->deleteDirectory($key.'.chunks');
+            }
             FilePreviews::forget($key);
             FileTexts::forget($key);
         }

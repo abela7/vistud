@@ -1,7 +1,7 @@
 {{--
-    A module's tabs (docs/specs/vistud-2-blueprint.md §3.5.3): Topics · Files · Notes · Questions · Sessions. The first
-    three are the module's page (`?tab=`); Questions and Sessions are its pages of their own, shown with the same strip
-    so the module reads as one place. `current` is the tab that is open; the counts are quiet numbers beside the names.
+    A module's tabs: Folders, Files, Notes, and Topics are the module's page (`?tab=`). Questions, Sessions, and
+    Classes are pages of their own, shown with the same strip so the module reads as one place. `current` is the tab
+    that is open; the counts are quiet numbers beside the names.
 --}}
 @props(['workspaceId', 'moduleId', 'current' => 'folders', 'counts' => []])
 @php
@@ -12,6 +12,7 @@
         'topics' => ['Topics', route('workspaces.modules.show', [$workspaceId, $moduleId, 'tab' => 'topics']), 'book-open'],
         'questions' => ['Questions', route('workspaces.modules.questions', [$workspaceId, $moduleId]), 'circle-help'],
         'sessions' => ['Sessions', route('workspaces.modules.sessions', [$workspaceId, $moduleId]), 'timer'],
+        'classes' => ['Classes', route('workspaces.modules.classes', [$workspaceId, $moduleId]), 'presentation'],
     ];
 @endphp
 <nav aria-label="This module" {{ $attributes->class('page-tabs') }}>

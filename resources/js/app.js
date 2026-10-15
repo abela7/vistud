@@ -8,6 +8,7 @@ import './session.js';
 import './back.js';
 import './selection.js';
 import './uploader.js';
+import './class-recorder.js';
 import './tutor-chat.js';
 import './vistud-ai.js';
 import './guide-chat.js';
