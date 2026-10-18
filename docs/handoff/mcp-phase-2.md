@@ -34,12 +34,18 @@ With Claude Code connected as in M6.1 (`claude mcp add --transport http vistud h
 3. Ask "read page 3 of <a file> in <a course>". The text comes back.
 4. Settings › AI › Connected AI apps › "What they read lately" lists those calls.
 
+## Built since, before the server (2026-10-18)
+
+- **Decisions recorded** (Abel): 2, his own VPS; 7, `https://vistud.app` (so `https://vistud.app/mcp`; `.app` is HTTPS-only); 6, explicit sessions, with ADR 0002 §9 amended the same day.
+- **Big PDFs are read off the request**: `FileTexts::of()` answers "preparing" for a PDF over 4 MB that hasn't been read yet and queues `App\Jobs\ExtractFileText` (unique per file); with the sync queue it is read by the time it answers, as before. A PDF that can't be read leaves a `.failed` mark, so the tutor hears "no text" instead of "preparing" for ever. This is the in-app path too. Tests in `tests/Feature/Study/FileTextsTest.php`.
+- **`/mcp` time limit**: `McpPrincipal` sets PHP's limit to 230 s, inside Claude's 240.
+- **Guides**: `docs/development/deploy.md` (the server, nginx, `.env`, processes, the go-live migration with the same `APP_KEY`, a release, connecting the apps, the restore drill), `docs/development/operations.md` (checks, the kill switch, what to do), `docs/development/mcp-golden-prompts.md` (twelve asks to rerun after any tool change).
+
 ## What is left (part 2, needs the server)
 
 - **Hosting** (plan section 5): the VPS, domain and TLS, `APP_URL`, `/mcp` timeouts, queue worker, scheduler, backups, monitoring, `docs/development/deploy.md` and `operations.md`. Then the connector in claude.ai, ChatGPT and Antigravity CLI.
 - **ChatGPT step 1**: whether Abel's plan can add a custom server at all.
-- **No inline file parsing** (`FileTexts::of()` returning "preparing" and queueing the extraction): needed for the 240-second limit of the chat apps' calls; it changes the in-app path too, so it goes with the server.
-- **The `securitySchemes` spike** and **golden prompts** (`docs/development/mcp-golden-prompts.md`).
+- **The `securitySchemes` spike** (needs ChatGPT reaching the server).
 - `Mcp/SchemaBudgetTest`, `Mcp/KillSwitchTest` (the kill switch is already covered by `UnauthenticatedTest`).
 
 ## Rollback order

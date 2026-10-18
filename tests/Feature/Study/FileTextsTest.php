@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Study;
 
+use App\Jobs\ExtractFileText;
 use App\Platform\Access\Principal;
 use App\Study\FileDetails;
 use App\Study\Files;
@@ -10,6 +11,7 @@ use App\Study\FileTexts;
 use App\Study\Modules;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\MakesOfficeFiles;
@@ -63,6 +65,37 @@ class FileTextsTest extends TestCase
         app(Files::class)->trash($this->by, $file->id);
         app(Files::class)->destroy($this->by, $file->id);
         Storage::disk('local')->assertMissing($kept);
+    }
+
+    public function test_a_big_pdf_is_read_on_the_queue_and_says_preparing_until_then(): void
+    {
+        config(['vistud.files.inline_pdf_bytes' => 10]);
+        Queue::fake();
+        $file = $this->upload('Lecture 2.pdf', (string) file_get_contents(base_path('tests/Browser/fixtures/files/Lecture 2 - cell division.pdf')));
+
+        $this->assertSame(FileText::PREPARING, $this->read($file)->state);
+        Queue::assertPushed(ExtractFileText::class, fn (ExtractFileText $job) => $job->fileId === $file->id);
+
+        // The worker reads it; from then on the text is there at once.
+        [, $key] = app(Files::class)->content($this->by, $file->id);
+        (new ExtractFileText($file->id, $key))->handle();
+        $text = $this->read($file);
+        $this->assertSame(FileText::READY, $text->state);
+        $this->assertStringContainsString('Mitosis makes two identical cells.', $text->pages[0]);
+    }
+
+    public function test_a_big_pdf_that_cannot_be_read_says_so_instead_of_preparing_for_ever(): void
+    {
+        config(['vistud.files.inline_pdf_bytes' => 10]);
+        Queue::fake();
+        $file = $this->upload('Broken.pdf', (string) file_get_contents(base_path('tests/Browser/fixtures/files/Lecture 2 - cell division.pdf')));
+        [, $key] = app(Files::class)->content($this->by, $file->id);
+        // The bytes on disk are damaged after the upload was checked.
+        Storage::disk('local')->put($key, "%PDF-1.4\nnot really a pdf\n%%EOF");
+
+        (new ExtractFileText($file->id, $key))->handle();
+
+        $this->assertSame(FileText::NONE, $this->read($file)->state);
     }
 
     public function test_slides_come_with_their_speakers_notes_and_word_and_text_files_in_parts(): void

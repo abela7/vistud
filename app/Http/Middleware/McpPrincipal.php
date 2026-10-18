@@ -34,6 +34,9 @@ final class McpPrincipal
 
     public function handle(Request $request, Closure $next): Response
     {
+        // A chat app gives a call 240 seconds; PHP stops first, so the answer is an error and not a cut connection.
+        @set_time_limit(230);
+
         if (! config('mcp.enabled', true)) {
             throw new Unavailable('mcp_disabled', 'AI connections are switched off for now.');
         }

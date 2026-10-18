@@ -558,6 +558,7 @@ reason:   not_learning | sensitive | invalid | not_allowed
   - Relative phrases are resolved in the learner's time zone, with a matching precision. For example, "yesterday" becomes precision `day`.
   - The LLM's clock is never trusted.
 - **Sessions.** One client's captures belong to the same session while the gaps between them are under 30 minutes.
+  - **Amended 2026-10-18 (Abel, as PM; docs/specs/mcp-connections-plan.md §3.6, decision 6):** sessions are explicit. A chat app starts one (`start_session`) and names it by `session_id` on every capture that is evidence. A capture with no open session is `rejected` with the fix, so nothing is lost silently. Reasons: ViStud allows one open session per learner and counts study time in `session_segments`, and an implicit session would let a second chat or a scheduled task attach evidence to a session it did not start. The 30-minute gap stays as the idle pause.
 - **Missing events.**
   - An event that was never captured is never treated as evidence.
   - Briefs mention that capture may have been incomplete.

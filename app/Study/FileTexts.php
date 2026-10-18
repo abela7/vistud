@@ -2,6 +2,7 @@
 
 namespace App\Study;
 
+use App\Jobs\ExtractFileText;
 use App\Platform\Access\Principal;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\Log;
@@ -30,6 +31,9 @@ final class FileTexts
     /** Files bigger than this aren't read (the parser holds a PDF in memory). */
     public const MAX_BYTES = 40 * 1024 * 1024;
 
+    /** A PDF up to this size is read inside the request; a bigger one on the queue (App\Jobs\ExtractFileText). */
+    public const INLINE_PDF_BYTES = 4 * 1024 * 1024;
+
     /** Bumped when what is kept changes, so each file is read again the next time it is asked for. */
     private const VERSION = 3;
 
@@ -43,28 +47,27 @@ final class FileTexts
         }
         $disk = Files::disk();
         $textKey = self::key($key);
-        if ($disk->exists($textKey)) {
-            $kept = json_decode((string) $disk->get($textKey), true);
-            if (is_array($kept) && ($kept['v'] ?? null) === self::VERSION && is_array($kept['pages'] ?? null)) {
-                return new FileText(
-                    $file,
-                    FileText::READY,
-                    array_values(array_map('strval', $kept['pages'])),
-                    (string) ($kept['unit'] ?? 'page'),
-                    array_values(array_map('strval', (array) ($kept['captions'] ?? []))),
-                    is_array($kept['facts'] ?? null) ? $kept['facts'] : [],
-                );
-            }
+        if (($kept = self::kept($file, $textKey)) !== null) {
+            return $kept;
         }
         if ($file->size > self::MAX_BYTES) {
             return new FileText($file, FileText::NONE);
+        }
+        // A big PDF is read on the queue's worker, never inside a request: an AI app's call has 240 seconds, and a
+        // page waits for nobody (docs/specs/mcp-connections-plan.md M6.2). Queued once per file; with the sync queue
+        // it has been read by now.
+        if ($file->extension === 'pdf' && $file->size > (int) config('vistud.files.inline_pdf_bytes', self::INLINE_PDF_BYTES)) {
+            ExtractFileText::dispatch($file->id, $key);
+
+            return self::kept($file, $textKey)
+                ?? new FileText($file, $disk->exists("{$textKey}.failed") ? FileText::NONE : FileText::PREPARING);
         }
 
         $local = null;
         try {
             $path = fn () => $local ??= self::local($key);
             $read = match (true) {
-                $file->extension === 'pdf' => $this->pdf($path()),
+                $file->extension === 'pdf' => self::pdf($path()),
                 $file->extension === 'pptx' => OfficeReader::pptx($path()),
                 $file->extension === 'docx' => OfficeReader::docx($path()),
                 $file->extension === 'xlsx' => OfficeReader::xlsx($path()),
@@ -93,10 +96,63 @@ final class FileTexts
         return new FileText($file, FileText::READY, $pages, $read->unit, $captions, $read->facts);
     }
 
+    /**
+     * Reads a big PDF and keeps its text beside it, for App\Jobs\ExtractFileText. A PDF that can't be read leaves a
+     * `.failed` mark, so the tutor is told there is no text instead of "preparing" for ever.
+     */
+    public static function extractPdf(string $storageKey): void
+    {
+        $disk = Files::disk();
+        $textKey = self::key($storageKey);
+        $local = null;
+        try {
+            $local = self::local($storageKey);
+            $read = self::pdf($local);
+            $pages = array_map(fn (string $page) => mb_substr(self::tidy($page), 0, self::PAGE_CHARS), $read->pages);
+            $disk->put($textKey, (string) json_encode(['v' => self::VERSION, 'unit' => $read->unit, 'pages' => $pages, 'captions' => [], 'facts' => $read->facts]));
+            $disk->delete("{$textKey}.failed");
+        } catch (Throwable $e) {
+            Log::warning('A file could not be read for the tutor.', ['key' => $storageKey, 'problem' => Str::limit($e->getMessage(), 300)]);
+            $disk->put("{$textKey}.failed", '1');
+        } finally {
+            if ($local !== null && str_starts_with($local, sys_get_temp_dir())) {
+                @unlink($local);
+            }
+        }
+    }
+
+    /**
+     * What was read from the file before, when it is still of this version; null otherwise. It reads the disk, so a
+     * second call can find what a job wrote since the first.
+     *
+     * @phpstan-impure
+     */
+    private static function kept(FileDetails $file, string $textKey): ?FileText
+    {
+        $disk = Files::disk();
+        if (! $disk->exists($textKey)) {
+            return null;
+        }
+        $kept = json_decode((string) $disk->get($textKey), true);
+        if (! is_array($kept) || ($kept['v'] ?? null) !== self::VERSION || ! is_array($kept['pages'] ?? null)) {
+            return null;
+        }
+
+        return new FileText(
+            $file,
+            FileText::READY,
+            array_values(array_map('strval', $kept['pages'])),
+            (string) ($kept['unit'] ?? 'page'),
+            array_values(array_map('strval', (array) ($kept['captions'] ?? []))),
+            is_array($kept['facts'] ?? null) ? $kept['facts'] : [],
+        );
+    }
+
     /** Deletes what was read from the file at this storage key (called when the file is deleted). */
     public static function forget(string $storageKey): void
     {
         Files::disk()->delete(self::key($storageKey));
+        Files::disk()->delete(self::key($storageKey).'.failed');
     }
 
     private static function key(string $storageKey): string
@@ -105,7 +161,7 @@ final class FileTexts
     }
 
     /** A PDF's pages, with its title, author and dates when it says them. */
-    private function pdf(string $path): OfficeRead
+    private static function pdf(string $path): OfficeRead
     {
         $limit = ini_get('memory_limit');
         if ($limit !== false && $limit !== '-1' && self::bytes($limit) < 512 * 1024 * 1024) {
