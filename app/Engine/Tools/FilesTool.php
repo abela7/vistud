@@ -47,12 +47,12 @@ final class FilesTool implements Tool
         $rows = [];
         foreach ($this->files->list($by, $context->workspaceId) as $file) {
             if ($only === null || $file->moduleId === $only) {
-                $rows[] = array_filter(['file' => $file->fileName(), 'type' => $file->typeLabel(), 'size' => $file->humanSize(), 'uploaded' => substr($file->uploadedAt, 0, 10), 'module' => $file->moduleId !== null ? $titles[$file->moduleId] ?? null : null, 'folder' => $file->folderId !== null ? $folderNames[$file->folderId] ?? null : null]);
+                $rows[] = array_filter(['id' => $file->id, 'file' => $file->fileName(), 'type' => $file->typeLabel(), 'size' => $file->humanSize(), 'uploaded' => substr($file->uploadedAt, 0, 10), 'module' => $file->moduleId !== null ? $titles[$file->moduleId] ?? null : null, 'folder' => $file->folderId !== null ? $folderNames[$file->folderId] ?? null : null]);
             }
         }
         foreach ($this->links->list($by, $context->workspaceId) as $link) {
             if ($only === null || $link->moduleId === $only) {
-                $rows[] = array_filter(['link' => $link->title, 'url' => $link->url, 'module' => $link->moduleId !== null ? $titles[$link->moduleId] ?? null : null, 'folder' => $link->folderId !== null ? $folderNames[$link->folderId] ?? null : null]);
+                $rows[] = array_filter(['id' => $link->id, 'link' => $link->title, 'url' => $link->url, 'module' => $link->moduleId !== null ? $titles[$link->moduleId] ?? null : null, 'folder' => $link->folderId !== null ? $folderNames[$link->folderId] ?? null : null]);
             }
         }
 

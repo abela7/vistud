@@ -174,13 +174,30 @@ class VistudAiTest extends TestCase
         $this->assertStringContainsString('There is no course called "Biology"', $run('topics', ['course' => 'Biology']));
 
         $found = json_decode($run('search_everything', ['query' => 'stable']), true);
-        $this->assertSame([['course' => 'Algorithm Design', 'kind' => 'topic', 'name' => 'Stable marriage problem']], $found);
+        $this->assertNotEmpty($found[0]['id']);
+        $this->assertSame([['id' => $found[0]['id'], 'course' => 'Algorithm Design', 'kind' => 'topic', 'name' => 'Stable marriage problem']], $found);
 
         $memories = json_decode($run('memories'), true);
+        $this->assertNotEmpty($memories[0]['id']);
         $this->assertSame([[1, 'all courses'], [2, 'Algorithm Design']], array_map(fn ($m) => [$m['number'], $m['for']], $memories));
         $this->assertStringContainsString('Remembered for Physics: "Prefers labs on Fridays."', $run('remember', ['note' => 'Prefers labs on Fridays.', 'course' => 'Physics']));
+        $this->assertStringContainsString('in place of "Learns best from a worked example before the theory."', $run('remember', ['note' => 'Studies best in the morning.', 'replaces' => $memories[0]['id']]));
         $thread = app(VistudAi::class)->start($this->by, 'Forget something.');
         $this->assertStringContainsString('the student must agree first', $tools->run($this->by, new Context('', null, null, 'UTC', threadId: $thread), 'forget_memory', ['number' => 1]));
+        $this->assertStringContainsString('the student must agree first', $tools->run($this->by, new Context('', null, null, 'UTC', threadId: $thread), 'forget_memory', ['id' => $memories[1]['id']]));
+
+        // Over MCP, memory writes require an id and refuse list numbers.
+        $mcp = $this->principal($this->ada, channel: 'mcp');
+        $this->assertStringContainsString("Give the memory's id from the memories tool, not its list number.", $tools->run($mcp, $this->context(), 'remember', ['note' => 'Updated.', 'replaces' => '1']));
+        $this->assertStringContainsString("Give the memory's id from the memories tool, not its list number.", $tools->run($mcp, new Context('', null, null, 'UTC', threadId: $thread), 'forget_memory', ['number' => 1]));
+        $this->assertStringContainsString('the student must agree first', $tools->run($mcp, new Context('', null, null, 'UTC', threadId: $thread), 'forget_memory', ['id' => $memories[1]['id']]));
+
+        // A write tool wrapped by InCourse requires an exact course name or id; an ambiguous partial changes nothing and lists candidates.
+        $algebra = app(Workspaces::class)->create($this->by, ['name' => 'Algebra II'])->id;
+        $ambiguousRead = $run('topics', ['course' => 'alg']);
+        $this->assertStringContainsString("(id {$this->algorithms})", $ambiguousRead);
+        $this->assertStringContainsString("(id {$algebra})", $ambiguousRead);
+        $this->assertStringContainsString('There is no course called "alg"', $run('set_topic_status', ['course' => 'alg', 'topic' => 'Stable marriage problem', 'status' => 'covered', 'reason' => 'Done.']));
 
         app(Sessions::class)->log($this->by, $this->physics, ['date' => '2026-10-11', 'time' => '10:00', 'minutes' => 30], 'UTC');
         $time = json_decode($run('study_time', ['days' => 7]), true);

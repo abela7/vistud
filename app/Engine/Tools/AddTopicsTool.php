@@ -80,7 +80,7 @@ final class AddTopicsTool implements Tool
             }
             [$moduleId, $folderId] = [$sessionModule, $sessionFolder];
             if (($title = Lookup::text($one, 'module')) !== null) {
-                $module = Lookup::one($modules, $title, fn ($m) => $m->title, 'module');
+                $module = Lookup::forWrite($by, $modules, $title, fn ($m) => $m->title, 'module');
                 if (is_string($module)) {
                     $problems[] = "{$name}: {$module}";
 

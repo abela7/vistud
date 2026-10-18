@@ -45,6 +45,7 @@ final class FindingsTool implements Tool
             }
             foreach ($byTopic[$topic->id] ?? [] as $finding) {
                 $rows[] = array_filter([
+                    'id' => $finding->id,
                     'topic' => $topic->name,
                     'finding' => $finding->text,
                     'source' => $finding->sourceName !== null ? trim($finding->sourceName.($finding->locator ? ", {$finding->locator}" : '')) : null,

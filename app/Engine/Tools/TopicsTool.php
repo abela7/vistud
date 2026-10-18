@@ -25,7 +25,7 @@ final class TopicsTool implements Tool
 
     public function description(): string
     {
-        return 'The topics of the course (or of one module), each with where it stands (not started, covered, understood, confusing, or mastered when their practice earned it), who set that and when (the student or you; nobody, for a default), and the evidence. Use it to see what the student knows and what still confuses them. In a session in a folder it lists the folder\'s topics and the module\'s topics in no folder, unless you ask for the whole course or a module.';
+        return 'The topics of the course (or of one module), each with where it stands (not started, covered, understood, confusing, or mastered when their practice earned it), who set that and when (the student, you, or the evidence when it comes from their practice; nobody, for a default), and the evidence. Use it to see what the student knows and what still confuses them. In a session in a folder it lists the folder\'s topics and the module\'s topics in no folder, unless you ask for the whole course or a module.';
     }
 
     public function parameters(): array
@@ -58,6 +58,14 @@ final class TopicsTool implements Tool
         foreach ($this->folders->tree($by, $context->workspaceId) as $folder) {
             $folderNames[$folder->id] = $folder->name;
         }
+        $tutor = $by->channel === 'mcp' ? "ViStud's tutor" : 'you';
+        $whoSaid = fn (?string $statusBy) => match ($statusBy) {
+            'tutor' => $tutor,
+            'chat' => 'a chat app',
+            'accepted' => "the student (accepted the AI's word)",
+            'student' => 'the student (may have been an accepted AI proposal)',
+            default => 'the student',
+        };
         $rows = [];
         foreach ($this->topics->list($by, $context->workspaceId) as $topic) {
             $own = $topic->folderId === null && $topic->moduleId !== null && $topic->moduleId === $context->moduleId;
@@ -65,12 +73,20 @@ final class TopicsTool implements Tool
                 continue;
             }
             $rows[] = array_filter([
+                'id' => $topic->id,
                 'topic' => $topic->name,
                 'module' => $topic->moduleId !== null ? ($titles[$topic->moduleId] ?? null) : null,
                 'folder' => $topic->folderId !== null ? ($folderNames[$topic->folderId] ?? null) : null,
                 'status' => Stack::word($topic->shown()),
-                'set_by' => $topic->status === null ? 'nobody yet' : ($topic->byTutor() ? 'you' : 'the student'),
-                'set_at' => $topic->status !== null && $topic->statusAt !== null ? CarbonImmutable::parse($topic->statusAt, 'UTC')->setTimezone($context->zone)->format('Y-m-d H:i') : null,
+                'status_source' => $topic->statusSource(),
+                // Who said the word shown; a word overtaken by newer practice is the evidence's, not theirs.
+                'set_by' => match (true) {
+                    $topic->saidShown() => $whoSaid($topic->statusBy),
+                    $topic->status !== null && $topic->statusBy !== null => 'the evidence, since '.$whoSaid($topic->statusBy).' said '.Stack::word($topic->status),
+                    $topic->shown() === 'not_started' => 'nobody yet',
+                    default => 'the evidence',
+                },
+                'set_at' => $topic->saidShown() && $topic->statusAt !== null ? CarbonImmutable::parse($topic->statusAt, 'UTC')->setTimezone($context->zone)->format('Y-m-d H:i') : null,
                 'evidence' => $topic->evidence(),
             ]);
         }

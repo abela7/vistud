@@ -2,6 +2,7 @@
 
 namespace App\Study;
 
+use App\Engine\Tools\Lookup;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
@@ -37,7 +38,7 @@ final class Quizzes
      * results: a correct answer counts one, a partial one half. An answer that couldn't be marked (`unjudged`) is kept
      * as such, and counts neither way. $judge is the AI that marked the answers (WriteBack::apply).
      *
-     * @param  array{kind?: mixed, topic?: mixed, questions?: mixed}  $input
+     * @param  array{kind?: mixed, topic?: mixed, topic_id?: mixed, questions?: mixed, started_at?: mixed}  $input
      * @param  ?array{model: string, prompt: string, via: string}  $judge
      */
     public function record(Principal $by, string $sessionId, array $input, ?array $judge = null): QuizDetails
@@ -51,12 +52,46 @@ final class Quizzes
             'questions' => ! is_array($given) || $given === [] ? 'Give the questions that were asked.' : (count($given) > self::MAX_QUESTIONS ? 'Keep it to '.self::MAX_QUESTIONS.' questions.' : null),
         ]));
 
-        $topics = [];
-        foreach ($this->topics->list($by, $session->workspaceId) as $topic) {
-            $topics[mb_strtolower($topic->name)] = $topic;
+        $topicList = $this->topics->list($by, $session->workspaceId);
+        $byId = [];
+        $byKey = [];
+        $byCore = [];
+        foreach ($topicList as $topic) {
+            $byId[$topic->id] = $topic;
+            $byKey[Lookup::key($topic->name)][] = $topic;
+            $byCore[TopicSuggestions::core($topic->name)][] = $topic;
         }
-        $find = fn (mixed $name) => is_string($name) && trim($name) !== '' ? ($topics[mb_strtolower(trim($name))] ?? null) : null;
-        $quizTopic = $find($input['topic'] ?? null) ?? ($session->topicId !== null ? collect($topics)->first(fn (TopicDetails $t) => $t->id === $session->topicId) : null);
+        // In-app: id, exact name, core name, or unique partial match; never guesses between several. Over MCP: id or unique exact name only.
+        $find = function (mixed $name) use ($by, $topicList, $byId, $byKey, $byCore): ?TopicDetails {
+            if (! is_string($name) || ($wanted = trim($name)) === '') {
+                return null;
+            }
+            if (isset($byId[$wanted])) {
+                return $byId[$wanted];
+            }
+            $exact = $byKey[Lookup::key($wanted)] ?? [];
+            if (count($exact) === 1) {
+                return $exact[0];
+            }
+            if ($exact !== [] || $by->channel === 'mcp') {
+                return null;
+            }
+            $alike = $byCore[TopicSuggestions::core($wanted)] ?? [];
+            if (count($alike) === 1) {
+                return $alike[0];
+            }
+            if ($alike !== []) {
+                return null;
+            }
+            $near = array_values(array_filter($topicList, fn (TopicDetails $t) => mb_stripos($t->name, $wanted) !== false));
+
+            return count($near) === 1 ? $near[0] : null;
+        };
+        $topRaw = $input['topic_id'] ?? $input['topic'] ?? null;
+        $hasTop = is_string($topRaw) && trim($topRaw) !== '';
+        $quizTopic = $hasTop
+            ? $find($topRaw)
+            : ($session->topicId !== null ? ($byId[$session->topicId] ?? null) : null);
 
         $questions = [];
         foreach (array_values($given) as $index => $item) {
@@ -70,13 +105,21 @@ final class Quizzes
                     default => null,
                 },
             ]));
-            $topic = $find($item['topic'] ?? null) ?? $quizTopic;
+            // A question with no topic is the quiz's. One that names a topic the course doesn't have is the quiz's in a
+            // quiz (one topic by nature), but in a test, which spans topics, it counts for none: putting it on the
+            // session's topic would give that topic marks for another one. An ambiguous name never falls back.
+            $qRaw = $item['topic_id'] ?? $item['topic'] ?? null;
+            $named = is_string($qRaw) && trim($qRaw) !== '';
+            $matched = $named ? $find($qRaw) : null;
+            $ambiguous = $named && $matched === null && count(array_filter($topicList, fn (TopicDetails $t) => mb_stripos($t->name, trim((string) $qRaw)) !== false)) > 1;
+            $topic = $named ? ($matched ?? ($kind === 'quiz' && ! $ambiguous && $by->channel !== 'mcp' ? $quizTopic : null)) : $quizTopic;
             $questions[] = [
                 'asked' => mb_substr($asked, 0, Capture::LIMITS['asked']),
                 'answer' => mb_substr(trim((string) ($item['answer'] ?? '')), 0, Capture::LIMITS['answer']),
                 'result' => $result,
                 'right' => mb_substr(trim((string) ($item['right'] ?? '')), 0, Capture::LIMITS['right']),
                 'fix' => mb_substr(trim((string) ($item['fix'] ?? '')), 0, Capture::LIMITS['fix']),
+                'form' => self::formOf($item, $kind),
                 'topic' => $topic?->name,
                 'topic_id' => $topic?->id,
             ];
@@ -90,7 +133,7 @@ final class Quizzes
         $attempts = [];
         foreach ($questions as $q) {
             if ($q['topic_id'] !== null) {
-                $attempts[] = ['include' => true, 'kind' => 'attempt', 'topic_id' => $q['topic_id'], 'asked' => $q['asked'], 'answer' => $q['answer'], 'result' => $q['result'], 'right' => $q['right'], 'fix' => $q['fix'], 'form' => 'recall', 'support' => 'unaided'];
+                $attempts[] = ['include' => true, 'kind' => 'attempt', 'topic_id' => $q['topic_id'], 'asked' => $q['asked'], 'answer' => $q['answer'], 'result' => $q['result'], 'right' => $q['right'], 'fix' => $q['fix'], 'form' => $q['form'], 'support' => 'unaided'];
             }
         }
 
@@ -235,6 +278,28 @@ final class Quizzes
         return (int) round(100 * $points / count($questions));
     }
 
+    /**
+     * How a question exercised its topic, which is what mastery counts (ADR 0002 §7: secure needs apply successes on
+     * two tasks in two sessions): the form given; else, from the quiz panel's kind of question, a choice recognises, a
+     * short answer recalls and a written one applies; else a quiz's question recalls and a test's, exam-level, applies.
+     * Writing every answer as recall, as this did before, kept every topic short of mastered however many tests it passed.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    public static function formOf(array $item, string $kind): string
+    {
+        if (in_array($item['form'] ?? null, Capture::FORMS, true)) {
+            return $item['form'];
+        }
+
+        return match ($item['type'] ?? null) {
+            'best' => 'recognise',
+            'short' => 'recall',
+            'write' => 'apply',
+            default => $kind === 'test' ? 'apply' : 'recall',
+        };
+    }
+
     /** The status a score earns a topic: understood, still confusing or covered. */
     public static function statusFor(int $score): string
     {
@@ -246,6 +311,8 @@ final class Quizzes
         $questions = array_map(fn (array $q) => [
             'asked' => (string) ($q['asked'] ?? ''), 'answer' => (string) ($q['answer'] ?? ''), 'result' => (string) ($q['result'] ?? 'incorrect'),
             'right' => (string) ($q['right'] ?? ''), 'fix' => (string) ($q['fix'] ?? ''), 'topic' => $q['topic'] ?? null, 'topic_id' => $q['topic_id'] ?? null,
+            // A quiz kept before forms were: every answer of it was written as recall.
+            'form' => in_array($q['form'] ?? null, Capture::FORMS, true) ? $q['form'] : 'recall',
         ], is_string($row->questions) ? (json_decode($row->questions, true) ?: []) : []);
 
         $proposals = [];
@@ -257,6 +324,11 @@ final class Quizzes
                 }
             }
             foreach ($byTopic as $topicId => $group) {
+                // Answers that couldn't be marked say nothing about the topic: none marked, no status proposed (a
+                // score of 0 would call it confusing).
+                if (array_filter($group['questions'], fn (array $q) => $q['result'] !== 'unjudged') === []) {
+                    continue;
+                }
                 $score = self::score($group['questions']);
                 $proposals[] = ['topic_id' => $topicId, 'topic' => $group['name'], 'score' => $score, 'status' => self::statusFor($score)];
             }

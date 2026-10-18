@@ -60,12 +60,12 @@ final class ModuleFilesTool implements Tool
             ['digest' => $digest, 'state' => $state] = $states[$file->id];
             $rows[] = $digest?->read() === true
                 ? array_filter([
-                    'file' => $file->fileName(), 'type' => $file->typeLabel(), 'length' => $digest->pages.' '.($file->kind === 'slides' ? 'slides' : 'pages'),
+                    'id' => $file->id, 'file' => $file->fileName(), 'type' => $file->typeLabel(), 'length' => $digest->pages.' '.($file->kind === 'slides' ? 'slides' : 'pages'),
                     'summary' => $digest->summary, 'topics' => $digest->topics,
                     'outline' => array_map(fn (array $item) => "{$item['page']}: {$item['heading']}", array_slice($digest->outline, 0, 20)),
                     'language' => $digest->language,
                 ])
-                : ['file' => $file->fileName(), 'type' => $file->typeLabel(), 'read' => false, 'note' => match ($state) {
+                : ['id' => $file->id, 'file' => $file->fileName(), 'type' => $file->typeLabel(), 'read' => false, 'note' => match ($state) {
                     'reading' => 'being read now',
                     'skipped' => $file->kind === 'image' ? 'a picture: the student attaches it in the chat' : 'nothing to read in it',
                     default => 'not read yet: open it with read_file',

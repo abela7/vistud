@@ -35,6 +35,12 @@ final readonly class QuizDetails
         return count(array_filter($this->questions, fn (array $q) => $q['result'] === 'correct'));
     }
 
+    /** How many answers could be marked: the score is out of these. */
+    public function judged(): int
+    {
+        return count(array_filter($this->questions, fn (array $q) => $q['result'] !== 'unjudged'));
+    }
+
     /** Duration of the quiz in seconds. */
     public function durationSeconds(): int
     {

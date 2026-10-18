@@ -33,7 +33,7 @@ final class DeleteTopicTool implements Tool
         if ($wanted === null || $wanted === '') {
             return 'Say which topic to remove.';
         }
-        $topic = Lookup::one($this->topics->list($by, $context->workspaceId), $wanted, fn (TopicDetails $t) => $t->name, 'topic');
+        $topic = Lookup::forWrite($by, $this->topics->list($by, $context->workspaceId), $wanted, fn (TopicDetails $t) => $t->name, 'topic');
         if (is_string($topic)) {
             return $topic;
         }

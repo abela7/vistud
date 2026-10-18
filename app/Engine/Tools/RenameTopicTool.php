@@ -39,7 +39,7 @@ final class RenameTopicTool implements Tool
             return 'Send the new name for the topic.';
         }
         $newName = Topics::cleanMarkdown(trim($newName));
-        $topic = Lookup::one($this->topics->list($by, $context->workspaceId), $wanted, fn (TopicDetails $t) => $t->name, 'topic');
+        $topic = Lookup::forWrite($by, $this->topics->list($by, $context->workspaceId), $wanted, fn (TopicDetails $t) => $t->name, 'topic');
         if (is_string($topic)) {
             return $topic;
         }

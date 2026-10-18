@@ -29,19 +29,23 @@ final class AnswerQuestionTool implements Tool
                     'type' => 'string',
                     'description' => 'The question text or key words to match the open question.',
                 ],
+                'question_id' => [
+                    'type' => 'string',
+                    'description' => 'The id of the open question (from the questions tool).',
+                ],
                 'answer' => [
                     'type' => 'string',
                     'description' => 'The simple, concise, and question-oriented answer (1 to 2 sentences at most, under 40 words, no filler).',
                 ],
             ],
-            'required' => ['question', 'answer'],
+            'required' => ['answer'],
             'additionalProperties' => false,
         ];
     }
 
     public function run(Principal $by, Context $context, array $input): string
     {
-        $wanted = trim((string) ($input['question'] ?? ''));
+        $wanted = trim((string) ($input['question_id'] ?? $input['question'] ?? ''));
         $answer = trim((string) ($input['answer'] ?? ''));
 
         if ($wanted === '') {
@@ -56,8 +60,7 @@ final class AnswerQuestionTool implements Tool
             return 'There are no questions recorded in this course yet.';
         }
 
-        // Its exact words first; else the one question whose words contain these (open ones before answered ones). Never a
-        // guess between several: the tutor is told which match, to say the one it means.
+        // Its id or exact words first; in-app only, the one question whose words contain these (open ones before answered ones).
         $norm = fn (string $s) => trim((string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', mb_strtolower($s)));
         $wantedNorm = $norm($wanted);
         if ($wantedNorm === '') {
@@ -65,26 +68,31 @@ final class AnswerQuestionTool implements Tool
         }
         $matches = array_values(array_filter($allQuestions, fn ($q) => $q->id === $wanted || $norm($q->text) === $wantedNorm));
         // The same words written down twice are the same question: an open one first.
-        usort($matches, fn ($a, $b) => ($a->status === 'answered') <=> ($b->status === 'answered'));
+        usort($matches, fn ($a, $b) => (! $a->open()) <=> (! $b->open()));
         $matches = array_slice($matches, 0, 1);
-        foreach ([fn ($q) => $q->status !== 'answered', fn ($q) => true] as $which) {
-            if ($matches !== []) {
-                break;
+        if ($by->channel !== 'mcp') {
+            foreach ([fn ($q) => $q->open(), fn ($q) => true] as $which) {
+                if ($matches !== []) {
+                    break;
+                }
+                $matches = array_values(array_filter($allQuestions, fn ($q) => $which($q) && $norm($q->text) !== '' && str_contains($norm($q->text), $wantedNorm)));
             }
-            $matches = array_values(array_filter($allQuestions, fn ($q) => $which($q) && $norm($q->text) !== '' && str_contains($norm($q->text), $wantedNorm)));
         }
 
         if ($matches === []) {
-            $openTexts = array_map(fn ($q) => "\"{$q->text}\"", array_slice(array_filter($allQuestions, fn ($q) => $q->status !== 'answered'), 0, 5));
+            $openTexts = array_map(fn ($q) => "\"{$q->text}\" (id {$q->id})", array_slice(array_filter($allQuestions, fn ($q) => $q->open()), 0, 5));
             $available = $openTexts !== [] ? ' Available open questions: '.implode(', ', $openTexts) : '';
 
             return "Could not find a question matching \"{$wanted}\".{$available}";
         }
         if (count($matches) > 1) {
-            return 'Several questions match "'.$wanted.'": '.implode(', ', array_map(fn ($q) => "\"{$q->text}\"", array_slice($matches, 0, 5))).'. Send the one you mean, in its exact words.';
+            return 'Several questions match "'.$wanted.'": '.implode(', ', array_map(fn ($q) => "\"{$q->text}\" (id {$q->id})", array_slice($matches, 0, 5))).'. Send the one you mean, by its id or in its exact words.';
         }
 
         $matched = $matches[0];
+        if ($by->channel === 'mcp' && ! $matched->open()) {
+            return "The question \"{$matched->text}\" is already answered.";
+        }
         $conciseAnswer = mb_substr($answer, 0, Questions::MAX_ANSWER);
         // The tutor's answer answers it; whether it clicked is the student's to say.
         $this->questions->setStatus($by, $matched->id, 'answered', $conciseAnswer, theirWord: false);

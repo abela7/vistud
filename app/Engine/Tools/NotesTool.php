@@ -49,6 +49,7 @@ final class NotesTool implements Tool
         $rows = [];
         foreach (array_slice($notes, 0, 60) as $note) {
             $rows[] = array_filter([
+                'id' => $note->id,
                 'note' => $note->displayTitle(),
                 'module' => $note->moduleId !== null ? $titles[$note->moduleId] ?? null : 'the course\'s top level',
                 'folder' => $note->folderId !== null ? $folderNames[$note->folderId] ?? null : null,

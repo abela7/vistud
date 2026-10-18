@@ -50,26 +50,26 @@ final class SearchEverythingTool implements Tool
         $fits = fn (string $name) => mb_stripos($name, $query) !== false;
         $rows = [];
         $more = 0;
-        $add = function (string $course, string $kind, string $name) use (&$rows, &$more) {
-            count($rows) < self::MAX ? $rows[] = ['course' => $course, 'kind' => $kind, 'name' => $name] : $more++;
+        $add = function (string $id, string $course, string $kind, string $name) use (&$rows, &$more) {
+            count($rows) < self::MAX ? $rows[] = ['id' => $id, 'course' => $course, 'kind' => $kind, 'name' => $name] : $more++;
         };
         // The journal is read once for every course's topics and questions.
         $snapshot = $this->memory->snapshot(Guard::learner($by));
         foreach ($this->courses->all($by) as $course) {
             foreach ($this->topics->list($by, $course->id, $snapshot) as $topic) {
-                $fits($topic->name) && $add($course->name, 'topic', Topics::cleanMarkdown($topic->name));
+                $fits($topic->name) && $add($topic->id, $course->name, 'topic', Topics::cleanMarkdown($topic->name));
             }
             foreach ($this->notes->list($by, $course->id) as $note) {
-                $fits($note->displayTitle()) && $add($course->name, 'note', $note->displayTitle());
+                $fits($note->displayTitle()) && $add($note->id, $course->name, 'note', $note->displayTitle());
             }
             foreach ($this->files->list($by, $course->id) as $file) {
-                $fits($file->fileName()) && $add($course->name, 'file', $file->fileName());
+                $fits($file->fileName()) && $add($file->id, $course->name, 'file', $file->fileName());
             }
             foreach ($this->questions->list($by, $course->id, snapshot: $snapshot) as $question) {
-                $fits($question->text) && $add($course->name, 'question', mb_strimwidth($question->text, 0, 160, '…'));
+                $fits($question->text) && $add($question->id, $course->name, 'question', mb_strimwidth($question->text, 0, 160, '…'));
             }
             foreach ($this->activities->list($by, $course->id) as $activity) {
-                $fits($activity->title) && $add($course->name, $activity->kind, $activity->title);
+                $fits($activity->title) && $add($activity->id, $course->name, $activity->kind, $activity->title);
             }
         }
 

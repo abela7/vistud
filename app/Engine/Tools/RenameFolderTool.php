@@ -39,7 +39,7 @@ final class RenameFolderTool implements Tool
             return 'Send the new name for the folder.';
         }
         $newName = trim($newName);
-        $folder = Lookup::one($this->folders->tree($by, $context->workspaceId), $wanted, fn (FolderDetails $f) => $f->name, 'folder');
+        $folder = Lookup::forWrite($by, $this->folders->tree($by, $context->workspaceId), $wanted, fn (FolderDetails $f) => $f->name, 'folder');
         if (is_string($folder)) {
             return $folder;
         }

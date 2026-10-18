@@ -53,7 +53,7 @@ final class SetTopicStatusTool implements Tool
                 return 'Say which topic: the session has none yet.';
             }
         } else {
-            $topic = Lookup::one($topics, $wanted, fn ($t) => $t->name, 'topic');
+            $topic = Lookup::forWrite($by, $topics, $wanted, fn ($t) => $t->name, 'topic');
             if (is_string($topic)) {
                 return $topic;
             }
@@ -64,7 +64,7 @@ final class SetTopicStatusTool implements Tool
             return "\"{$topic->name}\" is {$words} already.";
         }
         $since = $context->sessionId === null ? null : $this->sessions->find($by, $context->sessionId)->startedAt;
-        if ($topic->status !== null && $topic->statusBy !== 'tutor' && Topics::saidSince($topic->statusAt, $since)) {
+        if ($topic->studentsWord() && Topics::saidSince($topic->statusAt, $since)) {
             // The student's own word on it: it stays. What the tutor saw is still told to them, to take or leave.
             $context->effects->status($topic->id, $topic->name, $topic->status, $status, false, $reason);
 

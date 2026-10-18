@@ -33,7 +33,7 @@ final class RememberTool implements Tool
         return ['type' => 'object', 'properties' => [
             'note' => ['type' => 'string', 'description' => 'One short line, at most '.TutorMemories::MAX_TEXT.' characters, e.g. "Studies best in the morning, about an hour a day."'],
             'course' => ['type' => 'string', 'description' => 'A course\'s name, when it holds only there.'],
-            'replaces' => ['type' => 'integer', 'description' => 'The number of a line in the memories list that this one replaces.'],
+            'replaces' => ['type' => 'string', 'description' => 'The id (or in-app list number) of a line in the memories list that this one replaces.'],
         ], 'required' => ['note'], 'additionalProperties' => false];
     }
 
@@ -48,17 +48,29 @@ final class RememberTool implements Tool
         }
         $course = null;
         if (($wanted = Lookup::text($input, 'course')) !== null) {
-            $course = $this->courses->find($by, $wanted);
+            $course = $this->courses->find($by, $wanted, exact: $by->channel === 'mcp');
             if (is_string($course)) {
                 return $course;
             }
         }
         $replaced = null;
-        if (isset($input['replaces'])) {
+        if (isset($input['replaces']) && trim((string) $input['replaces']) !== '') {
+            $wanted = trim((string) $input['replaces']);
             $all = $this->memories->all($by);
-            $replaced = $all[(int) $input['replaces'] - 1] ?? null;
+            $replaced = collect($all)->firstWhere('id', $wanted);
             if ($replaced === null) {
-                return 'There is no line '.(int) $input['replaces'].' in the memories list (1 to '.count($all).').';
+                if ($by->channel === 'mcp') {
+                    return ctype_digit($wanted)
+                        ? 'Give the memory\'s id from the memories tool, not its list number.'
+                        : "There is no memory with id \"{$wanted}\".";
+                }
+                if (! is_int($input['replaces']) && ! ctype_digit($wanted)) {
+                    return "There is no memory with id \"{$wanted}\".";
+                }
+                $replaced = $all[(int) $wanted - 1] ?? null;
+                if ($replaced === null) {
+                    return 'There is no line '.(int) $wanted.' in the memories list (1 to '.count($all).').';
+                }
             }
         }
         try {

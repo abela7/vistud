@@ -2,9 +2,11 @@
 
 namespace App\Engine\Vistud;
 
+use App\Engine\Toolbox;
 use App\Engine\Tools\Context;
 use App\Engine\Tools\Tool;
 use App\Platform\Access\Principal;
+use App\Study\Fence;
 
 /**
  * One of the course tools (the tutor's: topics, notes, files, set_topic_status…) for ViStud AI, which works above every
@@ -37,13 +39,14 @@ final class InCourse implements Tool
 
     public function run(Principal $by, Context $context, array $input): string
     {
-        $course = $this->courses->find($by, $input['course'] ?? null);
+        $writes = Toolbox::writes($this->inner->name()) || $this->inner->name() === 'edit_note';
+        $course = $this->courses->find($by, $input['course'] ?? null, exact: $writes);
         if (is_string($course)) {
             return $course;
         }
         unset($input['course']);
-        $inCourse = new Context($course->id, null, null, $context->zone, $context->effects, threadId: $context->threadId, model: $context->model);
+        $inCourse = new Context($course->id, null, null, $context->zone, $context->effects, threadId: $context->threadId, model: $context->model, via: $context->via, prompt: $context->prompt);
 
-        return "In {$course->name}:\n".$this->inner->run($by, $inCourse, $input);
+        return 'In '.Fence::escape($course->name).":\n".$this->inner->run($by, $inCourse, $input);
     }
 }

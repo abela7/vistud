@@ -89,7 +89,7 @@ final class WriteNoteTool implements Tool
             if (in_array($normalized, ['the note', 'my note', 'current note', 'opened note', 'open note', 'this note', 'notes', 'study note', 'study notes', 'assignment note', 'assignment notes'], true)) {
                 $note = $this->studyNote($by, $context);
             } else {
-                $note = Lookup::here($this->notes->list($by, $context->workspaceId), $folderIds, $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
+                $note = Lookup::hereForWrite($by, $this->notes->list($by, $context->workspaceId), $folderIds, $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
                 if (is_string($note)) {
                     return $note.' Or give a title to start a new note.';
                 }

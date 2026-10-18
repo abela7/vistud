@@ -54,6 +54,7 @@ final class MemoriesTool implements Tool
         }
 
         return Lookup::json(array_map(fn (TutorMemory $m, int $i) => [
+            'id' => $m->id,
             'number' => $i + 1,
             'for' => $m->everywhere() ? 'all courses' : ($names[$m->workspaceId] ?? 'a removed course'),
             'text' => $m->text,

@@ -26,16 +26,31 @@ final class ForgetMemoryTool implements Tool
     public function parameters(): array
     {
         return ['type' => 'object', 'properties' => [
+            'id' => ['type' => 'string', 'description' => 'The memory\'s id from the memories tool.'],
             'number' => ['type' => 'integer', 'description' => 'The line\'s number in the memories list.'],
-        ], 'required' => ['number'], 'additionalProperties' => false];
+        ], 'additionalProperties' => false];
     }
 
     public function run(Principal $by, Context $context, array $input): string
     {
         $all = $this->memories->all($by);
-        $line = $all[(int) ($input['number'] ?? 0) - 1] ?? null;
-        if ($line === null) {
-            return 'There is no line '.(int) ($input['number'] ?? 0).' in the memories list (1 to '.count($all).').';
+        $id = isset($input['id']) && is_string($input['id']) ? trim($input['id']) : '';
+        if ($id === '' && isset($input['number']) && is_string($input['number']) && ! ctype_digit(trim($input['number']))) {
+            $id = trim($input['number']);
+        }
+        if ($id !== '') {
+            $line = collect($all)->firstWhere('id', $id);
+            if ($line === null) {
+                return "There is no memory with id \"{$id}\".";
+            }
+        } else {
+            if ($by->channel === 'mcp') {
+                return 'Give the memory\'s id from the memories tool, not its list number.';
+            }
+            $line = $all[(int) ($input['number'] ?? 0) - 1] ?? null;
+            if ($line === null) {
+                return 'There is no line '.(int) ($input['number'] ?? 0).' in the memories list (1 to '.count($all).').';
+            }
         }
         if (($ask = Agreement::needed($by, $context, "forget_memory:{$line->id}", "Forget \"{$line->text}\"?")) !== null) {
             return $ask;

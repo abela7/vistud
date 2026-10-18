@@ -41,13 +41,14 @@ final class AssignmentsTool implements Tool
             $progress = $standing['progress'][$a->id] ?? null;
             $health = $standing['health'][$a->id] ?? null;
             $rows[] = array_filter([
+                'id' => $a->id,
                 'title' => $a->title,
                 'kind' => strtolower($a->kindLabel()),
                 'status' => ['todo' => 'to do', 'doing' => 'in progress', 'done' => 'done'][$a->status] ?? $a->status,
                 'due' => $a->dueOn,
                 'time_left' => $a->status !== 'done' ? $a->timeLeft($now) : null,
                 'module' => $a->moduleId !== null ? $modules[$a->moduleId] ?? null : null,
-                'plan' => $progress ? "{$progress->done} of {$progress->total} done, {$progress->percent}%" : null,
+                'plan' => $progress?->words(),
                 'going' => $health ? str_replace('_', ' ', $health['state']).($health['reasons'] ? ' ('.implode('; ', $health['reasons']).')' : '') : null,
             ]);
         }

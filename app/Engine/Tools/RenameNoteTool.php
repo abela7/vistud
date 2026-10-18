@@ -44,7 +44,7 @@ final class RenameNoteTool implements Tool
             if (in_array($normalized, ['the note', 'my note', 'current note', 'opened note', 'open note', 'this note', 'notes', 'study note', 'study notes'], true)) {
                 $note = $this->studyNote($by, $context);
             } else {
-                $note = Lookup::here($this->notes->list($by, $context->workspaceId), Lookup::folder($this->folders, $by, $context), $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
+                $note = Lookup::hereForWrite($by, $this->notes->list($by, $context->workspaceId), Lookup::folder($this->folders, $by, $context), $wanted, fn (NoteDetails $n) => $n->displayTitle(), 'note');
                 if (is_string($note)) {
                     return $note;
                 }

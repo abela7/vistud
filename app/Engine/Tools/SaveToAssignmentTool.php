@@ -125,6 +125,6 @@ final class SaveToAssignmentTool implements Tool
             return 'Several assignments are open: '.implode('; ', array_map(fn (ActivityDetails $a) => $a->title, array_slice($open, 0, 6))).'. Say which assignment to save to.';
         }
 
-        return Lookup::one($open !== [] ? $open : $all, $wanted, fn (ActivityDetails $a) => $a->title, 'assignment');
+        return Lookup::forWrite($by, $open !== [] ? $open : $all, $wanted, fn (ActivityDetails $a) => $a->title, 'assignment');
     }
 }

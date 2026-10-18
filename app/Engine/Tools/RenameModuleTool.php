@@ -38,7 +38,7 @@ final class RenameModuleTool implements Tool
         $wanted = Lookup::text($input, 'module');
         $module = null;
         if ($wanted !== null) {
-            $module = Lookup::one($this->modules->list($by, $context->workspaceId), $wanted, fn (ModuleDetails $m) => $m->title, 'module');
+            $module = Lookup::forWrite($by, $this->modules->list($by, $context->workspaceId), $wanted, fn (ModuleDetails $m) => $m->title, 'module');
             if (is_string($module)) {
                 return $module;
             }

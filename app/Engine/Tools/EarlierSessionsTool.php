@@ -81,6 +81,7 @@ final class EarlierSessionsTool implements Tool
             }
             $moduleId = $session->moduleId ?? ($session->topicId !== null ? collect($topicList)->firstWhere('id', $session->topicId)?->moduleId : null);
             $rows[] = array_filter([
+                'id' => $session->id,
                 'on' => CarbonImmutable::parse($session->startedAt)->setTimezone($context->zone)->format('Y-m-d'),
                 'module' => $moduleId !== null ? $modules[$moduleId] ?? null : null,
                 'topic' => $session->topicId !== null ? $topics[$session->topicId] ?? null : null,

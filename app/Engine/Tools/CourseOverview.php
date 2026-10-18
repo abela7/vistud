@@ -83,11 +83,12 @@ final class CourseOverview implements Tool
             foreach ($tree as $folder) {
                 if ($folder->moduleId === $module->id && $folder->parentId === null) {
                     $in = array_filter($mine, fn ($topic) => $topic->folderId !== null && $topOf($topic->folderId) === $folder->id);
-                    $folders[] = ['folder' => $folder->name, 'topics' => $count($in)];
+                    $folders[] = ['id' => $folder->id, 'folder' => $folder->name, 'topics' => $count($in)];
                 }
             }
             $own = array_filter($mine, fn ($topic) => $topic->folderId === null);
             $modules[] = array_filter([
+                'id' => $module->id,
                 'number' => $i + 1,
                 'title' => $module->title,
                 'runs' => $module->startsOn || $module->endsOn ? trim(($module->startsOn ?? '').' to '.($module->endsOn ?? ''), ' to') : null,
@@ -100,7 +101,7 @@ final class CourseOverview implements Tool
             ], fn ($v) => $v !== null);
         }
         $today = CarbonImmutable::now($context->zone)->startOfDay();
-        $open = array_filter($this->questions->list($by, $w), fn ($q) => $q->status !== 'answered');
+        $open = array_filter($this->questions->list($by, $w), fn ($q) => $q->open());
         $due = array_filter($this->activities->list($by, $w), fn ($a) => $a->status !== 'done' && $a->dueOn !== null && $a->dueOn <= $today->addDays(14)->toDateString());
 
         return Lookup::json(array_filter([

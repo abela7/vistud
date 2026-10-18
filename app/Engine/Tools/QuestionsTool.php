@@ -60,13 +60,14 @@ final class QuestionsTool implements Tool
             }
             $onlyModule = $module->id;
         }
-        $list = array_values(array_filter($this->questions->list($by, $context->workspaceId), fn ($q) => ($all || $q->status !== 'answered')
+        $list = array_values(array_filter($this->questions->list($by, $context->workspaceId), fn ($q) => ($all || $q->open())
             && ($onlyTopic === null || $q->topicId === $onlyTopic)
             && ($onlyModule === null || $q->moduleId === $onlyModule || ($q->topicId !== null && ($topicList[array_search($q->topicId, array_column($topicList, 'id'), true)]->moduleId ?? null) === $onlyModule))));
         usort($list, fn ($a, $b) => [$b->status === 'stuck', $a->status === 'answered', $b->askedAt] <=> [$a->status === 'stuck', $b->status === 'answered', $a->askedAt]);
         $rows = [];
         foreach (array_slice($list, 0, 40) as $q) {
             $rows[] = array_filter([
+                'id' => $q->id,
                 'question' => $q->text,
                 'status' => $q->status,
                 'topic' => $q->topicId !== null ? $topics[$q->topicId] ?? null : null,

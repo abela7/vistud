@@ -39,24 +39,48 @@ abstract class Saving implements Tool
             return "Nothing to save: send at least one {$words[0]}.";
         }
         $session = $this->sessions->find($by, $context->sessionId);
+        $topicList = $this->topics->list($by, $context->workspaceId);
+        $byId = [];
         $names = [];
-        foreach ($this->topics->list($by, $context->workspaceId) as $topic) {
-            $names[mb_strtolower($topic->name)] = $topic->name;
+        foreach ($topicList as $topic) {
+            $byId[$topic->id] = $topic->name;
+            $names[Lookup::key($topic->name)][] = $topic;
         }
-        $fallback = $session->topicId !== null ? collect($this->topics->list($by, $context->workspaceId))->firstWhere('id', $session->topicId)?->name : null;
+        $fallback = $session->topicId !== null ? ($byId[$session->topicId] ?? null) : null;
 
         $items = [];
         $empty = 0;
         $loose = in_array($kind, self::LOOSE, true);
         // Topic names given that the course doesn't have, and key points with no topic to go to.
         $unknown = [];
+        $problems = [];
         $without = 0;
         foreach (array_slice($wanted, 0, 10) as $one) {
             $named = is_string($one['topic'] ?? null) ? trim($one['topic']) : '';
-            if ($named !== '' && ! isset($names[mb_strtolower($named)])) {
-                $unknown[$named] = true;
+            $resolved = null;
+            if ($named !== '') {
+                if (isset($byId[$named])) {
+                    $resolved = $byId[$named];
+                } else {
+                    $exact = $names[Lookup::key($named)] ?? [];
+                    if (count($exact) === 1) {
+                        $resolved = $exact[0]->name;
+                    } elseif (count($exact) > 1) {
+                        $problems[] = Lookup::exact($topicList, $named, fn ($t) => $t->name, 'topic');
+
+                        continue;
+                    } else {
+                        $near = array_values(array_filter($topicList, fn ($t) => mb_stripos($t->name, $named) !== false));
+                        if (count($near) > 1 || $by->channel === 'mcp') {
+                            $problems[] = Lookup::exact($topicList, $named, fn ($t) => $t->name, 'topic');
+
+                            continue;
+                        }
+                        $unknown[$named] = true;
+                    }
+                }
             }
-            $topic = $names[mb_strtolower($named)] ?? $fallback;
+            $topic = $resolved ?? $fallback;
             if ($topic === null && ! $loose) {
                 $without++;
 
@@ -67,6 +91,10 @@ abstract class Saving implements Tool
         }
         $unknownWords = '"'.implode('", "', array_keys($unknown)).'"';
         if ($items === []) {
+            if ($problems !== []) {
+                return implode(' ', array_unique($problems));
+            }
+
             return $without > 0
                 ? ucfirst($words[1]).' need a topic, and this session has none yet'.($unknown !== [] ? " (the course has no topic called {$unknownWords})" : '').'. Agree one with the student and set it with set_topic (or add the course\'s topics with add_topics), then save again.'
                 : "Nothing was saved: every {$words[0]} was empty.";
@@ -101,6 +129,7 @@ abstract class Saving implements Tool
             $empty > 0 ? $empty.' '.($empty === 1 ? 'was' : 'were').' empty.' : null,
             $without > 0 ? $without.' could not be saved: this session has no topic yet (set_topic or add_topics first).' : null,
             $unknown !== [] && ($fallback !== null || $loose) ? "The course has no topic called {$unknownWords}, so ".($fallback !== null ? "the session's topic was used" : "they went under the session's module").'; add_topics adds it.' : null,
+            $problems !== [] ? implode(' ', array_unique($problems)) : null,
             $result['failed'] !== [] ? count($result['failed']).' could not be saved: '.implode('; ', array_unique(array_column($result['failed'], 1))).'.' : null,
             $saved > 0 ? 'Tell the student in a line what you saved.' : null,
         ]));
@@ -118,7 +147,7 @@ abstract class Saving implements Tool
         $out = [];
         foreach (is_array($input[$key] ?? null) ? $input[$key] : [] as $one) {
             if (is_array($one)) {
-                $out[] = ['topic' => $one['topic'] ?? null, 'fields' => array_intersect_key($one, array_flip($fields))];
+                $out[] = ['topic' => $one['topic_id'] ?? $one['topic'] ?? null, 'fields' => array_intersect_key($one, array_flip($fields))];
             }
         }
 
@@ -128,7 +157,10 @@ abstract class Saving implements Tool
     /** @return array<string, mixed> the schema of a list of items with these string fields and an optional topic */
     protected static function listOf(string $key, array $fields, string $what): array
     {
-        $properties = ['topic' => ['type' => 'string', 'description' => 'The course topic it belongs to, by its exact name in the course. Left out: the session\'s topic.']];
+        $properties = [
+            'topic' => ['type' => 'string', 'description' => 'The course topic it belongs to, by its exact name in the course. Left out: the session\'s topic.'],
+            'topic_id' => ['type' => 'string', 'description' => 'The id of the course topic it belongs to (from the topics tool).'],
+        ];
         foreach ($fields as $field => $description) {
             $properties[$field] = ['type' => 'string', 'description' => $description];
         }

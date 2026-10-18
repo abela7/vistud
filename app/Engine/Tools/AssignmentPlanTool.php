@@ -51,9 +51,10 @@ final class AssignmentPlanTool implements Tool
     public static function format(PlanDetails $plan, ActivityDetails $activity): array
     {
         $progress = $plan->progress();
-        $out = ['assignment' => $activity->title, 'due' => $activity->dueOn, 'progress' => "{$progress->done} of {$progress->total} done, {$progress->percent}%", 'sections' => [], 'tasks_outside_sections' => [], 'criteria' => [], 'milestones' => []];
+        $out = ['id' => $activity->id, 'assignment' => $activity->title, 'due' => $activity->dueOn, 'progress' => $progress->words(), 'sections' => [], 'tasks_outside_sections' => [], 'criteria' => [], 'milestones' => []];
         foreach ($plan->parts() as $part) {
             $out['sections'][] = array_filter([
+                'id' => $part->id,
                 'section' => $part->title,
                 'weight' => $part->weight !== null ? "{$part->weight}%" : null,
                 'state' => self::state($plan, $part),
@@ -63,10 +64,10 @@ final class AssignmentPlanTool implements Tool
         }
         $out['tasks_outside_sections'] = self::steps($plan, null);
         foreach ($plan->criteria() as $criterion) {
-            $out['criteria'][] = array_filter(['criterion' => $criterion->title, 'marks' => $criterion->weight, 'state' => self::words($criterion->state)]);
+            $out['criteria'][] = array_filter(['id' => $criterion->id, 'criterion' => $criterion->title, 'marks' => $criterion->weight, 'state' => self::words($criterion->state)]);
         }
         foreach ($plan->milestones() as $milestone) {
-            $out['milestones'][] = array_filter(['milestone' => $milestone->title, 'on' => $milestone->dueOn, 'state' => $milestone->state]);
+            $out['milestones'][] = array_filter(['id' => $milestone->id, 'milestone' => $milestone->title, 'on' => $milestone->dueOn, 'state' => $milestone->state]);
         }
 
         return array_filter($out, fn ($v) => $v !== [] && $v !== null);
@@ -78,6 +79,7 @@ final class AssignmentPlanTool implements Tool
         $rows = [];
         foreach ($plan->steps($parentId) as $step) {
             $rows[] = array_filter([
+                'id' => $step->id,
                 'task' => $step->title,
                 'state' => self::state($plan, $step),
                 'due' => $step->dueOn,

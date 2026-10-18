@@ -69,7 +69,7 @@ final class UpdateAssignmentPlanItemTool implements Tool
             fn (PlanItem $i) => $kind === null || $i->kind === $kind
         ));
 
-        $found = Lookup::one($candidates, $wanted, fn (PlanItem $i) => $i->title, 'plan item');
+        $found = Lookup::forWrite($by, $candidates, $wanted, fn (PlanItem $i) => $i->title, 'plan item');
         if (is_string($found)) {
             return $found;
         }

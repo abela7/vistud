@@ -34,7 +34,7 @@ final class RememberTool implements Tool
         return ['type' => 'object', 'properties' => [
             'note' => ['type' => 'string', 'description' => 'One short line, at most '.TutorMemories::MAX_TEXT.' characters, about them and what it means for teaching them, e.g. "Learns best from a worked example before the theory."'],
             'all_courses' => ['type' => 'boolean', 'description' => 'True when it is about them in general, not only this course.'],
-            'replaces' => ['type' => 'integer', 'description' => 'The number of a line you remember that this one replaces.'],
+            'replaces' => ['type' => 'string', 'description' => 'The id (or in-app list number) of a line you remember that this one replaces.'],
         ], 'required' => ['note'], 'additionalProperties' => false];
     }
 
@@ -48,11 +48,23 @@ final class RememberTool implements Tool
             return 'Send the line to remember.';
         }
         $replaced = null;
-        if (isset($input['replaces'])) {
+        if (isset($input['replaces']) && trim((string) $input['replaces']) !== '') {
+            $wanted = trim((string) $input['replaces']);
             $list = $this->memories->list($by, $context->workspaceId);
-            $replaced = $list[(int) $input['replaces'] - 1] ?? null;
+            $replaced = collect($list)->firstWhere('id', $wanted);
             if ($replaced === null) {
-                return 'There is no line '.(int) $input['replaces'].' in what you remember (1 to '.count($list).').';
+                if ($by->channel === 'mcp') {
+                    return ctype_digit($wanted)
+                        ? 'Give the memory\'s id from the memories tool, not its list number.'
+                        : "There is no memory with id \"{$wanted}\".";
+                }
+                if (! is_int($input['replaces']) && ! ctype_digit($wanted)) {
+                    return "There is no memory with id \"{$wanted}\".";
+                }
+                $replaced = $list[(int) $wanted - 1] ?? null;
+                if ($replaced === null) {
+                    return 'There is no line '.(int) $wanted.' in what you remember (1 to '.count($list).').';
+                }
             }
         }
         try {

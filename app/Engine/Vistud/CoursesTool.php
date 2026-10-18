@@ -58,7 +58,7 @@ final class CoursesTool implements Tool
             $studied = isset($last[$course->id]) ? CarbonImmutable::parse($last[$course->id][0], 'UTC')->setTimezone($context->zone)->toDateString() : null;
             if ($course->archived()) {
                 if (($input['archived'] ?? false) === true) {
-                    $rows[] = array_filter(['course' => $course->name, 'code' => $course->code, 'term' => $course->term, 'archived' => true, 'last_studied' => $studied]);
+                    $rows[] = array_filter(['id' => $course->id, 'course' => $course->name, 'code' => $course->code, 'term' => $course->term, 'archived' => true, 'last_studied' => $studied]);
                 }
 
                 continue;
@@ -66,7 +66,7 @@ final class CoursesTool implements Tool
             $snapshot ??= $this->memory->snapshot($scope);
             $roll = $this->rollups->for($by, $course->id, $snapshot);
             $rows[] = array_filter([
-                'course' => $course->name, 'code' => $course->code, 'term' => $course->term,
+                'id' => $course->id, 'course' => $course->name, 'code' => $course->code, 'term' => $course->term,
                 'topics' => ['understood' => $roll->done(), 'total' => $roll->total(), 'need_attention' => count($roll->attention), 'not_started' => $roll->notStarted()],
                 'cards_due' => $roll->cards['due'] ?: null,
                 'sessions' => $last[$course->id][1] ?? 0,
