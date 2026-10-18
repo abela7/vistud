@@ -46,7 +46,7 @@ use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
 
 /**
- * The tutor's standing context, in layers (docs/specs/vistud-2-blueprint.md Â§3.6.2). Stable layers come first and
+ * The tutor's standing context, in layers (docs/specs/vistud-2-blueprint.md §3.6.2). Stable layers come first and
  * are the same word for word from one call to the next, so the service can cache them; what changes comes last:
  *
  *  0 the tutor's rules (resources/prompts/tutor-2.md)      1 the tools, beside the system prompt
@@ -232,7 +232,7 @@ final class Stack
                 );
             } else {
                 $path = $this->folders->path($by, $folder->id);
-                $folderName = implode(' â€º ', array_map(fn ($f) => $f->name, $path));
+                $folderName = implode(' › ', array_map(fn ($f) => $f->name, $path));
                 $brief = $this->briefs->forFolder($by, $folder->id);
                 $facts = new Facts(
                     courseName: $workspace->name,
@@ -432,7 +432,7 @@ final class Stack
 
     /**
      * The course's open graded work, and what the assignments this session feeds ask of it (the owner's ask,
-     * 2026-10-13: the study tutor knows the assignment, and says "on your assignment you are askedâ€¦"). A session feeds
+     * 2026-10-13: the study tutor knows the assignment, and says "on your assignment you are asked…"). A session feeds
      * an assignment when its understanding names the session's topic, a topic of the session's module, or the module,
      * or when it is set in the module.
      *
@@ -585,7 +585,7 @@ final class Stack
     {
         $lines = [['## The student', true], ['About you, in their words: '.($f->aboutYou !== '' ? $f->aboutYou : 'nothing written yet.'), true]];
         if ($f->preferences !== []) {
-            $lines[] = ['How they like to learn in this course: '.implode(' Â· ', $f->preferences).'.', true];
+            $lines[] = ['How they like to learn in this course: '.implode(' · ', $f->preferences).'.', true];
         }
         // What the tutor kept from earlier chats: a few short lines, so never cut. Numbered, so the tool can replace one.
         if (! $f->remembers) {
@@ -621,7 +621,7 @@ final class Stack
         $here = $f->folderName !== null;
         if ($here) {
             // A folder's session (docs/specs/vistud-2-blueprint.md, Phase 9) or helper look-up: where they are, and what that means.
-            $lines = [['## Where you are', true], [implode(' â€º ', array_filter([$f->courseName, $title, $f->folderName])), true]];
+            $lines = [['## Where you are', true], [implode(' › ', array_filter([$f->courseName, $title, $f->folderName])), true]];
             if ($isHelper) {
                 $lines[] = ["The student is looking at the folder {$f->folderName}. Answer their questions about this folder and its topics and files.", true];
             } else {
@@ -629,8 +629,8 @@ final class Stack
             }
             if ($f->otherFolders !== []) {
                 $otherText = $isHelper
-                    ? 'The module\'s other folders: '.implode(' Â· ', array_slice($f->otherFolders, 0, 8)).'.'
-                    : 'The module\'s other folders are for other sessions: '.implode(' Â· ', array_slice($f->otherFolders, 0, 8)).'.';
+                    ? 'The module\'s other folders: '.implode(' · ', array_slice($f->otherFolders, 0, 8)).'.'
+                    : 'The module\'s other folders are for other sessions: '.implode(' · ', array_slice($f->otherFolders, 0, 8)).'.';
                 $lines[] = [$otherText, true];
             }
         } else {
@@ -641,7 +641,7 @@ final class Stack
             $lines[] = ['About this module: '.$f->moduleAbout, true];
         }
         if ($f->moduleParts !== []) {
-            $lines[] = ['Its parts: '.implode(' Â· ', $f->moduleParts).'.', true];
+            $lines[] = ['Its parts: '.implode(' · ', $f->moduleParts).'.', true];
         }
         if ($f->moduleInstructions !== '') {
             $lines[] = ["Instructions for this module, in the student's words: {$f->moduleInstructions}", true];
@@ -652,7 +652,7 @@ final class Stack
         // The session's topic is marked, and kept when the list is cut: the one after it is the next to study.
         foreach ($f->topics as $topic) {
             $now = $f->topicNow !== null && $topic['name'] === $f->topicNow;
-            $lines[] = ["- {$topic['name']}: {$topic['status']}".($now ? ' â† the session\'s topic now' : ''), $now];
+            $lines[] = ["- {$topic['name']}: {$topic['status']}".($now ? ' ← the session\'s topic now' : ''), $now];
         }
         if ($here && $f->moduleOwnTopics !== []) {
             $lines[] = ['In the module but in no folder (they belong to every part of it):', true];
@@ -696,7 +696,7 @@ final class Stack
             }
         }
         if ($f->assignmentsLinked !== []) {
-            $lines[] = ['What this study feeds, from each assignment\'s reading ([S1], [F2]: its sources). When what you teach is asked for in one, say so ("On Coursework 1 you are asked toâ€¦"), tie it to what is marked, and offer to save useful study notes or examples directly to that assignment with save_to_assignment. Help them learn it; never write the graded work.', true];
+            $lines[] = ['What this study feeds, from each assignment\'s reading ([S1], [F2]: its sources). When what you teach is asked for in one, say so ("On Coursework 1 you are asked to…"), tie it to what is marked, and offer to save useful study notes or examples directly to that assignment with save_to_assignment. Help them learn it; never write the graded work.', true];
             array_push($lines, ...$f->assignmentsLinked);
         }
 
@@ -773,7 +773,7 @@ final class Stack
         $lines[] = ["Kind: {$a->kindLabel()}", true];
         $lines[] = ["Stage: {$a->stage}", true];
         $lines[] = ["Status: {$a->status}", true];
-        $due = $a->dueOn === null ? 'none given' : $a->dueAt()->format('l j F Y').($a->dueTime !== null ? " at {$a->dueTime}" : '')." ({$a->zone})".($a->timeLeft() !== null ? " â€” {$a->timeLeft()} left" : '');
+        $due = $a->dueOn === null ? 'none given' : $a->dueAt()->format('l j F Y').($a->dueTime !== null ? " at {$a->dueTime}" : '')." ({$a->zone})".($a->timeLeft() !== null ? " — {$a->timeLeft()} left" : '');
         $lines[] = ["Deadline: {$due}", true];
 
         if ($a->moduleId !== null) {
@@ -817,7 +817,7 @@ final class Stack
                 $lines[] = ["{$heading}:", $kept];
                 foreach ($items as $item) {
                     $topic = $part === 'topics' ? ($standing[$item['id'] ?? ''] ?? null) : null;
-                    $lines[] = ['- '.self::understood($part, $item).($topic !== null ? ' â€” where the student stands: '.self::status($topic) : ''), $kept];
+                    $lines[] = ['- '.self::understood($part, $item).($topic !== null ? ' — where the student stands: '.self::status($topic) : ''), $kept];
                 }
             }
             foreach ($understanding->extraSections() as $section) {
@@ -843,15 +843,15 @@ final class Stack
         foreach ($labelled as $label => $item) {
             $new = $understanding !== null && ! isset($understanding->sources[$label]) ? ' (new: not in the understanding yet)' : '';
             if ($item instanceof FileDetails) {
-                $lines[] = ["- {$label} Â· file â€œ{$item->fileName()}â€{$new}", true];
+                $lines[] = ["- {$label} · file “{$item->fileName()}”{$new}", true];
 
                 continue;
             }
-            $title = $item->title !== null ? " Â· â€œ{$item->title}â€" : '';
+            $title = $item->title !== null ? " · “{$item->title}”" : '';
             $date = $item->receivedOn ?? CarbonImmutable::parse($item->createdAt)->format('Y-m-d');
             $text = trim((string) preg_replace('/\s+/u', ' ', $item->text));
-            $excerpt = mb_strlen($text) > 100 ? mb_substr($text, 0, 100).'â€¦' : $text;
-            $lines[] = ["- {$label} Â· {$item->kindLabel()}{$title} ({$date}){$new}: {$excerpt}", true];
+            $excerpt = mb_strlen($text) > 100 ? mb_substr($text, 0, 100).'…' : $text;
+            $lines[] = ["- {$label} · {$item->kindLabel()}{$title} ({$date}){$new}: {$excerpt}", true];
         }
 
         // Plan summary
@@ -861,14 +861,14 @@ final class Stack
             $lines[] = ['No plan yet.', true];
             $starters = [];
             foreach (PlanStarters::ALL as $key => $starter) {
-                $partNames = implode(' â†’ ', array_map(fn (array $part) => $part[0], $starter['parts']));
+                $partNames = implode(' → ', array_map(fn (array $part) => $part[0], $starter['parts']));
                 $starters[] = "{$key} ({$starter['label']}: {$partNames})";
             }
             $lines[] = ['Pre-made plan starters available (via save_assignment_plan `starter`, or tailored with custom sections/steps/criteria): '.implode('; ', $starters).'.', true];
         } else {
             $progress = $plan->progress();
             $health = $plan->health($a);
-            $healthText = $health !== null ? " Â· Health: {$health['state']}".($health['reasons'] !== [] ? ' ('.implode(', ', $health['reasons']).')' : '') : '';
+            $healthText = $health !== null ? " · Health: {$health['state']}".($health['reasons'] !== [] ? ' ('.implode(', ', $health['reasons']).')' : '') : '';
             $lines[] = ["Progress: {$progress->done} of {$progress->total} done, {$progress->percent}%{$healthText}", true];
 
             $parts = $plan->parts();
@@ -926,7 +926,7 @@ final class Stack
             if ($folderNotes !== []) {
                 $lines[] = ["\n### Notes saved for this assignment (read with read_note; write or update with write_note / edit_note)", true];
                 foreach ($folderNotes as $n) {
-                    $lines[] = ["- â€œ{$n->displayTitle()}â€", true];
+                    $lines[] = ["- “{$n->displayTitle()}”", true];
                 }
             }
         } catch (NotFound) {
@@ -1030,7 +1030,7 @@ final class Stack
 
     /**
      * The session's folder, when it studies in one of the module's: its name with the folders above it ("Lecture 1 +
-     * Lab 1 â€º Labs"), it and the folders inside it, and the names of the module's other folders. Nothing when it has
+     * Lab 1 › Labs"), it and the folders inside it, and the names of the module's other folders. Nothing when it has
      * none, or the folder is gone or in another module.
      *
      * @return array{0: ?string, 1: ?list<string>, 2: list<string>}
@@ -1083,7 +1083,7 @@ final class Stack
             }
         }
 
-        return [implode(' â€º ', array_map(fn ($folder) => $folder->name, $path)), $this->folders->within($by, $folderId), $others];
+        return [implode(' › ', array_map(fn ($folder) => $folder->name, $path)), $this->folders->within($by, $folderId), $others];
     }
 
     /**
@@ -1202,7 +1202,7 @@ final class Stack
     private static function dates(ModuleDetails $module): ?string
     {
         $day = fn (?string $date) => $date === null ? null : CarbonImmutable::parse($date)->format('j M');
-        $text = trim(($day($module->startsOn) ?? '').' â€“ '.($day($module->endsOn) ?? ''), ' â€“');
+        $text = trim(($day($module->startsOn) ?? '').' – '.($day($module->endsOn) ?? ''), ' –');
 
         return $text !== '' ? $text : null;
     }

@@ -71,7 +71,7 @@ final class VistudAi
         $text = self::words($text);
         $choices = $this->ready($by);
         $id = Ids::new();
-        $title = mb_strimwidth((string) preg_replace('/\s+/u', ' ', $text), 0, 80, 'â€¦');
+        $title = mb_strimwidth((string) preg_replace('/\s+/u', ' ', $text), 0, 80, '…');
         LearnerTables::insert(Guard::learner($by), 'engine_threads', [
             'id' => $id, 'purpose' => self::PURPOSE, 'title' => $title, 'model' => $model ?: $choices->tutorModel, 'created_at' => now(), 'updated_at' => now(),
         ]);
