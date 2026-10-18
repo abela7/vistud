@@ -1013,7 +1013,7 @@ final class Sessions
                 'record_type' => 'session',
                 'record_id' => $row->id,
                 'revision' => (int) $row->revision,
-                'channel' => 'web',
+                'channel' => Memory::actor($scope, $by)['channel'],
                 'client' => $row->manual ? 'logged' : 'vistud',
                 'workspace' => $row->workspace_id,
                 'module' => $row->module_id,

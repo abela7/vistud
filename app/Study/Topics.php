@@ -157,32 +157,46 @@ final class Topics
      */
     public function report(Principal $by, string $id, string $status): void
     {
+        $this->recordWord($by, $id, $status, 'stated', 'first_hand');
+    }
+
+    /**
+     * A status the student accepted from an AI proposal (WriteBack): recorded as 'accepted' on the topic row, and as a
+     * journal observation with origin 'reported' (no judge field; docs/specs/mcp-connections-plan.md §3.6).
+     */
+    public function accept(Principal $by, string $id, string $status): void
+    {
+        $this->recordWord($by, $id, $status, 'accepted', 'reported');
+    }
+
+    private function recordWord(Principal $by, string $id, string $status, string $statusBy, string $origin): void
+    {
         $scope = Guard::learner($by);
         Input::refuse(in_array($status, self::STATUSES, true) ? [] : ['status' => 'Unknown status.']);
         $row = $this->row($scope, $id);
 
         if ($status === 'not_started') {
             // Kept as the student's word, so it holds over what was met before (TopicDetails::shown) until it is studied again.
-            LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => 'not_started', 'status_by' => 'student', 'status_at' => now(), 'updated_at' => now()]);
+            LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => 'not_started', 'status_by' => $statusBy, 'status_at' => now(), 'updated_at' => now()]);
 
             return;
         }
 
         $about = [['rel' => 'about', 'target' => "topic:{$id}"]];
         $this->memory->append($scope, [match ($status) {
-            'covered' => Memory::observation($scope, $by, 'exposure', ['format' => 'lecture'], $about),
-            'understood' => Memory::observation($scope, $by, 'self_report', ['stance' => 'confident'], $about),
-            'confused' => Memory::observation($scope, $by, 'self_report', ['stance' => 'confused'], $about),
+            'covered' => Memory::observation($scope, $by, 'exposure', ['format' => 'lecture'], $about, origin: $origin),
+            'understood' => Memory::observation($scope, $by, 'self_report', ['stance' => 'confident'], $about, origin: $origin),
+            'confused' => Memory::observation($scope, $by, 'self_report', ['stance' => 'confused'], $about, origin: $origin),
         }], $row->workspace_id);
-        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $status, 'status_by' => 'student', 'status_at' => now(), 'updated_at' => now()]);
+        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $status, 'status_by' => $statusBy, 'status_at' => now(), 'updated_at' => now()]);
     }
 
     /**
-     * The tutor's word on a topic (docs/specs/vistud-2-blueprint.md §3.8): shown as the tutor's, and never over a word
-     * the student said in this session ($since, its start): one they said before it is older than what the tutor saw
-     * now, and is updated, to undo (the owner's ask, 2026-10-12). Only the row changes: the journal holds what the student
-     * reported and did, so a status the tutor set is not evidence. Returns what it was before (for undo), or null when
-     * nothing changed: the student's word stood, or the topic already had that status.
+     * The tutor's word on a topic (docs/specs/vistud-2-blueprint.md §3.8): shown as the tutor's (or a chat app's over MCP),
+     * and never over a word the student said in this session ($since, its start): one they said before it is older than
+     * what the tutor saw now, and is updated, to undo (the owner's ask, 2026-10-12). Only the row changes: the journal
+     * holds what the student reported and did, so a status the tutor set is not evidence. Returns what it was before
+     * (for undo), or null when nothing changed: the student's word stood, or the topic already had that status.
      *
      * @return ?array{status: ?string, by: ?string, at: ?string}
      */
@@ -194,18 +208,19 @@ final class Topics
         // The student's own word stands, unless they said it before $since (the session's start): what the tutor saw in
         // this session is newer, and it is shown as the tutor's, to undo.
         $older = $since !== null && $row->status_at !== null && ! self::saidSince((string) $row->status_at, $since);
-        if ($row->status === $status || ($row->status !== null && $row->status_by !== 'tutor' && ! $older)) {
+        if ($row->status === $status || ($row->status !== null && self::isStudentsWord($row->status_by) && ! $older)) {
             return null;
         }
         $before = ['status' => $row->status, 'by' => $row->status_by, 'at' => $row->status_at];
-        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $status, 'status_by' => 'tutor', 'status_at' => now(), 'updated_at' => now()]);
+        $statusBy = $by->channel === 'mcp' ? 'chat' : 'tutor';
+        LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $status, 'status_by' => $statusBy, 'status_at' => now(), 'updated_at' => now()]);
 
         return $before;
     }
 
     /**
-     * Puts a topic's status back as it was before the tutor marked it ($before is what mark() returned), unless the
-     * student has said something about it since.
+     * Puts a topic's status back as it was before the tutor or chat app marked it ($before is what mark() returned),
+     * unless the student has said something about it since.
      *
      * @param  array{status: ?string, by: ?string, at: ?string}  $before
      */
@@ -213,7 +228,7 @@ final class Topics
     {
         $scope = Guard::learner($by);
         $row = $this->row($scope, $id);
-        if ($row->status_by !== 'tutor') {
+        if (! self::isAiMark($row->status_by)) {
             return;
         }
         LearnerTables::query($scope, 'topics')->where('id', $id)->update(['status' => $before['status'], 'status_by' => $before['status'] === null ? null : $before['by'], 'status_at' => $before['status'] === null ? null : $before['at'], 'updated_at' => now()]);
@@ -283,8 +298,10 @@ final class Topics
     private function row(LearnerScope $scope, string $id, bool $lock = false): object
     {
         $query = LearnerTables::query($scope, 'topics')->where('id', $id)->whereNull('retired_at');
+        $row = ($lock ? $query->lockForUpdate() : $query)->first() ?? throw new NotFound;
+        Input::workspace($scope, $row->workspace_id);
 
-        return ($lock ? $query->lockForUpdate() : $query)->first() ?? throw new NotFound;
+        return $row;
     }
 
     public static function cleanMarkdown(string $name): string
@@ -313,12 +330,22 @@ final class Topics
         return $name;
     }
 
+    private static function isStudentsWord(?string $statusBy): bool
+    {
+        return in_array($statusBy, TopicDetails::STUDENT_WORDS, true);
+    }
+
+    private static function isAiMark(?string $statusBy): bool
+    {
+        return in_array($statusBy, TopicDetails::AI_MARKS, true);
+    }
+
     private static function details(object $row, ?array $derived): TopicDetails
     {
         return new TopicDetails(
             $row->id, $row->workspace_id, $row->module_id, $row->name, $row->status, (int) $row->position,
             $derived['label'] ?? 'not_started', $derived['flags'] ?? [], $derived['facts']['last_contact'] ?? null,
-            $row->status === null ? null : ($row->status_by ?? 'student'), $row->status === null || $row->status_at === null ? null : (string) $row->status_at,
+            $row->status === null ? null : $row->status_by, $row->status === null || $row->status_at === null ? null : (string) $row->status_at,
             $row->folder_id ?? null,
             $derived['facts']['last_success'] ?? null,
         );

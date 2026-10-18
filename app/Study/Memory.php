@@ -43,7 +43,7 @@ final class Memory
     /** The learner as the actor of an event written from a request. */
     public static function actor(LearnerScope $scope, Principal $by): array
     {
-        return ['type' => 'learner', 'id' => $scope->learnerId, 'channel' => in_array($by->channel, ['web', 'api'], true) ? $by->channel : 'web'];
+        return ['type' => 'learner', 'id' => $scope->learnerId, 'channel' => in_array($by->channel, ['web', 'api', 'mcp'], true) ? $by->channel : 'web'];
     }
 
     /** A claim the student makes about their own material (a person's claim is accepted as it is). */
@@ -66,14 +66,14 @@ final class Memory
         ], fn ($v) => $v !== []);
     }
 
-    /** Something the student observed first-hand: an exposure, a question, a self-report. */
-    public static function observation(LearnerScope $scope, Principal $by, string $kind, array $body, array $links = [], array $content = [], ?string $at = null): array
+    /** Something the student observed (first-hand, or reported when accepted from an AI): an exposure, a question, a self-report. */
+    public static function observation(LearnerScope $scope, Principal $by, string $kind, array $body, array $links = [], array $content = [], ?string $at = null, string $origin = 'first_hand'): array
     {
         return array_filter([
             'id' => Ids::new(),
             'kind' => $kind,
             'actor' => self::actor($scope, $by),
-            'origin' => 'first_hand',
+            'origin' => $origin,
             'occurred_at' => $at ?? self::now(),
             'body' => $body,
             'links' => $links,

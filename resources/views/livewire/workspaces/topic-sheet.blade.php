@@ -74,8 +74,15 @@
                                 <span><x-icon name="shield-check" class="size-3.5" />Mastered: your reviews show it has stuck.</span>
                             @endif
                             <span>From your studying: {{ $topic->evidence() }}</span>
-                            @if ($topic->byTutor())
-                                <span>Set by the tutor{{ $topic->statusAt !== null ? ', '.\Illuminate\Support\Carbon::parse($topic->statusAt, 'UTC')->format('j M') : '' }}. Pick another to change it.</span>
+                            @php($atWord = $topic->statusAt !== null ? ', '.\Illuminate\Support\Carbon::parse($topic->statusAt, 'UTC')->format('j M') : '')
+                            @if ($topic->statusSource() === 'tutor')
+                                <span>Set by the tutor{{ $atWord }}. Pick another to change it.</span>
+                            @elseif ($topic->statusSource() === 'chat')
+                                <span>Marked by a chat app{{ $atWord }}. Pick another to change it.</span>
+                            @elseif ($topic->statusSource() === 'accepted')
+                                <span>You accepted the AI's word{{ $atWord }}. Pick another to change it.</span>
+                            @elseif ($topic->statusSource() === 'stated_unverified')
+                                <span>You said so{{ $atWord }} (may have been an accepted AI proposal).</span>
                             @endif
                         </div>
                         @error('status') <p class="field-error">{{ $message }}</p> @enderror

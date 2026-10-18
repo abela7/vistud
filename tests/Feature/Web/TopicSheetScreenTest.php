@@ -4,7 +4,9 @@ namespace Tests\Feature\Web;
 
 use App\Livewire\Workspaces\TopicSheet;
 use App\Models\User;
+use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Study\Findings;
 use App\Study\Modules;
@@ -55,8 +57,18 @@ class TopicSheetScreenTest extends TestCase
         app(Topics::class)->mark($this->by, $this->topic, 'confused');
         $this->sheet()->assertSee('Set by the tutor, ')->assertSee('Pick another to change it.');
 
+        $mcp = $this->principal($this->ada, channel: 'mcp');
+        app(Topics::class)->mark($mcp, $this->topic, 'covered');
+        $this->sheet()->assertSee('Marked by a chat app, ')->assertSee('Pick another to change it.');
+
+        app(Topics::class)->accept($this->by, $this->topic, 'covered');
+        $this->sheet()->assertSee("You accepted the AI's word, ", false)->assertSee('Pick another to change it.');
+
+        LearnerTables::query(Guard::learner($this->by), 'topics')->where('id', $this->topic)->update(['status_by' => 'student']);
+        $this->sheet()->assertSee('You said so')->assertSee('(may have been an accepted AI proposal).');
+
         app(Topics::class)->report($this->by, $this->topic, 'understood');
-        $this->sheet()->assertDontSee('Set by the tutor');
+        $this->sheet()->assertDontSee('Set by the tutor')->assertDontSee('Marked by a chat app')->assertDontSee("accepted the AI's word", false)->assertDontSee('may have been an accepted AI proposal');
     }
 
     public function test_key_points_are_added_and_removed_on_the_sheet(): void

@@ -258,10 +258,10 @@ class TopicsTest extends TestCase
         $this->assertSame([null, null, null], [$joins->status, $joins->statusBy, $joins->statusAt]);
         $this->assertFalse($joins->byTutor());
 
-        // The student's word is theirs.
+        // The student's word is theirs ('stated').
         $this->topics->report($this->by, $keys->id, 'understood');
         $mine = $this->topics->find($this->by, $keys->id);
-        $this->assertSame(['understood', 'student', false], [$mine->status, $mine->statusBy, $mine->byTutor()]);
+        $this->assertSame(['understood', 'stated', false, true, 'stated'], [$mine->status, $mine->statusBy, $mine->byTutor(), $mine->studentsWord(), $mine->statusSource()]);
         $this->assertNotNull($mine->statusAt);
 
         // The tutor's word on a topic with none: shown as the tutor's, and not evidence in the journal.
@@ -269,7 +269,7 @@ class TopicsTest extends TestCase
         $undo = $this->topics->mark($this->by, $joins->id, 'confused');
         $marked = $this->topics->find($this->by, $joins->id);
         $this->assertSame(['status' => null, 'by' => null, 'at' => null], $undo);
-        $this->assertSame(['confused', 'tutor', true, 'confused'], [$marked->status, $marked->statusBy, $marked->byTutor(), $marked->shown()]);
+        $this->assertSame(['confused', 'tutor', true, true, 'tutor', 'confused'], [$marked->status, $marked->statusBy, $marked->byTutor(), $marked->byAi(), $marked->statusSource(), $marked->shown()]);
         $this->assertSame($before, count($this->entries()));
 
         // Never over the student's own, and nothing changes when it already says that.
@@ -284,13 +284,36 @@ class TopicsTest extends TestCase
         $this->assertSame(['confused', 'tutor'], [$this->topics->find($this->by, $joins->id)->status, $this->topics->find($this->by, $joins->id)->statusBy]);
         $this->topics->unmark($this->by, $joins->id, $undo);
         $cleared = $this->topics->find($this->by, $joins->id);
-        $this->assertSame([null, null, null], [$cleared->status, $cleared->statusBy, $cleared->statusAt]);
+        $this->assertSame([null, null, null, 'none'], [$cleared->status, $cleared->statusBy, $cleared->statusAt, $cleared->statusSource()]);
+
+        // A connected chat app (channel 'mcp') writes status_by 'chat', which is also an AI mark and can be undone.
+        $mcp = $this->principal($this->ada, channel: 'mcp');
+        $chatUndo = $this->topics->mark($mcp, $joins->id, 'covered');
+        $chatMarked = $this->topics->find($this->by, $joins->id);
+        $this->assertSame(['covered', 'chat', true, false, 'chat'], [$chatMarked->status, $chatMarked->statusBy, $chatMarked->byAi(), $chatMarked->studentsWord(), $chatMarked->statusSource()]);
+        $this->topics->unmark($this->by, $joins->id, $chatUndo);
+        $this->assertNull($this->topics->find($this->by, $joins->id)->status);
+
+        // Accepted AI proposals write status_by 'accepted' and a journal observation with origin 'reported'.
+        $this->topics->accept($this->by, $joins->id, 'covered');
+        $accepted = $this->topics->find($this->by, $joins->id);
+        $this->assertSame(['covered', 'accepted', true, false, 'accepted'], [$accepted->status, $accepted->statusBy, $accepted->studentsWord(), $accepted->byAi(), $accepted->statusSource()]);
+        $entries = $this->entries();
+        $this->assertSame('reported', end($entries)->origin);
 
         // Once the student has said something, the tutor's undo leaves their word alone.
-        $this->topics->mark($this->by, $joins->id, 'covered');
+        $this->topics->unmark($this->by, $joins->id, $undo);
+        $this->assertSame(['covered', 'accepted'], [$this->topics->find($this->by, $joins->id)->status, $this->topics->find($this->by, $joins->id)->statusBy]);
         $this->topics->report($this->by, $joins->id, 'understood');
         $this->topics->unmark($this->by, $joins->id, $undo);
-        $this->assertSame(['understood', 'student'], [$this->topics->find($this->by, $joins->id)->status, $this->topics->find($this->by, $joins->id)->statusBy]);
+        $this->assertSame(['understood', 'stated'], [$this->topics->find($this->by, $joins->id)->status, $this->topics->find($this->by, $joins->id)->statusBy]);
+
+        // Legacy 'student' rows read as 'stated_unverified', and null status_by never defaults to the student.
+        LearnerTables::query(Guard::learner($this->by), 'topics')->where('id', $joins->id)->update(['status_by' => 'student']);
+        $this->assertSame(['student', true, 'stated_unverified'], [$this->topics->find($this->by, $joins->id)->statusBy, $this->topics->find($this->by, $joins->id)->studentsWord(), $this->topics->find($this->by, $joins->id)->statusSource()]);
+        LearnerTables::query(Guard::learner($this->by), 'topics')->where('id', $joins->id)->update(['status_by' => null]);
+        $nullBy = $this->topics->find($this->by, $joins->id);
+        $this->assertSame([null, false, false, 'derived'], [$nullBy->statusBy, $nullBy->saidShown(), $nullBy->studentsWord(), $nullBy->statusSource()]);
 
         // Only the three statuses, and only the student's own topics.
         $this->assertThrows(fn () => $this->topics->mark($this->by, $joins->id, 'mastered'), Unprocessable::class);

@@ -208,7 +208,7 @@ class SessionChatFirstTest extends TestCase
         $this->assertNull($topics->find($this->by, $this->keys)->status);
         $chat->call('applyStatus', $this->keys, 'confused')->assertSee('Keys: not understood')->assertDontSee('Mark it');
         $mine = $topics->find($this->by, $this->keys);
-        $this->assertSame(['confused', 'student'], [$mine->status, $mine->statusBy]);
+        $this->assertSame(['confused', 'stated'], [$mine->status, $mine->statusBy]);
         // Only the three statuses can be applied.
         $chat->call('applyStatus', $this->joins, 'mastered');
         $this->assertNull($topics->find($this->by, $this->joins)->status);
@@ -245,7 +245,7 @@ class SessionChatFirstTest extends TestCase
         );
         app(SessionChat::class)->send($this->by, $session->id, 'Wrap joins and keys.');
         // The student's own word on Keys stayed: the tutor could only suggest.
-        $this->assertSame(['confused', 'student'], [$topics->find($this->by, $this->keys)->status, $topics->find($this->by, $this->keys)->statusBy]);
+        $this->assertSame(['confused', 'stated'], [$topics->find($this->by, $this->keys)->status, $topics->find($this->by, $this->keys)->statusBy]);
 
         $page = $this->page($session->id)->call('confirmEnd')->assertSet('mode', 'end')
             ->assertSet('statuses', [$this->joins => 'understood', $this->keys => 'covered'])
@@ -254,8 +254,8 @@ class SessionChatFirstTest extends TestCase
         // The student keeps Joins as the tutor said and changes their mind about Keys; ending makes both their word.
         $page->set('statuses.'.$this->keys, '')->call('save')->assertSet('mode', 'done')->assertSee('Session ended');
         $joins = $topics->find($this->by, $this->joins);
-        $this->assertSame(['understood', 'student'], [$joins->status, $joins->statusBy]);
-        $this->assertSame(['confused', 'student'], [$topics->find($this->by, $this->keys)->status, $topics->find($this->by, $this->keys)->statusBy]);
+        $this->assertSame(['understood', 'stated'], [$joins->status, $joins->statusBy]);
+        $this->assertSame(['confused', 'stated'], [$topics->find($this->by, $this->keys)->status, $topics->find($this->by, $this->keys)->statusBy]);
         $this->assertSame('ended', app(Sessions::class)->find($this->by, $session->id)->state);
     }
 

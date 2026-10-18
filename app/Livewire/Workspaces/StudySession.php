@@ -770,6 +770,8 @@ Output ONLY a valid JSON object:
                 'result' => $g['result'],
                 'right' => $g['right'],
                 'fix' => $g['fix'],
+                // The kind of question says how it exercised the topic (Quizzes::formOf): a choice recognises, a written answer applies.
+                'type' => $g['type'],
                 'topic' => $g['topic'],
             ], $graded),
             'started_at' => $startedAt,
@@ -1239,7 +1241,7 @@ Output ONLY a valid JSON object:
                     try {
                         $topic = $this->topics->find($by, (string) $topicId);
                         // Said here, it is now the student's word, unless it already was.
-                        if ($topic->status !== $status || $topic->statusBy !== 'student') {
+                        if ($topic->status !== $status || ! $topic->studentsWord()) {
                             $this->topics->report($by, $topic->id, $status);
                         }
                     } catch (NotFound) {

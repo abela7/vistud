@@ -13,22 +13,26 @@ use App\Engine\Context\Stack;
  */
 final readonly class Context
 {
-    public function __construct(public string $workspaceId, public ?string $moduleId, public ?string $sessionId, public string $zone, public Effects $effects = new Effects, public ?string $folderId = null, public ?string $threadId = null, public ?string $model = null, public ?string $activityId = null) {}
+    public function __construct(public string $workspaceId, public ?string $moduleId, public ?string $sessionId, public string $zone, public Effects $effects = new Effects, public ?string $folderId = null, public ?string $threadId = null, public ?string $model = null, public ?string $activityId = null, public string $via = 'chat', public ?string $prompt = null) {}
 
     /** The same chat, for a call made by `$model` (a fallback may answer instead of the chosen one); the effects are shared. */
     public function by(string $model): self
     {
-        return new self($this->workspaceId, $this->moduleId, $this->sessionId, $this->zone, $this->effects, $this->folderId, $this->threadId, $model, $this->activityId);
+        return new self($this->workspaceId, $this->moduleId, $this->sessionId, $this->zone, $this->effects, $this->folderId, $this->threadId, $model, $this->activityId, $this->via, $this->prompt);
     }
 
     /**
      * Who judged what the tutor records in this chat, for the journal: the model, the version of the tutor's rules it
-     * was given, and that it came through ViStud's own chat.
+     * was given, and how it came.
      *
      * @return array{model: string, prompt: string, via: string}
      */
     public function judge(): array
     {
-        return ['model' => $this->model !== null && $this->model !== '' ? $this->model : 'unknown', 'prompt' => Stack::promptVersion(), 'via' => 'chat'];
+        return [
+            'model' => $this->model !== null && $this->model !== '' ? $this->model : 'unknown',
+            'prompt' => $this->prompt !== null && $this->prompt !== '' ? $this->prompt : Stack::promptVersion(),
+            'via' => $this->via,
+        ];
     }
 }

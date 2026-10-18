@@ -81,6 +81,56 @@ final readonly class TopicDetails
         };
     }
 
+    public const STUDENT_WORDS = ['stated', 'accepted', 'student'];
+
+    public const AI_MARKS = ['tutor', 'chat'];
+
+    /**
+     * Whether the word shown is the one somebody said. When newer evidence has overtaken it ("understood" said, mastered
+     * since; "not started" said, studied since), the word shown is the evidence's, and nobody said it.
+     */
+    public function saidShown(): bool
+    {
+        return $this->status !== null && $this->statusBy !== null && $this->status === $this->shown();
+    }
+
+    /** Whether the status on the topic is the student's word (stated directly, accepted from an AI, or legacy student). */
+    public function studentsWord(): bool
+    {
+        return $this->status !== null && in_array($this->statusBy, self::STUDENT_WORDS, true);
+    }
+
+    /** Whether an AI (ViStud's tutor or a connected chat app) set the status on the topic: undoable, never the student's word. */
+    public function byAi(): bool
+    {
+        return $this->status !== null && in_array($this->statusBy, self::AI_MARKS, true);
+    }
+
+    /** Whether the tutor (or a connected chat app) set the status shown, rather than the student: it says so, and can be undone. */
+    public function byTutor(): bool
+    {
+        return $this->byAi();
+    }
+
+    /**
+     * Where the shown status came from: stated | stated_unverified | accepted | tutor | chat | derived | none.
+     */
+    public function statusSource(): string
+    {
+        if (! $this->saidShown()) {
+            return $this->shown() === 'not_started' ? 'none' : 'derived';
+        }
+
+        return match ($this->statusBy) {
+            'stated' => 'stated',
+            'student' => 'stated_unverified',
+            'accepted' => 'accepted',
+            'tutor' => 'tutor',
+            'chat' => 'chat',
+            default => $this->shown() === 'not_started' ? 'none' : 'derived',
+        };
+    }
+
     /** Whether evidence at $evidence came after the word said at $said (to the second: a tie goes to the word). */
     private static function newer(?string $evidence, ?string $said): bool
     {
@@ -92,12 +142,6 @@ final readonly class TopicDetails
         }
 
         return strtotime($evidence) > strtotime($said.(preg_match('/[zZ]|[+-]\d\d:?\d\d$/', $said) === 1 ? '' : ' UTC'));
-    }
-
-    /** Whether the tutor set the status shown, rather than the student: it says so, and can be undone. */
-    public function byTutor(): bool
-    {
-        return $this->status !== null && $this->statusBy === 'tutor';
     }
 
     /** "Evidence: seen, not practised · not practised yet" */

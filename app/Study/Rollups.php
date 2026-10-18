@@ -163,7 +163,7 @@ final class Rollups
             $reasons[] = 'stuck';
         }
         // The student's word after the test is the newer evidence, and clears it.
-        $said = $topic->statusBy === 'student' && $topic->statusAt !== null && $test !== null && CarbonImmutable::parse($topic->statusAt, 'UTC')->gt(CarbonImmutable::parse($test['at']));
+        $said = $topic->studentsWord() && $topic->statusAt !== null && $test !== null && CarbonImmutable::parse($topic->statusAt, 'UTC')->gt(CarbonImmutable::parse($test['at']));
         if ($test !== null && $test['score'] < self::TEST_BELOW && ! $said) {
             $reasons[] = 'test';
         }

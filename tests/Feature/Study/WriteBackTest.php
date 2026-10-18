@@ -118,10 +118,12 @@ class WriteBackTest extends TestCase
         $this->assertSame('Why are unmatched columns NULL rather than empty?', app(Questions::class)->list($this->by, $this->databases->id)[0]->text);
         $this->assertSame('What does a LEFT JOIN keep?', app(Flashcards::class)->list($this->by, $this->databases->id)[0]->front);
         $topics = collect(app(Topics::class)->list($this->by, $this->databases->id))->keyBy('name');
-        $this->assertSame([$this->week1->id, 'understood'], [$topics['Keys']->moduleId, $topics['Joins']->status]);
+        $this->assertSame([$this->week1->id, 'understood', 'accepted', 'accepted'], [$topics['Keys']->moduleId, $topics['Joins']->status, $topics['Joins']->statusBy, $topics['Joins']->statusSource()]);
 
-        // The answers are attempts on tasks that exercise their topics, in this session, at its end.
+        // The answers are attempts on tasks that exercise their topics, in this session, at its end; the accepted status has origin 'reported'.
         $entries = app(JournalReader::class)->entries($this->learnerScopeOf($this->ada));
+        $selfReports = array_values(array_filter($entries, fn ($e) => $e->kind->value === 'self_report'));
+        $this->assertSame(['reported', 'confident'], [$selfReports[0]->origin, $selfReports[0]->body['stance']]);
         $attempts = array_values(array_filter($entries, fn ($e) => $e->kind->value === 'attempt'));
         $this->assertSame([['apply', 'unaided', 'correct', 'ai', 'chat'], ['recall', 'hinted', 'partial', 'ai', 'chat']],
             array_map(fn ($e) => [$e->body['form'], $e->body['support'], $e->body['outcome'], $e->body['judged_by'], $e->body['setting']], $attempts));

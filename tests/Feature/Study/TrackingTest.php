@@ -211,7 +211,7 @@ class TrackingTest extends TestCase
         // Said in this session: the student's word stands; the tutor's view is only proposed.
         $said = $tool->run($this->by, $context(), ['topic' => 'Keys', 'status' => 'understood', 'reason' => 'Got one right.']);
         $this->assertStringContainsString('so it stays', $said);
-        $this->assertSame(['confused', 'student'], [$this->shown($keys), $this->topics->find($this->by, $keys)->statusBy]);
+        $this->assertSame(['confused', 'stated'], [$this->shown($keys), $this->topics->find($this->by, $keys)->statusBy]);
     }
 
     public function test_the_tutor_knows_where_each_topic_stands_who_said_so_and_the_evidence(): void

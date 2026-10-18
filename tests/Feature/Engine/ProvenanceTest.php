@@ -2,11 +2,14 @@
 
 namespace Tests\Feature\Engine;
 
+use App\Brain\Store\JournalReader;
 use App\Engine\Context\Stack;
 use App\Engine\Engine;
 use App\Engine\Fake;
 use App\Engine\SessionChat;
 use App\Engine\Settings;
+use App\Engine\Toolbox;
+use App\Engine\Tools\Context;
 use App\Models\User;
 use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
@@ -17,8 +20,8 @@ use App\Study\SessionDetails;
 use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\WorkspaceDetails;
-use App\Study\WriteBack;
 use App\Study\Workspaces;
+use App\Study\WriteBack;
 use Carbon\CarbonImmutable;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
@@ -99,5 +102,29 @@ class ProvenanceTest extends TestCase
         $this->assertSame(100, $quiz->score);
         $this->assertSame(['correct', 'unjudged'], array_column($this->attempts(), 'outcome'));
         $this->assertSame('quiz', $this->attempts()[1]['judge']['via']);
+    }
+
+    public function test_mcp_judge_via_and_actor_channel_are_accepted_and_kept(): void
+    {
+        $mcp = $this->principal($this->ada, channel: 'mcp');
+        $context = new Context($this->databases->id, $this->session->moduleId, $this->session->id, 'UTC', model: 'anthropic/claude', via: 'mcp', prompt: 'mcp-rules@1');
+        $this->assertSame(['model' => 'anthropic/claude', 'prompt' => 'mcp-rules@1', 'via' => 'mcp'], $context->judge());
+
+        app(Toolbox::class)->run($mcp, $context, 'record_quiz', [
+            'kind' => 'quiz',
+            'questions' => [['asked' => 'What is a left join?', 'answer' => 'Keeps all left rows.', 'result' => 'correct', 'topic' => 'Joins']],
+        ]);
+
+        $entries = app(JournalReader::class)->entries(Guard::learner($mcp));
+        $attempt = collect($entries)->last(fn ($e) => $e->type === 'core.attempt');
+        $this->assertNotNull($attempt);
+        $this->assertSame('mcp', $attempt->actor->channel);
+        $this->assertEqualsCanonicalizing(['model' => 'anthropic/claude', 'prompt' => 'mcp-rules@1', 'via' => 'mcp'], $attempt->body['judge']);
+
+        app(Sessions::class)->end($mcp, $this->session->id);
+        $entries = app(JournalReader::class)->entries(Guard::learner($mcp));
+        $sessionRecord = collect($entries)->last(fn ($e) => $e->type === 'core.record');
+        $this->assertSame('mcp', $sessionRecord->actor->channel);
+        $this->assertSame('mcp', $sessionRecord->body['channel']);
     }
 }

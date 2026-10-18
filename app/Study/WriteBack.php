@@ -153,7 +153,7 @@ final class WriteBack
                     'finding' => $this->findings->add($by, $topicId, ['text' => (string) ($item['text'] ?? '')], 'ai'),
                     'question' => $this->questions->ask($by, $session->workspaceId, (string) ($item['text'] ?? ''), $topicId, $topicId !== null ? ($topics[$topicId]->moduleId ?? $moduleId) : $moduleId, $session->id),
                     'attempt' => $this->attempt($scope, $by, $session, $topicId, $item, $at, $quiz, $judge ?? self::PASTED),
-                    'status' => $this->topics->report($by, $topicId, (string) ($item['proposed'] ?? '')),
+                    'status' => $this->topics->accept($by, $topicId, (string) ($item['proposed'] ?? '')),
                     'summary' => $this->sessions->setSummary($by, $session->id, (string) ($item['text'] ?? '')),
                     'checkpoint' => $this->sessions->setCheckpoint($by, $session->id, (string) ($item['text'] ?? '')),
                     'remember' => $this->memories->enabled($by)
