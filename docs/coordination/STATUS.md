@@ -201,6 +201,18 @@ Recorded by the PM before WP4 started, and since.
 
 Plan: [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md). One phase at a time, each with a handoff note in `docs/handoff/mcp-phase-N.md`.
 
+### M6.1 · The door
+
+| | |
+|---|---|
+| State | **Delivered, awaiting review** |
+| Plan section | [mcp-connections-plan.md §4 · M6.1](../specs/mcp-connections-plan.md#m61--the-door-3-units) |
+| Handoff | [docs/handoff/mcp-phase-1.md](../handoff/mcp-phase-1.md) |
+| Depends on | M6.0 |
+| Next handoff | Abel signs Claude Code in on this computer (handoff, "What Abel tests"); then M6.2 needs the public server (decisions 2 and 7) |
+
+**Evidence:** tests `tests/Feature/Mcp/OAuthDiscoveryTest.php`, `ConsentTest.php`, `UnauthenticatedTest.php`, `PrincipalTest.php`, `TokenKindsTest.php`, `TunnelGuardTest.php`, `tests/Feature/Web/ConnectionsScreenTest.php`; `tests/Architecture/LearnerIsolationTest.php` covers the three new learner tables.
+
 ### M6.0 · Truth first
 
 | | |

@@ -66,6 +66,7 @@ Folders marked with an increment or work package don't exist yet. `app/Study/` h
 | **Brain/Store** | Persisting entries, content and the reference index; learner-scoped reads | Be reached without a `LearnerScope` |
 | **Brain/Writer** | Appending entries: validation, positions, idempotency, review refusals | Trust the caller about the actor or the learner |
 | **Brain/Redaction** | Redaction, block entries, the outbox clean-up, the redaction ledger, reconciliation after restores | Share a transaction with file deletions |
+| **Mcp** (M6.1) | AI apps over MCP: the connections a student approved (`Connections`, `Provider`), the consent step (`Http\AuthorizeConnection`, `Http\ApproveConnection`), the server (`Servers\ViStudServer`) and its MCP-native tools (`Tools\*`) | Query learner tables except its own three, or hold business rules of the study features: its tools call the same services and `App\Engine\Tools` as the in-app tutor |
 | **Adapters** (Http, Livewire, Console) | Parsing input, building the `Principal`, calling one service, shaping output | Contain business rules, query learner tables, or skip the service |
 | **Models** | Mapping rows to objects | Contain business rules or be used to bypass `LearnerTables` for learner data |
 

@@ -8,6 +8,7 @@ use App\Platform\Access\Principal;
 use App\Platform\Access\Role;
 use App\Platform\Errors\AccessRevoked;
 use App\Platform\Errors\AccountDeleted;
+use App\Platform\Errors\Forbidden;
 use App\Platform\Http\RequestId;
 use DateTimeImmutable;
 use Illuminate\Auth\AuthenticationException;
@@ -55,6 +56,45 @@ final class PrincipalFactory
             ip: $request->ip(),
             userAgent: $request->userAgent(),
             requestId: RequestId::of($request),
+        );
+        $request->attributes->set(self::ATTRIBUTE, $principal);
+
+        return $principal;
+    }
+
+    /**
+     * For a chat app signed in over MCP with a Passport token (docs/specs/mcp-connections-plan.md §3.2). It acts as the
+     * student only: an account that is also an admin keeps its Student role alone, so a token can never pass
+     * Guard::admin(), and it has no password confirmation. Status, roles and 2FA are read from the database each call.
+     */
+    public function forToken(Request $request): Principal
+    {
+        $cached = $request->attributes->get(self::ATTRIBUTE);
+        if ($cached instanceof Principal && $cached->channel === 'mcp') {
+            return $cached;
+        }
+
+        $user = $request->user('api');
+        if (! $user instanceof User) {
+            throw new AuthenticationException;
+        }
+
+        $full = $this->forUser($user, channel: 'mcp', area: Area::Student, ip: $request->ip(), userAgent: $request->userAgent(), requestId: RequestId::of($request));
+        if (! $full->hasRole(Role::Student) || $full->learnerId === null) {
+            throw new Forbidden('student_role_required', 'Only a student account can connect an AI app.');
+        }
+
+        $principal = new Principal(
+            userId: $full->userId,
+            learnerId: $full->learnerId,
+            roles: [Role::Student],
+            twoFactorConfirmed: $full->twoFactorConfirmed,
+            passwordConfirmedAt: null,
+            channel: 'mcp',
+            ip: $full->ip,
+            userAgent: $full->userAgent,
+            requestId: $full->requestId,
+            area: Area::Student,
         );
         $request->attributes->set(self::ATTRIBUTE, $principal);
 

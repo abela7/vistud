@@ -89,6 +89,18 @@ Never paste the key into a chat with an AI agent, a ticket or a commit. `php art
 
 The tutor reads PDFs with the `smalot/pdfparser` library (installed by `composer install`), PowerPoint and Word files straight from the file, and other Office files through LibreOffice's preview PDF. The chat's browser test (`tests/Browser/chat.spec.js`) runs against a fake service that streams slowly (`tests/Browser/fixtures/fake-engine.php`, on port 8099); it points the installation's engine address at the fake while it runs and puts it back after.
 
+## AI apps over MCP (M6.1)
+
+Claude, ChatGPT and Gemini can sign in to ViStud and call its tools (docs/specs/mcp-connections-plan.md). Once per machine, make Passport's signing keys; they live in `storage/` and never go into git:
+
+```bash
+php artisan passport:keys
+```
+
+The server is `POST /mcp`. To try it from this computer with Claude Code, serve the app (`php artisan serve`) and run `claude mcp add --transport http vistud http://127.0.0.1:8000/mcp`; it opens the browser to sign in. `php artisan mcp:inspector mcp` lists the tools. Students see and cut their connections in Settings › AI.
+
+claude.ai, ChatGPT and Gemini call from their own clouds, so they need a public HTTPS address. For a test only: set `APP_DEBUG=false` and `TUNNEL=1`, use a database with synthetic data, start a tunnel (`cloudflared tunnel --url http://127.0.0.1:8000`, or a named tunnel for a stable hostname), set `APP_URL` to the tunnel's address and run `php artisan config:clear`. With `TUNNEL=1` every page except sign-in, the consent step and `/mcp` answers 404, and the app refuses to run with debug on. Stop the tunnel afterwards. `MCP_ENABLED=false` is the kill switch: `/mcp` answers 503.
+
 ## Themes and front-end assets
 
 - Themes are data in `resources/themes/*.json` ([DESIGN.md §3](../../DESIGN.md#3-colour-themes-and-gradients)). After changing one, run `php artisan vistud:themes:build`: it checks every theme's contrast and regenerates `resources/css/themes/themes.css` and the sentinel fixture used by the browser tests. CI fails if they are out of date (`vistud:themes:build --check`).

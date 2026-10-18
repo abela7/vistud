@@ -27,6 +27,7 @@
 
         @if ($part === 'ai')
             <livewire:study.engine-settings />
+            <div class="acc-cols"><livewire:study.connections /></div>
         @elseif ($part === 'appearance')
             <div class="acc-cols">
                 <x-accordion id="theme" title="Theme" icon="palette" :open="true">

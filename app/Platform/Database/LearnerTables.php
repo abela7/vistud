@@ -69,6 +69,9 @@ final class LearnerTables
         'class_reviews',
         'outbox',
         'canonical_files',
+        'mcp_connections',
+        'mcp_calls',
+        'mcp_confirmations',
     ];
 
     /** `$connection`: another than the default, such as the owner's for what the runtime user may not do (journal rebuilds). */

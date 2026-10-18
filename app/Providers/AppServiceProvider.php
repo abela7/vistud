@@ -9,14 +9,22 @@ use App\Engine\OpenRouter;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureTwoFactorEnrolled;
 use App\Http\Middleware\EnterAdminArea;
+use App\Mcp\Http\AuthorizeConnection;
+use App\Platform\Access\Principal;
 use App\Platform\Database\RuntimeGrants;
+use Carbon\CarbonInterval;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\MigrationsEnded;
+use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\Looping;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Passport\Http\Controllers\AuthorizationController;
+use Laravel\Passport\Passport;
 use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
@@ -26,6 +34,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(Themes::class, fn () => new Themes(resource_path('themes')));
         // The built-in chat's engine: OpenRouter, or any service with the OpenAI chat format (config/vistud.php).
         $this->app->bind(Engine::class, OpenRouter::class);
+        // An AI app's sign-in always shows ViStud's consent page, which may not be framed (docs/specs/mcp-connections-plan.md §3.2).
+        $this->app->bind(AuthorizationController::class, AuthorizeConnection::class);
+        // No device-code sign-in: its table is not made and no AI app needs it.
+        Passport::$deviceCodeGrantEnabled = false;
     }
 
     public function boot(): void
@@ -46,6 +58,20 @@ class AppServiceProvider extends ServiceProvider
         // jobs go on the queue only while one is (App\Engine\Jobs\Runner), otherwise they run after the response.
         Event::listen(Looping::class, fn () => Heartbeat::beat());
         Event::listen(JobProcessing::class, fn () => Heartbeat::beat());
+
+        // AI apps over MCP (docs/specs/mcp-connections-plan.md §3.2): an hour per access token, 30 days per refresh token,
+        // ViStud's consent page; calls limited per student (a reconnect does not reset it) and, before sign-in, per IP.
+        Passport::authorizationView('mcp.authorize');
+        Passport::tokensExpireIn(CarbonInterval::hour());
+        Passport::refreshTokensExpireIn(CarbonInterval::days(30));
+        RateLimiter::for('mcp', function (Request $request) {
+            $principal = $request->attributes->get('vistud.principal');
+            $key = $principal instanceof Principal && $principal->learnerId !== null ? $principal->learnerId : $request->ip();
+
+            return Limit::perMinute((int) config('mcp.per_minute', 60))->by('mcp:'.$key);
+        });
+        RateLimiter::for('mcp-ip', fn (Request $request) => Limit::perMinute(300)->by('mcp-ip:'.$request->ip()));
+        RateLimiter::for('mcp-register', fn (Request $request) => Limit::perMinute((int) config('mcp.register_per_minute', 10))->by('mcp-register:'.$request->ip()));
 
         // New tables get their runtime-user privileges as soon as the schema
         // owner has created them (docs/development/setup.md).

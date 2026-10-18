@@ -42,6 +42,12 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Chat apps that sign in over MCP (docs/specs/mcp-connections-plan.md §3.2). Only routes/ai.php uses it.
+        'api' => [
+            'driver' => 'passport',
+            'provider' => 'users',
+        ],
     ],
 
     /*

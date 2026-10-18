@@ -13,3 +13,5 @@ Schedule::command('vistud:sessions:settle')->everyTenMinutes();
 Schedule::command('vistud:journal:rebuild')->daily();
 Schedule::command('vistud:engine:prune-threads')->daily();
 Schedule::command('vistud:db:orphans')->daily();
+Schedule::command('passport:purge')->hourly();
+Schedule::command('vistud:mcp:prune')->daily();

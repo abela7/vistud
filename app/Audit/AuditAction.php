@@ -42,4 +42,14 @@ final class AuditAction
     public const ENGINE_KEY_REMOVED = 'engine.key_removed';
 
     public const ENGINE_DEFAULTS_CHANGED = 'engine.defaults_changed';
+
+    // AI apps connected over MCP (docs/specs/mcp-connections-plan.md §3.4). Lifecycle and exceptions only: never a
+    // per-call row, since this log is read by admins and kept for good.
+    public const CONNECTION_CONSENTED = 'connection.consented';
+
+    public const CONNECTION_REVOKED = 'connection.revoked';
+
+    public const CONNECTION_DENIED = 'connection.denied';
+
+    public const MCP_RATE_LIMITED = 'mcp.rate_limited';
 }

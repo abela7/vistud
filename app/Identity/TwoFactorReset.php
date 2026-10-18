@@ -4,6 +4,7 @@ namespace App\Identity;
 
 use App\Audit\AuditAction;
 use App\Audit\AuditLog;
+use App\Jobs\RevokeConnections;
 use App\Models\User;
 use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
@@ -33,6 +34,8 @@ final class TwoFactorReset
                 'remember_token' => null,
             ])->save();
             DB::table('sessions')->where('user_id', $user->id)->delete();
+            // Connected AI apps sign in again after a 2FA reset (docs/specs/mcp-connections-plan.md M6.1).
+            RevokeConnections::dispatchSync($user->id, 'two_factor_reset');
 
             $this->audit->record($by, AuditAction::TWO_FACTOR_RESET, 'user', $user->id, role: $by->isSystem() ? null : 'admin');
         });

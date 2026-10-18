@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureAccountActive;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureTwoFactorEnrolled;
 use App\Http\Middleware\EnterAdminArea;
+use App\Http\Middleware\McpTunnelOnly;
 use App\Http\Middleware\RequirePasswordConfirmation;
 use App\Http\Middleware\ShowRecoveryCodesOnce;
 use App\Platform\Errors\AppError;
@@ -41,6 +42,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(AssignRequestId::class);
+        // A test tunnel opens only the AI-app paths (docs/specs/mcp-connections-plan.md M6.1); behind it, the
+        // tunnel's https address is the one links are made with.
+        $middleware->prepend(McpTunnelOnly::class);
+        if (env('TUNNEL')) {
+            $middleware->trustProxies(at: '*');
+        }
         $middleware->appendToGroup('web', [EnsureAccountActive::class, ShowRecoveryCodesOnce::class]);
         $middleware->group('api.v1', [AddAccountHeader::class]);
         $middleware->alias([

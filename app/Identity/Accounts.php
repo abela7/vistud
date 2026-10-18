@@ -4,6 +4,7 @@ namespace App\Identity;
 
 use App\Audit\AuditAction;
 use App\Audit\AuditLog;
+use App\Jobs\RevokeConnections;
 use App\Models\User;
 use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
@@ -200,6 +201,8 @@ final class Accounts
     {
         DB::table('sessions')->where('user_id', $user->id)->delete();
         $user->forceFill(['remember_token' => null])->save();
+        // Connected AI apps stop with the sessions (docs/specs/mcp-connections-plan.md M6.1).
+        RevokeConnections::dispatchSync($user->id, 'account');
     }
 
     private function adminRole(Principal $by): ?string
