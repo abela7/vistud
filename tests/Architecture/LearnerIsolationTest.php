@@ -22,8 +22,10 @@ class LearnerIsolationTest extends TestCase
         'app/Jobs/',
         'app/Console/Commands/',
         'app/Brain/Redaction/',
-        'app/Platform/Outbox/',
     ];
+
+    /** Code that may query shared canonical_files rows. */
+    private const SHARED_ALLOWED = [];
 
     public function test_every_learner_table_carries_learner_id(): void
     {
@@ -31,24 +33,58 @@ class LearnerIsolationTest extends TestCase
             $this->assertTrue(Schema::hasTable($table), "Learner table '{$table}' does not exist.");
             $this->assertTrue(Schema::hasColumn($table, 'learner_id'), "Learner table '{$table}' has no learner_id column.");
         }
+
+        $unregistered = [];
+        foreach (Schema::getTableListing(Schema::getCurrentSchemaName(), false) as $table) {
+            if (Schema::hasColumn($table, 'learner_id') && ! in_array($table, LearnerTables::TABLES, true)) {
+                $unregistered[] = $table;
+            }
+        }
+        $this->assertSame([], $unregistered, 'Every table with a learner_id column must be registered in LearnerTables::TABLES.');
     }
 
     public function test_learner_tables_are_reached_only_through_the_isolation_layer(): void
     {
         $tables = implode('|', array_map('preg_quote', LearnerTables::TABLES));
         $direct = '/(?:table|from|join|leftJoin|rightJoin)\(\s*[\'"](?:'.$tables.')[\'"]|\$table\s*=\s*[\'"](?:'.$tables.')[\'"]/';
+        $rawSql = '/\bDB::(?i:select|selectOne|statement|unprepared|affectingStatement|scalar|insert|update|delete|raw)\s*\([^;]*\b(?:'.$tables.')\b|\b(?i:from|join|into|update)\s+`?(?:'.$tables.')`?\b/s';
 
         $offenders = [];
         foreach ($this->phpFiles('app') as $file) {
             if ($file === 'app/Platform/Database/LearnerTables.php') {
                 continue;
             }
-            if (preg_match($direct, file_get_contents(base_path($file))) === 1) {
+            $source = file_get_contents(base_path($file));
+            $stripped = self::stripComments($source);
+            if (preg_match($direct, $stripped) === 1 || preg_match($rawSql, $stripped) === 1) {
                 $offenders[] = $file;
             }
         }
 
         $this->assertSame([], $offenders, 'Use LearnerTables::query() for learner tables.');
+    }
+
+    public function test_shared_canonical_files_are_reached_only_by_allowed_callers(): void
+    {
+        $offenders = [];
+        foreach ($this->phpFiles('app') as $file) {
+            if ($file === 'app/Platform/Database/LearnerTables.php') {
+                continue;
+            }
+            $allowed = array_filter(self::SHARED_ALLOWED, fn ($prefix) => str_starts_with($file, $prefix));
+            if ($allowed === [] && str_contains(file_get_contents(base_path($file)), 'LearnerTables::shared(')) {
+                $offenders[] = $file;
+            }
+        }
+
+        $this->assertSame([], $offenders, 'Only allowed callers may use LearnerTables::shared().');
+
+        $query = LearnerTables::shared('canonical_files');
+        $this->assertStringContainsString('`canonical_files`.`learner_id` is null', strtolower($query->toSql()));
+        $this->assertSame(['shared'], $query->getBindings());
+
+        $this->expectException(\InvalidArgumentException::class);
+        LearnerTables::shared('topics');
     }
 
     public function test_bare_learner_scopes_are_created_only_by_trusted_server_code(): void
@@ -96,5 +132,18 @@ class LearnerIsolationTest extends TestCase
         sort($files);
 
         return $files;
+    }
+
+    private static function stripComments(string $source): string
+    {
+        $out = '';
+        foreach (token_get_all($source) as $token) {
+            if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            $out .= is_array($token) ? $token[1] : $token;
+        }
+
+        return $out;
     }
 }

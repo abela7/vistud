@@ -67,6 +67,8 @@ final class LearnerTables
         'class_transcripts',
         'class_materials',
         'class_reviews',
+        'outbox',
+        'canonical_files',
     ];
 
     /** `$connection`: another than the default, such as the owner's for what the runtime user may not do (journal rebuilds). */
@@ -77,6 +79,18 @@ final class LearnerTables
         }
 
         return DB::connection($connection)->table($table)->where($table.'.learner_id', $scope->learnerId);
+    }
+
+    /** Shared rows in canonical_files (learner_id is null and visibility is shared). */
+    public static function shared(string $table, ?string $connection = null): Builder
+    {
+        if ($table !== 'canonical_files') {
+            throw new InvalidArgumentException("'{$table}' is not a shared learner table.");
+        }
+
+        return DB::connection($connection)->table('canonical_files')
+            ->whereNull('canonical_files.learner_id')
+            ->where('canonical_files.visibility', 'shared');
     }
 
     /** Insert rows, forcing learner_id to the scope's learner. */
