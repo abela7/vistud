@@ -3,6 +3,7 @@
 namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
+use App\Study\Fence;
 use App\Study\Files;
 use App\Study\FileText;
 use App\Study\FileTexts;
@@ -47,7 +48,7 @@ final class ReadFileTool implements Tool
             return $file;
         }
         $text = $this->texts->of($by, $file->id);
-        $name = $file->fileName();
+        $name = Fence::escape($file->fileName());
 
         return match ($text->state) {
             FileText::PICTURE => "\"{$name}\" is a picture: it can't be read as text. Ask the student to attach it in the chat, so you can see it.",
@@ -59,7 +60,7 @@ final class ReadFileTool implements Tool
 
     private function pages(FileText $text, ?string $wanted): string
     {
-        $name = $text->file->fileName();
+        $name = Fence::escape($text->file->fileName());
         $count = $text->count();
         if ($count === 0 || ! $text->hasWords()) {
             return "\"{$name}\" has {$text->size()} but no text in them: it is probably scanned, or made of pictures. Ask the student to attach the pages they're on as pictures.\n".$text->profile();
@@ -87,7 +88,7 @@ final class ReadFileTool implements Tool
         }
         $span = $from === $to ? "{$text->unit} {$from}" : "{$text->unit}s {$from}-{$to}";
 
-        return "\"{$name}\": {$span} of {$count}.\n".$text->profile()."\n\n".implode("\n\n", $out);
+        return "\"{$name}\": {$span} of {$count}.\n".$text->profile()."\n\n".Fence::wrap(implode("\n\n", $out));
     }
 
     /** The whole file at a glance: what each page is (a slide's title, a sheet and its rows, or its first line). */
@@ -99,8 +100,9 @@ final class ReadFileTool implements Tool
             $first = $caption !== '' ? $caption : trim((string) strtok(trim($page)."\n", "\n"));
             $lines[] = ucfirst($text->unit).' '.($i + 1).': '.($first !== '' ? mb_substr($first, 0, 100) : '(no text)');
         }
+        $name = Fence::escape($text->file->fileName());
 
-        return "\"{$text->file->fileName()}\": an outline of its {$text->size()}, what each one is. Read any of them with pages.\n".$text->profile()."\n\n".implode("\n", $lines);
+        return "\"{$name}\": an outline of its {$text->size()}, what each one is. Read any of them with pages.\n".$text->profile()."\n\n".Fence::wrap(implode("\n", $lines));
     }
 
     /**

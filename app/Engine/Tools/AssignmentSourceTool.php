@@ -6,6 +6,7 @@ use App\Platform\Access\Principal;
 use App\Study\AssignmentSource;
 use App\Study\AssignmentSources;
 use App\Study\AssignmentUnderstandings;
+use App\Study\Fence;
 use App\Study\FileDetails;
 
 /** Reads the full text of one written source of the assignment, by the label its understanding cites, or by its title. */
@@ -70,8 +71,9 @@ final class AssignmentSourceTool implements Tool
         }
 
         $found = $written[$label];
-        $header = "### {$label} · {$found->kindLabel()}".($found->title !== null ? " · “{$found->title}”" : '').($found->receivedOn !== null ? " · received {$found->receivedOn}" : '');
+        $title = $found->title !== null ? " · “{$found->title}”" : '';
+        $header = "### {$label} · {$found->kindLabel()}{$title}".($found->receivedOn !== null ? " · received {$found->receivedOn}" : '');
 
-        return "{$header}\n\n{$found->text}";
+        return Fence::wrap("{$header}\n\n{$found->text}");
     }
 }

@@ -110,7 +110,7 @@ final readonly class FileText
             $head[] = number_format((int) $facts['words']).' words';
         }
         $uploaded = substr($this->file->uploadedAt, 0, 10);
-        $line = 'File “'.$this->file->fileName().'”: '.implode(', ', $head).($uploaded !== '' ? '; uploaded '.$uploaded : '').'.';
+        $line = 'File “'.Fence::escape($this->file->fileName()).'”: '.implode(', ', $head).($uploaded !== '' ? '; uploaded '.$uploaded : '').'.';
 
         $about = [];
         foreach (self::WORDS as $key => $words) {
@@ -119,6 +119,6 @@ final readonly class FileText
             }
         }
 
-        return $about === [] ? $line : $line."\nIt says of itself: ".implode('; ', $about).'.';
+        return $about === [] ? $line : $line."\nIt says of itself: ".Fence::wrap(implode('; ', $about).'.');
     }
 }

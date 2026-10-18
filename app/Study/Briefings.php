@@ -103,7 +103,7 @@ final class Briefings
         $confused = array_values(array_filter($topics, fn (TopicDetails $t) => $t->shown() === 'confused'));
         $add(60, 2, 'Still confusing', array_map(fn (TopicDetails $t) => '- '.$t->name.($t->moduleId !== null && isset($moduleTitles[$t->moduleId]) ? " ({$moduleTitles[$t->moduleId]})" : ''), $confused));
         // Stuck first, then the ones about this session's topic or module.
-        $open = array_values(array_filter($this->questions->list($by, $workspace->id), fn (QuestionDetails $q) => $q->status !== 'answered'));
+        $open = array_values(array_filter($this->questions->list($by, $workspace->id), fn (QuestionDetails $q) => $q->open()));
         $here = fn (QuestionDetails $q) => ($session->topicId !== null && $q->topicId === $session->topicId) || ($moduleId !== null && $q->moduleId === $moduleId);
         usort($open, fn ($a, $b) => [$b->status === 'stuck', $here($b)] <=> [$a->status === 'stuck', $here($a)]);
         $add(70, 2, 'Open questions', array_map(fn (QuestionDetails $q) => '- '.$q->text.$this->bracket([
@@ -132,7 +132,7 @@ final class Briefings
         [$materialLines, $noteBlocks] = $this->material($by, $session, $moduleId, $moduleTitles);
         $add(100, 3, $session->material === [] ? 'Material in ViStud' : 'Material for this session', $materialLines);
 
-        $add(110, 4, 'All topics in this course', $this->topicLines($topics, $modules, $status), intro: 'The status is the student\'s own word; the evidence is what their practice shows.');
+        $add(110, 4, 'All topics in this course', $this->topicLines($topics, $modules, $status), intro: 'Where each topic stands (from what the student said, what they accepted from an AI, what a tutor or chat app marked, or the evidence), and what their practice shows.');
         $others = [];
         foreach ($topics as $t) {
             if ($t->id !== $session->topicId) {
@@ -149,12 +149,25 @@ final class Briefings
         return new Briefing($markdown, implode(' · ', array_filter([$topic?->name, $workspace->name])), $trimmed);
     }
 
+    /** Who the topic's word is from: the student's, an accepted AI proposal, the tutor's, a chat app's, or the evidence when nobody said it (or it was overtaken since). */
+    private static function who(TopicDetails $topic): string
+    {
+        return match ($topic->statusSource()) {
+            'stated' => 'The student says',
+            'stated_unverified' => 'The student said (may have been an accepted AI proposal)',
+            'accepted' => "The student accepted the AI's word",
+            'tutor' => 'The tutor marked it',
+            'chat' => 'A chat app marked it',
+            default => 'Status (from the evidence, not said by anyone)',
+        };
+    }
+
     /** @return list<string> */
     private function sessionLines(SessionDetails $session, ?TopicDetails $topic, callable $status, callable $date): array
     {
         $lines = ['- Started: '.$date($session->startedAt).' (the student\'s time).'];
         $lines[] = $topic !== null
-            ? "- Topic: {$topic->name}. The student says: {$status($topic)}. Evidence: {$topic->evidence()}."
+            ? "- Topic: {$topic->name}. ".self::who($topic).": {$status($topic)}. Evidence: {$topic->evidence()}."
             : '- Topic: none chosen. Propose one (from what is still confusing, open or due soon below, or the module\'s material) and ask whether to take it; in ViStud, keep it as the Topics section says.';
         if ($session->pomodoro !== null) {
             $p = $session->pomodoro;
@@ -229,7 +242,7 @@ final class Briefings
                 if (mb_strlen($text) > self::NOTE_LIMIT) {
                     $text = rtrim(mb_substr($text, 0, self::NOTE_LIMIT))."\n\n(The rest of this note is left out.)";
                 }
-                $blocks[] = "## The student's note: {$note->displayTitle()}\n\n".NoteDoc::fenced($text !== '' ? $text : '(Empty.)');
+                $blocks[] = "## The student's note: {$note->displayTitle()}\n\n".($text !== '' ? $text : '(Empty.)');
             }
         }
 
@@ -299,7 +312,7 @@ final class Briefings
             $lines = [];
             $spent = $base;
             foreach ($section['lines'] as $line) {
-                $room = self::BUDGET - $used - $spent - 80;
+                $room = self::BUDGET - $used - $spent - 200;
                 if ($size($line) > $room) {
                     // A long block (a note) is cut to the room left, when there's enough for it to be useful.
                     if ($section['cut'] && $room > 500) {
@@ -343,6 +356,10 @@ final class Briefings
             $parts[] = $block.$text;
         }
 
-        return [trim(implode("\n\n", $parts))."\n", $trimmed];
+        $head = $parts[0] ?? '';
+        $body = implode("\n\n", array_slice($parts, 1));
+        $out = $body === '' ? $head : $head."\n\n".Fence::wrap($body);
+
+        return [trim($out)."\n", $trimmed];
     }
 }

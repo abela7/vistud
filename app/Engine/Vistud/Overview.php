@@ -8,6 +8,7 @@ use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 use App\Study\Activities;
 use App\Study\CourseProfiles;
+use App\Study\Fence;
 use App\Study\Instructions;
 use App\Study\Memory;
 use App\Study\Rollups;
@@ -82,7 +83,9 @@ final class Overview
             $this->recent($by, $names, $zone),
         ];
 
-        return implode("\n\n", array_filter($sections, fn (string $s) => $s !== ''));
+        $body = implode("\n\n", array_filter($sections, fn (string $s) => $s !== ''));
+
+        return $body === '' ? '' : Fence::wrap($body);
     }
 
     private function today(CarbonImmutable $now, int $weekSeconds): string

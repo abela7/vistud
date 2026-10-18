@@ -112,13 +112,32 @@ class ToolboxTest extends TestCase
         $this->assertStringContainsString('"properties":{}', json_encode(app(Toolbox::class)->definitions()[0]));
     }
 
+    public function test_every_enum_in_a_tool_schema_is_a_list_so_providers_accept_it(): void
+    {
+        $enums = function (array $schema, string $at) use (&$enums): void {
+            if (array_key_exists('enum', $schema)) {
+                $this->assertIsArray($schema['enum'], $at);
+                $this->assertTrue(array_is_list($schema['enum']), "{$at}: enum must be a list of values, not a map");
+            }
+            foreach ($schema as $key => $value) {
+                if (is_array($value)) {
+                    $enums($value, "{$at}.{$key}");
+                }
+            }
+        };
+        foreach (app(Toolbox::class)->definitions() as $definition) {
+            $enums($definition['function']['parameters'], $definition['function']['name']);
+        }
+    }
+
     public function test_the_course_overview_counts_what_matters_now(): void
     {
         $overview = json_decode($this->look('course_overview'), true);
         $this->assertSame('2026-10-05', $overview['today']);
+        $folderId = app(Folders::class)->tree($this->by, $this->databases->id)[0]->id;
         // By where they stand, in all and in each folder; the topic in none of the module's folders by name.
-        $this->assertSame(['number' => 1, 'title' => 'Week 1: Relational model', 'runs' => '2026-09-28 to 2026-10-04', 'topics' => ['total' => 1, 'understood' => 1], 'folders' => [['folder' => 'ER diagram for the library', 'topics' => ['total' => 0]]], 'topics_in_no_folder' => ['Primary and foreign keys'], 'notes' => 1], $overview['modules'][0]);
-        $this->assertSame(['number' => 2, 'title' => 'Week 2: SQL joins', 'current' => true, 'topics' => ['total' => 1, 'confusing' => 1]], $overview['modules'][1]);
+        $this->assertSame(['id' => $this->week1, 'number' => 1, 'title' => 'Week 1: Relational model', 'runs' => '2026-09-28 to 2026-10-04', 'topics' => ['total' => 1, 'understood' => 1], 'folders' => [['id' => $folderId, 'folder' => 'ER diagram for the library', 'topics' => ['total' => 0]]], 'topics_in_no_folder' => ['Primary and foreign keys'], 'notes' => 1], $overview['modules'][0]);
+        $this->assertSame(['id' => $this->context->moduleId, 'number' => 2, 'title' => 'Week 2: SQL joins', 'current' => true, 'topics' => ['total' => 1, 'confusing' => 1]], $overview['modules'][1]);
         // One question is answered; the old lab is late, so it is due too.
         $this->assertSame([1, 1, 2, 1], [$overview['open_questions'], $overview['stuck_questions'], $overview['due_in_14_days'], $overview['flashcards_due']]);
     }
@@ -373,7 +392,7 @@ class ToolboxTest extends TestCase
         // said before the session is older than what the tutor saw in it, and is updated: TrackingTest.)
         $topics->report($this->by, $this->joins, 'confused');
         $this->assertStringContainsString('themselves, so it stays', $this->look('set_topic_status', ['topic' => 'Joins', 'status' => 'understood', 'reason' => 'They answered well.']));
-        $this->assertSame(['confused', 'student'], [$topics->find($this->by, $this->joins)->status, $topics->find($this->by, $this->joins)->statusBy]);
+        $this->assertSame(['confused', 'stated'], [$topics->find($this->by, $this->joins)->status, $topics->find($this->by, $this->joins)->statusBy]);
         $kept = $this->context->effects->take()['statuses'][0];
         $this->assertSame([false, 'confused', 'understood'], [$kept['applied'], $kept['from'], $kept['to']]);
 
@@ -504,7 +523,7 @@ class ToolboxTest extends TestCase
 
         $outline = $this->look('read_file', ['file' => 'OS types', 'pages' => 'all']);
         $this->assertStringStartsWith('"OS types.pptx": an outline of its 3 slides', $outline);
-        $this->assertStringEndsWith("Slide 1: What is an OS?\nSlide 2: Batch systems\nSlide 3: Real-time systems", $outline);
+        $this->assertStringEndsWith(NoteDoc::fenced("Slide 1: What is an OS?\nSlide 2: Batch systems\nSlide 3: Real-time systems"), $outline);
         $this->assertStringNotContainsString('Details of', $outline);
     }
 

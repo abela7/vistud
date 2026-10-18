@@ -184,7 +184,7 @@ final class Tutoring
             $custom[] = "- What NOT to do: {$choices['custom_dont']}";
         }
         if ($custom !== []) {
-            $rendered .= "\n\n## Custom instructions\n\n".implode("\n", $custom);
+            $rendered .= "\n\n".Fence::wrap("## Custom instructions\n\n".implode("\n", $custom));
         }
 
         $pluginPrompt = Plugins::prompt($choices['plugins'] ?? []);

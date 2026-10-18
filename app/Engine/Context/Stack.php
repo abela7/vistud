@@ -18,6 +18,7 @@ use App\Study\AssignmentUnderstanding;
 use App\Study\AssignmentUnderstandings;
 use App\Study\CourseProfiles;
 use App\Study\CourseTypes;
+use App\Study\Fence;
 use App\Study\FileDetails;
 use App\Study\Files;
 use App\Study\Folders;
@@ -45,7 +46,7 @@ use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
 
 /**
- * The tutor's standing context, in layers (docs/specs/vistud-2-blueprint.md §3.6.2). Stable layers come first and
+ * The tutor's standing context, in layers (docs/specs/vistud-2-blueprint.md Â§3.6.2). Stable layers come first and
  * are the same word for word from one call to the next, so the service can cache them; what changes comes last:
  *
  *  0 the tutor's rules (resources/prompts/tutor-2.md)      1 the tools, beside the system prompt
@@ -187,6 +188,11 @@ final class Stack
             : '';
         $report[] = ['layer' => 6, 'name' => 'Chat so far', 'tokens' => Tokens::of($foldedText), 'budget' => null, 'cut' => 0];
 
+        foreach ([2, 3, 4] as $layer) {
+            $texts[$layer] = self::fenceLayer($texts[$layer]);
+        }
+        $foldedText = self::fenceLayer($foldedText);
+
         $stable = self::join([$texts[0], $texts[2], $texts[3]]);
 
         return new Built(self::join([$stable, $texts[4], $foldedText]), $stable, $tools, $report);
@@ -226,7 +232,7 @@ final class Stack
                 );
             } else {
                 $path = $this->folders->path($by, $folder->id);
-                $folderName = implode(' › ', array_map(fn ($f) => $f->name, $path));
+                $folderName = implode(' â€º ', array_map(fn ($f) => $f->name, $path));
                 $brief = $this->briefs->forFolder($by, $folder->id);
                 $facts = new Facts(
                     courseName: $workspace->name,
@@ -284,6 +290,10 @@ final class Stack
         $tooling = $tools === [] ? '' : (string) json_encode($tools, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         array_splice($report, 1, 0, [['layer' => 1, 'name' => 'Tools', 'tokens' => Tokens::of($tooling), 'budget' => null, 'cut' => 0]]);
 
+        foreach ([3, 4] as $layer) {
+            $texts[$layer] = self::fenceLayer($texts[$layer]);
+        }
+
         return new Built(self::join([$texts[0], $texts[3], $texts[4]]), $texts[0], $tools, $report);
     }
 
@@ -317,6 +327,11 @@ final class Stack
             : '';
         $report[] = ['layer' => 6, 'name' => 'Chat so far', 'tokens' => Tokens::of($folded), 'budget' => null, 'cut' => 0];
 
+        foreach ([2, 3, 4, 5] as $layer) {
+            $texts[$layer] = self::fenceLayer($texts[$layer]);
+        }
+        $folded = self::fenceLayer($folded);
+
         $stable = self::join([$texts[0], $texts[2], $texts[3]]);
 
         return new Built(self::join([$stable, $texts[4], $texts[5], $folded]), $stable, $tools, $report);
@@ -336,8 +351,6 @@ final class Stack
         $module = $this->moduleOf($by, $workspace->id, $session->moduleId ?? $topic?->moduleId);
         $instructions = $this->instructions->forSession($by, $workspace->id, $module?->id);
         $choices = $this->settings->get($by);
-        // The session line says the word alone (it names who and the practice itself); the topic lists say it in full.
-        $status = fn ($t) => self::word($t->shown());
         [$material, $materialText] = $this->material($by, $session, $withTools);
 
         $tutoring = Tutoring::normalised($session->tutoring);
@@ -396,7 +409,7 @@ final class Stack
             otherFolders: $otherFolders,
             mode: $session->mode,
             topicNow: $topic?->name,
-            topicPractice: $topic === null ? null : ($topic->status === null ? "{$status($topic)}, nobody has said yet" : ($topic->byTutor() ? "you marked it {$status($topic)}" : "the student says {$status($topic)}")).'; practice: '.$topic->evidence().$this->onTopicSoFar($by, $session),
+            topicPractice: $topic === null ? null : self::sessionWord($topic).'; practice: '.$topic->evidence().$this->onTopicSoFar($by, $session),
             topicChangedInChat: $topicChangedInChat,
             topicTakenOff: $topicTakenOff,
             withTools: $withTools,
@@ -419,7 +432,7 @@ final class Stack
 
     /**
      * The course's open graded work, and what the assignments this session feeds ask of it (the owner's ask,
-     * 2026-10-13: the study tutor knows the assignment, and says "on your assignment you are asked…"). A session feeds
+     * 2026-10-13: the study tutor knows the assignment, and says "on your assignment you are askedâ€¦"). A session feeds
      * an assignment when its understanding names the session's topic, a topic of the session's module, or the module,
      * or when it is set in the module.
      *
@@ -572,7 +585,7 @@ final class Stack
     {
         $lines = [['## The student', true], ['About you, in their words: '.($f->aboutYou !== '' ? $f->aboutYou : 'nothing written yet.'), true]];
         if ($f->preferences !== []) {
-            $lines[] = ['How they like to learn in this course: '.implode(' · ', $f->preferences).'.', true];
+            $lines[] = ['How they like to learn in this course: '.implode(' Â· ', $f->preferences).'.', true];
         }
         // What the tutor kept from earlier chats: a few short lines, so never cut. Numbered, so the tool can replace one.
         if (! $f->remembers) {
@@ -608,7 +621,7 @@ final class Stack
         $here = $f->folderName !== null;
         if ($here) {
             // A folder's session (docs/specs/vistud-2-blueprint.md, Phase 9) or helper look-up: where they are, and what that means.
-            $lines = [['## Where you are', true], [implode(' › ', array_filter([$f->courseName, $title, $f->folderName])), true]];
+            $lines = [['## Where you are', true], [implode(' â€º ', array_filter([$f->courseName, $title, $f->folderName])), true]];
             if ($isHelper) {
                 $lines[] = ["The student is looking at the folder {$f->folderName}. Answer their questions about this folder and its topics and files.", true];
             } else {
@@ -616,8 +629,8 @@ final class Stack
             }
             if ($f->otherFolders !== []) {
                 $otherText = $isHelper
-                    ? 'The module\'s other folders: '.implode(' · ', array_slice($f->otherFolders, 0, 8)).'.'
-                    : 'The module\'s other folders are for other sessions: '.implode(' · ', array_slice($f->otherFolders, 0, 8)).'.';
+                    ? 'The module\'s other folders: '.implode(' Â· ', array_slice($f->otherFolders, 0, 8)).'.'
+                    : 'The module\'s other folders are for other sessions: '.implode(' Â· ', array_slice($f->otherFolders, 0, 8)).'.';
                 $lines[] = [$otherText, true];
             }
         } else {
@@ -628,7 +641,7 @@ final class Stack
             $lines[] = ['About this module: '.$f->moduleAbout, true];
         }
         if ($f->moduleParts !== []) {
-            $lines[] = ['Its parts: '.implode(' · ', $f->moduleParts).'.', true];
+            $lines[] = ['Its parts: '.implode(' Â· ', $f->moduleParts).'.', true];
         }
         if ($f->moduleInstructions !== '') {
             $lines[] = ["Instructions for this module, in the student's words: {$f->moduleInstructions}", true];
@@ -639,7 +652,7 @@ final class Stack
         // The session's topic is marked, and kept when the list is cut: the one after it is the next to study.
         foreach ($f->topics as $topic) {
             $now = $f->topicNow !== null && $topic['name'] === $f->topicNow;
-            $lines[] = ["- {$topic['name']}: {$topic['status']}".($now ? ' ← the session\'s topic now' : ''), $now];
+            $lines[] = ["- {$topic['name']}: {$topic['status']}".($now ? ' â† the session\'s topic now' : ''), $now];
         }
         if ($here && $f->moduleOwnTopics !== []) {
             $lines[] = ['In the module but in no folder (they belong to every part of it):', true];
@@ -683,7 +696,7 @@ final class Stack
             }
         }
         if ($f->assignmentsLinked !== []) {
-            $lines[] = ['What this study feeds, from each assignment\'s reading ([S1], [F2]: its sources). When what you teach is asked for in one, say so ("On Coursework 1 you are asked to…"), tie it to what is marked, and offer to save useful study notes or examples directly to that assignment with save_to_assignment. Help them learn it; never write the graded work.', true];
+            $lines[] = ['What this study feeds, from each assignment\'s reading ([S1], [F2]: its sources). When what you teach is asked for in one, say so ("On Coursework 1 you are asked toâ€¦"), tie it to what is marked, and offer to save useful study notes or examples directly to that assignment with save_to_assignment. Help them learn it; never write the graded work.', true];
             array_push($lines, ...$f->assignmentsLinked);
         }
 
@@ -760,7 +773,7 @@ final class Stack
         $lines[] = ["Kind: {$a->kindLabel()}", true];
         $lines[] = ["Stage: {$a->stage}", true];
         $lines[] = ["Status: {$a->status}", true];
-        $due = $a->dueOn === null ? 'none given' : $a->dueAt()->format('l j F Y').($a->dueTime !== null ? " at {$a->dueTime}" : '')." ({$a->zone})".($a->timeLeft() !== null ? " — {$a->timeLeft()} left" : '');
+        $due = $a->dueOn === null ? 'none given' : $a->dueAt()->format('l j F Y').($a->dueTime !== null ? " at {$a->dueTime}" : '')." ({$a->zone})".($a->timeLeft() !== null ? " â€” {$a->timeLeft()} left" : '');
         $lines[] = ["Deadline: {$due}", true];
 
         if ($a->moduleId !== null) {
@@ -804,7 +817,7 @@ final class Stack
                 $lines[] = ["{$heading}:", $kept];
                 foreach ($items as $item) {
                     $topic = $part === 'topics' ? ($standing[$item['id'] ?? ''] ?? null) : null;
-                    $lines[] = ['- '.self::understood($part, $item).($topic !== null ? ' — where the student stands: '.self::status($topic) : ''), $kept];
+                    $lines[] = ['- '.self::understood($part, $item).($topic !== null ? ' â€” where the student stands: '.self::status($topic) : ''), $kept];
                 }
             }
             foreach ($understanding->extraSections() as $section) {
@@ -830,15 +843,15 @@ final class Stack
         foreach ($labelled as $label => $item) {
             $new = $understanding !== null && ! isset($understanding->sources[$label]) ? ' (new: not in the understanding yet)' : '';
             if ($item instanceof FileDetails) {
-                $lines[] = ["- {$label} · file “{$item->fileName()}”{$new}", true];
+                $lines[] = ["- {$label} Â· file â€œ{$item->fileName()}â€{$new}", true];
 
                 continue;
             }
-            $title = $item->title !== null ? " · “{$item->title}”" : '';
+            $title = $item->title !== null ? " Â· â€œ{$item->title}â€" : '';
             $date = $item->receivedOn ?? CarbonImmutable::parse($item->createdAt)->format('Y-m-d');
             $text = trim((string) preg_replace('/\s+/u', ' ', $item->text));
-            $excerpt = mb_strlen($text) > 100 ? mb_substr($text, 0, 100).'…' : $text;
-            $lines[] = ["- {$label} · {$item->kindLabel()}{$title} ({$date}){$new}: {$excerpt}", true];
+            $excerpt = mb_strlen($text) > 100 ? mb_substr($text, 0, 100).'â€¦' : $text;
+            $lines[] = ["- {$label} Â· {$item->kindLabel()}{$title} ({$date}){$new}: {$excerpt}", true];
         }
 
         // Plan summary
@@ -848,14 +861,14 @@ final class Stack
             $lines[] = ['No plan yet.', true];
             $starters = [];
             foreach (PlanStarters::ALL as $key => $starter) {
-                $partNames = implode(' → ', array_map(fn (array $part) => $part[0], $starter['parts']));
+                $partNames = implode(' â†’ ', array_map(fn (array $part) => $part[0], $starter['parts']));
                 $starters[] = "{$key} ({$starter['label']}: {$partNames})";
             }
             $lines[] = ['Pre-made plan starters available (via save_assignment_plan `starter`, or tailored with custom sections/steps/criteria): '.implode('; ', $starters).'.', true];
         } else {
             $progress = $plan->progress();
             $health = $plan->health($a);
-            $healthText = $health !== null ? " · Health: {$health['state']}".($health['reasons'] !== [] ? ' ('.implode(', ', $health['reasons']).')' : '') : '';
+            $healthText = $health !== null ? " Â· Health: {$health['state']}".($health['reasons'] !== [] ? ' ('.implode(', ', $health['reasons']).')' : '') : '';
             $lines[] = ["Progress: {$progress->done} of {$progress->total} done, {$progress->percent}%{$healthText}", true];
 
             $parts = $plan->parts();
@@ -913,7 +926,7 @@ final class Stack
             if ($folderNotes !== []) {
                 $lines[] = ["\n### Notes saved for this assignment (read with read_note; write or update with write_note / edit_note)", true];
                 foreach ($folderNotes as $n) {
-                    $lines[] = ["- “{$n->displayTitle()}”", true];
+                    $lines[] = ["- â€œ{$n->displayTitle()}â€", true];
                 }
             }
         } catch (NotFound) {
@@ -1017,7 +1030,7 @@ final class Stack
 
     /**
      * The session's folder, when it studies in one of the module's: its name with the folders above it ("Lecture 1 +
-     * Lab 1 › Labs"), it and the folders inside it, and the names of the module's other folders. Nothing when it has
+     * Lab 1 â€º Labs"), it and the folders inside it, and the names of the module's other folders. Nothing when it has
      * none, or the folder is gone or in another module.
      *
      * @return array{0: ?string, 1: ?list<string>, 2: list<string>}
@@ -1070,7 +1083,7 @@ final class Stack
             }
         }
 
-        return [implode(' › ', array_map(fn ($folder) => $folder->name, $path)), $this->folders->within($by, $folderId), $others];
+        return [implode(' â€º ', array_map(fn ($folder) => $folder->name, $path)), $this->folders->within($by, $folderId), $others];
     }
 
     /**
@@ -1083,15 +1096,53 @@ final class Stack
         $shown = $topic->shown();
         $word = self::word($shown);
         // Nobody has said anything and nothing has been studied: the default, not the student's word.
-        if ($shown === 'not_started' && $topic->status === null && $topic->label === 'not_started') {
+        if ($topic->statusSource() === 'none' && $topic->label === 'not_started') {
             return 'not started (nothing said or studied yet)';
         }
+        $ago = $topic->statusAt !== null ? ' '.self::ago($topic->statusAt) : '';
         // Who said it, when the word shown is the one said (not overtaken by newer evidence).
-        $said = $topic->status !== null && ($topic->status === $shown || ($shown === 'confused' && $topic->status === 'confused'))
-            ? ($topic->statusBy === 'tutor' ? 'you marked it' : 'the student said so').($topic->statusAt !== null ? ' '.self::ago($topic->statusAt) : '')
-            : null;
+        $said = match ($topic->statusSource()) {
+            'stated' => "the student said so{$ago}",
+            'stated_unverified' => "the student said so{$ago} (may have been an accepted AI proposal)",
+            'accepted' => "the student accepted the AI's word{$ago}",
+            'tutor' => "you marked it{$ago}",
+            'chat' => "a chat app marked it{$ago}",
+            default => null,
+        };
 
         return $word.($said !== null ? ": {$said}" : '').($shown !== 'not_started' || $topic->label !== 'not_started' ? '; evidence: '.$topic->evidence() : '');
+    }
+
+    /**
+     * The session topic's word and who said it, for the session line: "you marked it understood", "the student says
+     * confusing". A word the practice has overtaken since is not put in anyone's mouth: "mastered, from the practice
+     * since (the student said understood earlier)".
+     */
+    private static function sessionWord(TopicDetails $topic): string
+    {
+        $word = self::word($topic->shown());
+        if ($topic->status === null || $topic->statusBy === null) {
+            return "{$word}, nobody has said yet";
+        }
+        if ($topic->saidShown()) {
+            return match ($topic->statusSource()) {
+                'tutor' => "you marked it {$word}",
+                'chat' => "a chat app marked it {$word}",
+                'accepted' => "the student accepted the AI's word: {$word}",
+                'stated_unverified' => "the student says {$word} (may have been an accepted AI proposal)",
+                default => "the student says {$word}",
+            };
+        }
+
+        $earlier = match ($topic->statusBy) {
+            'tutor' => 'you marked it',
+            'chat' => 'a chat app marked it',
+            'accepted' => "the student accepted the AI's word:",
+            'student' => 'the student said (may have been an accepted AI proposal)',
+            default => 'the student said',
+        };
+
+        return "{$word}, from the practice since ({$earlier} ".self::word($topic->status).' earlier)';
     }
 
     /**
@@ -1151,7 +1202,7 @@ final class Stack
     private static function dates(ModuleDetails $module): ?string
     {
         $day = fn (?string $date) => $date === null ? null : CarbonImmutable::parse($date)->format('j M');
-        $text = trim(($day($module->startsOn) ?? '').' – '.($day($module->endsOn) ?? ''), ' –');
+        $text = trim(($day($module->startsOn) ?? '').' â€“ '.($day($module->endsOn) ?? ''), ' â€“');
 
         return $text !== '' ? $text : null;
     }
@@ -1205,5 +1256,20 @@ final class Stack
     private static function join(array $texts): string
     {
         return implode("\n\n", array_values(array_filter($texts, fn (string $text) => $text !== '')));
+    }
+
+    /** Wraps a non-empty layer in Fence::wrap(), without double-fencing pre-fenced plain-model note blocks. */
+    private static function fenceLayer(string $text): string
+    {
+        if ($text === '') {
+            return '';
+        }
+        if (str_contains($text, "\n\n## The student's note: ")) {
+            [$head, $notes] = explode("\n\n## The student's note: ", $text, 2);
+
+            return Fence::wrap($head)."\n\n## The student's note: ".$notes;
+        }
+
+        return Fence::wrap($text);
     }
 }

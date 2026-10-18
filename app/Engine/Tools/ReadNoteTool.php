@@ -3,6 +3,7 @@
 namespace App\Engine\Tools;
 
 use App\Platform\Access\Principal;
+use App\Study\Fence;
 use App\Study\Folders;
 use App\Study\NoteDoc;
 use App\Study\Notes;
@@ -36,13 +37,14 @@ final class ReadNoteTool implements Tool
             return $note;
         }
         $text = trim(NoteDoc::markdown($this->notes->open($by, $note->id)->doc ?? []));
+        $title = Fence::escape($note->displayTitle());
         if ($text === '') {
-            return "The note \"{$note->displayTitle()}\" is empty.";
+            return "The note \"{$title}\" is empty.";
         }
         if (mb_strlen($text) > self::LIMIT) {
             $text = rtrim(mb_substr($text, 0, self::LIMIT))."\n\n(The rest of this note is left out; it is longer than ".self::LIMIT.' characters.)';
         }
 
-        return "# {$note->displayTitle()}\n\n".NoteDoc::fenced($text);
+        return "# {$title}\n\n".Fence::wrap($text);
     }
 }

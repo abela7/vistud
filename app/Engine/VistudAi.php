@@ -14,6 +14,7 @@ use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
+use App\Study\Fence;
 use App\Study\Input;
 use App\Study\Sessions;
 use Closure;
@@ -70,7 +71,7 @@ final class VistudAi
         $text = self::words($text);
         $choices = $this->ready($by);
         $id = Ids::new();
-        $title = mb_strimwidth((string) preg_replace('/\s+/u', ' ', $text), 0, 80, '…');
+        $title = mb_strimwidth((string) preg_replace('/\s+/u', ' ', $text), 0, 80, 'â€¦');
         LearnerTables::insert(Guard::learner($by), 'engine_threads', [
             'id' => $id, 'purpose' => self::PURPOSE, 'title' => $title, 'model' => $model ?: $choices->tutorModel, 'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -194,7 +195,7 @@ final class VistudAi
         $rules = trim((string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', (string) file_get_contents(base_path(self::PROMPT))));
         $parts = [$rules, "# Their study now\n\n".$this->overview->build($by)];
         if ($folded !== null && trim($folded) !== '') {
-            $parts[] = "## Earlier in this conversation (folded to keep it short)\n\n".trim($folded);
+            $parts[] = "## Earlier in this conversation (folded to keep it short)\n\n".Fence::wrap(trim($folded));
         }
 
         return implode("\n\n", $parts);
