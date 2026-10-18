@@ -58,6 +58,17 @@
             </div>
         @endif
 
+        @if ($calls !== [])
+            <details class="text-sm text-fg-muted">
+                <summary class="cursor-pointer">What they read lately ({{ count($calls) }})</summary>
+                <ul class="mt-2 space-y-1" role="list" aria-label="Recent calls">
+                    @foreach ($calls as $call)
+                        <li>{{ \App\Mcp\Provider::name($call['provider']) }} · {{ str_replace('_', ' ', $call['tool']) }}{{ $call['outcome'] === 'ok' ? '' : ' (refused)' }} · {{ \Illuminate\Support\Carbon::parse($call['at'], 'UTC')->diffForHumans() }}</li>
+                    @endforeach
+                </ul>
+            </details>
+        @endif
+
         @if ($ended !== [])
             <details class="text-sm text-fg-muted">
                 <summary class="cursor-pointer">Disconnected ({{ count($ended) }})</summary>

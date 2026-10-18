@@ -14,11 +14,13 @@ use App\Platform\Access\Principal;
 use App\Platform\Database\RuntimeGrants;
 use Carbon\CarbonInterval;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\MigrationsEnded;
 use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\Looping;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
@@ -36,6 +38,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(Engine::class, OpenRouter::class);
         // An AI app's sign-in always shows ViStud's consent page, which may not be framed (docs/specs/mcp-connections-plan.md §3.2).
         $this->app->bind(AuthorizationController::class, AuthorizeConnection::class);
+        // Passport gives its own controller the web login by class name; the subclass needs the same, or the code
+        // could be issued to whichever user a cached guard last held.
+        $this->app->when(AuthorizeConnection::class)->needs(StatefulGuard::class)->give(fn () => Auth::guard(config('passport.guard')));
         // No device-code sign-in: its table is not made and no AI app needs it.
         Passport::$deviceCodeGrantEnabled = false;
     }

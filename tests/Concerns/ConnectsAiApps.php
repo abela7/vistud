@@ -24,6 +24,10 @@ trait ConnectsAiApps
     /** The consent page for this app, as the signed-in student sees it. */
     protected function openConsent(User $student, string $clientId, string $redirect = self::CLAUDE_CALLBACK, string $verifier = 'v'): TestResponse
     {
+        // An earlier /mcp call in this test made `api` the default guard; a real browser request starts on `web`.
+        // The guards are kept, not rebuilt: a controller this test already used holds on to them.
+        $this->app['auth']->shouldUse('web');
+
         return $this->actingAs($student)->get('/oauth/authorize?'.http_build_query([
             'client_id' => $clientId,
             'redirect_uri' => $redirect,
@@ -58,7 +62,7 @@ trait ConnectsAiApps
         ])->assertOk();
 
         // The browser's login is not what /mcp trusts: from here on only the token counts.
-        $this->app['auth']->forgetGuards();
+        $this->app['auth']->guard('web')->forgetUser();
 
         return ['client_id' => $clientId, 'access_token' => (string) $token->json('access_token'), 'refresh_token' => (string) $token->json('refresh_token')];
     }
@@ -66,7 +70,9 @@ trait ConnectsAiApps
     /** One JSON-RPC call to /mcp. */
     protected function mcp(?string $token, string $method, array $params = [], array $headers = []): TestResponse
     {
-        $this->app['auth']->forgetGuards();
+        // Each call is a new request: the token, not a user the guard remembers from the last call, says who it is.
+        $this->app['auth']->guard('api')->forgetUser();
+        $this->app['auth']->guard('web')->forgetUser();
 
         return $this->postJson('/mcp', ['jsonrpc' => '2.0', 'id' => 1, 'method' => $method, 'params' => $params], array_filter([
             'Accept' => 'application/json, text/event-stream',

@@ -44,6 +44,18 @@ class ConnectionsScreenTest extends TestCase
         $this->callTool($tokens['access_token'], 'me')->assertStatus(401);
     }
 
+    public function test_it_lists_what_the_apps_read_without_the_text(): void
+    {
+        $ada = $this->student();
+        $tokens = $this->connectApp($ada);
+        $this->callTool($tokens['access_token'], 'me')->assertOk();
+
+        $this->app['auth']->shouldUse('web');
+        Livewire::actingAs($ada)->test(Connections::class)
+            ->assertSee('What they read lately (1)')
+            ->assertSee('Anthropic (Claude) · me');
+    }
+
     public function test_disconnect_all_asks_for_the_password_first(): void
     {
         $ada = $this->student();

@@ -201,6 +201,18 @@ Recorded by the PM before WP4 started, and since.
 
 Plan: [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md). One phase at a time, each with a handoff note in `docs/handoff/mcp-phase-N.md`.
 
+### M6.2 · Reads, on the public server
+
+| | |
+|---|---|
+| State | **In progress**: the read tools are delivered; the public server waits on decisions 2 and 7 |
+| Plan section | [mcp-connections-plan.md §4 · M6.2](../specs/mcp-connections-plan.md#m62--reads-on-the-public-server-4-units-2-for-reads-2-for-hosting) |
+| Handoff | [docs/handoff/mcp-phase-2.md](../handoff/mcp-phase-2.md) (part 1 of 2) |
+| Depends on | M6.1 |
+| Next handoff | Abel's answers to decisions 2 (where the server runs) and 7 (its address); then hosting, ChatGPT step 1 and the golden prompts |
+
+**Evidence:** tests `tests/Feature/Mcp/ReadToolsTest.php`, `tests/Feature/Mcp/IsolationTest.php`, `tests/Architecture/McpAdapterTest.php`, `tests/Feature/Web/ConnectionsScreenTest.php`.
+
 ### M6.1 · The door
 
 | | |

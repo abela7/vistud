@@ -102,6 +102,25 @@ final class Connections
             ->all();
     }
 
+    /**
+     * What the student's apps took from ViStud lately, newest first: the tool, how it went, when, and which company
+     * (ADR 0001's disclosure log). Never the text.
+     *
+     * @return list<array{tool: string, outcome: string, provider: string, at: string}>
+     */
+    public function disclosures(Principal $by, int $limit = 20): array
+    {
+        $scope = Guard::learner($by);
+        $providers = LearnerTables::query($scope, 'mcp_connections')->pluck('provider', 'id')->all();
+
+        return array_map(fn (object $call) => [
+            'tool' => (string) $call->tool,
+            'outcome' => (string) $call->outcome,
+            'provider' => (string) ($providers[$call->connection_id] ?? Provider::OTHER),
+            'at' => (string) $call->created_at,
+        ], Calls::recent($scope, $limit));
+    }
+
     public function find(Principal $by, string $id): ConnectionDetails
     {
         $scope = Guard::learner($by);

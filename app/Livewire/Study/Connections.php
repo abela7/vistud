@@ -59,7 +59,7 @@ final class Connections extends Component
     {
         // An account that is only an admin has no study data, so nothing to connect.
         if ($this->principal()->learnerId === null) {
-            return view('livewire.study.connections', ['groups' => [], 'ended' => [], 'url' => url('/mcp'), 'student' => false]);
+            return view('livewire.study.connections', ['groups' => [], 'ended' => [], 'calls' => [], 'url' => url('/mcp'), 'student' => false]);
         }
         $all = $this->connections->list($this->principal());
         $live = array_values(array_filter($all, fn (ConnectionDetails $c) => $c->live()));
@@ -72,6 +72,7 @@ final class Connections extends Component
         return view('livewire.study.connections', [
             'groups' => $groups,
             'ended' => array_values(array_filter($all, fn (ConnectionDetails $c) => ! $c->live())),
+            'calls' => $this->connections->disclosures($this->principal()),
             'url' => url('/mcp'),
             'student' => true,
         ]);

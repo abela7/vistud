@@ -225,6 +225,15 @@ Conventions are in [conventions.md](conventions.md#json-api). The OpenAPI defini
 
 There is no admin JSON API in M1. Admin actions run through Livewire and the console, and both go through the same services.
 
+## MCP tools (Provisional, M6.2)
+
+What an AI app may call on `POST /mcp` (docs/specs/mcp-connections-plan.md §3.1, §3.9). The list, with each tool's four hints, its source and the lowest connection level allowed, is `App\Mcp\ToolInfo::TOOLS`; what is left out, with why, is `App\Mcp\Excluded::TOOLS`. A tool's name, its arguments and its hints are the contract: changing one is a `contract-change` pull request, because chat apps and saved prompts depend on them.
+
+- A course tool takes `course_id` (from `courses`) and optionally `module_id`; an unknown id, another student's id, or a module of another course answers `isError` with the same words as an id that never existed.
+- Every answer that carries the student's words fences them (`App\Study\Fence`) or returns them as typed fields of structured content.
+- `me` is the one tool that names the student (a first name and a masked email). The study tools never do.
+- Every call writes one `mcp_calls` row: the tool, the outcome (`ok`, `error`, `not_found`, `not_allowed`), a type and an id, the characters returned. Never text.
+
 ## Error codes
 
 Stable. New codes may be added; existing codes never change meaning.
