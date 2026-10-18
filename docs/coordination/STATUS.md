@@ -196,3 +196,22 @@ Recorded by the PM before WP4 started, and since.
 | Contracts from WP2 and WP3 becoming Stable | PM review of increments 2 and 3 |
 | Local development on Windows | Not verified: PHP 8.4 and MySQL 8.4 there, the database-user step (documented for Unix shells only), and the Unix-only concurrency test ([LOCAL-TAKEOVER.md](../handoff/LOCAL-TAKEOVER.md#9-what-was-verified-where)) |
 | The M1 gate | V1 and V2 tests existing and passing (the concurrency test executing on Unix), WP4, WP5 and WP6 delivered, and the PM's approval |
+
+## M6 · External AI connections (MCP)
+
+Plan: [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md). One phase at a time, each with a handoff note in `docs/handoff/mcp-phase-N.md`.
+
+### M6.0 · Truth first
+
+| | |
+|---|---|
+| State | **Delivered, awaiting review** |
+| Plan section | [mcp-connections-plan.md §4 · M6.0](../specs/mcp-connections-plan.md#m60--truth-first-3-units) |
+| Handoff | [docs/handoff/mcp-phase-0.md](../handoff/mcp-phase-0.md) |
+| Depends on | ViStud 2 baseline |
+| Next handoff | PM review of M6.0 before M6.1 starts |
+
+**Evidence:**
+- Tests: `tests/Feature/Engine/ToolTruthTest.php`, `tests/Feature/Study/TopicsTest.php`, `tests/Feature/Study/WriteBackTest.php`, `tests/Feature/Study/OrphanWriteTest.php`, `tests/Feature/Engine/ProvenanceTest.php`, `tests/Feature/Engine/FenceTest.php`, `tests/Feature/Engine/EngineCommandsTest.php`, `tests/Architecture/LearnerIsolationTest.php`, `tests/Feature/Web/TopicSheetScreenTest.php`.
+- Guard tests green: `tests/Feature/Engine/ToolboxTest.php`, `tests/Feature/Engine/SessionChatTest.php`, `tests/Feature/Engine/AgreementTest.php`, `tests/Feature/Engine/ToolTruthTest.php`, `tests/Feature/Engine/StackTest.php`, `tests/Feature/Engine/VistudAiTest.php`.
+
