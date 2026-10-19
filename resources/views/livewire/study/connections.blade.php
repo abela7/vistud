@@ -63,7 +63,7 @@
             <div class="mt-2 space-y-3">
                 <p><span class="font-medium">Claude.</span> Download the package, then in Claude open Customize, Plugins, and upload the zip. Say "let's study week 1" and Claude starts a session from your course.</p>
                 <p><span class="font-medium">ChatGPT.</span> Add a custom connector with the address <code class="select-all">{{ $url }}</code>, then sign in here when it asks. The package below holds the same teaching rules; ChatGPT may not load it, and the connector sends the rules either way.</p>
-                <p><span class="font-medium">Gemini.</span> Connect it to the same address. The package is untested.</p>
+                <p><span class="font-medium">Gemini.</span> Connect it to the same address, under Settings, Connected apps, Custom apps. Sign-in may stop before ViStud ever sees it. If it does, use Prompt for another AI on a study session, and paste the reply back with Save from the chat. The package is untested.</p>
                 <ul class="flex flex-wrap gap-3" role="list">
                     <li><a class="link" href="{{ route('connections.plugin', 'claude') }}">Download for Claude</a></li>
                     <li><a class="link" href="{{ route('connections.plugin', 'openai') }}">Download for ChatGPT</a></li>
