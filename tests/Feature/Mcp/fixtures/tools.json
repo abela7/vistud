@@ -643,5 +643,139 @@
             "idempotentHint": false,
             "openWorldHint": false
         }
+    },
+    "rename_topic": {
+        "arguments": [
+            "capture_key",
+            "new_name",
+            "topic_id"
+        ],
+        "required": [
+            "new_name",
+            "topic_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "rename_module": {
+        "arguments": [
+            "capture_key",
+            "module_id",
+            "new_title"
+        ],
+        "required": [
+            "module_id",
+            "new_title"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "rename_folder": {
+        "arguments": [
+            "capture_key",
+            "folder_id",
+            "new_name"
+        ],
+        "required": [
+            "folder_id",
+            "new_name"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "rename_course": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "new_name"
+        ],
+        "required": [
+            "course_id",
+            "new_name"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "rename_note": {
+        "arguments": [
+            "capture_key",
+            "new_title",
+            "note_id"
+        ],
+        "required": [
+            "new_title",
+            "note_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "forget_memory": {
+        "arguments": [
+            "capture_key",
+            "memory_id"
+        ],
+        "required": [
+            "memory_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "remember": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "replaces_memory_id",
+            "text"
+        ],
+        "required": [
+            "text"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "replace_note": {
+        "arguments": [
+            "capture_key",
+            "note_id",
+            "text"
+        ],
+        "required": [
+            "note_id",
+            "text"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
     }
 }

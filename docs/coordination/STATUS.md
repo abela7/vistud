@@ -201,6 +201,18 @@ Recorded by the PM before WP4 started, and since.
 
 Plan: [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md). One phase at a time, each with a handoff note in `docs/handoff/mcp-phase-N.md`.
 
+### M6.5 · Changes you confirm in ViStud
+
+| | |
+|---|---|
+| State | **Delivered, except the app's own agreement for renames and the 320 px browser spec**: eight manage tools (level full) that only ask, the read-only confirm page and the POST that makes the change once, with the password for what lands in every prompt |
+| Plan section | [mcp-connections-plan.md §4 · M6.5](../specs/mcp-connections-plan.md#m65--changes-you-confirm-in-vistud-2-units) |
+| Handoff | [docs/handoff/mcp-phase-5.md](../handoff/mcp-phase-5.md) |
+| Depends on | M6.4 |
+| Next handoff | M6.6 (panels) |
+
+**Evidence:** tests `tests/Feature/Mcp/ConfirmationTest.php`, `ContractSnapshotTest.php`, `tests/Architecture/AdapterParityTest.php`.
+
 ### M6.4 · The rules travel: skills, prompts, plugins
 
 | | |

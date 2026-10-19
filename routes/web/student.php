@@ -4,6 +4,7 @@ use App\Brain\Store\JournalReader;
 use App\Http\Controllers\Api\V1\NoteImageController;
 use App\Http\Controllers\AssignmentPageController;
 use App\Http\Controllers\ClassRecordingController;
+use App\Http\Controllers\ConfirmChangeController;
 use App\Http\Controllers\CourseGuidePageController;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
@@ -50,6 +51,9 @@ Route::middleware('auth')->group(function () {
     })->name('settings');
     Route::redirect('/ai-engine', '/settings?part=ai', 301)->name('engine.settings');
     // The install package for a chat app (Claude, ChatGPT, Gemini), built from resources/skills (docs/specs/mcp-connections-plan.md M6.4).
+    // A change a chat app asked for: shown read-only (GET), made only at the POST (docs/specs/mcp-connections-plan.md M6.5).
+    Route::get('/connections/confirm/{id}', [ConfirmChangeController::class, 'show'])->where('id', '[A-Za-z0-9-]{1,64}')->name('connections.confirm');
+    Route::post('/connections/confirm/{id}', [ConfirmChangeController::class, 'store'])->where('id', '[A-Za-z0-9-]{1,64}')->name('connections.confirm.store');
     Route::get('/connections/plugin/{target}', PluginDownloadController::class)->where('target', 'claude|openai|gemini')->name('connections.plugin');
 
     // The student's journal, newest first.

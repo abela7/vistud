@@ -52,4 +52,7 @@ final class AuditAction
     public const CONNECTION_DENIED = 'connection.denied';
 
     public const MCP_RATE_LIMITED = 'mcp.rate_limited';
+
+    // A change a chat app asked for, which the student confirmed on a ViStud page (the tool name only, never the change).
+    public const MCP_DESTRUCTIVE_CONFIRMED = 'mcp.destructive_confirmed';
 }

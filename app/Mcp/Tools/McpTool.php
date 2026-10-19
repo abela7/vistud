@@ -44,7 +44,7 @@ abstract class McpTool extends Tool
      * The work itself.
      *
      * @param  array<string, mixed>  $arguments
-     * @return array{text: string, structured?: ?array<string, mixed>, type?: ?string, id?: ?string, effects?: array<string, mixed>, changed?: bool}
+     * @return array{text: string, structured?: ?array<string, mixed>, type?: ?string, id?: ?string, effects?: array<string, mixed>, changed?: bool, status?: string}
      */
     abstract protected function answer(Principal $by, array $arguments, ?object $connection): array;
 
@@ -112,7 +112,7 @@ abstract class McpTool extends Tool
         $structured = $done['structured'] ?? null;
         if ($writes) {
             $ack = array_filter([
-                'status' => ($effects['rows'] ?? 0) > 0 || ($done['changed'] ?? false) ? 'recorded' : 'unchanged',
+                'status' => $done['status'] ?? (($effects['rows'] ?? 0) > 0 || ($done['changed'] ?? false) ? 'recorded' : 'unchanged'),
                 'session_id' => ContextBuilder::id($arguments, 'session_id'),
                 'resumed' => $resumed ?: null,
                 'saved' => $effects['saved'] ?? null,

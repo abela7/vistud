@@ -56,6 +56,15 @@ final class ToolInfo
         'write_note' => ['title' => 'Write in a note', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
         'save_to_assignment' => ['title' => 'Save to an assignment', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
         'log_progress' => ['title' => 'Log assignment progress', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        // Changes the student confirms on a ViStud page (M6.5), at level full: the tool only asks, it never changes anything.
+        'rename_topic' => ['title' => 'Ask to rename a topic', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
+        'rename_module' => ['title' => 'Ask to rename a module', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
+        'rename_folder' => ['title' => 'Ask to rename a folder', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
+        'rename_course' => ['title' => 'Ask to rename a course', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
+        'rename_note' => ['title' => 'Ask to rename a note', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
+        'forget_memory' => ['title' => 'Ask to forget a memory', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
+        'remember' => ['title' => 'Ask to remember something about the student', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
+        'replace_note' => ['title' => 'Ask to replace a notes whole text', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
     ];
 
     /**

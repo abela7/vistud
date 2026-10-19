@@ -4,6 +4,7 @@ namespace App\Mcp\Servers;
 
 use App\Engine\Toolbox;
 use App\Engine\Vistud\VistudToolbox;
+use App\Mcp\Confirmations;
 use App\Mcp\Prompts\QuizMe;
 use App\Mcp\Prompts\ReviewTopic;
 use App\Mcp\Prompts\StartStudySession;
@@ -16,6 +17,7 @@ use App\Mcp\Tools\AnswerFlashcardTool;
 use App\Mcp\Tools\CurrentSessionTool;
 use App\Mcp\Tools\EngineTool;
 use App\Mcp\Tools\FlashcardsDueTool;
+use App\Mcp\Tools\ManageTool;
 use App\Mcp\Tools\MeTool;
 use App\Mcp\Tools\SessionStepTool;
 use App\Mcp\Tools\StartSessionTool;
@@ -88,6 +90,7 @@ final class ViStudServer extends Server
             $tools[] = match (true) {
                 isset($native[$name]) => $container->make($native[$name]),
                 in_array($name, SessionStepTool::STEPS, true) => new SessionStepTool($name),
+                isset(Confirmations::TOOLS[$name]) => new ManageTool($name),
                 isset($engine[$name]) => new EngineTool($engine[$name]),
                 default => throw new \LogicException("ToolInfo lists {$name}, but no tool has that name."),
             };

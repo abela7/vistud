@@ -22,14 +22,6 @@ final class Excluded
         'confirm_assignment_understanding' => 'The student confirms an assignment in the assignment companion.',
         'update_assignment_plan_item' => 'Assignment plans are edited in the assignment companion.',
         'assignment_source' => 'Read in the assignment companion, beside its plan.',
-        'edit_note' => 'Only its whole-note replace is offered, as replace_note, confirmed on a ViStud page (M6.5).',
-        // Manage tools arrive in M6.5.
-        'remember' => 'A manage tool, confirmed on a ViStud page: M6.5.',
-        'forget_memory' => 'A manage tool, confirmed on a ViStud page: M6.5.',
-        'rename_topic' => 'A manage tool, confirmed on a ViStud page: M6.5.',
-        'rename_module' => 'A manage tool, confirmed on a ViStud page: M6.5.',
-        'rename_folder' => 'A manage tool, confirmed on a ViStud page: M6.5.',
-        'rename_course' => 'A manage tool, confirmed on a ViStud page: M6.5.',
-        'rename_note' => 'A manage tool, confirmed on a ViStud page: M6.5.',
+        'edit_note' => 'Only its whole-note replace is offered, as replace_note, confirmed on a ViStud page.',
     ];
 }
