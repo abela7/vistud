@@ -239,6 +239,7 @@ final class Notes
     public function append(Principal $by, string $id, array $blocks, string $kind = 'tutor'): SavedVersion
     {
         $scope = Guard::learner($by);
+        $kind = self::writerKind($by, $kind);
 
         return DB::transaction(function () use ($scope, $id, $blocks, $kind) {
             $note = $this->row($scope, $id, lock: true);
@@ -267,8 +268,9 @@ final class Notes
     {
         $scope = Guard::learner($by);
         $title = self::validatedTitle($title);
+        $kind = self::writerKind($by, 'tutor');
 
-        return DB::transaction(function () use ($scope, $id, $title) {
+        return DB::transaction(function () use ($scope, $id, $title, $kind) {
             $note = $this->row($scope, $id, lock: true);
             if ($note->trashed_at !== null) {
                 throw new Gone('trashed');
@@ -277,7 +279,7 @@ final class Notes
             $doc = $current !== null ? (json_decode((string) $current->doc, true) ?: NoteDoc::empty()) : NoteDoc::empty();
             $version = (int) $note->current_version + 1;
             $at = now();
-            $this->addVersion($scope, $id, $version, $title, $doc, (int) $note->current_version, null, null, 'tutor', $at);
+            $this->addVersion($scope, $id, $version, $title, $doc, (int) $note->current_version, null, null, $kind, $at);
             LearnerTables::query($scope, 'notes')->where('id', $id)->update(['title' => $title, 'current_version' => $version, 'updated_at' => $at]);
 
             return new SavedVersion($version, self::time($at));
@@ -292,6 +294,7 @@ final class Notes
     public function replace(Principal $by, string $id, array $blocks, string $kind = 'tutor'): SavedVersion
     {
         $scope = Guard::learner($by);
+        $kind = self::writerKind($by, $kind);
 
         return DB::transaction(function () use ($scope, $id, $blocks, $kind) {
             $note = $this->row($scope, $id, lock: true);
@@ -318,6 +321,7 @@ final class Notes
     public function replaceDoc(Principal $by, string $id, array $doc, string $kind = 'tutor'): SavedVersion
     {
         $scope = Guard::learner($by);
+        $kind = self::writerKind($by, $kind);
 
         return DB::transaction(function () use ($scope, $id, $doc, $kind) {
             $note = $this->row($scope, $id, lock: true);
@@ -432,6 +436,12 @@ final class Notes
         LearnerTables::query($scope, 'note_versions')->where('note_id', $id)->delete();
         LearnerTables::query($scope, 'notes')->where('id', $id)->delete();
         $this->tombstone($scope, $id, 'deleted');
+    }
+
+    /** A version a connected chat app wrote says so (`chat_app`), so the note page can name the app; the in-app tutor's stays `tutor`. */
+    private static function writerKind(Principal $by, string $kind): string
+    {
+        return $by->channel === 'mcp' && $kind === 'tutor' ? 'chat_app' : $kind;
     }
 
     private function addVersion(LearnerScope $scope, string $noteId, int $version, string $title, array $doc, ?int $base, ?string $saveId, ?string $clientId, string $kind, $at = null): void

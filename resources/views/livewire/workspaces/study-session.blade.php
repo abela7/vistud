@@ -667,6 +667,11 @@
         <x-alert tone="info">Your break ran past an hour, so the session is paused. Resume when you're back.</x-alert>
     @endif
 
+    {{-- A chat app (Claude, ChatGPT…) called into this session in the last half hour: the page says so, since it may save things here. --}}
+    @if ($open && $apps['live'])
+        <p class="session-connected text-sm text-fg-muted" data-test="connected-chip"><x-icon name="link" class="inline size-4" /> {{ ucfirst($apps['live']) }} is connected to this session</p>
+    @endif
+
     @if ($open && $session->usesPomodoro())
         @include('livewire.workspaces.partials.pomodoro-clock')
     @endif
@@ -2109,6 +2114,9 @@
                                                     @if ($quiz['isThisSession'])
                                                         <span class="study-q-tag">This session</span>
                                                     @endif
+                                                    @if ($quiz['byApp'])
+                                                        <span class="study-q-tag">Set by a chat app ({{ $quiz['byApp'] }})</span>
+                                                    @endif
                                                 </span>
                                                 <span class="session-quiz-meta">{{ $quiz['right'] }} of {{ $quiz['asked'] }} right · {{ $quiz['durationWords'] }} · {{ $quiz['finishedAt'] }}</span>
                                             </span>
@@ -2122,8 +2130,8 @@
                                                 {{-- Asked in the session's confirm dialog; deleted for good, its answers stop counting. --}}
                                                 <button type="button" class="session-mini-btn self-start"
                                                     x-on:click="$dispatch('session-confirm', { kind: 'quiz', id: @js($quiz['id']), name: @js(ucfirst($quiz['kind']).' · '.$quiz['score'].'% · '.$quiz['right'].' of '.$quiz['asked'].' right') })"
-                                                    title="Delete this {{ $quiz['kind'] }} for good" aria-label="Delete this {{ $quiz['kind'] }}">
-                                                    <x-icon name="trash-2" class="size-3" /><span>Delete</span>
+                                                    title="{{ $quiz['byApp'] ? 'Undo this '.$quiz['kind'].': it is taken back, and its answers stop counting' : 'Delete this '.$quiz['kind'].' for good' }}" aria-label="{{ $quiz['byApp'] ? 'Undo' : 'Delete' }} this {{ $quiz['kind'] }}">
+                                                    <x-icon name="trash-2" class="size-3" /><span>{{ $quiz['byApp'] ? 'Undo' : 'Delete' }}</span>
                                                 </button>
                                             </div>
                                             @foreach ($quiz['questions'] as $qIdx => $q)
@@ -2491,7 +2499,12 @@
                                     <div class="end-topic" wire:key="end-topic-{{ $t->id }}">
                                         <p class="font-medium break-words">{{ $t->name }}</p>
                                         <p class="text-sm text-fg-muted">
-                                            @if ($given)
+                                            @if ($given && ($given['app'] ?? null))
+                                                Set by a chat app ({{ $given['app'] }}): {{ $statusWords[$given['to']] ?? $given['to'] }}.
+                                                @if (($given['applied'] ?? false) && is_array($given['before'] ?? null))
+                                                    <button type="button" class="link" wire:click="undoAppMark('{{ $t->id }}')">Undo<span class="sr-only"> marking {{ $t->name }}</span></button>
+                                                @endif
+                                            @elseif ($given)
                                                 {{ $given['applied'] ? 'The tutor marked it' : 'The tutor suggests' }} {{ $statusWords[$given['to']] ?? $given['to'] }}{{ ($given['reason'] ?? null) ? ': '.$given['reason'] : '.' }}
                                             @else
                                                 {{ $t->status !== null ? 'Now: '.($statusWords[$t->status] ?? $t->status).($t->byTutor() ? ' (marked by the tutor)' : '').'.' : 'No status yet.' }}

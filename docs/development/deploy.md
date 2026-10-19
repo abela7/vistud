@@ -71,7 +71,7 @@ Run on the server, as the deploy user:
 cd /var/www/vistud
 php artisan down --retry=30
 mysqldump ... > ~/backups/vistud-$(date +%F-%H%M).sql   # or the backup script
-git fetch origin && git merge --ff-only origin/claude-latest
+git fetch origin && git merge --ff-only origin/claude/persistent-study-context-zsilo6
 composer install --no-dev --optimize-autoloader
 npm ci && npm run build
 composer migrate

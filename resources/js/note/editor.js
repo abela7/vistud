@@ -916,6 +916,7 @@ export async function mount(host) {
                 status.querySelector('[data-save-label]').textContent = LABELS[state.status].replace('{s}', state.retryIn);
                 if (['conflict', 'gone', 'session', 'blocked', 'deleted', 'rejected', 'offline', 'nostorage'].includes(state.status)) {
                     show(state.status);
+                    if (state.status === 'conflict') nameApp();
                     if (state.status === 'rejected') alerts.querySelector('[data-rejected-message]').textContent = state.message;
                 } else if (alerts.querySelector('[data-alert]:not([hidden])')?.dataset.alert !== 'restored') {
                     show(null);
@@ -4085,6 +4086,47 @@ export async function mount(host) {
         }
     });
 
+    // ---------- A connected chat app is working on this note ----------
+    // Until pushed updates exist: while an app was used in the last ten minutes (the page says so with data-poll), ask every
+    // 30 seconds whether the note has a newer version, and treat it as another tab's save. A conflict names the app.
+    let pollTimer = null;
+    async function pulse() {
+        if (left || !host.dataset.pulseUrl) return null;
+        try {
+            const response = await fetch(host.dataset.pulseUrl, { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+            return response.ok ? await response.json() : null;
+        } catch {
+            return null;
+        }
+    }
+    async function nameApp() {
+        const slot = alerts.querySelector('[data-conflict-app]');
+        if (!slot) return;
+        const data = await pulse();
+        slot.hidden = !data?.app;
+        slot.textContent = data?.app ? `A chat app (${data.app}) changed this note. ` : '';
+    }
+    function stopPolling() {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+    async function checkForApp() {
+        const data = await pulse();
+        if (!data) return;
+        if (!data.active) stopPolling();
+        if (!autosave || data.version <= autosave.version()) return;
+        if (!autosave.isClean()) {
+            autosave.conflict(data.version);
+            return;
+        }
+        const current = await fetchCurrent();
+        if (current && current.version > autosave.version() && autosave.isClean()) {
+            showVersion(current);
+            autosave.synced(current.version);
+        }
+    }
+    if (host.hasAttribute('data-poll') && host.dataset.pulseUrl) pollTimer = setInterval(checkForApp, 30000);
+
     // Logging out asks the open note to store what it holds first.
     on(window, 'vistud:store-drafts', (event) => event.detail.waitFor(autosave ? autosave.storeNow() : Promise.resolve()));
 
@@ -4124,6 +4166,7 @@ export async function mount(host) {
     });
     // Leaving: what's written is stored and sent, then the editor stops.
     on(document, 'livewire:navigating', () => {
+        stopPolling();
         clearTimeout(createTimer);
         if (autosave) autosave.leave();
         else if (hasWords()) createNote();

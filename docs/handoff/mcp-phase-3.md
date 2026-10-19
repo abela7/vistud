@@ -1,6 +1,6 @@
 # ViStud · M6.3 (Sessions and writes): handoff, part 1
 
-Branch `claude-latest`. The plan is [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md) (section 4, M6.3; sections 3.3, 3.6 and 3.7). Decision 6 (explicit sessions) was made by Abel on 2026-10-18 and ADR 0002 §9 amended the same day. Part 1 is the core: a whole study session runs in an AI app and every piece lands in ViStud. Part 2 (below, "left") is the session page and Undo.
+Branch `claude-latest`. The plan is [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md) (section 4, M6.3; sections 3.3, 3.6 and 3.7). Decision 6 (explicit sessions) was made by Abel on 2026-10-18 and ADR 0002 §9 amended the same day. Part 1 is the core: a whole study session runs in an AI app and every piece lands in ViStud. Part 2 (below) is the session page, Undo and notes in two places.
 
 ## What was built
 
@@ -41,13 +41,26 @@ With Claude Code connected at level "Read and write" (`claude mcp add --transpor
 2. "Save two flashcards about what we did." They appear in ViStud, in that session.
 3. "End the session." The session page shows it ended, with the summary and the minutes.
 
-## What is left (part 2)
+## Part 2: the session page, Undo and notes in two places
 
-- **The session page:** the "saved" rail and end screen reading `mcp_calls`, the "Claude is connected" chip, marks shown as *set by a chat app (Anthropic)* with Undo.
-- **Undo what this connection did** on the Connections screen (plan §3.8).
-- **Notes edited in two places:** the 409 banner naming the AI app and the version poll (plan §3.7).
-- `Architecture/AdapterParityTest`.
-- **ChatGPT write probes:** they need the public server.
+**The session page** reads what chat apps saved into a session from `mcp_calls` (`App\Mcp\SessionWork`, merged into the in-app activity by `StudySession`):
+- The "Saved in this session" line and the end screen count what an app saved (key points, questions, quizzes), looked up live so something deleted since no longer counts. Cards are counted from the deck as before.
+- A chip, "Anthropic is connected to this session", while an app called into the session in the last 30 minutes.
+- A topic mark an app set reads "Set by a chat app (Anthropic)" with **Undo** (`undoAppMark`: `Topics::unmark`, which leaves it alone if the student has said something since). A quiz an app recorded carries the same tag and its button reads Undo (it is the existing quiz delete, which retracts the answers in the journal).
+
+**Undo what this app did** (Settings, Connected AI apps; `App\Mcp\Undo`): pick a window (an hour, 24 hours, 7 days, everything), see what it would take back, confirm. It takes back, by the ids in `mcp_calls`: flashcards, key points and questions the app made (deleted as the student would), quizzes it recorded (deleted, which retracts their answers), topic marks it set (back to what they were), and answers it wrote to open questions (`Questions::reopenAiAnswer`, the question open again). **Not** taken back, and the screen says so: topics it added, notes it wrote (every note keeps its versions), flashcard reviews, assignment log entries. A call undone once is marked `undone_at` and not taken back twice. `answer_question` now records the question it answered (`saved_ids.answered`) for this.
+
+**Notes in two places** (plan §3.7): a version an app writes is kind `chat_app` (`Notes::writerKind`). `GET /courses/{course}/notes/{note}/pulse` answers the newest version, which company's app wrote it (only while that is the current version) and whether any app was used in the last 10 minutes. The note page polls it every 30 seconds only while an app was active when the page opened (`data-poll`); a newer version is shown like another tab's save, or becomes the usual conflict choice (Keep my version / Use the newer version, both texts kept) if the student has unsaved typing. The conflict alert names the app. The poll ends when no app is active. The editor code (`resources/js/note/editor.js`) is checked by `node --check` and by the server tests for what it reads; it has **not** been exercised in a browser yet.
+
+**Parity registry:** `tests/Architecture/AdapterParityTest.php` has one row per student-facing capability, saying which of Livewire, the JSON API and MCP carry it. A new MCP tool or API route that no row names fails; a row with no API route or no MCP tool must give its reason.
+
+**Tests (new):** `Web/SessionAppWorkTest`, `Mcp/UndoConnectionTest`, `Web/NoteConflictTest`, `Architecture/AdapterParityTest`.
+
+## What is left
+
+- **ChatGPT write probes:** they need the public server (the deploy).
+- The note poll in a real browser (two tabs, an app writing).
+- Not built, by choice: `revision` checks on `set_checkpoint` and `end_session` (the summary is appended, never replaced); per-kind daily caps; undo of flashcard reviews.
 
 ## Rollback order
 

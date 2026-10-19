@@ -162,6 +162,7 @@
                     <button type="button" class="link-button" data-action="dismiss">Dismiss</button>
                 </x-alert>
                 <x-alert tone="warning" title="This note was changed somewhere else" data-alert="conflict" hidden>
+                    <span data-conflict-app hidden></span>
                     Another tab or device saved a newer version while you were writing. Nothing is lost: choose which version to keep.
                     <span class="mt-2 flex flex-wrap gap-2">
                         <x-button variant="primary" data-action="keep-mine">Keep my version</x-button>
@@ -196,7 +197,7 @@
                 data-note-id="{{ $new ? '' : $note->id }}"
                 data-ask-ai-url="{{ route('workspaces.notes.ask-ai', $workspace->id) }}"
                 @if ($import ?? null) data-import-url="{{ $import['url'] }}" data-import-name="{{ $import['name'] }}" data-import-kind="{{ $import['markdown'] ? 'markdown' : 'text' }}" @endif
-                @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" data-note-url="{{ route('workspaces.notes.show', [$workspace->id, $note->id]) }}" @endif>
+                @if ($new) data-create-url="{{ route('api.v1.notes.store') }}" data-place-type="{{ $place[0] }}" data-place-id="{{ $place[1] }}" @else data-save-url="{{ route('api.v1.notes.update', $note->id) }}" data-note-url="{{ route('workspaces.notes.show', [$workspace->id, $note->id]) }}" data-pulse-url="{{ route('workspaces.notes.pulse', [$workspace->id, $note->id]) }}" @if ($appsActive ?? false) data-poll @endif @endif>
                 <div class="note-toolbar" role="toolbar" aria-label="Formatting" aria-controls="note-body" data-note-toolbar>
                     <button type="button" class="toolbar-nav-button toolbar-nav-prev" data-toolbar-prev title="Previous tools" aria-label="Previous tools" hidden tabindex="-1">
                         <x-icon name="chevron-left" class="size-4" />

@@ -39,8 +39,14 @@
                                     @endif
                                 </p>
                             </div>
+                            @if ($connection->level !== 'read')
+                                <x-button variant="ghost" size="sm" wire:click="chooseUndo('{{ $connection->id }}')">Undo what it did</x-button>
+                            @endif
                             <x-button variant="ghost" size="sm" wire:click="disconnect('{{ $connection->id }}')" wire:confirm="Disconnect this app? It will have to sign in again.">Disconnect</x-button>
                         </li>
+                        @if ($undoFor === $connection->id)
+                            @include('livewire.study.partials.connection-undo')
+                        @endif
                     @endforeach
                 </ul>
             </div>
@@ -74,7 +80,15 @@
                 <summary class="cursor-pointer">Disconnected ({{ count($ended) }})</summary>
                 <ul class="mt-2 space-y-1" role="list">
                     @foreach ($ended as $connection)
-                        <li wire:key="ended-{{ $connection->id }}">{{ $connection->providerName() }} · {{ $connection->redirectHost ?? 'unknown address' }}</li>
+                        <li wire:key="ended-{{ $connection->id }}">
+                            {{ $connection->providerName() }} · {{ $connection->redirectHost ?? 'unknown address' }}
+                            @if ($connection->level !== 'read')
+                                <button type="button" class="link" wire:click="chooseUndo('{{ $connection->id }}')">Undo what it did</button>
+                            @endif
+                        </li>
+                        @if ($undoFor === $connection->id)
+                            @include('livewire.study.partials.connection-undo')
+                        @endif
                     @endforeach
                 </ul>
             </details>

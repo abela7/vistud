@@ -6,6 +6,7 @@ use App\Identity\PrincipalFactory;
 use App\Mcp\ConnectionDetails;
 use App\Mcp\Connections as ConnectionService;
 use App\Mcp\Provider;
+use App\Mcp\Undo;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use Illuminate\Contracts\View\View;
@@ -20,12 +21,20 @@ final class Connections extends Component
 {
     public ?string $flash = null;
 
+    /** The connection whose work the student is asking to take back, and how far back. */
+    public ?string $undoFor = null;
+
+    public string $undoWindow = 'day';
+
     private ConnectionService $connections;
 
     private PrincipalFactory $principals;
 
-    public function boot(ConnectionService $connections, PrincipalFactory $principals): void
+    private Undo $undo;
+
+    public function boot(ConnectionService $connections, PrincipalFactory $principals, Undo $undo): void
     {
+        $this->undo = $undo;
         $this->connections = $connections;
         $this->principals = $principals;
     }
@@ -39,6 +48,43 @@ final class Connections extends Component
         } catch (NotFound) {
             $this->flash = 'That app is already gone.';
         }
+    }
+
+    /** Opens the "undo what it did" panel for one app. */
+    public function chooseUndo(string $id): void
+    {
+        try {
+            $this->connections->find($this->principal(), $id);
+        } catch (NotFound) {
+            $this->flash = 'That app is already gone.';
+
+            return;
+        }
+        [$this->undoFor, $this->undoWindow] = [$id, 'day'];
+    }
+
+    public function cancelUndo(): void
+    {
+        $this->undoFor = null;
+    }
+
+    /** Takes back what the app saved in the chosen time (Mcp\Undo). */
+    public function undo(): void
+    {
+        $id = $this->undoFor;
+        $this->undoFor = null;
+        if ($id === null || ! isset(Undo::WINDOWS[$this->undoWindow])) {
+            return;
+        }
+        try {
+            $this->connections->find($this->principal(), $id);
+        } catch (NotFound) {
+            $this->flash = 'That app is already gone.';
+
+            return;
+        }
+        $said = Undo::words($this->undo->run($this->principal(), $id, $this->undoWindow));
+        $this->flash = $said === null ? 'There was nothing to take back in that time.' : "Taken back: {$said}.";
     }
 
     public function disconnectAll(): mixed
@@ -59,7 +105,7 @@ final class Connections extends Component
     {
         // An account that is only an admin has no study data, so nothing to connect.
         if ($this->principal()->learnerId === null) {
-            return view('livewire.study.connections', ['groups' => [], 'ended' => [], 'calls' => [], 'url' => url('/mcp'), 'student' => false]);
+            return view('livewire.study.connections', ['groups' => [], 'ended' => [], 'calls' => [], 'url' => url('/mcp'), 'student' => false, 'windows' => [], 'undoPlan' => null]);
         }
         $all = $this->connections->list($this->principal());
         $live = array_values(array_filter($all, fn (ConnectionDetails $c) => $c->live()));
@@ -75,6 +121,8 @@ final class Connections extends Component
             'calls' => $this->connections->disclosures($this->principal()),
             'url' => url('/mcp'),
             'student' => true,
+            'windows' => Undo::WINDOWS,
+            'undoPlan' => $this->undoFor === null ? null : Undo::words($this->undo->plan($this->principal(), $this->undoFor, $this->undoWindow)),
         ]);
     }
 

@@ -96,6 +96,8 @@ final class AnswerQuestionTool implements Tool
         $conciseAnswer = mb_substr($answer, 0, Questions::MAX_ANSWER);
         // The tutor's answer answers it; whether it clicked is the student's to say.
         $this->questions->setStatus($by, $matched->id, 'answered', $conciseAnswer, theirWord: false);
+        // Named by id so a connected app's answer can be taken back (Mcp\Undo); the chat's counts leave this kind out.
+        $context->effects->saved('answered', 1, [$matched->id]);
 
         return "Saved answer to question \"{$matched->text}\": {$conciseAnswer}. It shows as answered by the AI until the student says it makes sense.";
     }

@@ -41,6 +41,18 @@ final class Provider
         };
     }
 
+    /** The company on its own, for a line such as "set by a chat app (Anthropic)". */
+    public static function company(string $provider): string
+    {
+        return match ($provider) {
+            self::ANTHROPIC => 'Anthropic',
+            self::OPENAI => 'OpenAI',
+            self::GOOGLE => 'Google',
+            self::LOCAL => 'a program on this computer',
+            default => 'another app',
+        };
+    }
+
     public static function name(string $provider): string
     {
         return self::NAMES[$provider] ?? self::NAMES[self::OTHER];

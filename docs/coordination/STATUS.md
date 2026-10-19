@@ -205,13 +205,13 @@ Plan: [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md). On
 
 | | |
 |---|---|
-| State | **In progress**: part 1 delivered (sessions, writes, the capture contract, levels, the daily cap); part 2 is the session page, Undo and notes in two places |
+| State | **Delivered, except the ChatGPT write probes** (they need the public server): part 1 (sessions, writes, the capture contract, levels, the daily cap) and part 2 (the session page's saved rail, connected chip and marks with Undo, "Undo what this app did", notes in two places, the parity registry) |
 | Plan section | [mcp-connections-plan.md §4 · M6.3](../specs/mcp-connections-plan.md#m63--sessions-and-writes-4-units) |
 | Handoff | [docs/handoff/mcp-phase-3.md](../handoff/mcp-phase-3.md) |
 | Depends on | M6.2 part 1; decision 6 (made 2026-10-18) |
-| Next handoff | M6.3 part 2 |
+| Next handoff | M6.4 (skills, prompts, plugins) |
 
-**Evidence:** tests `tests/Feature/Mcp/SessionToolsTest.php`, `WriteToolsTest.php`, `ContractSnapshotTest.php`.
+**Evidence:** tests `tests/Feature/Mcp/SessionToolsTest.php`, `WriteToolsTest.php`, `UndoConnectionTest.php`, `ContractSnapshotTest.php`; `tests/Feature/Web/SessionAppWorkTest.php`, `NoteConflictTest.php`; `tests/Architecture/AdapterParityTest.php`.
 
 ### M6.2 · Reads, on the public server
 

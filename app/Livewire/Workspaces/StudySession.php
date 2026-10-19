@@ -11,6 +11,7 @@ use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Livewire\Concerns\PomodoroForm;
 use App\Livewire\Concerns\TeachingForm;
+use App\Mcp\SessionWork;
 use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
@@ -161,8 +162,11 @@ final class StudySession extends Component
 
     private Quizzes $quizzes;
 
-    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, Questions $questions, Folders $folders, PrincipalFactory $principals, SessionChat $chat, Settings $settings, Instructions $instructions, Helper $helper, Flashcards $flashcards, Quizzes $quizzes): void
+    private SessionWork $work;
+
+    public function boot(Sessions $sessions, Topics $topics, Modules $modules, Notes $notes, Files $files, Briefings $briefings, Questions $questions, Folders $folders, PrincipalFactory $principals, SessionChat $chat, Settings $settings, Instructions $instructions, Helper $helper, Flashcards $flashcards, Quizzes $quizzes, SessionWork $work): void
     {
+        $this->work = $work;
         $this->flashcards = $flashcards;
         $this->quizzes = $quizzes;
         $this->settings = $settings;
@@ -418,6 +422,23 @@ final class StudySession extends Component
             }
         }, 'Card deleted.');
         $this->dispatch('flashcards-changed');
+    }
+
+    /** Takes back a status a chat app set in this session: the topic goes back to what it was, unless the student has said something since. */
+    public function undoAppMark(string $topicId): void
+    {
+        $by = $this->principal();
+        $this->sessions->find($by, $this->sessionId);
+        $last = $this->work->for($by, $this->sessionId)['statuses'][$topicId] ?? null;
+        if (! is_array($last) || ($last['applied'] ?? false) !== true || ! is_array($last['before'] ?? null)) {
+            return;
+        }
+        try {
+            $this->topics->unmark($by, $topicId, $last['before']);
+        } catch (NotFound) {
+            return;
+        }
+        $this->dispatch('session-changed');
     }
 
     /** A quiz or test the student doesn't want: deleted for good, and its answers stop counting (Quizzes::delete). */
@@ -1306,7 +1327,9 @@ Output ONLY a valid JSON object:
         $folder = $this->folderOf($by, $session, $module);
         $inside = $folder === null ? null : $this->folders->within($by, $folder->id);
         $material = $this->material($by, $session, $module, $folder, $inside);
-        $activity = $this->chat->activity($by, $this->sessionId);
+        // The apps connected over MCP (Claude, ChatGPT…) save into the same session: their work is added to the tutor's.
+        $apps = $this->work->for($by, $this->sessionId);
+        $activity = SessionWork::merge($this->chat->activity($by, $this->sessionId), $apps);
         $choices = $this->settings->get($by);
         $courseTopics = $this->topics->list($by, $this->workspaceId);
 
@@ -1326,6 +1349,7 @@ Output ONLY a valid JSON object:
                 default => [],
             },
             'activity' => $activity,
+            'apps' => $apps,
             'sessionQuestions' => $this->questions->list($by, $this->workspaceId, sessionId: $session->id),
             'touched' => in_array($this->mode, ['end', 'done'], true) ? $this->touched($by, $session, $activity, $courseTopics) : [],
             'copyPaste' => $choices->copyPasteAi,
@@ -1341,7 +1365,7 @@ Output ONLY a valid JSON object:
             'sideNote' => $this->sideNotes($by, $session, $module, $folder, $topic, $inside, $zone),
             'sideFile' => $this->sideFiles($by, $session, $module, $folder, $inside),
             'sideCards' => $this->sideCards($by, $session, $module, $folder, $topic, $inside, $this->flashcards->today($by)),
-            'sideQuizzes' => $this->sideQuizzes($by, $session, $module, $zone),
+            'sideQuizzes' => $this->sideQuizzes($by, $session, $module, $zone, $apps),
             'sideQuestions' => $this->sideQuestions($by, $session, $module, $topic, $zone),
             'tutoring' => Tutoring::normalised($session->tutoring),
             'tutoringChoices' => Tutoring::CHOICES,
@@ -1545,7 +1569,7 @@ Output ONLY a valid JSON object:
      *
      * @return array{items: list<array{id: string, kind: string, score: int, asked: int, right: int, finishedAt: string, isThisSession: bool, questions: list<array{asked: string, answer: string, result: string, right: string, fix: string, topic: ?string}>}>, count: int, avgScore: int}
      */
-    private function sideQuizzes(Principal $by, SessionDetails $session, ?ModuleDetails $module, string $zone): array
+    private function sideQuizzes(Principal $by, SessionDetails $session, ?ModuleDetails $module, string $zone, array $apps): array
     {
         $sessionQuizzes = $this->quizzes->forSession($by, $session->id);
         $moreQuizzes = $module !== null ? $this->quizzes->forModule($by, $module->id) : $this->quizzes->forWorkspace($by, $this->workspaceId);
@@ -1570,6 +1594,8 @@ Output ONLY a valid JSON object:
             'paceWords' => $quiz->paceWords(),
             'finishedAt' => Carbon::parse($quiz->finishedAt)->setTimezone($zone)->diffForHumans(),
             'isThisSession' => $quiz->sessionId === $session->id,
+            // Recorded by a chat app: it says which, and the page offers Undo (a quiz is retracted for good, as Delete does).
+            'byApp' => $apps['quizApps'][$quiz->id] ?? null,
             'questions' => $quiz->questions,
         ], $combined);
 

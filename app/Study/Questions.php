@@ -179,6 +179,26 @@ final class Questions
         $this->setStatus($by, $id, 'answered');
     }
 
+    /**
+     * Takes back an answer an AI wrote (not the student's word): the question is open again, with no answer. Nothing is
+     * said of whether it clicked, because the student said nothing; the journal keeps that it was explained. An answer
+     * the student gave or accepted stays.
+     */
+    public function reopenAiAnswer(Principal $by, string $id): bool
+    {
+        $scope = Guard::learner($by);
+
+        return DB::transaction(function () use ($scope, $id) {
+            $row = $this->row($scope, $id, lock: true);
+            if ($row->status !== 'answered' || ($row->answered_by ?? null) !== 'ai') {
+                return false;
+            }
+            LearnerTables::query($scope, 'questions')->where('id', $id)->update(['status' => 'pending', 'answer' => null, 'answered_at' => null, 'answered_by' => null, 'updated_at' => now()]);
+
+            return true;
+        });
+    }
+
     /** Still not clear after all. */
     public function reopen(Principal $by, string $id): void
     {

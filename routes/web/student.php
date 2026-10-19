@@ -12,6 +12,7 @@ use App\Http\Controllers\FlashcardReviewController;
 use App\Http\Controllers\NoteAiController;
 use App\Http\Controllers\NoteExportController;
 use App\Http\Controllers\NotePageController;
+use App\Http\Controllers\NotePulseController;
 use App\Http\Controllers\PlacePageController;
 use App\Http\Controllers\QuestionPageController;
 use App\Http\Controllers\SessionBriefingController;
@@ -81,6 +82,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/courses/{workspace}/notes/{note}', NotePageController::class)
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'note' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.notes.show');
+    // Its newest version and who wrote it, asked every 30 s while a connected chat app is working (docs/specs/mcp-connections-plan.md §3.7).
+    Route::get('/courses/{workspace}/notes/{note}/pulse', NotePulseController::class)
+        ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'note' => '[A-Za-z0-9-]{1,64}'])
+        ->name('workspaces.notes.pulse');
 
     // In-note quick AI assistant on selected text
     Route::post('/courses/{workspace}/notes/ask-ai', NoteAiController::class)

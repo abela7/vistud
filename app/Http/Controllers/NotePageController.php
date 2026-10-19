@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Engine\Models;
 use App\Engine\Settings;
 use App\Identity\PrincipalFactory;
+use App\Mcp\NoteApps;
 use App\Platform\Errors\NotFound;
 use App\Study\Files;
 use App\Study\Folders;
@@ -30,7 +31,7 @@ use Illuminate\Http\Request;
  */
 class NotePageController
 {
-    public function __invoke(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Notes $notes, Modules $modules, Folders $folders, Settings $settings, Models $models, string $workspace, string $note): View|RedirectResponse
+    public function __invoke(Request $request, PrincipalFactory $principals, Workspaces $workspaces, Notes $notes, Modules $modules, Folders $folders, Settings $settings, Models $models, NoteApps $apps, string $workspace, string $note): View|RedirectResponse
     {
         $by = $principals->fromRequest($request);
         $details = $workspaces->find($by, $workspace);
@@ -55,6 +56,8 @@ class NotePageController
             'chatModels' => $chatModels,
             'activeModel' => $activeModel,
             'activeModelName' => $activeModelName,
+            // A connected chat app is working now: the page checks for its newer versions every 30 seconds.
+            'appsActive' => $apps->active($by),
         ]);
     }
 
