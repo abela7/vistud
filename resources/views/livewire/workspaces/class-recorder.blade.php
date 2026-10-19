@@ -35,7 +35,7 @@
                 <template x-teleport="body">
                     <div x-show="recording" x-cloak class="fixed inset-0 z-[70] flex flex-col gap-4 overflow-y-auto bg-surface p-4 sm:p-8" role="dialog" aria-modal="true" aria-label="Recording this class">
                         <div class="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4">
-                            <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex flex-wrap items-center justify-between gap-3" x-show="!compact">
                                 <p class="text-sm font-medium" x-show="!paused" role="status">
                                     <span class="mr-1 inline-block size-2 animate-pulse rounded-full bg-danger align-middle" aria-hidden="true"></span> Recording
                                 </p>
@@ -43,7 +43,7 @@
                                 <p class="text-3xl font-semibold tabular-nums" x-text="clock" aria-label="Time recorded"></p>
                             </div>
                             <p class="field-error" x-show="error !== ''" x-text="error" x-cloak role="alert"></p>
-                            <div class="flex flex-wrap items-center gap-3">
+                            <div class="flex flex-wrap items-center gap-3" x-show="!compact">
                                 <button type="button" class="btn btn-secondary btn-lg" x-show="canPause && !paused" x-on:click="pause()">
                                     <x-icon name="pause" class="size-5" /> Pause
                                 </button>
@@ -52,6 +52,9 @@
                                 </button>
                                 <button type="button" class="btn btn-danger btn-lg" x-on:click="stop()">
                                     <x-icon name="square" class="size-5" /> Finish
+                                </button>
+                                <button type="button" class="btn btn-ghost btn-lg" x-on:click="compact = true" aria-label="Hide the recorder and keep only the notes">
+                                    <x-icon name="minimize-2" class="size-5" /> Hide
                                 </button>
                             </div>
 
@@ -78,6 +81,12 @@
                                 </ul>
                             </div>
                         </div>
+
+                        {{-- Hidden: only the notes stay, and one quiet mic button brings the recorder back (to pause or finish). --}}
+                        <button type="button" class="fixed bottom-4 right-4 flex size-12 items-center justify-center rounded-full border border-border bg-surface-sunken text-fg shadow-lg" x-show="compact" x-cloak x-on:click="compact = false" aria-label="Show the recorder">
+                            <x-icon name="mic" class="size-5" />
+                            <span class="absolute right-1 top-1 size-2.5 rounded-full" x-bind:class="paused ? 'bg-fg-muted' : 'bg-danger'" aria-hidden="true"></span>
+                        </button>
                     </div>
                 </template>
             </div>

@@ -61,6 +61,8 @@ const register = () => {
         noteBusy: false,
         // The notes kept so far in this recording, shown on the recording screen.
         kept: [],
+        // The recorder hidden, only the notes showing (so the screen is quiet in a room).
+        compact: false,
 
         init() {
             this.base = Number(this.$root.dataset.offset || 0);
@@ -130,6 +132,7 @@ const register = () => {
             this.paused = false;
             this.clock = '0:00';
             this.recording = true;
+            this.compact = false;
             this.timer = window.setInterval(() => {
                 this.clock = clock(this.elapsed());
             }, 250);
