@@ -84,28 +84,31 @@
         @endunless
 
         @if ($open !== [])
-            <ul class="item-list" role="list" aria-label="Unfinished recording">
+            {{-- Stacked, phone first: the words on top at full width, the buttons under them. --}}
+            <ul class="space-y-3" role="list" aria-label="Unfinished recording">
                 @foreach ($open as $part)
                     @php
                         $reached = $part->durationSeconds > 0 ? $part->durationSeconds : $part->chunks * \App\Study\ClassRecordings::PIECE_SECONDS;
                     @endphp
-                    <li class="item-row" wire:key="open-{{ $part->id }}">
-                        <span class="item-icon" aria-hidden="true"><x-icon name="mic" class="size-5" /></span>
-                        <div class="min-w-0 flex-1 space-y-0.5">
-                            <p class="font-medium">A recording that did not finish</p>
-                            <p class="item-meta">
-                                @if ($part->chunks > 0)
-                                    About {{ ClassRecordingDetails::length($reached) }} was kept.
-                                @else
-                                    Nothing was recorded.
-                                @endif
-                            </p>
+                    <li class="space-y-3 rounded-lg border border-border bg-surface-sunken p-4" wire:key="open-{{ $part->id }}">
+                        <div class="flex items-start gap-3">
+                            <span class="item-icon shrink-0" aria-hidden="true"><x-icon name="mic" class="size-5" /></span>
+                            <div class="min-w-0 space-y-0.5">
+                                <p class="font-medium">A recording that did not finish</p>
+                                <p class="text-sm text-fg-muted">
+                                    @if ($part->chunks > 0)
+                                        About {{ ClassRecordingDetails::length($reached) }} was kept.
+                                    @else
+                                        Nothing was recorded.
+                                    @endif
+                                </p>
+                            </div>
                         </div>
-                        <div class="flex shrink-0 flex-wrap items-center gap-2">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                             @if ($part->chunks > 0)
-                                <x-button variant="primary" size="sm" wire:click="keepPart('{{ $part->id }}')" busy-label="Keeping…">Keep what was recorded</x-button>
+                                <x-button variant="primary" class="w-full justify-center sm:w-auto" wire:click="keepPart('{{ $part->id }}')" busy-label="Keeping…">Keep what was recorded</x-button>
                             @endif
-                            <x-button variant="ghost" size="sm" wire:click="discard('{{ $part->id }}')" wire:confirm="Throw this recording away?">Discard</x-button>
+                            <x-button variant="ghost" class="w-full justify-center sm:w-auto" wire:click="discard('{{ $part->id }}')" wire:confirm="Throw this recording away?">Discard</x-button>
                         </div>
                     </li>
                 @endforeach
