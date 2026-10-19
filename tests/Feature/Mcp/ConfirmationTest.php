@@ -171,7 +171,7 @@ class ConfirmationTest extends TestCase
         $this->assertFalse(collect($this->mcp($write, 'tools/list')->json('result.tools'))->pluck('name')->contains('rename_course'));
 
         $full = collect($this->mcp($this->token, 'tools/list')->json('result.tools'))->keyBy('name');
-        $this->assertCount(46, $full);
+        $this->assertCount(47, $full);
         $this->assertTrue($full['rename_topic']['_meta']['anthropic/requiresUserInteraction']);
         $this->assertTrue($full['rename_topic']['annotations']['destructiveHint']);
         $this->assertSame(array_keys(Confirmations::TOOLS), array_values(array_intersect(array_keys(Confirmations::TOOLS), $full->keys()->all())));

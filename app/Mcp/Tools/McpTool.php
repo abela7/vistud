@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Http\Middleware\McpPrincipal;
 use App\Identity\PrincipalFactory;
+use App\Mcp\Apps\Panels;
 use App\Mcp\Calls;
 use App\Mcp\ContextBuilder;
 use App\Mcp\ToolInfo;
@@ -125,6 +126,9 @@ abstract class McpTool extends Tool
             $effects += ['capture_key' => $key, 'hash' => $hash, 'ack' => $ack];
         }
         Calls::record($scope, $connection, $this->name(), Calls::OK, $done['type'] ?? null, $done['id'] ?? null, mb_strlen($text), $effects === [] ? null : array_filter($effects, fn ($v) => $v !== null));
+        if (Panels::meta($this->info()) !== null) {
+            $structured = ['ui_version' => Panels::version()] + ($structured ?? []);
+        }
 
         return $structured === null ? Response::text($text) : (new ResponseFactory([Response::text($text)]))->withStructuredContent($structured);
     }
@@ -211,6 +215,9 @@ abstract class McpTool extends Tool
     {
         $result = parent::toArray();
         $result['inputSchema'] = $this->inputSchema($this->fields(), $this->requiredFields());
+        if (($ui = Panels::meta($this->info())) !== null) {
+            $result['_meta'] = array_replace($result['_meta'] ?? [], ['ui' => $ui]);
+        }
 
         return $result;
     }

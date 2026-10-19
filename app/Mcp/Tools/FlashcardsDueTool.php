@@ -48,6 +48,6 @@ final class FlashcardsDueTool extends McpTool
         $lines = array_map(fn (array $r, int $i) => ($i + 1).'. [id '.$r['id'].'] Front: '.$r['front']."\n   Back: ".$r['back'], $rows, array_keys($rows));
         $text = count($rows).' '.(count($rows) === 1 ? 'card is' : 'cards are')." due. The cards are the student's own words:\n".Fence::wrap(implode("\n", $lines));
 
-        return ['text' => $text, 'structured' => ['cards' => $rows], 'type' => 'course', 'id' => $context->workspaceId];
+        return ['text' => $text, 'structured' => ['course_id' => $context->workspaceId, 'cards' => $rows], 'type' => 'course', 'id' => $context->workspaceId];
     }
 }

@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\McpPrincipal;
 use App\Mcp\Http\ApproveConnection;
+use App\Mcp\Http\PanelPreview;
 use App\Mcp\Servers\ViStudServer;
 use Illuminate\Support\Facades\Route;
 use Laravel\Mcp\Facades\Mcp;
@@ -30,3 +31,6 @@ Mcp::web('/mcp', ViStudServer::class)
 Route::middleware(['web', 'auth'])
     ->post('/connections/approve', ApproveConnection::class)
     ->name('mcp.approve');
+
+// The panel HTML for the 320 px browser check. PanelPreview refuses this outside local and the test suite.
+Route::middleware('web')->get('/mcp/panels/{panel}', PanelPreview::class)->where('panel', 'quiz|topic|session|confirm|cards');

@@ -4,6 +4,11 @@ namespace App\Mcp\Servers;
 
 use App\Engine\Toolbox;
 use App\Engine\Vistud\VistudToolbox;
+use App\Mcp\Apps\ConfirmationCard;
+use App\Mcp\Apps\FlashcardCard;
+use App\Mcp\Apps\QuizRound;
+use App\Mcp\Apps\SessionEndCard;
+use App\Mcp\Apps\TopicStatusCard;
 use App\Mcp\Confirmations;
 use App\Mcp\Prompts\QuizMe;
 use App\Mcp\Prompts\ReviewTopic;
@@ -20,6 +25,7 @@ use App\Mcp\Tools\FlashcardsDueTool;
 use App\Mcp\Tools\ManageTool;
 use App\Mcp\Tools\MeTool;
 use App\Mcp\Tools\SessionStepTool;
+use App\Mcp\Tools\ShowQuizTool;
 use App\Mcp\Tools\StartSessionTool;
 use Illuminate\Container\Container;
 use Laravel\Mcp\Server;
@@ -37,7 +43,7 @@ use Laravel\Mcp\Server\Tool;
 final class ViStudServer extends Server
 {
     /** The server's contract version, also stamped into the install packages (Mcp\Plugins\PluginBuilder). */
-    public const CONTRACT = '0.4.0';
+    public const CONTRACT = '0.5.0';
 
     /** laravel/mcp pages tools at 15 by default, and a chat app may read only the first page (plan §3.1). */
     public int $defaultPaginationLength = 50;
@@ -48,6 +54,11 @@ final class ViStudServer extends Server
         CourseBrief::class,
         NoteText::class,
         FilePage::class,
+        QuizRound::class,
+        TopicStatusCard::class,
+        SessionEndCard::class,
+        ConfirmationCard::class,
+        FlashcardCard::class,
     ];
 
     protected array $prompts = [
@@ -81,6 +92,7 @@ final class ViStudServer extends Server
             'me' => MeTool::class,
             'current_session' => CurrentSessionTool::class,
             'flashcards_due' => FlashcardsDueTool::class,
+            'show_quiz' => ShowQuizTool::class,
             'start_session' => StartSessionTool::class,
             'answer_flashcard' => AnswerFlashcardTool::class,
         ];

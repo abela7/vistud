@@ -318,6 +318,27 @@
             "openWorldHint": false
         }
     },
+    "show_quiz": {
+        "arguments": [
+            "course_id",
+            "module_id",
+            "questions",
+            "session_id",
+            "topic_id"
+        ],
+        "required": [
+            "course_id",
+            "questions",
+            "session_id",
+            "topic_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
     "study_brief": {
         "arguments": [
             "session_id"

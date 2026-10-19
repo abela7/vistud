@@ -38,6 +38,7 @@ final class ToolInfo
         'read_file' => ['title' => 'Read a file', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'read'],
         'earlier_sessions' => ['title' => 'Earlier study sessions', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'read'],
         'flashcards_due' => ['title' => 'Flashcards due', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => true, 'level' => 'read'],
+        'show_quiz' => ['title' => 'Show a quiz', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => true, 'level' => 'read'],
         'study_brief' => ['title' => 'Where the student stands, to teach', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'read'],
         // Sessions and writes (M6.3), at level read + write.
         'start_session' => ['title' => 'Start a study session', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'native', 'course' => true, 'level' => 'write'],
@@ -74,7 +75,7 @@ final class ToolInfo
      * @var array<string, 'required'|'optional'>
      */
     public const SESSION = [
-        'study_brief' => 'required',
+        'study_brief' => 'required', 'show_quiz' => 'required',
         'set_session_topic' => 'required', 'set_checkpoint' => 'required', 'resume_session' => 'required', 'end_session' => 'required',
         'set_topic_status' => 'optional', 'add_topics' => 'optional', 'answer_question' => 'optional', 'answer_flashcard' => 'optional',
         'save_key_points' => 'required', 'make_flashcards' => 'required', 'add_questions' => 'required', 'record_quiz' => 'required',
