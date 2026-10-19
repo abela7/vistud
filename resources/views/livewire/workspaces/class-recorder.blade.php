@@ -27,43 +27,59 @@
             <div wire:ignore x-data="classRecorder" data-chunk-base="{{ $chunkBase }}" data-offset="{{ $class->durationSeconds }}" class="space-y-3">
                 <p class="text-sm text-fg-muted" x-show="!canRecord" x-cloak>This browser cannot record. Open this page in Chrome, Edge, Firefox or Safari.</p>
                 <p class="field-error" x-show="error !== ''" x-text="error" x-cloak role="alert"></p>
-                <div class="flex flex-wrap items-center gap-3">
-                    <button type="button" class="btn btn-primary" x-show="canRecord && !recording" x-cloak x-on:click="record()">
-                        <x-icon name="mic" class="size-4" /> {{ $class->durationSeconds > 0 ? 'Record more' : 'Record' }}
-                    </button>
-                    <button type="button" class="btn btn-secondary" x-show="recording && canPause && !paused" x-cloak x-on:click="pause()">
-                        <x-icon name="pause" class="size-4" /> Pause
-                    </button>
-                    <button type="button" class="btn btn-secondary" x-show="recording && paused" x-cloak x-on:click="resume()">
-                        <x-icon name="play" class="size-4" /> Resume
-                    </button>
-                    <button type="button" class="btn btn-danger" x-show="recording" x-cloak x-on:click="stop()">
-                        <x-icon name="square" class="size-4" /> Finish
-                    </button>
-                    <p class="text-sm font-medium" x-show="recording && !paused" x-cloak role="status">
-                        <span class="mr-1 inline-block size-2 rounded-full bg-danger align-middle" aria-hidden="true"></span>
-                        Recording <span class="tabular-nums" x-text="clock"></span>
-                    </p>
-                    <p class="text-sm font-medium" x-show="recording && paused" x-cloak role="status">
-                        Paused <span class="tabular-nums" x-text="clock"></span>
-                    </p>
-                </div>
+                <button type="button" class="btn btn-primary" x-show="canRecord && !recording" x-cloak x-on:click="record()">
+                    <x-icon name="mic" class="size-4" /> {{ $class->durationSeconds > 0 ? 'Record more' : 'Record' }}
+                </button>
 
-                {{-- While recording: tap Note, write, tap Save note. The tap is where the note starts, the save is where it ends. --}}
-                <div x-show="recording" x-cloak class="space-y-3">
-                    <button type="button" class="btn btn-secondary w-full justify-center py-4 text-base sm:w-auto" x-show="!noting" x-on:click="startNote()">
-                        <x-icon name="notebook-pen" class="size-5" /> Note
-                    </button>
-                    <div class="space-y-2 rounded-lg border border-border bg-surface p-3" x-show="noting" x-cloak>
-                        <label for="live-note-{{ $uid }}" class="field-label">Your note, from <span class="tabular-nums" x-text="(() => { const s = noteFrom; const m = Math.floor(s / 60); return Math.floor(m / 60) > 0 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`; })()"></span> in the recording</label>
-                        <textarea id="live-note-{{ $uid }}" x-ref="note" x-model="noteText" class="input" rows="4" maxlength="8000" placeholder="What is being said or what you want to remember"></textarea>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <button type="button" class="btn btn-primary" x-on:click="saveNote()" x-bind:disabled="noteBusy">Save note</button>
-                            <button type="button" class="btn btn-ghost" x-on:click="cancelNote()">Cancel</button>
-                            <p class="text-sm text-fg-muted">The recording keeps going.</p>
+                {{-- While recording, the recorder has the whole screen: the clock, Pause and Finish, and your notes. --}}
+                <template x-teleport="body">
+                    <div x-show="recording" x-cloak class="fixed inset-0 z-[70] flex flex-col gap-4 overflow-y-auto bg-surface p-4 sm:p-8" role="dialog" aria-modal="true" aria-label="Recording this class">
+                        <div class="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4">
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                                <p class="text-sm font-medium" x-show="!paused" role="status">
+                                    <span class="mr-1 inline-block size-2 animate-pulse rounded-full bg-danger align-middle" aria-hidden="true"></span> Recording
+                                </p>
+                                <p class="text-sm font-medium" x-show="paused" x-cloak role="status">Paused</p>
+                                <p class="text-3xl font-semibold tabular-nums" x-text="clock" aria-label="Time recorded"></p>
+                            </div>
+                            <p class="field-error" x-show="error !== ''" x-text="error" x-cloak role="alert"></p>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <button type="button" class="btn btn-secondary btn-lg" x-show="canPause && !paused" x-on:click="pause()">
+                                    <x-icon name="pause" class="size-5" /> Pause
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-lg" x-show="paused" x-cloak x-on:click="resume()">
+                                    <x-icon name="play" class="size-5" /> Resume
+                                </button>
+                                <button type="button" class="btn btn-danger btn-lg" x-on:click="stop()">
+                                    <x-icon name="square" class="size-5" /> Finish
+                                </button>
+                            </div>
+
+                            {{-- Tap Note: that minute is where the note starts. Save note: that minute is where it ends. --}}
+                            <div class="space-y-3 border-t border-divider pt-4">
+                                <button type="button" class="btn btn-primary w-full justify-center py-4 text-base" x-show="!noting" x-on:click="startNote()">
+                                    <x-icon name="notebook-pen" class="size-5" /> Note
+                                </button>
+                                <div class="space-y-2" x-show="noting" x-cloak>
+                                    <label for="live-note-{{ $uid }}" class="field-label">Your note, from <span class="tabular-nums" x-text="stamp(noteFrom)"></span></label>
+                                    <textarea id="live-note-{{ $uid }}" x-ref="note" x-model="noteText" class="input" rows="5" maxlength="8000" placeholder="What is being said, or what you want to remember"></textarea>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <button type="button" class="btn btn-primary" x-on:click="saveNote()" x-bind:disabled="noteBusy">Save note</button>
+                                        <button type="button" class="btn btn-ghost" x-on:click="cancelNote()">Cancel</button>
+                                    </div>
+                                </div>
+                                <ul class="space-y-2" x-show="kept.length > 0" x-cloak aria-label="Your notes so far">
+                                    <template x-for="note in kept" :key="note.id">
+                                        <li class="rounded-lg border border-border bg-surface-sunken p-3 text-sm">
+                                            <span class="font-medium tabular-nums" x-text="stamp(note.from) + '–' + stamp(note.until)"></span>
+                                            <span class="block whitespace-pre-line break-words" x-text="note.text"></span>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </template>
             </div>
         @endunless
 

@@ -59,6 +59,8 @@ const register = () => {
         noteFrom: 0,
         noteText: '',
         noteBusy: false,
+        // The notes kept so far in this recording, shown on the recording screen.
+        kept: [],
 
         init() {
             this.base = Number(this.$root.dataset.offset || 0);
@@ -156,6 +158,15 @@ const register = () => {
             this.keepAwake();
         },
 
+        // Seconds as a clock: 4:07, or 1:02:09 past the hour.
+        stamp(total) {
+            const hours = Math.floor(total / 3600);
+            const minutes = Math.floor((total % 3600) / 60);
+            const seconds = total % 60;
+
+            return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}` : `${minutes}:${String(seconds).padStart(2, '0')}`;
+        },
+
         // Class time now, in seconds: the take's own clock on top of the earlier takes.
         now() {
             return Math.max(0, Math.round(this.base + this.elapsed()));
@@ -185,7 +196,9 @@ const register = () => {
             }
             this.noteBusy = true;
             try {
-                await this.$wire.addLiveNote(this.noteFrom, this.now(), text);
+                const until = Math.max(this.now(), this.noteFrom + 1);
+                await this.$wire.addLiveNote(this.noteFrom, until, text);
+                this.kept.push({ id: `${this.noteFrom}-${this.kept.length}`, from: this.noteFrom, until, text });
                 this.noting = false;
                 this.noteText = '';
             } finally {

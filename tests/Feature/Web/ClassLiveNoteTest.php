@@ -62,7 +62,7 @@ class ClassLiveNoteTest extends TestCase
 
     public function test_the_recorder_has_a_note_button_that_takes_the_minute_for_you(): void
     {
-        $this->page()->assertSee('Note')->assertSee('Save note')->assertSee('The recording keeps going.')->assertSeeHtml('data-offset="0"');
+        $this->page()->assertSee('Note')->assertSee('Save note')->assertSee('Recording this class', false)->assertSeeHtml('data-offset="0"');
     }
 
     public function test_a_note_is_kept_against_its_minutes_before_the_recording_has_finished(): void
