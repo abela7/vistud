@@ -15,6 +15,7 @@ use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
 use App\Study\Modules;
 use App\Study\Workspaces;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -148,5 +149,56 @@ class ClassLiveNoteTest extends TestCase
             $this->assertStringContainsString('Not found', $e->getMessage());
         }
         $this->assertSame([], app(ClassNote::class)->read($this->by, $this->class));
+    }
+
+    private function record(): string
+    {
+        $recordings = app(ClassRecordings::class);
+        $part = $recordings->start($this->by, $this->class);
+        $recordings->accept($this->by, $this->class, $part->id, 1, $this->temp('webm bytes'), 'audio/webm');
+
+        return $recordings->finish($this->by, $this->class, $part->id, 600)->path;
+    }
+
+    public function test_the_recording_can_be_deleted_for_good_and_the_class_and_notes_stay(): void
+    {
+        $path = $this->record();
+        $page = $this->page();
+        $page->call('addLiveNote', 60, 90, 'Keep me');
+        $this->assertTrue(Storage::disk('local')->exists($path));
+
+        $this->page()->assertSee('Delete the recording')->call('deleteRecording');
+
+        $this->assertFalse(Storage::disk('local')->exists($path));
+        $this->assertSame(0, DB::table('class_recordings')->count());
+        $class = app(ClassSessions::class)->find($this->by, $this->class);
+        $this->assertSame([0, ClassSessions::NEW], [$class->durationSeconds, $class->status]);
+        $this->assertSame(['Keep me'], array_column(app(ClassNote::class)->read($this->by, $this->class), 'about'));
+        $this->page()->assertSee('Record');
+    }
+
+    public function test_the_class_can_be_deleted_and_another_student_cannot_delete_it(): void
+    {
+        $path = $this->record();
+        $grace = $this->student();
+        try {
+            Livewire::actingAs($grace)->test(ClassRecorder::class, ['workspaceId' => $this->course, 'moduleId' => $this->module, 'classId' => $this->class])->call('deleteClass');
+            $this->fail('Another student opened the class.');
+        } catch (\Throwable $e) {
+            $this->assertStringContainsString('Not found', $e->getMessage());
+        }
+        $this->assertTrue(Storage::disk('local')->exists($path));
+
+        $this->page()->call('deleteClass')->assertRedirect(route('workspaces.modules.classes', [$this->course, $this->module]));
+
+        $this->assertFalse(Storage::disk('local')->exists($path));
+        $this->assertSame([], app(ClassSessions::class)->forModule($this->by, $this->course, $this->module));
+    }
+
+    public function test_a_class_with_nothing_recorded_can_still_be_deleted(): void
+    {
+        $this->page()->assertSee('Delete this class')->assertDontSee('Delete the recording')->call('deleteClass');
+
+        $this->assertSame([], app(ClassSessions::class)->forModule($this->by, $this->course, $this->module));
     }
 }

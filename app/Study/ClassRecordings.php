@@ -236,6 +236,36 @@ final class ClassRecordings
         ]);
     }
 
+    /**
+     * Deletes the audio of a class for good: every take, finished or not, its file and its row, so the storage comes
+     * back. The class stays (its marks, class note, transcript and lecture notes are the student's notes and stay too),
+     * ready to be recorded again.
+     */
+    public function deleteRecording(Principal $by, string $classId): void
+    {
+        $scope = Guard::learner($by);
+        $this->classes->find($by, $classId);
+        DB::transaction(function () use ($scope, $classId) {
+            $rows = LearnerTables::query($scope, 'class_recordings')->where('class_session_id', $classId)->lockForUpdate()->get();
+            foreach ($rows as $row) {
+                if ($row->path !== null) {
+                    Files::disk()->delete($row->path);
+                    Files::disk()->deleteDirectory($row->path.'.chunks');
+                }
+            }
+            LearnerTables::query($scope, 'class_recordings')->where('class_session_id', $classId)->delete();
+            LearnerTables::query($scope, 'class_sessions')->where('id', $classId)->update(['duration_seconds' => 0, 'status' => ClassSessions::NEW, 'updated_at' => now()]);
+        });
+    }
+
+    /** Deletes the class and its audio. Its notes (the class note, the transcript, the lecture notes) stay as notes in the module. */
+    public function deleteClass(Principal $by, string $classId): void
+    {
+        $scope = Guard::learner($by);
+        $this->deleteRecording($by, $classId);
+        LearnerTables::query($scope, 'class_sessions')->where('id', $classId)->delete();
+    }
+
     /** @return list<ClassRecordingDetails> finished parts, then an interrupted one */
     public function forClass(Principal $by, string $classId): array
     {

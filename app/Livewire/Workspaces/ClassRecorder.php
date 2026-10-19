@@ -187,6 +187,23 @@ final class ClassRecorder extends Component
         $this->keep($marks);
     }
 
+    /** Throws the recording away for good; the class and what was written stay. */
+    public function deleteRecording(): void
+    {
+        $this->resetErrorBag();
+        $this->class();
+        $this->recordings->deleteRecording($this->principal(), $this->classId);
+    }
+
+    /** Deletes the class and its recording; its notes stay in the module. */
+    public function deleteClass(): mixed
+    {
+        $this->class();
+        $this->recordings->deleteClass($this->principal(), $this->classId);
+
+        return $this->redirect(route('workspaces.modules.classes', [$this->workspaceId, $this->moduleId]), navigate: true);
+    }
+
     /** Keeps what arrived of a take that never finished. */
     public function keepPart(string $id): void
     {

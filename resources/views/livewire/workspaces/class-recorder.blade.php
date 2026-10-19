@@ -236,4 +236,19 @@
             </details>
         </div>
     @endif
+
+    @if ($class->durationSeconds > 0 || $open !== [])
+        <div class="card space-y-2 p-5" data-test="delete">
+            <h2 class="text-sm font-medium">Delete</h2>
+            <p class="text-sm text-fg-muted">Finish recording first. Your notes, the transcript and the lecture notes are notes in this module: they stay unless you delete them there.</p>
+            <div class="flex flex-wrap gap-2">
+                <x-button variant="danger" size="sm" icon="trash-2" wire:click="deleteRecording" wire:confirm="Delete the recording of this class for good? The class and your notes stay.">Delete the recording</x-button>
+                <x-button variant="ghost" size="sm" wire:click="deleteClass" wire:confirm="Delete this class and its recording for good? Your notes stay in the module.">Delete this class</x-button>
+            </div>
+        </div>
+    @else
+        <div class="flex justify-end">
+            <x-button variant="ghost" size="sm" icon="trash-2" wire:click="deleteClass" wire:confirm="Delete this class?">Delete this class</x-button>
+        </div>
+    @endif
 </div>
