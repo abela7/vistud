@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\McpNoStore;
 use App\Http\Middleware\McpPrincipal;
 use App\Mcp\Http\ApproveConnection;
 use App\Mcp\Http\PanelPreview;
@@ -25,7 +26,7 @@ Route::getRoutes()->refreshNameLookups();
 Route::getRoutes()->getByName('mcp.oauth.register')?->middleware('throttle:mcp-register');
 
 Mcp::web('/mcp', ViStudServer::class)
-    ->middleware(['throttle:mcp-ip', 'auth:api', CheckToken::using('mcp:use'), McpPrincipal::class, 'throttle:mcp'])
+    ->middleware([McpNoStore::class, 'throttle:mcp-ip', 'auth:api', CheckToken::using('mcp:use'), McpPrincipal::class, 'throttle:mcp'])
     ->name('mcp');
 
 Route::middleware(['web', 'auth'])

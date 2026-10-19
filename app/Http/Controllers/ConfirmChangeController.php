@@ -6,9 +6,9 @@ use App\Identity\PrincipalFactory;
 use App\Mcp\Confirmations;
 use App\Platform\Errors\AppError;
 use App\Platform\Errors\NotFound;
-use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 /**
  * The page where the student says Yes to a change a chat app asked for (docs/specs/mcp-connections-plan.md §3.4, M6.5).
@@ -18,14 +18,14 @@ use Illuminate\Http\Request;
  */
 class ConfirmChangeController
 {
-    public function show(Request $request, PrincipalFactory $principals, Confirmations $confirmations, string $id): View
+    public function show(Request $request, PrincipalFactory $principals, Confirmations $confirmations, string $id): Response
     {
         $by = $principals->fromRequest($request);
 
-        return view('mcp.confirm', ['change' => $confirmations->show($by, $id), 'done' => null, 'problem' => null, 'needsPassword' => false]);
+        return $this->page(['change' => $confirmations->show($by, $id), 'done' => null, 'problem' => null, 'needsPassword' => false]);
     }
 
-    public function store(Request $request, PrincipalFactory $principals, Confirmations $confirmations, string $id): View|RedirectResponse
+    public function store(Request $request, PrincipalFactory $principals, Confirmations $confirmations, string $id): Response|RedirectResponse
     {
         $by = $principals->fromRequest($request);
         if ($confirmations->needsPassword($by, $id) && ! $by->hasRecentPasswordConfirmation()) {
@@ -39,9 +39,15 @@ class ConfirmChangeController
         } catch (NotFound $e) {
             throw $e;
         } catch (AppError $e) {
-            return view('mcp.confirm', ['change' => $change, 'done' => null, 'problem' => $e->getMessage(), 'needsPassword' => false]);
+            return $this->page(['change' => $change, 'done' => null, 'problem' => $e->getMessage(), 'needsPassword' => false]);
         }
 
-        return view('mcp.confirm', ['change' => $change, 'done' => $done, 'problem' => null, 'needsPassword' => false]);
+        return $this->page(['change' => $change, 'done' => $done, 'problem' => null, 'needsPassword' => false]);
+    }
+
+    /** The confirm page cannot be framed, and it does not set a form-action policy (the Gemini relay fix). */
+    private function page(array $data): Response
+    {
+        return response()->view('mcp.confirm', $data)->header('Content-Security-Policy', "frame-ancestors 'none'")->header('X-Frame-Options', 'DENY');
     }
 }
