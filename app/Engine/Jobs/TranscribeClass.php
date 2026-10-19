@@ -6,6 +6,7 @@ use App\Engine\EngineFailed;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Study\AudioPieces;
+use App\Study\ClassNote;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
 use App\Study\Fence;
@@ -42,6 +43,7 @@ final class TranscribeClass extends Job
         Leave out: off-topic talk, chatter, repetition, admin that is not about the course.
         The transcript is in pieces, each headed with its time in the recording. Keep those times as headings, so the student can find the part in the recording.
         Where the transcript says [unclear] or a passage is confusing, write "Check this (at mm:ss): " and what is unclear, instead of guessing what was meant.
+        The student may also have written notes of their own during the class, each with the minutes it was written in. Where there are some, add under the part of the lecture at those minutes a line "Your note (mm:ss): ..." and, under it, what was being taught right then, so each of their notes is answered from what was said. Never change their words.
         Never add facts that are not in the transcript. Plain Markdown: headings, short paragraphs and lists.
         TXT;
 
@@ -97,7 +99,13 @@ final class TranscribeClass extends Job
             File::deleteDirectory($work);
         }
 
-        $notes = trim($run->ask(self::NOTES."\n\n".$about, Fence::wrap($transcript), 8000)->whole()->text);
+        // What the student wrote while the class ran, each against the minutes it was written in: the notes answer them.
+        $own = '';
+        foreach (app(ClassNote::class)->read($by, $class->id) as $mark) {
+            $own .= "- {$mark['from']}–{$mark['until']}: ".trim($mark['body'] !== '' ? $mark['body'] : $mark['about'])."\n";
+        }
+        $input = Fence::wrap($transcript).($own !== '' ? "\n\nThe student's own notes, with the minutes of the recording they were written in:\n".Fence::wrap($own) : '');
+        $notes = trim($run->ask(self::NOTES."\n\n".$about, $input, 8000)->whole()->text);
         if (trim($transcript) === '' || $notes === '') {
             throw new EngineFailed('engine_empty', 'The AI wrote nothing. Try again.');
         }

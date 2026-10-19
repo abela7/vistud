@@ -52,8 +52,16 @@ const register = () => {
         wake: null,
         guard: null,
         leave: null,
+        // Class time at the start of this take: what earlier takes of the class already hold.
+        base: 0,
+        // A note being written while the class is recorded: where the recording was when the student tapped Note.
+        noting: false,
+        noteFrom: 0,
+        noteText: '',
+        noteBusy: false,
 
         init() {
+            this.base = Number(this.$root.dataset.offset || 0);
             this.guard = (event) => {
                 if (!this.recording) return;
                 event.preventDefault();
@@ -148,13 +156,53 @@ const register = () => {
             this.keepAwake();
         },
 
-        stop() {
+        // Class time now, in seconds: the take's own clock on top of the earlier takes.
+        now() {
+            return Math.max(0, Math.round(this.base + this.elapsed()));
+        },
+
+        // Note: the moment it is tapped is the start of what the note is about; the recording keeps going.
+        startNote() {
+            if (!this.recording) return;
+            this.noteFrom = this.now();
+            this.noteText = '';
+            this.noting = true;
+            this.$nextTick(() => this.$refs.note?.focus());
+        },
+
+        cancelNote() {
+            this.noting = false;
+            this.noteText = '';
+        },
+
+        // Save note: the moment it is saved is the end. It is kept at once, against the recording's own minutes.
+        async saveNote() {
+            if (!this.noting || this.noteBusy) return;
+            const text = this.noteText.trim();
+            if (text === '') {
+                this.cancelNote();
+                return;
+            }
+            this.noteBusy = true;
+            try {
+                await this.$wire.addLiveNote(this.noteFrom, this.now(), text);
+                this.noting = false;
+                this.noteText = '';
+            } finally {
+                this.noteBusy = false;
+            }
+        },
+
+        async stop() {
+            // A note still open is kept, ending where the class ends.
+            if (this.noting) await this.saveNote();
             if (this.recorder && this.recorder.state !== 'inactive') this.recorder.stop();
         },
 
         async stopped() {
             window.clearInterval(this.timer);
             const length = Math.max(0, Math.round(this.elapsed()));
+            this.base += length;
             this.paused = false;
             this.release();
             this.letSleep();

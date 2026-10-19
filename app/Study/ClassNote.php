@@ -50,15 +50,16 @@ final class ClassNote
     }
 
     /**
-     * Replaces the class note with these marks. The same note is kept.
+     * Replaces the class note with these marks. The same note is kept. `$live` is for notes written while the class is
+     * still being recorded: the recording's length is not known yet, so a mark may reach past what is kept so far.
      *
      * @param  array<mixed>  $marks
      * @return list<array{from: string, until: string, about: string, body: string}>
      */
-    public function write(Principal $by, string $classId, array $marks): array
+    public function write(Principal $by, string $classId, array $marks, bool $live = false): array
     {
         $class = $this->classes->find($by, $classId);
-        $clean = $this->checked($class, $marks);
+        $clean = $this->checked($class, $marks, $live);
         if ($clean === [] && $class->noteId === null) {
             return [];
         }
@@ -89,12 +90,12 @@ final class ClassNote
      * @param  array<mixed>  $marks
      * @return list<array{from: int, until: int, about: string, body: string}>
      */
-    private function checked(ClassSessionDetails $class, array $marks): array
+    private function checked(ClassSessionDetails $class, array $marks, bool $live = false): array
     {
         if (count($marks) > self::MAX) {
             Input::refuse(['mark' => 'Keep it to '.self::MAX.' marks.']);
         }
-        if ($marks !== [] && $class->durationSeconds < 1) {
+        if ($marks !== [] && $class->durationSeconds < 1 && ! $live) {
             Input::refuse(['mark' => 'Record the class before you mark it.']);
         }
 
@@ -103,7 +104,7 @@ final class ClassNote
             if (! is_array($mark)) {
                 Input::refuse(['mark' => 'That mark is not valid.']);
             }
-            $clean[] = $this->one($class, $mark);
+            $clean[] = $this->one($class, $mark, $live);
         }
 
         return $clean;
@@ -113,7 +114,7 @@ final class ClassNote
      * @param  array<string, mixed>  $mark
      * @return array{from: int, until: int, about: string, body: string}
      */
-    private function one(ClassSessionDetails $class, array $mark): array
+    private function one(ClassSessionDetails $class, array $mark, bool $live = false): array
     {
         $from = self::seconds($mark['from'] ?? null);
         $until = self::seconds($mark['until'] ?? null);
@@ -125,7 +126,7 @@ final class ClassNote
                 ? 'Use a time like 20:00.'
                 : ($from !== null && $until <= $from
                     ? 'The end has to be after the start.'
-                    : ($until > $class->durationSeconds ? 'That is past the end of the recording.' : null)),
+                    : (! $live && $until > $class->durationSeconds ? 'That is past the end of the recording.' : null)),
             'about' => $about === ''
                 ? 'Say what this stretch is about.'
                 : (mb_strlen($about) > self::MAX_ABOUT ? 'Use '.self::MAX_ABOUT.' characters or fewer.' : null),

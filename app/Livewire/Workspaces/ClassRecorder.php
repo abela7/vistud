@@ -16,6 +16,7 @@ use App\Study\ClassRecordings;
 use App\Study\ClassSessionDetails;
 use App\Study\ClassSessions;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
@@ -137,6 +138,34 @@ final class ClassRecorder extends Component
             return;
         }
         $this->reset('from', 'until', 'about', 'body');
+    }
+
+    /**
+     * A note written while the class is being recorded: it starts where the recording was when the student tapped Note
+     * and ends where it was when they saved, in seconds of class time. What is written is the note; its title is its first words.
+     */
+    public function addLiveNote(int $from, int $until, string $text): void
+    {
+        $this->resetErrorBag();
+        $this->class();
+        $text = trim($text);
+        if ($text === '') {
+            return;
+        }
+        $from = max(0, $from);
+        $until = max($until, $from + 1);
+        $marks = $this->marks;
+        $marks[] = [
+            'from' => TranscribeClass::clock($from),
+            'until' => TranscribeClass::clock($until),
+            'about' => Str::limit((string) preg_replace('/\s+/', ' ', $text), 60, '…'),
+            'body' => $text,
+        ];
+        try {
+            $this->marks = $this->classNote->write($this->principal(), $this->classId, $marks, live: true);
+        } catch (Unprocessable $e) {
+            $this->fields($e);
+        }
     }
 
     public function saveMarks(): void

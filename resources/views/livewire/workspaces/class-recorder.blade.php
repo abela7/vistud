@@ -24,7 +24,7 @@
         @unless ($class->hasConsent())
             <x-button variant="primary" icon="mic" wire:click="allow" busy-label="Saving…">I have permission to record</x-button>
         @else
-            <div wire:ignore x-data="classRecorder" data-chunk-base="{{ $chunkBase }}" class="space-y-3">
+            <div wire:ignore x-data="classRecorder" data-chunk-base="{{ $chunkBase }}" data-offset="{{ $class->durationSeconds }}" class="space-y-3">
                 <p class="text-sm text-fg-muted" x-show="!canRecord" x-cloak>This browser cannot record. Open this page in Chrome, Edge, Firefox or Safari.</p>
                 <p class="field-error" x-show="error !== ''" x-text="error" x-cloak role="alert"></p>
                 <div class="flex flex-wrap items-center gap-3">
@@ -47,6 +47,22 @@
                     <p class="text-sm font-medium" x-show="recording && paused" x-cloak role="status">
                         Paused <span class="tabular-nums" x-text="clock"></span>
                     </p>
+                </div>
+
+                {{-- While recording: tap Note, write, tap Save note. The tap is where the note starts, the save is where it ends. --}}
+                <div x-show="recording" x-cloak class="space-y-3">
+                    <button type="button" class="btn btn-secondary w-full justify-center py-4 text-base sm:w-auto" x-show="!noting" x-on:click="startNote()">
+                        <x-icon name="notebook-pen" class="size-5" /> Note
+                    </button>
+                    <div class="space-y-2 rounded-lg border border-border bg-surface p-3" x-show="noting" x-cloak>
+                        <label for="live-note-{{ $uid }}" class="field-label">Your note, from <span class="tabular-nums" x-text="(() => { const s = noteFrom; const m = Math.floor(s / 60); return Math.floor(m / 60) > 0 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`; })()"></span> in the recording</label>
+                        <textarea id="live-note-{{ $uid }}" x-ref="note" x-model="noteText" class="input" rows="4" maxlength="8000" placeholder="What is being said or what you want to remember"></textarea>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" class="btn btn-primary" x-on:click="saveNote()" x-bind:disabled="noteBusy">Save note</button>
+                            <button type="button" class="btn btn-ghost" x-on:click="cancelNote()">Cancel</button>
+                            <p class="text-sm text-fg-muted">The recording keeps going.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         @endunless
@@ -178,8 +194,10 @@
                 <x-button variant="secondary" wire:click="saveMarks" busy-label="Saving…">Save the note</x-button>
             @endif
 
-            <form wire:submit="addMark" class="space-y-3 @if ($marks !== []) border-t border-divider pt-5 @endif">
-                <h3 class="text-sm font-medium">Add a mark</h3>
+            <details class="@if ($marks !== []) border-t border-divider pt-5 @endif">
+            <summary class="cursor-pointer text-sm font-medium">Add a note by its time</summary>
+            <form wire:submit="addMark" class="mt-3 space-y-3">
+                <p class="text-sm text-fg-muted">While you record, the Note button is easier: it takes the minute for you. Here you choose the minutes yourself.</p>
                 <p class="text-sm text-fg-muted">Play the recording to where the stretch begins, press <em>Use player time</em>, then do the same for where it ends. Or type a time like 10:00.</p>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div class="space-y-1">
@@ -213,8 +231,9 @@
                     <textarea id="mark-new-body-{{ $uid }}" class="input" rows="3" wire:model="body" maxlength="8000" placeholder="What this stretch is about"></textarea>
                     @error('body') <p class="field-error">{{ $message }}</p> @enderror
                 </div>
-                <x-button type="submit" variant="primary" icon="bookmark" busy-label="Adding…">Add a mark</x-button>
+                <x-button type="submit" variant="primary" icon="bookmark" busy-label="Adding…">Add the note</x-button>
             </form>
+            </details>
         </div>
     @endif
 </div>

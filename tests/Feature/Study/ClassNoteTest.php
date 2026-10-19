@@ -150,7 +150,7 @@ class ClassNoteTest extends TestCase
             ->assertOk()
             ->assertSee('The recording')
             ->assertSee('Use player time')
-            ->assertSee('Add a mark')
+            ->assertSee('Add a note by its time')
             ->assertDontSee('Part 1');
 
         Livewire::actingAs($ada)
