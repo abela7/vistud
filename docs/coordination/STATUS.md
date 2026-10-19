@@ -201,6 +201,54 @@ Recorded by the PM before WP4 started, and since.
 
 Plan: [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md). One phase at a time, each with a handoff note in `docs/handoff/mcp-phase-N.md`.
 
+### M6.9 · The second-learner gate
+
+| | |
+|---|---|
+| State | **Closed.** The report command exits with a failure. Encryption, the validator G2 and G3 suites, and the privacy policy are not in place. Do not connect a second person |
+| Plan section | [mcp-connections-plan.md §4 · M6.9](../specs/mcp-connections-plan.md#m69--the-second-learner-gate-about-5-units-estimate-uncertain) |
+| Handoff | [docs/handoff/mcp-phase-9.md](../handoff/mcp-phase-9.md) |
+| Depends on | M6.7, and the validator suites |
+| Next handoff | Abel decides when the gate's four checks are true |
+
+**Evidence:** `php artisan vistud:gate:second-learner` and `tests/Feature/Mcp/SecondLearnerGateTest.php`.
+
+### M6.8 · Gemini attempt
+
+| | |
+|---|---|
+| State | **The local half is delivered.** Sign-in and token attempts are logged with a request id and no body. A 1,400-character state round-trips. Unknown Google hosts are refused and not guessed. The live Gemini sign-in needs the public server |
+| Plan section | [mcp-connections-plan.md §4 · M6.8](../specs/mcp-connections-plan.md#m68--gemini-attempt-1-unit-only-if-you-are-eligible) |
+| Handoff | [docs/handoff/mcp-phase-8.md](../handoff/mcp-phase-8.md) |
+| Depends on | M6.1 |
+| Next handoff | Abel tries Gemini on `https://vistud.app/mcp` and writes the result here, including a quarterly re-test |
+
+**Evidence:** `tests/Feature/Mcp/GeminiFlowTest.php`.
+
+### M6.7 · Isolation and measurement
+
+| | |
+|---|---|
+| State | **Delivered, with two limits:** the 10,000 calls go through the services the tools use, not 10,000 HTTP round-trips; OpenAI is not trimmed, because the 5,000-token figure is unconfirmed and the full schemas measure about 6,500 |
+| Plan section | [mcp-connections-plan.md §4 · M6.7](../specs/mcp-connections-plan.md#m67--isolation-and-measurement-3-units) |
+| Handoff | [docs/handoff/mcp-phase-7.md](../handoff/mcp-phase-7.md) |
+| Depends on | M6.3 |
+| Next handoff | M6.9 for the gate; G2 and G3 stay with a validator |
+
+**Evidence:** `tests/Feature/Mcp/McpIsolationSuiteTest.php`, `HeadersTest.php`, `SchemaBudgetTest.php`, `tests/Feature/Engine/MeasureG1bTest.php`. First G1b report on this database: inconclusive.
+
+### M6.6 · Panels
+
+| | |
+|---|---|
+| State | **Delivered, except a live Claude or ChatGPT render**: `show_quiz`, five panels, `ui.domain` per company, confirmation cards that only open the ViStud page |
+| Plan section | [mcp-connections-plan.md §4 · M6.6](../specs/mcp-connections-plan.md#m66--panels-3-units) |
+| Handoff | [docs/handoff/mcp-phase-6.md](../handoff/mcp-phase-6.md) |
+| Depends on | M6.5 |
+| Next handoff | M6.7 (isolation and measurement) |
+
+**Evidence:** tests `tests/Feature/Mcp/AppsTest.php`, `ContractSnapshotTest.php`. Browser spec `tests/Browser/mcp-apps.spec.js` (not run here).
+
 ### M6.5 · Changes you confirm in ViStud
 
 | | |
