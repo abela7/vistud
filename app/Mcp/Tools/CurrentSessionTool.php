@@ -25,12 +25,12 @@ final class CurrentSessionTool extends McpTool
         return 'current_session';
     }
 
-    protected function answer(Principal $by, array $arguments): array
+    protected function answer(Principal $by, array $arguments, ?object $connection): array
     {
         $container = Container::getInstance();
         $session = $container->make(Sessions::class)->current($by);
         if ($session === null) {
-            return ['No study session is open.', ['open' => false], null, null];
+            return ['text' => 'No study session is open.', 'structured' => ['open' => false]];
         }
 
         $course = $container->make(Workspaces::class)->find($by, $session->workspaceId);
@@ -62,7 +62,7 @@ final class CurrentSessionTool extends McpTool
         $where = implode("\n", array_filter(['Course: '.$course->name, $module !== null ? 'Module: '.$module->title : null, $topic !== null ? 'Topic: '.$topic->name : null]));
         $text = "A study session is {$session->state}: {$minutes} min studied so far. Its ids are in the structured result.\n".Fence::wrap($where);
 
-        return [$text, $data, 'session', $session->id];
+        return ['text' => $text, 'structured' => $data, 'type' => 'session', 'id' => $session->id];
     }
 
     /** @return array<string, Type> */

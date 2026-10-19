@@ -22,18 +22,18 @@ final class MeTool extends McpTool
         return 'me';
     }
 
-    protected function answer(Principal $by, array $arguments): array
+    protected function answer(Principal $by, array $arguments, ?object $connection): array
     {
         $user = request()->user('api');
         $courses = count(Container::getInstance()->make(Workspaces::class)->list($by));
 
-        return [sprintf(
+        return ['text' => sprintf(
             'Signed in to ViStud as %s (%s). %d %s.',
             self::firstName((string) ($user->name ?? '')),
             self::masked((string) ($user->email ?? '')),
             $courses,
             $courses === 1 ? 'course' : 'courses',
-        ), null, null, null];
+        )];
     }
 
     /** @return array<string, Type> */

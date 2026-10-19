@@ -25,7 +25,7 @@ final class FlashcardsDueTool extends McpTool
         return 'The flashcards due for review in a course, longest waiting first, with their ids: front, back, how often reviewed. Pass course_id from the courses tool, and module_id to keep to one module. Ask the front, let the student answer, then show the back.';
     }
 
-    protected function answer(Principal $by, array $arguments): array
+    protected function answer(Principal $by, array $arguments, ?object $connection): array
     {
         $context = Container::getInstance()->make(ContextBuilder::class)->forCourse($by, $arguments);
         $cards = Container::getInstance()->make(Flashcards::class);
@@ -42,27 +42,12 @@ final class FlashcardsDueTool extends McpTool
             ];
         }
         if ($rows === []) {
-            return ['No flashcards are due in this course.', ['cards' => []], 'course', $context->workspaceId];
+            return ['text' => 'No flashcards are due in this course.', 'structured' => ['cards' => []], 'type' => 'course', 'id' => $context->workspaceId];
         }
 
         $lines = array_map(fn (array $r, int $i) => ($i + 1).'. [id '.$r['id'].'] Front: '.$r['front']."\n   Back: ".$r['back'], $rows, array_keys($rows));
         $text = count($rows).' '.(count($rows) === 1 ? 'card is' : 'cards are')." due. The cards are the student's own words:\n".Fence::wrap(implode("\n", $lines));
 
-        return [$text, ['cards' => $rows], 'course', $context->workspaceId];
-    }
-
-    public function toArray(): array
-    {
-        $result = parent::toArray();
-        $result['inputSchema'] = [
-            'type' => 'object',
-            'properties' => (object) [
-                'course_id' => ['type' => 'string', 'description' => 'The course\'s id, from the courses tool.'],
-                'module_id' => ['type' => 'string', 'description' => 'A module\'s id in that course; leave out for the whole course.'],
-            ],
-            'required' => ['course_id'],
-        ];
-
-        return $result;
+        return ['text' => $text, 'structured' => ['cards' => $rows], 'type' => 'course', 'id' => $context->workspaceId];
     }
 }

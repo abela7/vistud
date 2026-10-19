@@ -298,6 +298,25 @@ final class Stack
     }
 
     /**
+     * The tutor's standing context for a session without its rules (layer 0): the course, the student, the module and
+     * the session, each fenced, for an AI app that teaches outside ViStud (`study_brief`, `start_session`;
+     * docs/specs/mcp-connections-plan.md §3.3). The chat app has its own system prompt; ViStud's rules travel in
+     * resources/prompts/mcp-rules.md.
+     */
+    public function standing(Principal $by, SessionDetails $session): string
+    {
+        $facts = $this->gather($by, $session, null, true);
+        $layers = [$this->course($facts), $this->student($facts, true), $this->module($facts), $this->session($facts)];
+        $texts = [];
+        foreach ([2, 3, 4, 5] as $i => $number) {
+            [$text] = self::fit($layers[$i], self::BUDGETS[$number]);
+            $texts[] = self::fenceLayer($text);
+        }
+
+        return self::join($texts);
+    }
+
+    /**
      * Writes the layers from the facts. Pure: the same facts give the same words.
      *
      * @param  list<array<string, mixed>>  $tools

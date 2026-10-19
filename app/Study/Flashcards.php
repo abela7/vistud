@@ -269,20 +269,26 @@ final class Flashcards
      * $schedule, the card's next date on the ladder. Practising early and a
      * second go in the same round don't move the card.
      */
-    public function answer(Principal $by, string $id, string $result, bool $schedule = true): FlashcardDetails
+    /**
+     * Records a review. `$judge` is who marked it when it was not the student: an AI app over MCP
+     * (docs/specs/mcp-connections-plan.md M6.3) passes its connection's judge, and the attempt says `judged_by: ai`.
+     *
+     * @param  array{model: string, prompt: string, via: string}|null  $judge
+     */
+    public function answer(Principal $by, string $id, string $result, bool $schedule = true, ?array $judge = null): FlashcardDetails
     {
         Input::refuse(in_array($result, self::RESULTS, true) ? [] : ['result' => 'Choose how it went.']);
         $scope = Guard::learner($by);
         $today = $this->today($by);
 
-        DB::transaction(function () use ($scope, $by, $id, $result, $schedule, $today) {
+        DB::transaction(function () use ($scope, $by, $id, $result, $schedule, $today, $judge) {
             $row = $this->row($scope, $id, lock: true);
             $this->ensureTask($scope, $by, $row);
             $session = Sessions::openIn($scope, $row->workspace_id)
                 ?? 'cards-'.$today.'-'.substr(sha1($scope->learnerId.'|'.$row->workspace_id), 0, 16);
             $this->memory->append($scope, [Memory::observation($scope, $by, 'attempt', [
                 'task' => self::taskId($id), 'task_revision' => (int) $row->revision, 'form' => 'recall', 'support' => 'unaided',
-                'setting' => 'practice', 'outcome' => $result, 'judged_by' => 'self',
+                'setting' => 'practice', 'outcome' => $result, ...($judge === null ? ['judged_by' => 'self'] : ['judged_by' => 'ai', 'judge' => $judge]),
             ]) + ['session' => $session]]);
 
             $changes = ['reviews' => (int) $row->reviews + 1, 'last_result' => $result, 'last_reviewed_at' => now(), 'updated_at' => now()];

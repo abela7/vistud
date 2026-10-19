@@ -50,14 +50,16 @@ class ReadToolsTest extends TestCase
     {
         $tools = collect($this->mcp($this->token, 'tools/list')->assertOk()->json('result.tools'))->keyBy('name');
 
-        $this->assertSame(array_keys(ToolInfo::TOOLS), $tools->keys()->all());
-        foreach (ToolInfo::TOOLS as $name => $info) {
+        // Connected read only: the writes are not even listed.
+        $reads = array_filter(ToolInfo::TOOLS, fn (array $info) => $info['level'] === 'read');
+        $this->assertSame(array_keys($reads), $tools->keys()->all());
+        foreach ($reads as $name => $info) {
             $hints = $tools[$name]['annotations'];
             $this->assertSame($info['read_only'], $hints['readOnlyHint'], $name);
             $this->assertSame($info['destructive'], $hints['destructiveHint'], $name);
             $this->assertSame($info['idempotent'], $hints['idempotentHint'], $name);
             $this->assertFalse($hints['openWorldHint'], $name);
-            if ($info['course']) {
+            if ($info['course'] && ! isset(ToolInfo::SESSION[$name])) {
                 $this->assertContains('course_id', $tools[$name]['inputSchema']['required'], $name);
             }
         }
@@ -123,7 +125,7 @@ class ReadToolsTest extends TestCase
         $this->callTool($this->token, 'topics');
 
         $rows = DB::table('mcp_calls')->orderBy('created_at')->get();
-        $this->assertSame(['ok', 'not_found'], $rows->pluck('outcome')->all());
+        $this->assertSame(['ok', 'error'], $rows->pluck('outcome')->all());
         $this->assertSame($this->course, $rows[0]->target_id);
         foreach ($rows as $row) {
             $this->assertStringNotContainsString('Joins', json_encode($row));

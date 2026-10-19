@@ -4,6 +4,7 @@ namespace App\Mcp\Tools;
 
 use App\Engine\Toolbox;
 use App\Engine\Tools\Tool as EngineToolContract;
+use App\Mcp\Calls;
 use App\Mcp\ContextBuilder;
 use App\Mcp\ToolInfo;
 use App\Platform\Access\Principal;
@@ -12,8 +13,9 @@ use Illuminate\Container\Container;
 /**
  * One of the in-app tutor's tools, offered over MCP (docs/specs/mcp-connections-plan.md §3.1). It runs the same
  * App\Engine\Tools class the tutor runs, with a Context built from ids (App\Mcp\ContextBuilder), so there is one set of
- * rules for both. A course tool takes `course_id` (from the `courses` tool) and, where it helps, `module_id` and
- * `folder_id`; a ViStud AI tool works across courses. The answer is the tool's text, capped as in the app.
+ * rules for both. A course tool takes `course_id` (from `courses`), or `session_id` inside a study session; a ViStud
+ * AI tool works across courses. The answer is the tool's text, capped as in the app; what a write saved goes into the
+ * acknowledgement and the call record as counts and ids.
  */
 final class EngineTool extends McpTool
 {
@@ -26,41 +28,48 @@ final class EngineTool extends McpTool
 
     public function description(): string
     {
-        $info = ToolInfo::of($this->info());
+        $name = $this->info();
+        $hint = match (true) {
+            (ToolInfo::SESSION[$name] ?? null) === 'required' => ' Pass session_id (start_session gives it).',
+            isset(ToolInfo::SESSION[$name]) => ' Pass session_id inside a study session, or course_id.',
+            ToolInfo::of($name)['course'] => ' Pass course_id from the courses tool.',
+            default => '',
+        };
 
-        return $this->tool->description().($info['course'] ? ' Pass course_id from the courses tool.' : '');
+        return $this->tool->description().$hint;
     }
 
-    protected function answer(Principal $by, array $arguments): array
+    protected function answer(Principal $by, array $arguments, ?object $connection): array
     {
-        $contexts = Container::getInstance()->make(ContextBuilder::class);
-        $info = ToolInfo::of($this->info());
-        $context = $info['course'] ? $contexts->forCourse($by, $arguments) : $contexts->acrossCourses($by);
-        unset($arguments['course_id'], $arguments['module_id'], $arguments['folder_id']);
+        $context = Container::getInstance()->make(ContextBuilder::class)->for($by, $this->info(), $arguments, $connection);
+        unset($arguments['course_id'], $arguments['module_id'], $arguments['folder_id'], $arguments['session_id'], $arguments['assignment_id']);
 
         $out = $this->tool->run($by, $context, $arguments);
         if (mb_strlen($out) > Toolbox::MAX_OUTPUT) {
             $out = rtrim(mb_substr($out, 0, Toolbox::MAX_OUTPUT))."\n\n(Cut here: the answer is longer than ".Toolbox::MAX_OUTPUT.' characters. Ask for less at a time.)';
         }
+        $effects = Calls::reduce($context->effects->take());
 
-        return [$out, null, $info['course'] ? 'course' : null, $info['course'] ? $context->workspaceId : null];
+        return [
+            'text' => $out,
+            'type' => $context->sessionId !== null ? 'session' : ($context->workspaceId !== '' ? 'course' : null),
+            'id' => $context->sessionId ?? ($context->workspaceId !== '' ? $context->workspaceId : null),
+            'effects' => $effects,
+        ];
     }
 
-    /** The tool's own JSON schema, with the ids a course tool needs. */
+    /** The tool's own JSON schema, with the ids it takes over MCP. */
     public function toArray(): array
     {
         $result = parent::toArray();
         $schema = $this->tool->parameters();
-        if (ToolInfo::of($this->info())['course']) {
-            $properties = (array) ($schema['properties'] ?? []);
-            $schema['properties'] = [
-                'course_id' => ['type' => 'string', 'description' => 'The course\'s id, from the courses tool.'],
-                'module_id' => ['type' => 'string', 'description' => 'A module\'s id in that course, from course_overview; leave out for the whole course.'],
-            ] + $properties;
-            $schema['required'] = array_values(array_unique(['course_id', ...($schema['required'] ?? [])]));
+        $properties = (array) ($schema['properties'] ?? []);
+        $schema['properties'] = (object) ($this->idProperties() + $properties);
+        $schema['required'] = array_values(array_unique([...$this->requiredIds(), ...($schema['required'] ?? [])]));
+        if ($schema['required'] === []) {
+            unset($schema['required']);
         }
         $schema['type'] = 'object';
-        $schema['properties'] = (object) ($schema['properties'] ?? []);
         $result['inputSchema'] = $schema;
 
         return $result;

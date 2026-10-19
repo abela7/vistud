@@ -1,0 +1,646 @@
+{
+    "me": {
+        "arguments": [],
+        "required": [],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "courses": {
+        "arguments": [
+            "archived"
+        ],
+        "required": [],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "study_time": {
+        "arguments": [
+            "course",
+            "days"
+        ],
+        "required": [],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "search_everything": {
+        "arguments": [
+            "query"
+        ],
+        "required": [
+            "query"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "memories": {
+        "arguments": [],
+        "required": [],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "current_session": {
+        "arguments": [],
+        "required": [],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "course_overview": {
+        "arguments": [
+            "course_id",
+            "module_id"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "topics": {
+        "arguments": [
+            "course_id",
+            "everywhere",
+            "module",
+            "module_id"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "questions": {
+        "arguments": [
+            "course_id",
+            "module",
+            "module_id",
+            "topic",
+            "which"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "findings": {
+        "arguments": [
+            "course_id",
+            "module_id",
+            "topic"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "assignments": {
+        "arguments": [
+            "course_id",
+            "module_id",
+            "which"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "assignment_plan": {
+        "arguments": [
+            "assignment",
+            "course_id",
+            "module_id"
+        ],
+        "required": [
+            "assignment",
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "calendar": {
+        "arguments": [
+            "course_id",
+            "from",
+            "module_id",
+            "to"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "notes": {
+        "arguments": [
+            "course_id",
+            "module",
+            "module_id"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "read_note": {
+        "arguments": [
+            "course_id",
+            "module_id",
+            "note"
+        ],
+        "required": [
+            "course_id",
+            "note"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "search_notes": {
+        "arguments": [
+            "course_id",
+            "module_id",
+            "query"
+        ],
+        "required": [
+            "course_id",
+            "query"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "files": {
+        "arguments": [
+            "course_id",
+            "module",
+            "module_id"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "module_files": {
+        "arguments": [
+            "course_id",
+            "module",
+            "module_id"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "read_file": {
+        "arguments": [
+            "course_id",
+            "file",
+            "module_id",
+            "pages"
+        ],
+        "required": [
+            "course_id",
+            "file"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "earlier_sessions": {
+        "arguments": [
+            "course_id",
+            "limit",
+            "module",
+            "module_id",
+            "topic"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "flashcards_due": {
+        "arguments": [
+            "course_id",
+            "module_id"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "study_brief": {
+        "arguments": [
+            "session_id"
+        ],
+        "required": [
+            "session_id"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "start_session": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "mode",
+            "module_id",
+            "topic_id"
+        ],
+        "required": [
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "set_session_topic": {
+        "arguments": [
+            "capture_key",
+            "session_id",
+            "topic_id"
+        ],
+        "required": [
+            "session_id",
+            "topic_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "set_checkpoint": {
+        "arguments": [
+            "capture_key",
+            "checkpoint",
+            "session_id"
+        ],
+        "required": [
+            "checkpoint",
+            "session_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "resume_session": {
+        "arguments": [
+            "capture_key",
+            "session_id"
+        ],
+        "required": [
+            "session_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "end_session": {
+        "arguments": [
+            "capture_key",
+            "checkpoint",
+            "session_id",
+            "summary"
+        ],
+        "required": [
+            "session_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "set_topic_status": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "module_id",
+            "reason",
+            "session_id",
+            "status",
+            "topic"
+        ],
+        "required": [
+            "reason",
+            "status"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "add_topics": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "module_id",
+            "session_id",
+            "topics"
+        ],
+        "required": [
+            "topics"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "save_key_points": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "module_id",
+            "points",
+            "session_id"
+        ],
+        "required": [
+            "points",
+            "session_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "make_flashcards": {
+        "arguments": [
+            "capture_key",
+            "cards",
+            "course_id",
+            "module_id",
+            "session_id"
+        ],
+        "required": [
+            "cards",
+            "session_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "add_questions": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "module_id",
+            "questions",
+            "session_id"
+        ],
+        "required": [
+            "questions",
+            "session_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "answer_question": {
+        "arguments": [
+            "answer",
+            "capture_key",
+            "course_id",
+            "module_id",
+            "question",
+            "question_id",
+            "session_id"
+        ],
+        "required": [
+            "answer"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "record_quiz": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "kind",
+            "module_id",
+            "questions",
+            "session_id",
+            "topic",
+            "topic_id"
+        ],
+        "required": [
+            "kind",
+            "questions",
+            "session_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "answer_flashcard": {
+        "arguments": [
+            "capture_key",
+            "card_id",
+            "course_id",
+            "graded_by",
+            "module_id",
+            "result",
+            "session_id"
+        ],
+        "required": [
+            "card_id",
+            "result"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "write_note": {
+        "arguments": [
+            "assignment_id",
+            "capture_key",
+            "course_id",
+            "mode",
+            "module_id",
+            "note",
+            "search",
+            "session_id",
+            "text",
+            "title"
+        ],
+        "required": [
+            "text"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "save_to_assignment": {
+        "arguments": [
+            "assignment",
+            "assignment_id",
+            "capture_key",
+            "course_id",
+            "module_id",
+            "text",
+            "title"
+        ],
+        "required": [
+            "assignment_id",
+            "text",
+            "title"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "log_progress": {
+        "arguments": [
+            "assignment_id",
+            "capture_key",
+            "course_id",
+            "kind",
+            "module_id",
+            "stage",
+            "text"
+        ],
+        "required": [
+            "assignment_id",
+            "kind",
+            "stage",
+            "text"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    }
+}

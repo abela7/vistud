@@ -23,17 +23,7 @@ final class Excluded
         'update_assignment_plan_item' => 'Assignment plans are edited in the assignment companion.',
         'assignment_source' => 'Read in the assignment companion, beside its plan.',
         'edit_note' => 'Only its whole-note replace is offered, as replace_note, confirmed on a ViStud page (M6.5).',
-        // Writes and manage tools arrive in M6.3 and M6.5.
-        'set_topic_status' => 'A write: M6.3.',
-        'add_topics' => 'A write: M6.3.',
-        'make_flashcards' => 'A write: M6.3.',
-        'save_key_points' => 'A write: M6.3.',
-        'add_questions' => 'A write: M6.3.',
-        'answer_question' => 'A write: M6.3.',
-        'write_note' => 'A write: M6.3.',
-        'record_quiz' => 'A write: M6.3.',
-        'save_to_assignment' => 'A write: M6.3.',
-        'log_progress' => 'A write: M6.3.',
+        // Manage tools arrive in M6.5.
         'remember' => 'A manage tool, confirmed on a ViStud page: M6.5.',
         'forget_memory' => 'A manage tool, confirmed on a ViStud page: M6.5.',
         'rename_topic' => 'A manage tool, confirmed on a ViStud page: M6.5.',

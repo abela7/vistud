@@ -38,7 +38,42 @@ final class ToolInfo
         'read_file' => ['title' => 'Read a file', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'read'],
         'earlier_sessions' => ['title' => 'Earlier study sessions', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'read'],
         'flashcards_due' => ['title' => 'Flashcards due', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => true, 'level' => 'read'],
+        'study_brief' => ['title' => 'Where the student stands, to teach', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'read'],
+        // Sessions and writes (M6.3), at level read + write.
+        'start_session' => ['title' => 'Start a study session', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'native', 'course' => true, 'level' => 'write'],
+        'set_session_topic' => ['title' => 'Change the session\'s topic', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'write'],
+        'set_checkpoint' => ['title' => 'Save where the session stands', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'write'],
+        'resume_session' => ['title' => 'Resume a paused session', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'write'],
+        'end_session' => ['title' => 'End the study session', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'write'],
+        'set_topic_status' => ['title' => 'Mark where the student stands on a topic', 'read_only' => false, 'destructive' => true, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'add_topics' => ['title' => 'Add topics', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'save_key_points' => ['title' => 'Save key points', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'make_flashcards' => ['title' => 'Save flashcards', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'add_questions' => ['title' => 'Save open questions', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'answer_question' => ['title' => 'Answer an open question', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'record_quiz' => ['title' => 'Record a quiz or test', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'answer_flashcard' => ['title' => 'Record a flashcard answer', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'native', 'course' => true, 'level' => 'write'],
+        'write_note' => ['title' => 'Write in a note', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'save_to_assignment' => ['title' => 'Save to an assignment', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'log_progress' => ['title' => 'Log assignment progress', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
     ];
+
+    /**
+     * Which tools work inside a study session, named by `session_id`: `required` refuses without one (and names the
+     * fix), `optional` uses it when given. A session gives the course, module and folder.
+     *
+     * @var array<string, 'required'|'optional'>
+     */
+    public const SESSION = [
+        'study_brief' => 'required',
+        'set_session_topic' => 'required', 'set_checkpoint' => 'required', 'resume_session' => 'required', 'end_session' => 'required',
+        'set_topic_status' => 'optional', 'add_topics' => 'optional', 'answer_question' => 'optional', 'answer_flashcard' => 'optional',
+        'save_key_points' => 'required', 'make_flashcards' => 'required', 'add_questions' => 'required', 'record_quiz' => 'required',
+        'write_note' => 'optional',
+    ];
+
+    /** @var list<string> tools that work on one assignment, named by `assignment_id` */
+    public const ASSIGNMENT = ['write_note', 'save_to_assignment', 'log_progress'];
 
     /** @return array{title: string, read_only: bool, destructive: bool, idempotent: bool, source: string, course: bool, level: string} */
     public static function of(string $name): array

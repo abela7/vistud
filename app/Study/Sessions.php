@@ -764,7 +764,9 @@ final class Sessions
         if ($until->getTimestamp() - $from->getTimestamp() < self::CONTACT_SECONDS) {
             return;
         }
-        $taught = LearnerTables::query($scope, 'engine_threads')->where('session_id', $row->id)->exists();
+        // Taught: by the in-app tutor, or by an AI app over MCP (docs/specs/mcp-connections-plan.md §3.3).
+        $taught = LearnerTables::query($scope, 'engine_threads')->where('session_id', $row->id)->exists()
+            || LearnerTables::query($scope, 'mcp_calls')->where('target_type', 'session')->where('target_id', $row->id)->where('outcome', 'ok')->exists();
         $entry = Memory::observation($scope, $by, 'exposure', ['format' => $taught ? 'explanation' : 'reading'],
             [['rel' => 'about', 'target' => "topic:{$row->topic_id}"]], [], $until->format('Y-m-d\TH:i:s.uP'));
         $entry['session'] = $row->id;

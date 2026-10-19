@@ -201,6 +201,18 @@ Recorded by the PM before WP4 started, and since.
 
 Plan: [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md). One phase at a time, each with a handoff note in `docs/handoff/mcp-phase-N.md`.
 
+### M6.3 · Sessions and writes
+
+| | |
+|---|---|
+| State | **In progress**: part 1 delivered (sessions, writes, the capture contract, levels, the daily cap); part 2 is the session page, Undo and notes in two places |
+| Plan section | [mcp-connections-plan.md §4 · M6.3](../specs/mcp-connections-plan.md#m63--sessions-and-writes-4-units) |
+| Handoff | [docs/handoff/mcp-phase-3.md](../handoff/mcp-phase-3.md) |
+| Depends on | M6.2 part 1; decision 6 (made 2026-10-18) |
+| Next handoff | M6.3 part 2 |
+
+**Evidence:** tests `tests/Feature/Mcp/SessionToolsTest.php`, `WriteToolsTest.php`, `ContractSnapshotTest.php`.
+
 ### M6.2 · Reads, on the public server
 
 | | |

@@ -5,10 +5,13 @@ namespace App\Mcp\Servers;
 use App\Engine\Toolbox;
 use App\Engine\Vistud\VistudToolbox;
 use App\Mcp\ToolInfo;
+use App\Mcp\Tools\AnswerFlashcardTool;
 use App\Mcp\Tools\CurrentSessionTool;
 use App\Mcp\Tools\EngineTool;
 use App\Mcp\Tools\FlashcardsDueTool;
 use App\Mcp\Tools\MeTool;
+use App\Mcp\Tools\SessionStepTool;
+use App\Mcp\Tools\StartSessionTool;
 use Illuminate\Container\Container;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Name;
@@ -18,10 +21,10 @@ use Laravel\Mcp\Server\Tool;
 /**
  * ViStud over MCP (docs/specs/mcp-connections-plan.md): one server for Claude, ChatGPT and Gemini. The tools are
  * listed in App\Mcp\ToolInfo: the in-app tutor's own tools, wrapped (App\Mcp\Tools\EngineTool), and a few built here
- * on the services. M6.2 offers the reads; writes arrive in M6.3. The rules are resources/prompts/mcp-rules.md.
+ * on the services. Reads since M6.2; study sessions and writes since M6.3. The rules are resources/prompts/mcp-rules.md.
  */
 #[Name('ViStud')]
-#[Version('0.2.0')]
+#[Version('0.3.0')]
 final class ViStudServer extends Server
 {
     /** laravel/mcp pages tools at 15 by default, and a chat app may read only the first page (plan §3.1). */
@@ -57,12 +60,15 @@ final class ViStudServer extends Server
             'me' => MeTool::class,
             'current_session' => CurrentSessionTool::class,
             'flashcards_due' => FlashcardsDueTool::class,
+            'start_session' => StartSessionTool::class,
+            'answer_flashcard' => AnswerFlashcardTool::class,
         ];
 
         $tools = [];
         foreach (array_keys(ToolInfo::TOOLS) as $name) {
             $tools[] = match (true) {
                 isset($native[$name]) => $container->make($native[$name]),
+                in_array($name, SessionStepTool::STEPS, true) => new SessionStepTool($name),
                 isset($engine[$name]) => new EngineTool($engine[$name]),
                 default => throw new \LogicException("ToolInfo lists {$name}, but no tool has that name."),
             };
