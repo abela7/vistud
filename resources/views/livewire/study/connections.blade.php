@@ -58,6 +58,21 @@
             </ol>
         @endforelse
 
+        <details class="text-sm" data-test="install-help">
+            <summary class="cursor-pointer text-fg-muted">Install ViStud in your chat app</summary>
+            <div class="mt-2 space-y-3">
+                <p><span class="font-medium">Claude.</span> Download the package, then in Claude open Customize, Plugins, and upload the zip. Say "let's study week 1" and Claude starts a session from your course.</p>
+                <p><span class="font-medium">ChatGPT.</span> Add a custom connector with the address <code class="select-all">{{ $url }}</code>, then sign in here when it asks. The package below holds the same teaching rules; ChatGPT may not load it, and the connector sends the rules either way.</p>
+                <p><span class="font-medium">Gemini.</span> Connect it to the same address. The package is untested.</p>
+                <ul class="flex flex-wrap gap-3" role="list">
+                    <li><a class="link" href="{{ route('connections.plugin', 'claude') }}">Download for Claude</a></li>
+                    <li><a class="link" href="{{ route('connections.plugin', 'openai') }}">Download for ChatGPT</a></li>
+                    <li><a class="link" href="{{ route('connections.plugin', 'gemini') }}">Download for Gemini</a></li>
+                </ul>
+                <p class="text-fg-muted">No chat app that connects? Use "Prompt for another AI" on a study session to copy a prompt into any chat. Nothing is saved back that way.</p>
+            </div>
+        </details>
+
         @if ($groups !== [])
             <div class="acc-actions">
                 <x-button variant="danger" size="sm" wire:click="disconnectAll" wire:confirm="Disconnect every AI app? Each will have to sign in again.">Disconnect all AI apps</x-button>

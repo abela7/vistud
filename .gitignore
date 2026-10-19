@@ -31,3 +31,4 @@ Thumbs.db
 
 # A developer's local PHP, Node and MySQL copies (see docs/development/setup.md)
 /.tools/
+/plugins

@@ -4,6 +4,13 @@ namespace App\Mcp\Servers;
 
 use App\Engine\Toolbox;
 use App\Engine\Vistud\VistudToolbox;
+use App\Mcp\Prompts\QuizMe;
+use App\Mcp\Prompts\ReviewTopic;
+use App\Mcp\Prompts\StartStudySession;
+use App\Mcp\Prompts\WeeklyBrief;
+use App\Mcp\Resources\CourseBrief;
+use App\Mcp\Resources\FilePage;
+use App\Mcp\Resources\NoteText;
 use App\Mcp\ToolInfo;
 use App\Mcp\Tools\AnswerFlashcardTool;
 use App\Mcp\Tools\CurrentSessionTool;
@@ -24,17 +31,29 @@ use Laravel\Mcp\Server\Tool;
  * on the services. Reads since M6.2; study sessions and writes since M6.3. The rules are resources/prompts/mcp-rules.md.
  */
 #[Name('ViStud')]
-#[Version('0.3.0')]
+#[Version(ViStudServer::CONTRACT)]
 final class ViStudServer extends Server
 {
+    /** The server's contract version, also stamped into the install packages (Mcp\Plugins\PluginBuilder). */
+    public const CONTRACT = '0.4.0';
+
     /** laravel/mcp pages tools at 15 by default, and a chat app may read only the first page (plan §3.1). */
     public int $defaultPaginationLength = 50;
 
     protected array $tools = [];
 
-    protected array $resources = [];
+    protected array $resources = [
+        CourseBrief::class,
+        NoteText::class,
+        FilePage::class,
+    ];
 
-    protected array $prompts = [];
+    protected array $prompts = [
+        StartStudySession::class,
+        QuizMe::class,
+        ReviewTopic::class,
+        WeeklyBrief::class,
+    ];
 
     protected function boot(): void
     {

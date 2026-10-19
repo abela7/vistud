@@ -14,6 +14,7 @@ use App\Http\Controllers\NoteExportController;
 use App\Http\Controllers\NotePageController;
 use App\Http\Controllers\NotePulseController;
 use App\Http\Controllers\PlacePageController;
+use App\Http\Controllers\PluginDownloadController;
 use App\Http\Controllers\QuestionPageController;
 use App\Http\Controllers\SessionBriefingController;
 use App\Http\Controllers\SessionPageController;
@@ -48,6 +49,8 @@ Route::middleware('auth')->group(function () {
         return view('settings.index', ['part' => $part, 'twoFactor' => $request->user()?->two_factor_confirmed_at !== null]);
     })->name('settings');
     Route::redirect('/ai-engine', '/settings?part=ai', 301)->name('engine.settings');
+    // The install package for a chat app (Claude, ChatGPT, Gemini), built from resources/skills (docs/specs/mcp-connections-plan.md M6.4).
+    Route::get('/connections/plugin/{target}', PluginDownloadController::class)->where('target', 'claude|openai|gemini')->name('connections.plugin');
 
     // The student's journal, newest first.
     Route::get('/journal', function (Request $request, PrincipalFactory $principals, JournalReader $reader) {

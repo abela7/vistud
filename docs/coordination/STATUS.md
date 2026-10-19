@@ -201,6 +201,18 @@ Recorded by the PM before WP4 started, and since.
 
 Plan: [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md). One phase at a time, each with a handoff note in `docs/handoff/mcp-phase-N.md`.
 
+### M6.4 · The rules travel: skills, prompts, plugins
+
+| | |
+|---|---|
+| State | **Delivered, except the real install test and the ChatGPT skills spike** (they need the public server): prompts, resources, three skills, the install packages for Claude, ChatGPT and Gemini, and the install help and downloads on the Connections screen |
+| Plan section | [mcp-connections-plan.md §4 · M6.4](../specs/mcp-connections-plan.md#m64--the-rules-travel-skills-prompts-plugins-2-units) |
+| Handoff | [docs/handoff/mcp-phase-4.md](../handoff/mcp-phase-4.md) |
+| Depends on | M6.3 |
+| Next handoff | M6.5 (changes you confirm in ViStud) |
+
+**Evidence:** tests `tests/Feature/Mcp/PromptsTest.php`, `ResourcesTest.php`, `PluginBuildTest.php`.
+
 ### M6.3 · Sessions and writes
 
 | | |

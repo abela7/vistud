@@ -93,4 +93,23 @@ class ConnectionsScreenTest extends TestCase
         Livewire::actingAs($this->admin(student: false))->test(Connections::class)
             ->assertDontSee('Connected AI apps');
     }
+
+    public function test_it_offers_the_install_packages_for_each_chat_app(): void
+    {
+        $this->withoutVite();
+        $ada = $this->student();
+
+        $page = $this->actingAs($ada)->get(route('settings', ['part' => 'ai']))->assertOk()->assertSee('Install ViStud in your chat app')->assertSee('Download for Claude');
+        $this->assertStringContainsString(route('connections.plugin', 'openai'), $page->getContent());
+
+        $zip = $this->actingAs($ada)->get(route('connections.plugin', 'claude'))->assertOk();
+        $this->assertSame('application/zip', $zip->headers->get('Content-Type'));
+        $this->assertStringContainsString('vistud-claude.zip', (string) $zip->headers->get('Content-Disposition'));
+        $this->get('/connections/plugin/nothing')->assertNotFound();
+    }
+
+    public function test_the_package_needs_a_signed_in_student(): void
+    {
+        $this->get(route('connections.plugin', 'claude'))->assertRedirect();
+    }
 }

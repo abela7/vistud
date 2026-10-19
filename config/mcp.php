@@ -29,6 +29,9 @@ return [
 
     'clients' => [],
 
+    // The address chat apps connect to, written into the install packages (vistud:mcp:plugins). Empty: APP_URL.
+    'public_url' => env('MCP_PUBLIC_URL'),
+
     // The kill switch: false answers every /mcp call with 503 and refuses new sign-ins, without touching connections.
     'enabled' => (bool) env('MCP_ENABLED', true),
 
