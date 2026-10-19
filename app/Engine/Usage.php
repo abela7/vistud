@@ -25,6 +25,24 @@ final class Usage
         return $this->since(Guard::learner($by), $this->monthStart($this->sessions->timezone($by)));
     }
 
+    /**
+     * Of what was sent to the models this month, the share read from the services' prompt cache (billed at about a
+     * tenth), in whole percent; null before anything was sent.
+     */
+    public function cachedShare(Principal $by): ?int
+    {
+        $scope = Guard::learner($by);
+        $since = $this->monthStart($this->sessions->timezone($by));
+        [$in, $cached] = [0, 0];
+        foreach (['engine_messages', 'engine_jobs'] as $table) {
+            $row = LearnerTables::query($scope, $table)->where('created_at', '>=', $since)->selectRaw('coalesce(sum(tokens_in), 0) as tokens_in, coalesce(sum(tokens_cached), 0) as tokens_cached')->first();
+            $in += (int) ($row->tokens_in ?? 0);
+            $cached += (int) ($row->tokens_cached ?? 0);
+        }
+
+        return $in > 0 ? (int) round(100 * min($cached, $in) / $in) : null;
+    }
+
     /** What the month has cost all together, for the limit. */
     public function monthTotal(LearnerScope $scope, string $zone): int
     {

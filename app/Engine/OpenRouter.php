@@ -363,11 +363,23 @@ final class OpenRouter implements Engine
         if ($request->noTraining) {
             $body['provider'] = ['data_collection' => 'deny'];
         }
+        // Claude caches only when asked: one marker, which the service moves to the end of what is sent, so the next call
+        // reads the standing context, the tools and the chat so far at about a tenth of the price. The request is ordered
+        // for it (App\Engine\Context\Stack: what stays the same first). OpenAI, Gemini and DeepSeek cache on their own.
+        if (self::asksForCache($request->model)) {
+            $body['cache_control'] = ['type' => 'ephemeral'];
+        }
         if ($stream) {
             $body['stream'] = true;
         }
 
         return $body;
+    }
+
+    /** Whether a model on OpenRouter caches only when the request asks (Anthropic's Claude). */
+    public static function asksForCache(string $model): bool
+    {
+        return str_starts_with(ltrim($model, '~'), 'anthropic/');
     }
 
     /** Sends a request with the key (the student's, or the one set up for everyone); a connection that fails says so. */
@@ -483,6 +495,8 @@ final class OpenRouter implements Engine
                 'stop' => 'stop', 'tool_calls' => 'tool_calls', 'length' => 'length', default => 'other'
             },
             reasoning: $reasoning,
+            // OpenRouter and OpenAI's shape; DeepSeek's own API names it apart.
+            tokensCached: (int) ($usage['prompt_tokens_details']['cached_tokens'] ?? $usage['prompt_cache_hit_tokens'] ?? 0),
         );
     }
 

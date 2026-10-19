@@ -222,7 +222,7 @@ final class VistudAi
             $this->keep($scope, $thread->id, ++$position, [
                 'role' => 'assistant', 'content' => $reply->text, 'tool_calls' => $calls === [] ? null : json_encode($calls), 'model' => $reply->model,
                 'reasoning' => $reply->reasoning === [] ? null : json_encode($reply->reasoning),
-                'tokens_in' => $reply->tokensIn, 'tokens_out' => $reply->tokensOut, 'cost_micros' => $reply->costMicros ?? 0,
+                'tokens_in' => $reply->tokensIn, 'tokens_cached' => $reply->tokensCached, 'tokens_out' => $reply->tokensOut, 'cost_micros' => $reply->costMicros ?? 0,
             ]);
             LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update(['spent_micros' => DB::raw('spent_micros + '.(int) ($reply->costMicros ?? 0)), 'updated_at' => now()]);
             $messages[] = array_filter(['role' => 'assistant', 'content' => $reply->text !== '' ? $reply->text : null, 'tool_calls' => $calls ?: null, 'reasoning_details' => $reply->reasoning !== [] ? $reply->reasoning : null], fn ($v) => $v !== null);

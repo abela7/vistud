@@ -268,5 +268,8 @@
                 </div>
             @endforeach
         </dl>
+        @if ($cachedShare !== null)
+            <p class="acc-note" data-usage-cached>{{ $cachedShare }}% of what was sent to the AI this month was reused from the last message, which costs about a tenth of the price.</p>
+        @endif
     </x-panel>
 </div>

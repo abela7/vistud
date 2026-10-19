@@ -279,6 +279,7 @@ final class EngineSettings extends Component
             'choices' => $choices,
             'roles' => EngineRole::cases(),
             'usage' => $this->usage->month($by),
+            'cachedShare' => $this->usage->cachedShare($by),
             'keyState' => $keyState,
             'models' => $models,
             'setupUrl' => $by->hasRole(Role::Admin) ? route('admin.engine') : null,

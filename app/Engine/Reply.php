@@ -26,6 +26,8 @@ final readonly class Reply
          * @var list<array<string, mixed>>
          */
         public array $reasoning = [],
+        /** Of `tokensIn`, how many the service read from its prompt cache (billed at about a tenth). */
+        public int $tokensCached = 0,
     ) {}
 
     /**

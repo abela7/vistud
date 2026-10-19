@@ -522,7 +522,7 @@ final class SessionChat
             $this->keep($scope, $thread->id, ++$position, [
                 'role' => 'assistant', 'content' => $reply->text, 'tool_calls' => $calls === [] ? null : json_encode($calls), 'model' => $reply->model,
                 'reasoning' => $reply->reasoning === [] ? null : json_encode($reply->reasoning),
-                'tokens_in' => $reply->tokensIn, 'tokens_out' => $reply->tokensOut, 'cost_micros' => $reply->costMicros ?? 0,
+                'tokens_in' => $reply->tokensIn, 'tokens_cached' => $reply->tokensCached, 'tokens_out' => $reply->tokensOut, 'cost_micros' => $reply->costMicros ?? 0,
             ]);
             // Counted round by round, so a turn the engine fails on later still counts what it cost.
             LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update(['spent_micros' => DB::raw('spent_micros + '.(int) ($reply->costMicros ?? 0)), 'updated_at' => now()]);

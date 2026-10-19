@@ -92,6 +92,7 @@ final class Run
         LearnerTables::query($scope, 'engine_jobs')->where('id', $this->id)->update([
             'model' => $reply->model !== '' ? $reply->model : $this->model,
             'tokens_in' => DB::raw('tokens_in + '.$reply->tokensIn),
+            'tokens_cached' => DB::raw('tokens_cached + '.$reply->tokensCached),
             'tokens_out' => DB::raw('tokens_out + '.$reply->tokensOut),
             'cost_micros' => DB::raw('cost_micros + '.(int) ($reply->costMicros ?? 0)),
         ]);
