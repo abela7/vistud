@@ -154,6 +154,7 @@
         "arguments": [
             "assignment",
             "course_id",
+            "log_page",
             "module_id"
         ],
         "required": [

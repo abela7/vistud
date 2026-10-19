@@ -2,12 +2,17 @@
 
 namespace App\Engine\Tools;
 
+use App\Engine\Context\Stack;
 use App\Platform\Access\Principal;
 use App\Study\Activities;
 use App\Study\ActivityDetails;
+use App\Study\AssignmentLog;
+use App\Study\AssignmentLogEntry;
+use App\Study\Fence;
 use App\Study\PlanDetails;
 use App\Study\PlanItem;
 use App\Study\Plans;
+use Carbon\CarbonImmutable;
 
 /** One assignment's plan: its sections with their weights, the tasks under each (and their sub-tasks), the marking criteria and the milestones. */
 final class AssignmentPlanTool implements Tool
@@ -26,7 +31,10 @@ final class AssignmentPlanTool implements Tool
 
     public function parameters(): array
     {
-        return ['type' => 'object', 'properties' => ['assignment' => ['type' => 'string', 'description' => 'The assignment\'s title (or part of it).']], 'required' => ['assignment'], 'additionalProperties' => false];
+        return ['type' => 'object', 'properties' => [
+            'assignment' => ['type' => 'string', 'description' => 'The assignment\'s title (or part of it).'],
+            'log_page' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Instead of the plan: a page of the assignment\'s log, newest first, '.Stack::LOG_LINES.' a page. Page 1 is what your instructions show; 2, 3… go further back.'],
+        ], 'required' => ['assignment'], 'additionalProperties' => false];
     }
 
     public function run(Principal $by, Context $context, array $input): string
@@ -38,6 +46,9 @@ final class AssignmentPlanTool implements Tool
         if (is_string($activity)) {
             return $activity;
         }
+        if (is_int($input['log_page'] ?? null) && $input['log_page'] >= 1) {
+            return $this->logPage($by, $activity, $input['log_page']);
+        }
         $plan = $this->plans->get($by, $activity->id);
         if ($plan->empty()) {
             return "\"{$activity->title}\" has no plan yet. The student can add sections and tasks, use a pre-made plan, or ask you for one.";
@@ -45,6 +56,22 @@ final class AssignmentPlanTool implements Tool
         $out = self::format($plan, $activity);
 
         return Lookup::json($out);
+    }
+
+    /**
+     * A page of the assignment's log, newest first (Stack::LOG_LINES a page): the instructions carry page 1, and a
+     * paper worked on for months keeps up to AssignmentLog::MAX_ENTRIES, so a later model can still read why
+     * something was decided in the first month. The entries are the student's and the tutor's words: fenced.
+     */
+    private function logPage(Principal $by, ActivityDetails $activity, int $page): string
+    {
+        $entries = app(AssignmentLog::class)->list($by, $activity->id, limit: Stack::LOG_LINES, offset: ($page - 1) * Stack::LOG_LINES);
+        if ($entries === []) {
+            return "Page {$page} of \"{$activity->title}\"'s log is empty: there are no older entries.";
+        }
+        $lines = array_map(fn (AssignmentLogEntry $e) => '- ['.CarbonImmutable::parse($e->createdAt)->format('Y-m-d H:i')."] [{$e->stage}] {$e->kind}: {$e->text} (by {$e->by}, id {$e->id})", $entries);
+
+        return "Log page {$page}, newest first:\n".Fence::wrap(implode("\n", $lines));
     }
 
     /** @return array<string, mixed> */

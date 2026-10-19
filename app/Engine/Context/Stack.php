@@ -31,6 +31,7 @@ use App\Study\Modules;
 use App\Study\NoteDetails;
 use App\Study\NoteDoc;
 use App\Study\Notes;
+use App\Study\PlanDetails;
 use App\Study\Plans;
 use App\Study\PlanStarters;
 use App\Study\PluginDetails;
@@ -789,6 +790,8 @@ final class Stack
     {
         $lines = [];
         $lines[] = ["## The assignment: {$a->title}", true];
+        // A paper can run for months and change models: this layer is read fresh every turn, the chat is not.
+        $lines[] = ['This section is ViStud\'s record as of now. Where the chat above says something else about the stage, the plan or the log, the chat is older: go by this.', true];
         $lines[] = ["Kind: {$a->kindLabel()}", true];
         $lines[] = ["Stage: {$a->stage}", true];
         $lines[] = ["Status: {$a->status}", true];
@@ -897,22 +900,15 @@ final class Stack
                     $weight = $part->weight !== null ? " ({$part->weight}%)" : '';
                     $state = AssignmentPlanTool::state($plan, $part);
                     $lines[] = ["- {$part->title}{$weight}: {$state}", true];
-                    foreach ($plan->steps($part->id) as $step) {
-                        $stepState = AssignmentPlanTool::state($plan, $step);
-                        $dueStep = $step->dueOn !== null ? " (due {$step->dueOn})" : '';
-                        $lines[] = ["  - [{$stepState}] {$step->title}{$dueStep}", true];
-                    }
+                    // Every level of steps (Plans::MAX_DEPTH), so a later model sees which sub-step is open.
+                    array_push($lines, ...self::stepLines($plan, $part->id, 1));
                 }
             }
 
             $standalone = $plan->steps(null);
             if ($standalone !== []) {
                 $lines[] = ['Tasks outside sections:', true];
-                foreach ($standalone as $step) {
-                    $stepState = AssignmentPlanTool::state($plan, $step);
-                    $dueStep = $step->dueOn !== null ? " (due {$step->dueOn})" : '';
-                    $lines[] = ["- [{$stepState}] {$step->title}{$dueStep}", true];
-                }
+                array_push($lines, ...self::stepLines($plan, null, 0));
             }
 
             $criteria = $plan->criteria();
@@ -955,13 +951,33 @@ final class Stack
         // What was decided and done, newest first: always kept (it is how a new model knows where things stand), at
         // most LOG_LINES of it; the page keeps the rest.
         $logEntries = $this->assignmentLog->list($by, $a->id, limit: self::LOG_LINES);
-        $lines[] = ["\n### Log, newest first (decisions, progress, advice, feedback, risks)", true];
+        $lines[] = ["\n### Log, newest first (decisions, progress, advice, feedback, risks): the newest ".self::LOG_LINES.'; assignment_plan with log_page 2, 3… gives older ones', true];
         if ($logEntries === []) {
             $lines[] = ['No entries yet.', true];
         }
         foreach ($logEntries as $entry) {
             $at = CarbonImmutable::parse($entry->createdAt)->format('Y-m-d H:i');
             $lines[] = ["- [{$at}] [{$entry->stage}] {$entry->kind}: {$entry->text} (by {$entry->by})", true];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * A plan's steps under `$parentId`, and their sub-steps, indented by level.
+     *
+     * @return list<array{0: string, 1: bool}>
+     */
+    private static function stepLines(PlanDetails $plan, ?string $parentId, int $depth): array
+    {
+        $lines = [];
+        foreach ($plan->steps($parentId) as $step) {
+            $state = AssignmentPlanTool::state($plan, $step);
+            $due = $step->dueOn !== null ? " (due {$step->dueOn})" : '';
+            $lines[] = [str_repeat('  ', $depth)."- [{$state}] {$step->title}{$due}", true];
+            if ($depth < 4) {
+                array_push($lines, ...self::stepLines($plan, $step->id, $depth + 1));
+            }
         }
 
         return $lines;

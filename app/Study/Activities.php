@@ -176,6 +176,11 @@ final class Activities
             if ($row->status !== $status) {
                 $this->change($scope, $by, $row, ['status' => $status]);
             }
+            // One rule for the two: work marked done is at the last stage, so a later model never reads "review, done".
+            // Reopening it keeps the stage; the student or the tutor moves it back if they want to.
+            if ($status === 'done' && ($row->stage ?? 'understand') !== 'submit') {
+                LearnerTables::query($scope, 'activities')->where('id', $id)->update(['stage' => 'submit', 'updated_at' => now()]);
+            }
         });
     }
 

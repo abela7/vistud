@@ -1144,8 +1144,12 @@ final class SessionChat
         $earlier = $thread->summary !== null && trim((string) $thread->summary) !== '' ? "What was already folded:\n".trim((string) $thread->summary)."\n\n---\n\n" : '';
 
         try {
+            // An assignment's chat can run for months across models: its fold keeps the work's state, not a lesson's.
+            $brief = $thread->activity_id !== null
+                ? 'You summarise the chat between a student and their tutor about one assignment (a paper, a project, an exam), so a tutor, maybe another model, can go on with it months later. Keep: the research question or task as agreed; decisions made and why; what was drafted or finished; which steps are open and what is blocking them; feedback received; risks named. Say when the chat was unsure. Ignore greetings, small talk, app/UI/model comments, and fleeting typos. Plain text, at most '.self::SUMMARY_CHARS.' characters, no headings. Never invent facts not in the chat.'
+                : 'You summarise one study session\'s chat between a student and their tutor, so the tutor can go on with it later. Keep only what was explained, how far the student got, what they got right or wrong, and what still confuses them. Ignore greetings, small talk, app/UI/model comments, and fleeting typos. Plain text, at most '.self::SUMMARY_CHARS.' characters, no headings. Never invent facts not in the chat.';
             $reply = $this->runner->run($by, Role::Reader, 'fold', $workspaceId, 'thread', $threadId, fn (Run $run) => $run->ask(
-                'You summarise one study session\'s chat between a student and their tutor, so the tutor can go on with it later. Keep only what was explained, how far the student got, what they got right or wrong, and what still confuses them. Ignore greetings, small talk, app/UI/model comments, and fleeting typos. Plain text, at most '.self::SUMMARY_CHARS.' characters, no headings. Never invent facts not in the chat.',
+                $brief,
                 $earlier.$transcript,
                 800,
             ));

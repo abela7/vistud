@@ -30,7 +30,7 @@ final class AssignmentLog
     public function __construct(private Activities $activities) {}
 
     /** @return list<AssignmentLogEntry> newest first */
-    public function list(Principal $by, string $activityId, int $limit = 50): array
+    public function list(Principal $by, string $activityId, int $limit = 50, int $offset = 0): array
     {
         $scope = Guard::learner($by);
         $this->activities->find($by, $activityId);
@@ -39,6 +39,7 @@ final class AssignmentLog
             ->where('activity_id', $activityId)
             ->orderByDesc('created_at')
             ->orderByDesc('id')
+            ->offset(max(0, $offset))
             ->limit($limit)
             ->get()
             ->map(fn ($row) => self::details($row))
