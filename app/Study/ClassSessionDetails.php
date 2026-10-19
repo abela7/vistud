@@ -25,6 +25,8 @@ final readonly class ClassSessionDetails
         public ?string $consentAt = null,
         public int $durationSeconds = 0,
         public ?string $noteId = null,
+        public ?string $transcriptNoteId = null,
+        public ?string $lectureNotesId = null,
     ) {}
 
     public function kindLabel(): string

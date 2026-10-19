@@ -109,6 +109,27 @@
         </div>
     @endif
 
+    @if ($tracks !== [])
+        <div class="card space-y-3 p-5" data-test="transcript" @if ($transcribeJob) wire:poll.5s @endif>
+            <h2 class="text-sm font-medium">Transcript and lecture notes</h2>
+            @if ($transcribeJob)
+                <p class="text-sm" role="status">Writing the class down… An hour of class takes a few minutes. You can leave this page; the notes appear in this module when they are ready.</p>
+            @else
+                @if ($class->lectureNotesId && $class->transcriptNoteId)
+                    <div class="flex flex-wrap gap-2">
+                        <a href="{{ route('workspaces.notes.show', [$workspaceId, $class->lectureNotesId]) }}" class="btn btn-primary btn-sm no-underline">Lecture notes</a>
+                        <a href="{{ route('workspaces.notes.show', [$workspaceId, $class->transcriptNoteId]) }}" class="btn btn-secondary btn-sm no-underline">Full transcript</a>
+                    </div>
+                @endif
+                <p class="text-sm text-fg-muted">The AI writes the class down word for word, then turns it into lecture notes with the times, so you can go back to the recording. What it can't make out is marked, never guessed. It uses your AI key.</p>
+                @if ($transcribeProblem)
+                    <x-alert tone="danger">{{ $transcribeProblem }}</x-alert>
+                @endif
+                <x-button size="sm" wire:click="transcribe" busy-label="Starting…">{{ $class->lectureNotesId ? 'Write it down again' : 'Write this class down' }}</x-button>
+            @endif
+        </div>
+    @endif
+
     @if ($class->durationSeconds > 0)
         <div class="card space-y-5 p-5">
             <div class="flex flex-wrap items-start justify-between gap-3">

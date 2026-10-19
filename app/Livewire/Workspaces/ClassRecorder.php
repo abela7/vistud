@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Livewire\Workspaces;
 
+use App\Engine\Jobs\Runner;
+use App\Engine\Jobs\TranscribeClass;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
@@ -40,6 +42,15 @@ final class ClassRecorder extends Component
     /** @var list<array{from: string, until: string, about: string, body: string}> */
     public array $marks = [];
 
+    /** The transcription under way, if one is (its engine_jobs row). */
+    #[Locked]
+    public ?string $transcribeJob = null;
+
+    /** Why the last transcription did not finish, in plain words. */
+    public ?string $transcribeProblem = null;
+
+    private Runner $runner;
+
     private ClassSessions $classes;
 
     private ClassRecordings $recordings;
@@ -48,8 +59,9 @@ final class ClassRecorder extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(ClassSessions $classes, ClassRecordings $recordings, ClassNote $classNote, PrincipalFactory $principals): void
+    public function boot(ClassSessions $classes, ClassRecordings $recordings, ClassNote $classNote, PrincipalFactory $principals, Runner $runner): void
     {
+        $this->runner = $runner;
         $this->classes = $classes;
         $this->recordings = $recordings;
         $this->classNote = $classNote;
@@ -63,6 +75,17 @@ final class ClassRecorder extends Component
         $this->classId = $classId;
         $this->class();
         $this->marks = $this->classNote->read($this->principal(), $this->classId);
+        $this->transcribeJob = $this->runner->pending($this->principal(), 'transcribe_class', 'class_session', $this->classId);
+    }
+
+    /** Writes the class down and makes lecture notes from it, in the background (TranscribeClass). */
+    public function transcribe(): void
+    {
+        $by = $this->principal();
+        $this->class();
+        $this->transcribeProblem = null;
+        $this->transcribeJob = $this->runner->pending($by, 'transcribe_class', 'class_session', $this->classId)
+            ?? $this->runner->start($by, new TranscribeClass($this->workspaceId, $this->classId));
     }
 
     public function allow(): void
@@ -181,12 +204,37 @@ final class ClassRecorder extends Component
             ];
         }
 
+        // A transcription that has ended: done shows its notes; a failure says why, once.
+        if ($this->transcribeJob !== null) {
+            $run = $this->runner->status($by, $this->transcribeJob);
+            if (! in_array($run['status'], ['queued', 'running'], true)) {
+                $this->transcribeJob = null;
+                $this->transcribeProblem = $run['status'] === 'done' ? null : self::problem($run['error_code']);
+                $class = $this->class();
+            }
+        }
+
         return view('livewire.workspaces.class-recorder', [
             'class' => $class,
             'open' => $open,
             'tracks' => $tracks,
             'chunkBase' => url('/courses/'.$this->workspaceId.'/modules/'.$this->moduleId.'/classes/'.$this->classId.'/recordings'),
         ]);
+    }
+
+    /** What went wrong with a transcription, in the student's words. */
+    private static function problem(?string $code): string
+    {
+        return match ($code) {
+            'engine_key', 'engine_not_set_up', 'engine_bad_key' => 'Add your AI key in Settings, AI, then try again.',
+            'engine_consent' => 'Agree to use the AI in Settings, AI, then try again.',
+            'engine_cap' => 'This month\'s AI limit is reached. Raise it in Settings, AI, to keep going.',
+            'engine_credit' => 'Your AI account is out of credit. Top it up, then try again.',
+            'engine_model' => 'The model that writes classes down is not available with your key. Check Settings, AI.',
+            'ffmpeg_missing' => 'The recording could not be cut into pieces on this server.',
+            'no_recording' => 'There is no finished recording to write down.',
+            default => 'Writing the class down didn\'t work. Try again.',
+        };
     }
 
     /** @param  array<mixed>  $marks */

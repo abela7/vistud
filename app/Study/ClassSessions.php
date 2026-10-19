@@ -128,6 +128,14 @@ final class ClassSessions
         return $parsed !== false && $parsed->format('Y-m-d') === $value ? $value : false;
     }
 
+    /** Keeps the class's transcript note and lecture notes (App\Engine\Jobs\TranscribeClass). */
+    public function keepTranscript(Principal $by, string $id, string $transcriptNoteId, string $lectureNotesId): void
+    {
+        $scope = Guard::learner($by);
+        $this->find($by, $id);
+        LearnerTables::query($scope, 'class_sessions')->where('id', $id)->update(['transcript_note_id' => $transcriptNoteId, 'lecture_notes_id' => $lectureNotesId, 'updated_at' => now()]);
+    }
+
     private static function zone(LearnerScope $scope): string
     {
         $zone = DB::table('learners')->where('id', $scope->learnerId)->value('timezone');
@@ -150,6 +158,8 @@ final class ClassSessions
             consentAt: $row->consent_at !== null ? (string) $row->consent_at : null,
             durationSeconds: (int) $row->duration_seconds,
             noteId: $row->note_id !== null ? (string) $row->note_id : null,
+            transcriptNoteId: ($row->transcript_note_id ?? null) !== null ? (string) $row->transcript_note_id : null,
+            lectureNotesId: ($row->lecture_notes_id ?? null) !== null ? (string) $row->lecture_notes_id : null,
         );
     }
 }

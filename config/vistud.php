@@ -78,6 +78,8 @@ return [
         'timeout' => (int) env('VISTUD_ENGINE_TIMEOUT', 120),
         'models_cache_hours' => 24,
         'tool_rounds' => 6,
+        // The model that writes a class recording down (App\Engine\Jobs\TranscribeClass): one that takes audio.
+        'audio_model' => env('VISTUD_AUDIO_MODEL', 'google/gemini-2.5-flash'),
         'fold_at' => 60_000,
         'keep_recent' => 8,
     ],

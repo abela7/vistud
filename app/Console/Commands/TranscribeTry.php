@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Engine\Choices;
 use App\Engine\Jobs\Run;
 use App\Engine\Jobs\Runner;
+use App\Engine\Jobs\TranscribeClass;
 use App\Engine\Role;
 use App\Identity\PrincipalFactory;
 use App\Models\User;
@@ -32,23 +33,6 @@ use Illuminate\Support\Facades\File;
 #[Description('Try transcribing one class recording: a word-for-word transcript, then lecture notes, with the cost')]
 class TranscribeTry extends Command
 {
-    private const HEAR = <<<'TXT'
-        You write down a piece of a class recording, word for word, for a student's study record.
-        Write only what is said, in the language it is said in. Never add, guess, correct or summarise.
-        Where a word or a sentence can't be made out, write [unclear]. Where nothing useful is said for a while, write [pause]; where people talk over each other or chat off the subject, write [chatter].
-        Start a new paragraph when the speaker or the subject changes. When someone other than the lecturer speaks, start their paragraph with "Student:".
-        No headings, no notes about the audio, nothing but the transcript.
-        TXT;
-
-    private const NOTES = <<<'TXT'
-        You turn the transcript of one class into lecture notes for the student who was there.
-        Keep: what the lecturer teaches, definitions, worked examples, what they say matters for the exam or the coursework, homework and dates.
-        Leave out: off-topic talk, chatter, repetition, admin that is not about the course.
-        The transcript is in pieces, each headed with its time in the recording. Keep those times as headings, so the student can find the part in the recording.
-        Where the transcript says [unclear] or a passage is confusing, write "Check this (at mm:ss): " and what is unclear, instead of guessing what was meant.
-        Never add facts that are not in the transcript. Plain Markdown: headings, short paragraphs and lists.
-        TXT;
-
     public function handle(PrincipalFactory $principals, ClassSessions $classes, ClassRecordings $recordings, Workspaces $workspaces, Modules $modules, Runner $runner, AudioPieces $pieces): int
     {
         $email = (string) $this->option('user');
@@ -92,7 +76,7 @@ class TranscribeTry extends Command
 
             $this->line('Turning the transcript into lecture notes…');
             $notesReply = $runner->run($by, Role::Reader, 'transcribe_notes', $class->workspaceId, 'class_session', $class->id,
-                fn (Run $run) => $run->ask(self::NOTES."\n\n".$about, Fence::wrap($transcript), 6000)->whole());
+                fn (Run $run) => $run->ask(TranscribeClass::NOTES."\n\n".$about, Fence::wrap($transcript), 6000)->whole());
             $notes = $notesReply->text;
             $notesCost = (int) ($notesReply->costMicros ?? 0);
         } catch (AppError $e) {
@@ -125,7 +109,7 @@ class TranscribeTry extends Command
             ['type' => 'input_audio', 'input_audio' => ['data' => base64_encode((string) file_get_contents($file)), 'format' => 'mp3']],
         ]]];
         $reply = $runner->run($by, Role::Reader, 'transcribe_piece', $workspaceId, 'class_session', $classId,
-            fn (Run $run) => $run->ask(self::HEAR, $message, 6000)->whole(), model: $model);
+            fn (Run $run) => $run->ask(TranscribeClass::HEAR, $message, 6000)->whole(), model: $model);
 
         return [trim($reply->text), (int) ($reply->costMicros ?? 0)];
     }

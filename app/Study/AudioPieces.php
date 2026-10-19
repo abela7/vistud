@@ -2,6 +2,7 @@
 
 namespace App\Study;
 
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 /**
@@ -22,7 +23,7 @@ class AudioPieces
             mkdir($directory, 0775, true);
         }
         $process = new Process([
-            (string) config('vistud.files.ffmpeg', 'ffmpeg'), '-hide_banner', '-loglevel', 'error', '-y',
+            self::binary(), '-hide_banner', '-loglevel', 'error', '-y',
             '-i', $file, '-vn', '-ac', '1', '-ar', '16000', '-b:a', '32k',
             '-f', 'segment', '-segment_time', (string) $seconds, '-reset_timestamps', '1',
             $directory.DIRECTORY_SEPARATOR.'piece-%03d.mp3',
@@ -40,5 +41,31 @@ class AudioPieces
         sort($pieces);
 
         return $pieces;
+    }
+
+    /**
+     * Where ffmpeg is: the one set in VISTUD_FFMPEG_BINARY, else one on the PATH, else where winget puts it on Windows
+     * (a web server started before ffmpeg was installed does not see the new PATH). Plain `ffmpeg` when none is found,
+     * so the error says what to install.
+     */
+    public static function binary(): string
+    {
+        $set = (string) config('vistud.files.ffmpeg', 'ffmpeg');
+        if ($set !== 'ffmpeg') {
+            return $set;
+        }
+        $found = (new ExecutableFinder)->find('ffmpeg');
+        if ($found !== null) {
+            return $found;
+        }
+        $local = getenv('LOCALAPPDATA');
+        if (is_string($local) && $local !== '') {
+            $winget = glob($local.'/Microsoft/WinGet/Packages/Gyan.FFmpeg*/*/bin/ffmpeg.exe') ?: [];
+            if ($winget !== []) {
+                return end($winget);
+            }
+        }
+
+        return 'ffmpeg';
     }
 }
