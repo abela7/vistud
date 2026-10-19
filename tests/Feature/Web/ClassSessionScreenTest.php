@@ -55,40 +55,32 @@ class ClassSessionScreenTest extends TestCase
             ->assertSee('Not recorded yet')
             ->assertSee('Add a class');
 
+        $this->travelTo('2026-10-14 10:00:00');
         Livewire::actingAs($this->ada)
             ->test(ModuleClasses::class, ['workspaceId' => $this->biology->id, 'moduleId' => $module->id])
-            ->call('start')
-            ->set('title', 'Week 3 lecture')
-            ->set('kind', 'lab')
-            ->set('heldOn', '2026-10-14')
-            ->set('teacher', 'Dr Smith')
-            ->call('add')
+            ->call('add', 'lab')
             ->assertHasNoErrors()
             ->assertRedirect();
 
-        $added = collect($classes->forModule($by, $this->biology->id, $module->id))->firstWhere('title', 'Week 3 lecture');
+        $added = collect($classes->forModule($by, $this->biology->id, $module->id))->firstWhere('title', 'Lab · 14 Oct 2026');
         $this->assertNotNull($added);
         $this->actingAs($this->ada)->get(route('workspaces.modules.classes.show', [$this->biology->id, $module->id, $added->id]))
             ->assertOk()
-            ->assertSee('Week 3 lecture')
-            ->assertSee('Lab · 14 Oct 2026 · Dr Smith')
+            ->assertSee('Lab · 14 Oct 2026')
             ->assertSee('Not recorded yet')
             ->assertSee('Only record this class when the people in the room have agreed.')
             ->assertSee('I have permission to record');
     }
 
-    public function test_a_blank_name_stays_on_the_form(): void
+    public function test_one_tap_on_a_kind_is_all_it_takes_and_an_unknown_kind_makes_nothing(): void
     {
         $by = $this->principal($this->ada);
         $module = app(ModuleService::class)->create($by, $this->biology->id, ['title' => 'Cells']);
 
         Livewire::actingAs($this->ada)
             ->test(ModuleClasses::class, ['workspaceId' => $this->biology->id, 'moduleId' => $module->id])
-            ->call('start')
-            ->set('title', '   ')
-            ->call('add')
-            ->assertHasErrors(['title' => 'Give the class a name.'])
-            ->assertSet('adding', true);
+            ->assertSee('Lecture')->assertSee('Tutorial')->assertSee('Lab')->assertSee('Seminar')
+            ->call('add', 'party');
 
         $this->assertSame([], app(ClassSessions::class)->forModule($by, $this->biology->id, $module->id));
     }

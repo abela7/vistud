@@ -10,11 +10,12 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\ClassSessions;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Carbon;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 /**
- * A module's classes: the list, and the form that adds one. Recording
+ * A module's classes: the list, and one tap on a kind to add today's. Recording
  * happens on the class's own page.
  */
 final class ModuleClasses extends Component
@@ -24,16 +25,6 @@ final class ModuleClasses extends Component
 
     #[Locked]
     public string $moduleId;
-
-    public bool $adding = false;
-
-    public string $title = '';
-
-    public string $kind = 'lecture';
-
-    public string $heldOn = '';
-
-    public string $teacher = '';
 
     private ClassSessions $classes;
 
@@ -51,43 +42,25 @@ final class ModuleClasses extends Component
         $this->moduleId = $moduleId;
     }
 
-    public function start(): void
+    /**
+     * One tap on a kind makes today's class (the day from the student's own clock) and opens it, ready to record.
+     * It is named by its kind and day: "Lecture · 19 Oct 2026".
+     */
+    public function add(string $kind): void
     {
-        $this->resetErrorBag();
-        $this->adding = true;
-        if ($this->heldOn === '') {
-            $this->heldOn = $this->classes->today($this->principal());
-        }
-    }
-
-    public function cancel(): void
-    {
-        $this->resetErrorBag();
-        $this->adding = false;
-        $this->title = '';
-        $this->teacher = '';
-        $this->kind = 'lecture';
-        $this->heldOn = '';
-    }
-
-    public function add(): void
-    {
-        $this->resetErrorBag();
-        try {
-            $class = $this->classes->create($this->principal(), $this->workspaceId, $this->moduleId, [
-                'title' => $this->title,
-                'kind' => $this->kind,
-                'held_on' => $this->heldOn,
-                'teacher' => $this->teacher,
-            ]);
-        } catch (Unprocessable $e) {
-            foreach ($e->details['fields'] ?? [] as $field => $messages) {
-                $this->addError((string) $field, is_array($messages) ? (string) ($messages[0] ?? '') : (string) $messages);
-            }
-
+        $by = $this->principal();
+        if (! isset(ClassSessions::KINDS[$kind])) {
             return;
-        } catch (NotFound) {
-            $this->addError('title', 'This module could not be found.');
+        }
+        $day = $this->classes->today($by);
+        try {
+            $class = $this->classes->create($by, $this->workspaceId, $this->moduleId, [
+                'title' => ClassSessions::KINDS[$kind].' · '.Carbon::parse($day)->format('j M Y'),
+                'kind' => $kind,
+                'held_on' => $day,
+            ]);
+        } catch (NotFound|Unprocessable) {
+            $this->addError('kind', 'This module could not be found.');
 
             return;
         }
