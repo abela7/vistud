@@ -7,6 +7,7 @@ use App\Engine\Context\Stack;
 use App\Engine\Engine;
 use App\Engine\Fake;
 use App\Engine\Helper;
+use App\Engine\SessionChat;
 use App\Engine\Toolbox;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
@@ -49,7 +50,8 @@ class PromptsTryTest extends TestCase
             $this->assertSame('fake/tutor', $request->model);
             $this->assertStringStartsWith("# You are the student's tutor", $request->system);
             $this->assertStringContainsString('## The course: Operating Systems', $request->system);
-            $this->assertSame(count(app(Toolbox::class)->definitions()), count($request->tools));
+            // A session's tools: all but those that work only in an assignment's chat.
+            $this->assertSame(count(app(Toolbox::class)->except(SessionChat::ASSIGNMENT_CHAT_ONLY)->definitions()), count($request->tools));
             $this->assertSame('user', $request->messages[array_key_last($request->messages)]['role']);
         }
         // The moments carry their conversation: "next" comes after the tutor's own words.

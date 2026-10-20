@@ -158,7 +158,13 @@ final class SessionChat
      * questions belongs to a study session's write-back (the topic's page has its own); renaming, deleting and moving
      * topics, the session's topic and its note are a session's or the page's.
      */
-    public const TOPIC_TOOLS = ['notes', 'read_note', 'search_notes', 'files', 'read_file', 'module_files', 'findings', 'questions', 'topics', 'earlier_sessions', 'calculate', 'plot_graph', 'answer_question', 'set_topic_status', 'remember', 'assignments', 'assignment_plan', 'assignment_source', 'save_to_assignment'];
+    public const TOPIC_TOOLS = ['notes', 'read_note', 'search_notes', 'files', 'read_file', 'module_files', 'findings', 'questions', 'topics', 'earlier_sessions', 'calculate', 'plot_graph', 'answer_question', 'set_topic_status', 'remember', 'assignments', 'assignment_plan', 'save_to_assignment'];
+
+    /**
+     * The tools that work only in an assignment's own chat: everywhere else each answers "This can only be done in an
+     * assignment's chat", so a study session isn't offered them (a small model would try them, and they cost words).
+     */
+    public const ASSIGNMENT_CHAT_ONLY = ['assignment_source', 'add_assignment_source', 'confirm_assignment_understanding', 'save_assignment_plan', 'update_assignment_plan_item', 'log_progress', 'set_stage'];
 
     /**
      * The chat on a topic's own page (the owner's ask, 2026-10-12): the same tutor, model, look-ups, history and stream as a
@@ -500,7 +506,7 @@ final class SessionChat
         } else {
             $built = $this->stack->build($by, $session, $thread->summary, $withTools);
             [$system, $tools] = [$built->system, $built->tools];
-            $toolbox = $this->toolbox;
+            $toolbox = $this->toolbox->except(self::ASSIGNMENT_CHAT_ONLY);
             if ($onTopic !== null) {
                 $system .= "\n\n".self::topicChat($onTopic);
                 $tools = array_values(array_filter($tools, fn (array $tool) => in_array($tool['function']['name'] ?? '', self::TOPIC_TOOLS, true)));
@@ -548,9 +554,28 @@ final class SessionChat
         LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update([
             'turns' => DB::raw('turns + 1'), 'model' => $activeModel, 'updated_at' => now(),
         ]);
-        $this->foldIfLong($by, $session->workspaceId, $thread->id);
+        $this->foldIfLong($by, $session->workspaceId, $thread->id, self::historyRoom($model, $system, $tools));
 
         return $reply;
+    }
+
+    /**
+     * How long (in characters) the unfolded chat may grow before it is folded: the configured size, or less for a
+     * model whose context is small, once the standing context, the tools and room for its answer are taken out of
+     * it. Without this a small model was sent more than it could hold and refused the turn.
+     *
+     * @param  list<array<string, mixed>>  $tools
+     */
+    public static function historyRoom(?Model $model, string $system, array $tools): int
+    {
+        $room = (int) config('vistud.engine.fold_at');
+        if ($model === null || $model->contextLength <= 0) {
+            return $room;
+        }
+        // Tokens::of counts four bytes a token; the answer may run to 8,000 tokens.
+        $fits = $model->contextLength * 4 - strlen($system) - strlen((string) json_encode($tools)) - 8000 * 4;
+
+        return min($room, max(8_000, $fits));
     }
 
     /**
@@ -1122,13 +1147,14 @@ final class SessionChat
      * Past a size, the oldest turns (all but the last few messages, cut at a student's message so a look-up
      * never loses its result) are summarised by the reader and kept only as that summary.
      */
-    private function foldIfLong(Principal $by, string $workspaceId, string $threadId): void
+    /** @param  int  $room  the characters the unfolded chat may hold (historyRoom) */
+    private function foldIfLong(Principal $by, string $workspaceId, string $threadId, int $room): void
     {
         $scope = Guard::learner($by);
         $thread = LearnerTables::query($scope, 'engine_threads')->where('id', $threadId)->first();
         $rows = array_values(array_filter($this->rows($scope, $threadId), fn ($row) => (int) $row->position > (int) $thread->folded_through));
         $size = array_sum(array_map(fn ($row) => mb_strlen((string) $row->content), $rows));
-        if ($size <= (int) config('vistud.engine.fold_at')) {
+        if ($size <= $room) {
             return;
         }
         $cut = count($rows) - max(1, (int) config('vistud.engine.keep_recent'));

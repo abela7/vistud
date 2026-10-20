@@ -5,9 +5,12 @@ namespace Tests\Feature\Engine;
 use App\Engine\Context\Stack;
 use App\Engine\Engine;
 use App\Engine\Fake;
+use App\Engine\Reply;
 use App\Engine\Request;
 use App\Engine\SessionChat;
 use App\Engine\Settings;
+use App\Engine\Tools\AssignmentPlanTool;
+use App\Engine\Tools\Context;
 use App\Engine\Usage;
 use App\Models\User;
 use App\Platform\Access\Guard;
@@ -722,5 +725,81 @@ class AssignmentCompanionChatTest extends TestCase
         $plan = app(Plans::class)->get($this->by, $this->assignment->id);
         $this->assertSame(['Plan', 'Build', 'Test', 'Hand in'], array_map(fn ($p) => $p->title, $plan->parts()));
         $this->assertSame('do', app(Activities::class)->find($this->by, $this->assignment->id)->stage);
+    }
+
+    /**
+     * A research paper spans months and the student changes model. The next model is told the stage and the
+     * plan as they are stored now. It is not told the previous model's private reasoning, and it is not told
+     * the whole history: the standing layer keeps fifteen log lines and one level of plan steps.
+     */
+    public function test_a_later_model_is_told_the_stored_stage_and_plan_after_months_of_work(): void
+    {
+        $plans = app(Plans::class);
+        $activities = app(Activities::class);
+        $log = app(AssignmentLog::class);
+
+        $part = $plans->addPart($this->by, $this->assignment->id, 'Literature review');
+        $search = $plans->addStep($this->by, $this->assignment->id, 'Search CINAHL', $part->id);
+        $screen = $plans->addStep($this->by, $this->assignment->id, 'Screen the 2024 reviews', $search->id);
+        $appraise = $plans->addStep($this->by, $this->assignment->id, 'Appraise the rest', $search->id);
+        $plans->addCriterion($this->by, $this->assignment->id, 'Critical appraisal', 20);
+        $plans->addMilestone($this->by, $this->assignment->id, 'Ethics approval', '2026-12-01');
+
+        $activities->setStage($this->by, $this->assignment->id, 'do');
+        $plans->setState($this->by, $screen->id, 'done');
+        $plans->setState($this->by, $appraise->id, 'todo');
+
+        for ($i = 1; $i <= 20; $i++) {
+            $this->travel(10)->days();
+            $log->add($this->by, $this->assignment->id, 'do', 'decision', "Decision {$i}: kept the research question.");
+        }
+
+        $this->engine->will(new Reply(
+            'We are still planning the search.',
+            model: 'fake/tutor',
+            reasoning: [['type' => 'reasoning.text', 'text' => 'SECRET-REASONING-MODEL-A']],
+        ));
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'Where are we?', model: 'fake/tutor');
+
+        $activities->setStage($this->by, $this->assignment->id, 'review');
+        $activities->setStatus($this->by, $this->assignment->id, 'done');
+
+        $this->engine->will(function (Request $request) {
+            $this->assertSame('fake/other', $request->model);
+            // Marked done moves the stage to submit (Activities::setStatus): never "review, done".
+            $this->assertStringContainsString('Stage: submit', $request->system);
+            $this->assertStringContainsString('Status: done', $request->system);
+            $this->assertStringContainsString('Literature review: in progress', $request->system);
+            $this->assertStringContainsString('[in progress] Search CINAHL', $request->system);
+            $this->assertStringContainsString('[not yet] Critical appraisal', $request->system);
+            $this->assertStringContainsString('Ethics approval', $request->system);
+            $this->assertStringContainsString('Decision 20: kept the research question.', $request->system);
+            $this->assertStringContainsString('Decision 6: kept the research question.', $request->system);
+            $this->assertStringNotContainsString('Decision 5: kept the research question.', $request->system);
+            // Every level of steps is in the layer now, and the log says how to read further back.
+            $this->assertStringContainsString('    - [done] Screen the 2024 reviews', $request->system);
+            $this->assertStringContainsString('    - [to do] Appraise the rest', $request->system);
+            $this->assertStringContainsString('log_page 2', $request->system);
+            $this->assertStringContainsString('the chat is older: go by this', $request->system);
+
+            $spoken = json_encode($request->messages);
+            $this->assertStringContainsString('We are still planning the search.', $spoken);
+            $this->assertStringNotContainsString('SECRET-REASONING-MODEL-A', $spoken);
+
+            return Fake::says('The paper is in review.', model: 'fake/other');
+        });
+        $this->chat()->sendOnAssignment($this->by, $this->assignment->id, 'New model. What stage is this paper in, and what is still open?', model: 'fake/other');
+
+        $fresh = $activities->find($this->by, $this->assignment->id);
+        $this->assertSame('submit', $fresh->stage);
+        $this->assertSame('done', $fresh->status);
+
+        $tool = app(AssignmentPlanTool::class)->run(
+            $this->by,
+            new Context($this->workspaceId, $this->moduleId, null, 'UTC', activityId: $this->assignment->id),
+            ['assignment' => ''],
+        );
+        $this->assertStringContainsString('Screen the 2024 reviews', $tool);
+        $this->assertStringContainsString('Appraise the rest', $tool);
     }
 }

@@ -237,6 +237,26 @@ class SessionChatTest extends TestCase
         $this->assertSame(4 * 1_000 + 200, $this->chat()->spent($this->by, $this->session->id)['session']);
     }
 
+    public function test_a_model_with_a_small_context_folds_the_chat_sooner_than_the_configured_size(): void
+    {
+        // fake/plain holds 8,000 tokens: far less than the 60,000 characters a chat may otherwise grow to.
+        config(['vistud.engine.fold_at' => 60_000, 'vistud.engine.keep_recent' => 2]);
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/plain', 'reader_model' => 'fake/quick', 'consent' => true]);
+        $long = str_repeat('Joins join tables. ', 160);
+        $this->engine->will(Fake::says($long), Fake::says($long));
+        $this->chat()->send($this->by, $this->session->id, 'One');
+        $this->chat()->send($this->by, $this->session->id, 'Two');
+        $this->assertStringNotContainsString('## Earlier in this chat', $this->engine->last()->system);
+        // Past what the model holds with the third turn: the fold follows, as it does for a long chat.
+        $this->engine->will(Fake::says($long), fn (Request $request) => Fake::says('Joins were explained twice.', 200, 'fake/quick'));
+        $this->chat()->send($this->by, $this->session->id, 'Three');
+        $this->engine->will(Fake::says('Four.'));
+        $this->chat()->send($this->by, $this->session->id, 'Four');
+        $last = $this->engine->last();
+        $this->assertStringContainsString('## Earlier in this chat', $last->system);
+        $this->assertSame(['Three', $long, 'Four'], array_map(fn ($m) => $m['content'], $last->messages));
+    }
+
     public function test_the_students_own_key_goes_with_every_request_and_without_any_key_the_chat_says_so(): void
     {
         $this->engine->will(Fake::says('Hi.'));

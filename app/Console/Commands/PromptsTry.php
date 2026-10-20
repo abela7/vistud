@@ -11,6 +11,7 @@ use App\Engine\EngineFailed;
 use App\Engine\Helper;
 use App\Engine\Jobs\ProfileCourse;
 use App\Engine\Request;
+use App\Engine\SessionChat;
 use App\Engine\Setup;
 use App\Engine\Toolbox;
 use Illuminate\Console\Attributes\Description;
@@ -69,7 +70,7 @@ class PromptsTry extends Command
             }
             $built = $role === 'helper'
                 ? $stack->composeHelper($facts, app(Toolbox::class)->only(Helper::TOOLS)->definitions())
-                : $stack->compose($facts, $withTools, $withTools ? app(Toolbox::class)->definitions() : []);
+                : $stack->compose($facts, $withTools, $withTools ? app(Toolbox::class)->except(SessionChat::ASSIGNMENT_CHAT_ONLY)->definitions() : []);
             $this->newLine();
             $this->line("<options=bold>{$number}. {$title}</>");
             $this->line('   Student: '.$messages[array_key_last($messages)]['content']);

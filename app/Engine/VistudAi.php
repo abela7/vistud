@@ -244,7 +244,7 @@ final class VistudAi
         }
 
         LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update(['turns' => DB::raw('turns + 1'), 'model' => $activeModel, 'updated_at' => now()]);
-        $this->foldIfLong($by, $thread->id);
+        $this->foldIfLong($by, $thread->id, SessionChat::historyRoom($model, $system, $tools));
 
         return $reply;
     }
@@ -269,12 +269,13 @@ final class VistudAi
     }
 
     /** Past a size, the oldest turns are summarised by the reader and kept only as that summary (as a session's chat). */
-    private function foldIfLong(Principal $by, string $threadId): void
+    /** @param  int  $room  the characters the unfolded chat may hold (SessionChat::historyRoom: less for a small model) */
+    private function foldIfLong(Principal $by, string $threadId, int $room): void
     {
         $scope = Guard::learner($by);
         $thread = LearnerTables::query($scope, 'engine_threads')->where('id', $threadId)->first();
         $rows = array_values(array_filter($this->rows($scope, $threadId), fn ($row) => (int) $row->position > (int) $thread->folded_through));
-        if (array_sum(array_map(fn ($row) => mb_strlen((string) $row->content), $rows)) <= (int) config('vistud.engine.fold_at')) {
+        if (array_sum(array_map(fn ($row) => mb_strlen((string) $row->content), $rows)) <= $room) {
             return;
         }
         $cut = count($rows) - max(1, (int) config('vistud.engine.keep_recent'));

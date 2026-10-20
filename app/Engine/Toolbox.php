@@ -126,6 +126,18 @@ final class Toolbox
         return $toolbox;
     }
 
+    /**
+     * The same toolbox without the named tools.
+     *
+     * @param  list<string>  $names
+     */
+    public function except(array $names): self
+    {
+        $names = array_values(array_diff(array_map(fn (Tool $tool) => $tool->name(), $this->tools()), $names));
+
+        return $this->only($names);
+    }
+
     /** @return list<Tool> */
     public function tools(): array
     {

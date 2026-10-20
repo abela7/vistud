@@ -33,7 +33,7 @@ final class LogProgressTool implements Tool
                 ],
                 'kind' => [
                     'type' => 'string',
-                    'enum' => AssignmentLog::KINDS,
+                    'enum' => array_keys(AssignmentLog::KINDS),
                     'description' => 'The kind of entry (decision, progress, advice, feedback, risk).',
                 ],
                 'text' => [

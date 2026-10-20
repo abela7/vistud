@@ -129,7 +129,7 @@ final class Stack
     /** The tutor's standing context for a session: its system prompt, its tools and the report on its layers. */
     public function build(Principal $by, SessionDetails $session, ?string $folded, bool $withTools): Built
     {
-        return $this->compose($this->gather($by, $session, $folded, $withTools), $withTools, $withTools ? $this->toolbox->definitions() : []);
+        return $this->compose($this->gather($by, $session, $folded, $withTools), $withTools, $withTools ? $this->toolbox->except(SessionChat::ASSIGNMENT_CHAT_ONLY)->definitions() : []);
     }
 
     /** The tutor's standing context for an assignment: companion rules, course, student, and the assignment layer. */
@@ -438,7 +438,8 @@ final class Stack
                 ...array_map(fn (string $key) => Tutoring::CHOICES[$key][$tutoring[$key]][1], array_keys(Tutoring::DEFAULTS)),
                 ! empty($tutoring['custom_do']) ? "What to do: {$tutoring['custom_do']}" : null,
                 ! empty($tutoring['custom_dont']) ? "What NOT to do: {$tutoring['custom_dont']}" : null,
-                ...array_map(fn (PluginDetails $p) => "Active plugin [{$p->name}]: ".implode(' ', $p->promptInstructions), Plugins::active($tutoring['plugins'] ?? [])),
+                // A subject plugin's rules say "always"; the student's level and short messages still come first.
+                ...array_map(fn (PluginDetails $p) => "Active plugin [{$p->name}], when it fits the part you are teaching (the student's level and the length of your messages come first): ".implode(' ', $p->promptInstructions), Plugins::active($tutoring['plugins'] ?? [])),
             ])),
             material: $material,
             checkpoint: $session->checkpoint,
@@ -768,11 +769,13 @@ final class Stack
         if ($f->openedNoteTitle !== null) {
             $lines[] = ["Opened note beside chat: \"{$f->openedNoteTitle}\". The student has this note open right now. When taking notes, writing, editing lines, or updating content, edit or write directly into this note (with edit_note or write_note) unless they specify another. Changes appear live on their screen.", true];
         }
+        // Where it stands is never cut: the teaching lines and plugins alone can fill the budget, and a tutor that lost
+        // its place starts the session over or guesses where it was.
         if ($f->checkpoint !== null) {
-            $lines[] = ["Where this session last stood (your last checkpoint): {$f->checkpoint} Pick up from here.", false];
+            $lines[] = ["Where this session last stood (your last checkpoint): {$f->checkpoint} Pick up from here.", true];
         }
         if ($f->studied !== null) {
-            $lines[] = ["Studied so far: {$f->studied}.", false];
+            $lines[] = ["Studied so far: {$f->studied}.", true];
         }
         if ($f->summary !== null) {
             $lines[] = ["Summary so far: {$f->summary}", false];

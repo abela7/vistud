@@ -5,6 +5,7 @@ namespace Tests\Feature\Engine;
 use App\Engine\Context\Facts;
 use App\Engine\Context\Stack;
 use App\Engine\Context\Tokens;
+use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Engine\Toolbox;
 use App\Models\User;
@@ -112,7 +113,10 @@ class StackTest extends TestCase
             $this->assertGreaterThan(0, $layer['tokens'], "layer {$layer['layer']} weighs something");
         }
         $this->assertSame(array_sum(array_column($built->report, 'tokens')), $built->tokens());
-        $this->assertSame(count(app(Toolbox::class)->definitions()), count($built->tools));
+        // A session is offered every tool but those that work only in an assignment's chat.
+        $names = array_map(fn (array $tool) => $tool['function']['name'], $built->tools);
+        $this->assertSame(count(app(Toolbox::class)->definitions()) - count(SessionChat::ASSIGNMENT_CHAT_ONLY), count($names));
+        $this->assertSame([], array_intersect(SessionChat::ASSIGNMENT_CHAT_ONLY, $names));
     }
 
     public function test_the_course_profile_and_how_the_student_likes_to_learn_fill_the_course_and_student_layers(): void
