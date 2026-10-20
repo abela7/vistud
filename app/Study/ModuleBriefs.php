@@ -91,7 +91,7 @@ final class ModuleBriefs
         }
 
         $asked = $folderIds === null ? $this->questions->list($by, $workspaceId, $moduleId) : $this->questions->list($by, $workspaceId, folderIds: $folderIds);
-        $open = array_values(array_filter($asked, fn (QuestionDetails $q) => $q->status !== 'answered'));
+        $open = array_values(array_filter($asked, fn (QuestionDetails $q) => $q->open()));
         usort($open, fn (QuestionDetails $a, QuestionDetails $b) => ($b->status === 'stuck') <=> ($a->status === 'stuck'));
         $questionLines = array_map(fn (QuestionDetails $q) => '"'.self::cut($q->text).'"'.($q->status === 'stuck' ? ' (stuck)' : ''), array_slice($open, 0, self::QUESTIONS));
 

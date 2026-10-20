@@ -219,7 +219,7 @@ final class TopicSheet extends Component
                     'modules' => $this->modules->list($by, $this->workspaceId),
                     'folders' => self::byModule($this->folders->tree($by, $this->workspaceId)),
                     'cards' => $this->flashcards->counts($by, $this->workspaceId, $topic->id),
-                    'open' => array_values(array_filter($this->questions->list($by, $this->workspaceId), fn ($q) => $q->topicId === $topic->id && $q->status !== 'answered')),
+                    'open' => array_values(array_filter($this->questions->list($by, $this->workspaceId), fn ($q) => $q->topicId === $topic->id && $q->open())),
                     'points' => $this->findings->byTopic($by, $this->workspaceId)[$topic->id] ?? [],
                     'sessionCount' => $topic->moduleId === null ? 0 : count(array_filter($this->sessions->forModule($by, $this->workspaceId, $topic->moduleId), fn ($s) => $s->topicId === $topic->id)),
                 ];

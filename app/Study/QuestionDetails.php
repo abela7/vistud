@@ -31,6 +31,16 @@ final readonly class QuestionDetails
         return $this->status === 'answered' && ! $this->answeredByAi() ? 'understood' : 'open';
     }
 
+    /**
+     * Still to be settled, as the Progress page shows it: not answered, or answered by the AI and not yet confirmed
+     * by the student. The tutor's tools and briefs count open questions the same way, so they never say "no open
+     * questions" while the screen shows one.
+     */
+    public function open(): bool
+    {
+        return $this->status !== 'answered' || $this->answeredByAi();
+    }
+
     /** Answered by the AI, and the student hasn't said yet that it clicked. */
     public function answeredByAi(): bool
     {

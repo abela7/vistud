@@ -63,7 +63,7 @@ final class Rollups
         $open = [];
         $stuck = [];
         foreach ($questions as $question) {
-            if ($question->status !== 'answered' && $question->topicId !== null) {
+            if ($question->open() && $question->topicId !== null) {
                 $open[$question->topicId] = ($open[$question->topicId] ?? 0) + 1;
             }
             if ($question->status === 'stuck') {

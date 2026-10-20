@@ -891,7 +891,7 @@ final class Stack
             $progress = $plan->progress();
             $health = $plan->health($a);
             $healthText = $health !== null ? " · Health: {$health['state']}".($health['reasons'] !== [] ? ' ('.implode(', ', $health['reasons']).')' : '') : '';
-            $lines[] = ["Progress: {$progress->done} of {$progress->total} done, {$progress->percent}%{$healthText}", true];
+            $lines[] = ['Progress: '.$progress->words().$healthText, true];
 
             $parts = $plan->parts();
             if ($parts !== []) {

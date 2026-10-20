@@ -38,6 +38,20 @@ final readonly class PlanProgress
     }
 
     /**
+     * How far it is, in words the tutor is told: "2 of 5 done, 35%". Once everything is ticked it says so, because
+     * the percentage stays short of 100 when the sections' weights add up to less than 100 (marks given to no
+     * section can't be earned), and "2 of 2 done, 60%" read as unfinished.
+     */
+    public function words(): string
+    {
+        if ($this->complete()) {
+            return "all {$this->total} done".($this->percent < 100 ? " ({$this->percent}%: the sections' weights add up to less than 100)" : '');
+        }
+
+        return "{$this->done} of {$this->total} done, {$this->percent}%";
+    }
+
+    /**
      * What is left against the time left: "5 left, about 2 a day", "3 left, due in 6 hours", "5 left and the
      * deadline has passed". The tone is ok, tight (more than TIGHT_PER_DAY a day, or more than 3 left on the
      * last day) or late. Null when there is nothing to say: no plan, nothing left, done, or no deadline.

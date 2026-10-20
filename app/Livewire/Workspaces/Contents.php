@@ -1271,7 +1271,7 @@ final class Contents extends Component
             // The module's questions have their own page; here, how many are open and stuck.
             $asked = $this->questions->list($by, $this->workspaceId, $module->id);
             $questions = [
-                'open' => count(array_filter($asked, fn ($q) => $q->status !== 'answered')),
+                'open' => count(array_filter($asked, fn ($q) => $q->open())),
                 'stuck' => count(array_filter($asked, fn ($q) => $q->status === 'stuck')),
             ];
             $placeTopics = array_values(array_filter($topics, fn ($t) => $t->moduleId === $module->id));
@@ -1339,7 +1339,7 @@ final class Contents extends Component
             'inside' => $inside,
             'topicNames' => collect($topics)->pluck('name', 'id')->all(),
             'questions' => [
-                'open' => count(array_filter($asked, fn ($q) => $q->status !== 'answered')),
+                'open' => count(array_filter($asked, fn ($q) => $q->open())),
                 'stuck' => count(array_filter($asked, fn ($q) => $q->status === 'stuck')),
             ],
             'asked' => $asked,

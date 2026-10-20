@@ -22,7 +22,7 @@ final class ModuleTabs
             'files' => $in('files')->whereNull('trashed_at')->count(),
             'notes' => $in('notes')->whereNull('trashed_at')->count(),
             'topics' => $in('topics')->whereNull('retired_at')->count(),
-            'questions' => count(array_filter($this->questions->list($by, $workspaceId, $moduleId), fn (QuestionDetails $q) => $q->status !== 'answered')),
+            'questions' => count(array_filter($this->questions->list($by, $workspaceId, $moduleId), fn (QuestionDetails $q) => $q->open())),
             'sessions' => count($this->sessions->forModule($by, $workspaceId, $moduleId)),
             'classes' => $in('class_sessions')->count(),
         ];

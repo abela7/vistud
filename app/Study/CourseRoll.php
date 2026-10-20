@@ -65,7 +65,7 @@ final readonly class CourseRoll
 
     public function percent(): int
     {
-        return $this->total() === 0 ? 0 : (int) round($this->done() / $this->total() * 100);
+        return Percent::of($this->done(), $this->total());
     }
 
     public function mastered(): int

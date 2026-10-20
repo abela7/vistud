@@ -48,7 +48,7 @@ final readonly class ModuleRoll
 
     public function percent(): int
     {
-        return $this->topics === [] ? 0 : (int) round($this->done() / count($this->topics) * 100);
+        return Percent::of($this->done(), count($this->topics));
     }
 
     /** Whether any topic has been touched. */

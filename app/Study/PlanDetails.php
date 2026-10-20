@@ -180,7 +180,7 @@ final readonly class PlanDetails
         return [
             'done' => count(array_filter($tasks, fn (PlanItem $task) => $this->stateOf($task) === 'done')),
             'total' => count($tasks),
-            'percent' => (int) round($fraction * 100),
+            'percent' => Percent::of($fraction, 1),
             'share' => $share,
             'earned' => $share * $fraction,
         ];
@@ -205,7 +205,7 @@ final readonly class PlanDetails
             $earned += $weights['shares'][$key] * $group['fraction'];
         }
 
-        return new PlanProgress($done, $total, (int) min(100, round($earned / max(100, $weights['given']) * 100)), weighted: $this->weighted());
+        return new PlanProgress($done, $total, Percent::of($earned, max(100, $weights['given'])), weighted: $this->weighted());
     }
 
     /** @return array<string, array{weight: ?int, fraction: float, done: int, total: int}> each section, and '' for the tasks outside them */
@@ -252,7 +252,7 @@ final readonly class PlanDetails
         return [
             'met' => count(array_filter($criteria, fn (PlanItem $c) => $c->state === 'met')),
             'total' => $total,
-            'percent' => (int) round($earned / $sum * 100),
+            'percent' => Percent::of($earned, $sum),
         ];
     }
 
