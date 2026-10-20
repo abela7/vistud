@@ -40,13 +40,13 @@
                             :error="false" :disabled="! $usingRecovery" :autofocus="! $challengeError && $usingRecovery" />
                     </div>
 
-                    <button type="button" class="text-sm font-medium text-accent-contrast underline underline-offset-2 hover:text-accent-hover hover:decoration-2" data-challenge-swap>{{ $swapLabel }}</button>
+                    <button type="button" class="min-h-[44px] inline-flex items-center text-sm font-medium text-accent-contrast underline underline-offset-2 hover:text-accent-hover hover:decoration-2" data-challenge-swap>{{ $swapLabel }}</button>
 
                     <x-button type="submit" variant="primary" size="lg" class="w-full" busy-label="Verifying…">Verify</x-button>
                 </form>
 
                 <p class="border-t border-divider pt-5 text-sm text-fg-muted">
-                    <a href="{{ route('login') }}" class="font-medium">Back to log in</a>
+                    <a href="{{ route('login') }}" class="min-h-[44px] inline-flex items-center font-medium">Back to log in</a>
                 </p>
             </div>
 

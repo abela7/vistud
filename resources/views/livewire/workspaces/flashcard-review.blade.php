@@ -136,7 +136,7 @@
 
             <div class="flex flex-wrap items-center justify-between gap-2 text-sm text-fg-muted">
                 <p class="flex items-center gap-1.5 max-sm:hidden"><x-icon name="keyboard" class="size-4" />Space turns the card over; 1, 2 or 3 answers.</p>
-                <button type="button" class="item-link font-normal" wire:click="editCard">Edit this card</button>
+                <button type="button" class="item-link font-normal min-h-[44px] inline-flex items-center" wire:click="editCard">Edit this card</button>
             </div>
         </div>
     @elseif ($total === 0)

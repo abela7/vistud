@@ -48,10 +48,8 @@
                     <p class="chat-empty-title">Ask me anything about your study</p>
                     <p class="chat-empty-hint">I see all your courses, deadlines and sessions, and what your tutors remember about you.</p>
                 @elseif ($activity ?? null)
-                    <p class="chat-empty-title">{{ $activity->title }}</p>
-                    @if (($pendingReview ?? []) !== [])
-                        <p class="chat-empty-hint">Reading what you uploaded.</p>
-                    @endif
+                    <p class="chat-empty-title">Assignment Companion</p>
+                    <p class="chat-empty-hint">Ask questions about your brief, plan your approach, or check your work against the criteria.</p>
                 @else
                     <p class="chat-empty-title">Ask anything about {{ $onTopic }}</p>
                     <p class="chat-empty-hint">Taught from this topic's notes, files and key points, at your level.</p>
@@ -75,8 +73,8 @@
             </div>
         @elseif ($turns === [])
             <div class="chat-empty" x-show="! live">
-                <p class="font-medium">Say hello, or ask about anything in this course.</p>
-                <p class="text-sm text-fg-muted">The tutor already knows where you stand: your topics, questions, notes and earlier sessions. It looks things up rather than guessing.</p>
+                <p class="font-medium">Say hello, or ask anything about this course.</p>
+                <p class="text-sm text-fg-muted max-sm:hidden">The tutor uses your notes, topics, and earlier sessions to help you study.</p>
                 @if ($open)
                     <ul class="chat-chips" role="list">
                         @foreach ($suggestions as $suggestion)
@@ -239,11 +237,11 @@
                                     <li><span class="chat-file"><x-icon name="circle-check" class="size-4" /><span class="truncate">Marked {{ $updatedItem['kind'] }} “{{ $updatedItem['title'] }}” as {{ $updatedItem['state'] }}</span></span></li>
                                 @endforeach
                                 @foreach ($turn['stages_changed'] ?? [] as $stage)
-                                    <li><span class="chat-file"><x-icon name="arrow-right-circle" class="size-4" /><span class="truncate">Moved to stage: {{ ucfirst((string) ($stage['to'] ?? $stage['stage'] ?? '')) }}</span></span></li>
+                                    <li><span class="chat-file"><x-icon name="arrow-right" class="size-4" /><span class="truncate">Moved to stage: {{ ucfirst((string) ($stage['to'] ?? $stage['stage'] ?? '')) }}</span></span></li>
                                 @endforeach
                                 @foreach ($turn['log_entries'] ?? [] as $log)
                                     <li class="chat-mark" wire:key="log-{{ $i }}-{{ $log['id'] }}">
-                                        <span class="chat-file"><x-icon name="clipboard-list" class="size-4" /><span class="truncate">Logged {{ $log['kind'] }}: {{ $log['text'] }}</span></span>
+                                        <span class="chat-file"><x-icon name="scroll-text" class="size-4" /><span class="truncate">Logged {{ $log['kind'] }}: {{ $log['text'] }}</span></span>
                                         <button type="button" class="chat-file-action" wire:click="undoLog('{{ $log['id'] }}')">Undo<span class="sr-only"> log entry</span></button>
                                     </li>
                                 @endforeach

@@ -82,7 +82,7 @@
     x-on:keydown.window="onKey($event)">
 
     {{-- Top header bar --}}
-    <x-page :title="$activity->title" :back-href="$backUrl" back-to="Assignment" :eyebrow="$eyebrow" :context="$context">
+    <x-page :title="$activity->title" :back-href="$backUrl" back-to="Assignment" :eyebrow="$eyebrow" :context="preg_replace('/^Due\s+Due\b/i', 'Due', $context)">
         <x-slot:menu>
             <button type="button" class="menu-item" x-on:click="$dispatch('clear-chat-confirm')">
                 <x-icon name="rotate-ccw" class="size-4" />Start the chat over
@@ -108,7 +108,7 @@
     </x-page>
 
     @if ($fresh)
-        <div class="guide-fullscreen-offer" x-show="offerFullscreen && ! fullscreen" x-cloak role="status">
+        <div class="guide-fullscreen-offer max-sm:hidden" x-show="offerFullscreen && ! fullscreen" x-cloak role="status">
             <x-icon name="maximize-2" class="size-4 shrink-0 text-fg-muted" />
             <p>Full screen gives this talk more room.</p>
             <button type="button" class="btn btn-primary btn-sm" x-on:click="useFullscreen()">Use full screen</button>
@@ -124,8 +124,8 @@
         </div>
 
         {{-- Desktop Rail --}}
-        <div class="session-rail-backdrop" wire:ignore.self x-show="railOpen" x-cloak x-on:click="railOpen = false" aria-hidden="true"></div>
-        <aside class="session-rail" wire:ignore.self x-show="railOpen" x-cloak x-on:keydown.escape.window="if (! fullscreen && railOpen) railOpen = false" aria-label="Assignment companion details">
+        <div class="session-rail-backdrop max-md:hidden" wire:ignore.self x-show="railOpen" x-cloak x-on:click="railOpen = false" aria-hidden="true"></div>
+        <aside class="session-rail max-md:hidden" wire:ignore.self x-show="railOpen" x-cloak x-on:keydown.escape.window="if (! fullscreen && railOpen) railOpen = false" aria-label="Assignment companion details">
             <div class="session-rail-head" wire:ignore>
                 <span class="text-xs font-semibold text-fg truncate">Assignment companion</span>
                 <button type="button" class="topbar-button size-7" x-on:click="railOpen = false" title="Close details" aria-label="Close details">

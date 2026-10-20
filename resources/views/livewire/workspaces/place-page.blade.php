@@ -743,7 +743,7 @@
                                                     <x-icon :name="$file->icon()" class="size-4" />
                                                 </span>
                                                 <span class="min-w-0 flex-1">
-                                                    <span class="block truncate text-sm font-medium text-fg group-hover:text-accent transition-colors">{{ $file->fileName() }}</span>
+                                                    <span class="block break-words text-sm font-medium text-fg group-hover:text-accent transition-colors">{{ $file->fileName() }}</span>
                                                     <span class="block text-xs text-fg-muted">{{ $file->typeLabel() }} · {{ $file->humanSize() }}</span>
                                                 </span>
                                             </a>
@@ -780,7 +780,7 @@
                                                     <x-icon name="notebook-pen" class="size-4" />
                                                 </span>
                                                 <span class="min-w-0 flex-1">
-                                                    <span class="block truncate text-sm font-medium text-fg group-hover:text-accent transition-colors">{{ $note->title }}</span>
+                                                    <span class="block break-words text-sm font-medium text-fg group-hover:text-accent transition-colors">{{ $note->title }}</span>
                                                     <span class="block text-xs text-fg-muted">{{ \Carbon\CarbonImmutable::parse($note->updatedAt)->diffForHumans() }}</span>
                                                 </span>
                                             </a>

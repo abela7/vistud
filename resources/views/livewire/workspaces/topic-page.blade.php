@@ -208,7 +208,7 @@
                                 @foreach ($topicNotes as $n)
                                     <li class="py-2 flex items-center justify-between gap-2" wire:key="topic-note-{{ $n->id }}">
                                         <div class="min-w-0 flex-1">
-                                            <a href="{{ route('workspaces.notes.show', [$workspaceId, $n->id]) }}" class="font-medium text-fg hover:text-accent transition-colors truncate block" style="text-decoration: none !important;">
+                                            <a href="{{ route('workspaces.notes.show', [$workspaceId, $n->id]) }}" class="font-medium text-fg hover:text-accent transition-colors break-words block" style="text-decoration: none !important;">
                                                 {{ $n->displayTitle() }}
                                             </a>
                                             <span class="text-xs text-fg-muted">{{ \Illuminate\Support\Carbon::parse($n->updatedAt)->diffForHumans() }}</span>
@@ -253,7 +253,7 @@
                                 @foreach ($topicFiles as $f)
                                     <li class="py-2 flex items-center justify-between gap-2" wire:key="topic-file-{{ $f->id }}">
                                         <div class="min-w-0 flex-1">
-                                            <a href="{{ route('workspaces.files.show', [$workspaceId, $f->id]) }}" class="font-medium text-fg hover:text-accent transition-colors truncate block" style="text-decoration: none !important;">
+                                            <a href="{{ route('workspaces.files.show', [$workspaceId, $f->id]) }}" class="font-medium text-fg hover:text-accent transition-colors break-words block" style="text-decoration: none !important;">
                                                 {{ $f->fileName() }}
                                             </a>
                                             <span class="text-xs text-fg-muted">{{ \Illuminate\Support\Number::fileSize($f->size) }}</span>
@@ -384,7 +384,7 @@
                             <li wire:key="reads-note-{{ $n->id }}">
                                 <a href="{{ route('workspaces.notes.show', [$workspaceId, $n->id]) }}" class="topic-page-read">
                                     <x-icon name="notebook-pen" class="size-4 shrink-0" />
-                                    <span class="min-w-0 flex-1 truncate">{{ $n->displayTitle() }}</span>
+                                    <span class="min-w-0 flex-1 break-words">{{ $n->displayTitle() }}</span>
                                     <span class="topic-page-read-kind">Note</span>
                                 </a>
                             </li>
@@ -393,7 +393,7 @@
                             <li wire:key="reads-file-{{ $f->id }}">
                                 <a href="{{ route('workspaces.files.show', [$workspaceId, $f->id]) }}" class="topic-page-read">
                                     <x-icon name="file-text" class="size-4 shrink-0" />
-                                    <span class="min-w-0 flex-1 truncate" title="{{ $f->fileName() }}">{{ $f->fileName() }}</span>
+                                    <span class="min-w-0 flex-1 break-words" title="{{ $f->fileName() }}">{{ $f->fileName() }}</span>
                                     <span class="topic-page-read-kind">{{ \Illuminate\Support\Number::fileSize($f->size) }}</span>
                                 </a>
                             </li>

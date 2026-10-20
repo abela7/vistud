@@ -38,7 +38,7 @@
                             </p>
                         </div>
                         <p class="border-t border-divider pt-5 text-sm text-fg-muted">
-                            Already have an account? <a href="{{ route('login') }}" class="font-medium">Log in</a>
+                            Already have an account? <a href="{{ route('login') }}" class="min-h-[44px] inline-flex items-center font-medium">Log in</a>
                         </p>
                     </div>
 

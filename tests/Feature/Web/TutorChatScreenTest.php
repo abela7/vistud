@@ -71,7 +71,7 @@ class TutorChatScreenTest extends TestCase
     {
         $this->get(route('workspaces.sessions.show', [$this->databases->id, $this->session->id]))->assertOk()->assertSee('Your tutor')->assertSee('Set up your AI first')->assertSee(route('settings', ['part' => 'ai']))->assertDontSee('Another AI');
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
-        $this->chat()->assertSee('Say hello, or ask about anything in this course.')->assertSee('Quiz me on what I should know by now.')->assertSee('fake/tutor · $0.00 of $2.00 this session')->assertDontSee('Keep what the tutor marked');
+        $this->chat()->assertSee('Say hello, or ask anything about this course.')->assertSee('Quiz me on what I should know by now.')->assertSee('fake/tutor · $0.00 of $2.00 this session')->assertDontSee('Keep what the tutor marked');
     }
 
     public function test_a_turn_shows_both_sides_the_look_ups_the_cost_and_the_marks_as_quotes_then_keeps_them(): void

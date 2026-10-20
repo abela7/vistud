@@ -209,7 +209,7 @@
                     @php $secSteps = $plan->steps($sec->id); @endphp
                     <li class="p-2 rounded-lg bg-surface-sunken space-y-1.5" wire:key="rail-sec-{{ $suffix }}-{{ $sec->id }}">
                         <div class="flex items-center justify-between gap-2">
-                            <button type="button" wire:click="cyclePlanItem('{{ $sec->id }}')" class="min-w-0 flex-1 text-left font-medium hover:text-accent truncate">
+                            <button type="button" wire:click="cyclePlanItem('{{ $sec->id }}')" class="min-w-0 flex-1 text-left font-medium hover:text-accent break-words">
                                 {{ $sec->title }}@if ($sec->weight !== null) <span class="text-fg-muted">({{ $sec->weight }}%)</span>@endif
                             </button>
                             <button type="button" wire:click="cyclePlanItem('{{ $sec->id }}')" class="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-surface text-fg-muted shrink-0">
@@ -220,7 +220,7 @@
                             <ul class="space-y-1 pl-2 border-l border-border/60" role="list">
                                 @foreach ($secSteps as $step)
                                     <li class="flex items-center justify-between gap-2" wire:key="rail-step-{{ $suffix }}-{{ $step->id }}">
-                                        <button type="button" wire:click="cyclePlanItem('{{ $step->id }}')" class="min-w-0 flex-1 text-left truncate {{ $step->state === 'done' ? 'line-through text-fg-muted' : 'text-fg' }}">
+                                        <button type="button" wire:click="cyclePlanItem('{{ $step->id }}')" class="min-w-0 flex-1 text-left break-words {{ $step->state === 'done' ? 'line-through text-fg-muted' : 'text-fg' }}">
                                             {{ $step->title }}
                                         </button>
                                         <button type="button" wire:click="cyclePlanItem('{{ $step->id }}')" class="text-[10px] uppercase font-semibold text-fg-muted shrink-0">
@@ -234,7 +234,7 @@
                 @endforeach
                 @foreach ($standaloneSteps ?? [] as $step)
                     <li class="flex items-center justify-between p-1.5 rounded bg-surface-sunken gap-2" wire:key="rail-step-free-{{ $suffix }}-{{ $step->id }}">
-                        <button type="button" wire:click="cyclePlanItem('{{ $step->id }}')" class="min-w-0 flex-1 text-left truncate {{ $step->state === 'done' ? 'line-through text-fg-muted' : 'text-fg' }}">
+                        <button type="button" wire:click="cyclePlanItem('{{ $step->id }}')" class="min-w-0 flex-1 text-left break-words {{ $step->state === 'done' ? 'line-through text-fg-muted' : 'text-fg' }}">
                             {{ $step->title }}
                         </button>
                         <button type="button" wire:click="cyclePlanItem('{{ $step->id }}')" class="text-[10px] uppercase font-semibold text-fg-muted shrink-0">
@@ -253,7 +253,7 @@
                 <ul class="space-y-1" role="list">
                     @foreach ($criteria as $criterion)
                         <li class="flex items-center justify-between p-1.5 rounded bg-surface-sunken gap-2" wire:key="rail-crit-{{ $suffix }}-{{ $criterion->id }}">
-                            <button type="button" wire:click="cyclePlanItem('{{ $criterion->id }}')" class="min-w-0 flex-1 text-left truncate {{ $criterion->state === 'met' ? 'text-success font-medium' : 'text-fg' }}">
+                            <button type="button" wire:click="cyclePlanItem('{{ $criterion->id }}')" class="min-w-0 flex-1 text-left break-words {{ $criterion->state === 'met' ? 'text-success font-medium' : 'text-fg' }}">
                                 {{ $criterion->title }}@if ($criterion->weight !== null) <span class="text-fg-muted">({{ $criterion->weight }}%)</span>@endif
                             </button>
                             <button type="button" wire:click="cyclePlanItem('{{ $criterion->id }}')" class="text-[10px] uppercase font-semibold text-fg-muted shrink-0">
@@ -271,9 +271,9 @@
                 <ul class="space-y-1" role="list">
                     @foreach ($assignmentNotes as $note)
                         <li>
-                            <a href="{{ route('workspaces.notes.show', [$workspaceId, $note->id]) }}" class="flex items-center gap-1.5 p-1.5 rounded bg-surface-sunken hover:text-accent truncate">
+                            <a href="{{ route('workspaces.notes.show', [$workspaceId, $note->id]) }}" class="flex items-center gap-1.5 p-1.5 rounded bg-surface-sunken hover:text-accent">
                                 <x-icon name="notebook-pen" class="size-3.5 shrink-0" />
-                                <span class="truncate">{{ $note->displayTitle() }}</span>
+                                <span class="break-words">{{ $note->displayTitle() }}</span>
                             </a>
                         </li>
                     @endforeach

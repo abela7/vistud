@@ -52,7 +52,7 @@
                             <x-icon name="sparkles" class="size-5" />
                         </div>
                         <p class="text-sm font-semibold text-fg">Ask anything about this course</p>
-                        <p class="text-xs text-fg-muted leading-relaxed">Ask about your course: "What did I find hard in Module 3?", "Which topics are not started?". It looks at your topics, questions, notes and files, and changes nothing.</p>
+                        <p class="text-xs text-fg-muted leading-relaxed">Quick answers from your course materials and notes without changing your progress.</p>
                         <div class="ask-quick-chips" role="list" aria-label="Suggested questions">
                             <button type="button" class="study-map-chip" wire:click="quickAsk('What do I find hard in this course?')" wire:loading.attr="disabled">
                                 <x-icon name="circle-alert" class="size-3.5 text-warning shrink-0" />

@@ -30,7 +30,7 @@
                 </form>
 
                 <p class="border-t border-divider pt-5 text-sm text-fg-muted">
-                    <a href="{{ route('login') }}" class="font-medium">Back to log in</a>
+                    <a href="{{ route('login') }}" class="min-h-[44px] inline-flex items-center font-medium">Back to log in</a>
                 </p>
             </div>
 

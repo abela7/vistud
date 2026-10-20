@@ -67,7 +67,7 @@
         <div class="empty-place">
             <span class="item-icon" aria-hidden="true"><x-icon name="layers" class="size-5" /></span>
             <p class="font-medium">No modules yet</p>
-            <p class="text-sm text-fg-muted">A module is any part of the course you study together: a week, a chapter, a unit or a lab block. Its notes, files, topics and sessions live in it. The AI reads your course and sets each one up with you.</p>
+            <p class="text-sm text-fg-muted">Add modules to organize your lectures, notes, and topics.</p>
             <div class="flex flex-wrap items-center justify-center gap-2">
                 <a href="{{ route('workspaces.guide', [$workspaceId, 'for' => 'modules']) }}" class="btn btn-primary"><x-icon name="sparkles" class="size-4" />Add modules with the AI</a>
                 <x-button icon="plus" wire:click="newModule">Add one myself</x-button>

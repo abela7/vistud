@@ -52,7 +52,7 @@
                 @endforeach
             </ol>
             @if ($plugins !== [])
-                <p class="guide-steps-note"><x-icon name="puzzle" class="size-4 shrink-0" /><span>New sessions start with {{ implode(' and ', array_filter($plugins)) }}.</span></p>
+                <p class="guide-steps-note max-sm:hidden"><x-icon name="puzzle" class="size-4 shrink-0" /><span>New sessions start with {{ implode(' and ', array_filter($plugins)) }}.</span></p>
             @endif
         </nav>
     @endif
@@ -67,7 +67,7 @@
         </div>
 
         @if ($fresh)
-            <div class="guide-fullscreen-offer" x-show="offerFullscreen && ! fullscreen" x-cloak role="status">
+            <div class="guide-fullscreen-offer max-sm:hidden" x-show="offerFullscreen && ! fullscreen" x-cloak role="status">
                 <x-icon name="maximize-2" class="size-4 shrink-0 text-fg-muted" />
                 <p>Full screen gives this talk more room.</p>
                 <button type="button" class="btn btn-primary btn-sm" x-on:click="useFullscreen()">Use full screen</button>

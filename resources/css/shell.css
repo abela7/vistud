@@ -771,9 +771,14 @@
         padding: 0.5rem 0.75rem 0.5rem 1rem;
     }
 
-    /* Touch: 44 px targets (DESIGN.md §6.2). */
-    @media (pointer: coarse) {
+    /* Touch & narrow screens: 44 px targets (DESIGN.md §6.2). */
+    @media (max-width: 639.98px), (pointer: coarse) {
         .topbar-button {
+            width: 2.75rem;
+            height: 2.75rem;
+        }
+
+        .session-pill .topbar-button {
             width: 2.75rem;
             height: 2.75rem;
         }

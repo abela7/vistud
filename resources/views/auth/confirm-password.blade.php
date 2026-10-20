@@ -24,7 +24,7 @@
                 </form>
 
                 <p class="border-t border-divider pt-5 text-sm text-fg-muted">
-                    <a href="{{ route('home') }}" class="font-medium">Cancel</a>
+                    <a href="{{ route('home') }}" class="min-h-[44px] inline-flex items-center font-medium">Cancel</a>
                 </p>
             </div>
 

@@ -927,7 +927,7 @@
             <button type="button" class="session-icon-btn" wire:ignore x-bind:class="{ 'is-active': railOpen }" x-on:click="toggleTopics()" x-bind:aria-pressed="railOpen.toString()" title="Toggle sidebar (topics, tutor controls &amp; material)" aria-label="Toggle sidebar">
                 <x-icon name="list-checks" class="size-3.5" />
             </button>
-            <button type="button" class="session-icon-btn" wire:ignore x-bind:class="{ 'is-active': fullscreen }" x-on:click="fullscreen = ! fullscreen" x-bind:aria-pressed="fullscreen.toString()" x-bind:title="fullscreen ? 'Exit full screen' : 'Full screen mode'" aria-label="Toggle full screen">
+            <button type="button" class="session-icon-btn max-sm:hidden" wire:ignore x-bind:class="{ 'is-active': fullscreen }" x-on:click="fullscreen = ! fullscreen" x-bind:aria-pressed="fullscreen.toString()" x-bind:title="fullscreen ? 'Exit full screen' : 'Full screen mode'" aria-label="Toggle full screen">
                 <x-icon name="maximize-2" class="size-3.5" x-show="! fullscreen" />
                 <x-icon name="minimize-2" class="size-3.5" x-show="fullscreen" x-cloak />
             </button>

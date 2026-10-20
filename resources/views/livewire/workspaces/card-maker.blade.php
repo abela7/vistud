@@ -35,7 +35,7 @@
 
                 <div class="space-y-5 px-5 pt-2">
                     @if ($step === 'prompt')
-                        <p class="text-fg-muted">Any AI can write your cards: ChatGPT, Gemini, Claude or another. Copy the prompt into it, then paste its reply below. You choose which cards to keep.</p>
+                        <p class="text-sm text-fg-muted">Copy this prompt into any AI, then paste its reply below to choose which cards to keep.</p>
 
                         <div class="grid gap-3 sm:grid-cols-3">
                             <div class="field">
