@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Identity\PrincipalFactory;
+use App\Platform\Files\UploadTemps;
 use App\Study\AssignmentReading;
 use App\Study\FileReading;
 use App\Study\Files;
@@ -49,7 +50,7 @@ class FileController
         [$file, $type, $placeId] = DB::transaction(function () use ($by, $type, $placeId, $request, $upload) {
             [$type, $placeId] = $this->folders->ensurePath($by, $type, $placeId, self::folderPath($request->input('folder')));
 
-            return [$this->files->upload($by, $type, $placeId, (string) $upload->getRealPath(), $upload->getClientOriginalName()), $type, $placeId];
+            return [UploadTemps::using($upload, fn ($path) => $this->files->upload($by, $type, $placeId, $path, $upload->getClientOriginalName())), $type, $placeId];
         });
 
         // A file in a module is read by the reader at once, if the student's settings say so (docs/specs/vistud-2-blueprint.md §3.6.6).

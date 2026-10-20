@@ -5,12 +5,13 @@ namespace App\Study;
 use App\Jobs\MakeFilePreview;
 use App\Jobs\StoredFileScope;
 use App\Platform\Access\Guard;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Files\PrivateFiles;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
@@ -18,7 +19,7 @@ use Throwable;
 
 /**
  * Word, PowerPoint and Excel files shown in the browser (the owner's review, 2026-09-30). LibreOffice turns the
- * file into a PDF (a few seconds), and the PDF is kept beside it on the files disk, so the browser's own PDF viewer
+ * file into a PDF (a few seconds), encrypted on the disposable derived disk, so the browser's own PDF viewer
  * shows it. The PDF is made on the queue's worker (App\Jobs\MakeFilePreview), as soon as the file is uploaded or
  * when its page first asks: never inside a request, so no page waits for LibreOffice. LibreOffice runs with a fresh profile for each file, with
  * macros off and links never updated, so a document can't run anything or pull in anything from outside; the
@@ -95,7 +96,7 @@ final class FilePreviews
         if (! self::converts($file)) {
             return null;
         }
-        $disk = Files::disk();
+        $disk = PrivateFiles::disk(self::key($key));
         $pdfKey = self::key($key);
         if ($disk->exists($pdfKey)) {
             return $pdfKey;
@@ -132,9 +133,10 @@ final class FilePreviews
      * isn't tried on every visit). Otherwise the seconds to wait before trying again: every conversion slot is taken,
      * or LibreOffice couldn't be run at all, which is not the file's fault and is logged.
      */
-    public static function make(string $id, string $key, string $extension): ?int
+    public static function make(string $id, string $key, string $extension, ?LearnerScope $scope = null): ?int
     {
-        $disk = Files::disk();
+        $scope ??= StoredFileScope::check(StoredFileScope::learnerId($key), $id, $key);
+        $disk = PrivateFiles::disk(self::key($key));
         $pdfKey = self::key($key);
         // One conversion of a file at a time.
         $lock = Cache::lock("vistud:preview:{$pdfKey}", self::PREVIEW_SECONDS + 30);
@@ -149,19 +151,16 @@ final class FilePreviews
                 fn (string $target) => ! $disk->exists($target) && ! $disk->exists("{$target}.failed"),
                 ARRAY_FILTER_USE_KEY,
             );
-            if ($wanted === [] || ! $disk->exists($key) || ($converter = self::converter()) === null) {
+            if ($wanted === [] || ! Files::disk()->exists($key) || ($converter = self::converter()) === null) {
                 return null;
             }
 
-            $work = storage_path('app/private/previews-work/'.Str::random(20));
+            $temp = PrivateFiles::temporary($scope, $key);
+            $work = $temp->path;
             File::ensureDirectoryExists("{$work}/in");
             try {
                 $source = "{$work}/in/source.{$extension}";
-                $in = $disk->readStream($key);
-                $out = fopen($source, 'wb');
-                stream_copy_to_stream($in, $out);
-                fclose($in);
-                fclose($out);
+                File::move($work.'/input', $source);
 
                 foreach ($wanted as $target => $format) {
                     $problem = null;
@@ -173,8 +172,11 @@ final class FilePreviews
                     // A PDF starts %PDF-; a .docx, .pptx or .xlsx is a ZIP file, which starts PK.
                     if ($made !== null && str_starts_with((string) file_get_contents($made, length: 5), $target === $pdfKey ? '%PDF-' : 'PK')) {
                         $stream = fopen($made, 'rb');
-                        $disk->writeStream($target, $stream);
-                        fclose($stream);
+                        try {
+                            PrivateFiles::write($scope, $target, $stream);
+                        } finally {
+                            fclose($stream);
+                        }
                         @unlink($made);
 
                         continue;
@@ -185,18 +187,18 @@ final class FilePreviews
                     }
                     // Not tried again on every visit: a file LibreOffice can't read won't read next time either.
                     $problem ??= 'nothing made';
-                    Log::warning('A file preview could not be made.', ['file' => $id, 'made' => pathinfo($target, PATHINFO_EXTENSION), 'problem' => Str::limit($problem, 500)]);
-                    $disk->put("{$target}.failed", Str::limit($problem, 500));
+                    Log::warning('A file preview could not be made.', ['file' => $id, 'made' => pathinfo($target, PATHINFO_EXTENSION), 'code' => 'conversion_failed']);
+                    $disk->put("{$target}.failed", 'conversion_failed');
                 }
 
                 return null;
             } catch (Throwable $e) {
                 // LibreOffice couldn't be started, or a file couldn't be written: this computer's fault, not the file's.
-                Log::warning('A file preview could not be made; it is tried again shortly.', ['file' => $id, 'problem' => Str::limit($e->getMessage(), 500)]);
+                Log::warning('A file preview could not be made; it is tried again shortly.', ['file' => $id, 'code' => 'conversion_unavailable']);
 
                 return 30;
             } finally {
-                File::deleteDirectory($work);
+                $temp->close();
             }
         } finally {
             $lock->release();
@@ -218,7 +220,7 @@ final class FilePreviews
         if ($modern === null) {
             return null;
         }
-        $disk = Files::disk();
+        $disk = PrivateFiles::disk(self::key($key));
         $target = self::modernKey($key, $modern[0]);
         if (! $disk->exists($target) && ! $disk->exists("{$target}.failed") && self::converter() !== null) {
             // Queued once for a file (the job is unique); with the sync queue it has been made by now.
@@ -249,24 +251,28 @@ final class FilePreviews
     }
 
     /**
-     * The previews that could not be made, newest first: what LibreOffice said, by the key of the note beside the
+     * The previews that could not be made, newest first: a fixed code, by the key of the marker beside the
      * file. For `php artisan vistud:doctor` and `vistud:previews:retry`.
      *
      * @return array<string, string>
      */
     public static function failures(): array
     {
-        $disk = Files::disk();
-        $failed = array_filter($disk->allFiles('learners'), fn (string $path) => str_ends_with($path, '.pdf.failed') && str_contains($path, '/previews/'));
-        usort($failed, fn ($a, $b) => $disk->lastModified($b) <=> $disk->lastModified($a));
+        $disk = PrivateFiles::disk('learners/previews/diagnostics');
+        // Old failure files may contain tool output. Enumerate/delete them, never
+        // read or print them, including those left on the pre-S3 source disk.
+        $failed = array_values(array_unique(array_filter([...$disk->allFiles('learners'), ...Files::disk()->allFiles('learners')], fn (string $path) => str_ends_with($path, '.pdf.failed') && str_contains($path, '/previews/'))));
+        $modified = fn ($path) => $disk->exists($path) ? $disk->lastModified($path) : Files::disk()->lastModified($path);
+        usort($failed, fn ($a, $b) => $modified($b) <=> $modified($a));
 
-        return array_combine($failed, array_map(fn ($path) => trim((string) $disk->get($path)), $failed)) ?: [];
+        return array_fill_keys($failed, 'conversion_failed');
     }
 
     /** Forgets every preview that could not be made, so each is tried again when its file is next opened. How many. */
     public static function retryFailed(): int
     {
         $failed = array_keys(self::failures());
+        PrivateFiles::disk('learners/previews/diagnostics')->delete($failed);
         Files::disk()->delete($failed);
 
         return count($failed);
@@ -321,6 +327,7 @@ final class FilePreviews
     private static function run(string $converter, string $work, string $source, string $format, ?string $inputFilter, ?string &$problem, int $timeoutSeconds): ?string
     {
         File::ensureDirectoryExists("{$work}/out");
+        File::ensureDirectoryExists("{$work}/tmp");
         File::ensureDirectoryExists("{$work}/profile/user");
         file_put_contents("{$work}/profile/user/registrymodifications.xcu", self::settings());
 
@@ -329,7 +336,7 @@ final class FilePreviews
             '--headless', '--norestore', '--nolockcheck', '--nodefault', '--nologo',
             ...($inputFilter === null ? [] : ["--infilter={$inputFilter}"]),
             '--convert-to', $format, '--outdir', "{$work}/out", $source,
-        ], null, PHP_OS_FAMILY === 'Windows' ? null : ['HOME' => $work]);
+        ], null, ['HOME' => $work, 'TMPDIR' => $work.'/tmp', 'TMP' => $work.'/tmp', 'TEMP' => $work.'/tmp']);
         $process->setTimeout($timeoutSeconds);
         $process->run();
 
@@ -350,6 +357,7 @@ final class FilePreviews
             $keys[] = self::modernKey($storageKey, $extension);
             $keys[] = self::modernKey($storageKey, $extension).'.failed';
         }
+        PrivateFiles::disk(self::key($storageKey))->delete($keys);
         Files::disk()->delete($keys);
     }
 

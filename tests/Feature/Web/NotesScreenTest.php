@@ -302,7 +302,7 @@ class NotesScreenTest extends TestCase
         $this->assertStringContainsString('no-store', (string) $markdown->headers->get('Cache-Control'));
         $this->assertSame(
             "# Mitosis: a summary / notes\n\n## Phases\n\nEnergy **matters**: \$E = mc^2\$.\n\n- [x] Prophase\n\n> [!THEOREM]\n> Cells divide.\n\n\$\$\n\\frac{n(n+1)}{2}\n\$\$\n",
-            $markdown->getContent(),
+            $markdown->streamedContent(),
         );
 
         // Plain text: the same words for Notepad, without markers.
@@ -310,7 +310,7 @@ class NotesScreenTest extends TestCase
             ->assertOk()
             ->assertHeader('Content-Type', 'text/plain; charset=utf-8')
             ->assertHeader('Content-Disposition', 'attachment; filename="Mitosis a summary notes.txt"')
-            ->assertContent("Mitosis: a summary / notes\n\nPhases\n\nEnergy matters: E = mc^2.\n\n- [x] Prophase\n\nTheorem:\nCells divide.\n\n\\frac{n(n+1)}{2}\n");
+            ->assertStreamedContent("Mitosis: a summary / notes\n\nPhases\n\nEnergy matters: E = mc^2.\n\n- [x] Prophase\n\nTheorem:\nCells divide.\n\n\\frac{n(n+1)}{2}\n");
 
         // A title with letters outside ASCII is kept in the file name, with an ASCII one for older browsers; no title is "Untitled note".
         $accents = $notes->create($by, 'workspace', $this->biology->id, 'Résumé — cellules');
@@ -319,7 +319,7 @@ class NotesScreenTest extends TestCase
         $this->assertStringContainsString("filename*=utf-8''R%C3%A9sum%C3%A9%20", $disposition);
         $untitled = $notes->create($by, 'workspace', $this->biology->id);
         $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $untitled->id, 'txt']))
-            ->assertOk()->assertHeader('Content-Disposition', 'attachment; filename="Untitled note.txt"')->assertContent("Untitled note\n");
+            ->assertOk()->assertHeader('Content-Disposition', 'attachment; filename="Untitled note.txt"')->assertStreamedContent("Untitled note\n");
 
         // Only the owner's note, in that workspace, in one of its formats.
         $bob = $this->student();
@@ -362,13 +362,13 @@ class NotesScreenTest extends TestCase
 
         $pdf = $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $note->id, 'pdf']))
             ->assertOk()->assertHeader('Content-Type', 'application/pdf')->assertHeader('Content-Disposition', 'attachment; filename="Kernel notes.pdf"');
-        $this->assertStringStartsWith('%PDF-', $pdf->getContent());
-        $this->assertMatchesRegularExpression('~/Subtype\s*/Image~', $pdf->getContent());
+        $this->assertStringStartsWith('%PDF-', $pdf->streamedContent());
+        $this->assertMatchesRegularExpression('~/Subtype\s*/Image~', $pdf->streamedContent());
 
         $word = $this->actingAs($this->ada)->get(route('workspaces.notes.export', [$this->biology->id, $note->id, 'docx']))
             ->assertOk()->assertHeader('Content-Disposition', 'attachment; filename="Kernel notes.docx"');
         $zip = tempnam(sys_get_temp_dir(), 'docx');
-        file_put_contents($zip, $word->getContent());
+        file_put_contents($zip, $word->streamedContent());
         $archive = new \ZipArchive;
         $archive->open($zip);
         $this->assertStringContainsString('System calls cross into the kernel.', (string) $archive->getFromName('word/document.xml'));

@@ -2,8 +2,11 @@
 
 namespace App\Engine;
 
+use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\AppError;
+use App\Platform\Files\PrivateFiles;
+use App\Platform\Files\TempWorkspace;
 use App\Study\Files;
 use App\Study\FileText;
 use App\Study\FileTexts;
@@ -161,7 +164,7 @@ final class Attachments
     {
         try {
             [$file, $key] = $this->files->content($by, $id);
-            $bytes = (string) Files::disk()->get($key);
+            $bytes = PrivateFiles::bytes(Guard::learner($by), $key, Files::maxBytes());
         } catch (Throwable) {
             return null;
         }
@@ -232,10 +235,8 @@ final class Attachments
      */
     private static function officeText(string $bytes, string $extension, int $maxChars): string
     {
-        $temp = tempnam(sys_get_temp_dir(), 'vistud-office-');
-        if ($temp === false) {
-            return '';
-        }
+        $work = new TempWorkspace;
+        $temp = $work->path.'/input';
         try {
             file_put_contents($temp, $bytes);
             $read = match ($extension) {
@@ -246,7 +247,7 @@ final class Attachments
         } catch (Throwable) {
             return '';
         } finally {
-            @unlink($temp);
+            $work->close();
         }
         $blocks = [];
         foreach ($read->pages as $i => $page) {

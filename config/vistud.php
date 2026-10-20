@@ -40,6 +40,8 @@ return [
         // Where uploaded files are kept: a private disk, never served
         // directly (docs/specs/workspaces.md step 4).
         'disk' => env('VISTUD_FILES_DISK', 'local'),
+        'derived_disk' => env('VISTUD_DERIVED_DISK', 'derived'),
+        'temp_root' => env('VISTUD_TEMP_ROOT', sys_get_temp_dir().'/vistud-'.substr(hash('sha256', base_path()), 0, 12)),
         // The largest file a student can upload. PHP's upload_max_filesize
         // and post_max_size must allow it too; the lower limit applies.
         'max_bytes' => (int) env('VISTUD_FILES_MAX_BYTES', 25 * 1024 * 1024),

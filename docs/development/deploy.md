@@ -141,6 +141,26 @@ Abel's study history is in the local MySQL and `storage/`. 2FA secrets, recovery
 5. Check before cut-over: signing in with 2FA works; Settings › AI › the key's "test" passes; `curl -i -X POST https://vistud.app/mcp` answers **401** with a `WWW-Authenticate` header naming `https://vistud.app/.well-known/oauth-protected-resource/mcp`.
 6. From then on, study on production only. The local copy is for development, with seeded or synthetic data.
 
+### Private files (S3a): preparation only
+
+S3a changes new uploads, note images and derived previews to the
+[binary file format](../architecture/private-file-format.md). It deliberately
+cannot read legacy plaintext. **Do not deploy/reopen this intermediate code on
+Abel's existing files.** S3b must first deliver and validate the combined offline
+file conversion, resume and rollback procedure. Its inventory must cover both
+halves, including old preview locations and upload/digest fingerprints; see
+[the S3a handoff](../handoff/second-learner-S3a.md). No file conversion command
+exists in S3a, and no local deployment has been performed.
+
+Before the later combined release, configure private source and disposable
+derived disks, and configure memory-backed processing/upload/request temp paths
+for FPM, CLI workers, the scheduler and nginx as described in
+[operations.md](operations.md#private-file-storage-and-temporary-bytes-s3a).
+PHP must have OpenSSL with AES-256-GCM. Keep source files/note images in matching
+content/key backups; exclude derived files and all processing/upload temps.
+Do not use the generic migration rollback below for a partially converted file
+store. Stop writers and use S3b's verified recovery procedure instead.
+
 ## A release
 
 Run on the server, as the deploy user:

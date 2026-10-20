@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api\V1;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Guard;
 use App\Platform\Errors\NotFound;
+use App\Platform\Files\PrivateFileResponse;
+use App\Platform\Files\PrivateFiles;
+use App\Platform\Files\UploadTemps;
 use App\Platform\Ids;
-use App\Study\Files;
 use App\Study\Input;
 use App\Study\NoteImages;
 use Illuminate\Http\JsonResponse;
@@ -45,9 +47,10 @@ class NoteImageController
         $id = Ids::new();
         $stream = fopen($path, 'rb');
         try {
-            Files::disk()->writeStream(NoteImages::key($scope->learnerId, $id, NoteImages::TYPES[$type][1]), $stream) ?: throw new \RuntimeException('The picture could not be stored.');
+            PrivateFiles::write($scope, NoteImages::key($scope->learnerId, $id, NoteImages::TYPES[$type][1]), $stream);
         } finally {
             fclose($stream);
+            UploadTemps::discard([$file]);
         }
 
         return response()->json(['id' => $id, 'url' => route('notes.images.show', $id)], 201);
@@ -60,13 +63,13 @@ class NoteImageController
         if ($found !== null) {
             [$key, $mime, $extension] = $found;
 
-            return Files::disk()->response($key, "{$id}.{$extension}", [
+            return PrivateFileResponse::make($request, PrivateFiles::read($scope, $key), "{$id}.{$extension}", [
                 'Content-Type' => $mime,
                 'X-Content-Type-Options' => 'nosniff',
                 'Cache-Control' => 'private, max-age=604800, immutable',
                 'Cross-Origin-Resource-Policy' => 'same-origin',
                 'Content-Security-Policy' => "default-src 'none'; sandbox",
-            ], 'inline');
+            ]);
         }
 
         throw new NotFound;

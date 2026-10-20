@@ -9,7 +9,7 @@ return [
     // Uploads wait here until App\Study\Files checks and stores them. The
     // size limit matches vistud.files.max_bytes (in kilobytes).
     'temporary_file_upload' => [
-        'disk' => 'local',
+        'disk' => 'temporary',
         'rules' => ['required', 'file', 'max:25600'],
         'directory' => 'livewire-tmp',
         'middleware' => null,

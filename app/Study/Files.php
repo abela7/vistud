@@ -10,6 +10,7 @@ use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\Gone;
 use App\Platform\Errors\NotFound;
+use App\Platform\Files\PrivateFiles;
 use App\Platform\Ids;
 use App\Platform\Uploads\UploadLimits;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -88,7 +89,7 @@ final class Files
             // Tried up to three times: the quota's locking read takes the gap after the learner's files, which a learner
             // whose id comes next takes too, so two first uploads at once can deadlock; the one MySQL rolls back runs
             // again (writing the same key again is harmless).
-            DB::transaction(function () use ($scope, $placeType, $placeId, $path, $id, $key, $disk, $name, $extension, $kind, $mime, $size) {
+            DB::transaction(function () use ($scope, $placeType, $placeId, $path, $id, $key, $name, $extension, $kind, $mime, $size) {
                 [$workspaceId, $moduleId, $folderId] = Input::place($scope, $placeType, $placeId);
                 $quota = (int) config('vistud.files.quota_bytes');
                 // One quota for files and class recordings alike (App\Study\ClassRecordings::withinQuota counts both too).
@@ -100,14 +101,14 @@ final class Files
 
                 $stream = fopen($path, 'rb');
                 try {
-                    $disk->writeStream($key, $stream) ?: throw new \RuntimeException('The file could not be stored.');
+                    $stored = PrivateFiles::write($scope, $key, $stream);
                 } finally {
                     fclose($stream);
                 }
                 LearnerTables::insert($scope, 'files', [
                     'id' => $id, 'workspace_id' => $workspaceId, 'module_id' => $moduleId, 'folder_id' => $folderId,
                     'name' => $name, 'extension' => $extension, 'kind' => $kind, 'mime' => $mime, 'size' => $size,
-                    'sha256' => hash_file('sha256', $path), 'storage_key' => $key,
+                    'sha256' => $stored['fingerprint'], 'storage_key' => $key,
                     'position' => $this->nextPosition($scope, $workspaceId, $moduleId, $folderId),
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
@@ -271,9 +272,15 @@ final class Files
         if ($file->kind !== 'text') {
             return null;
         }
-        $stream = self::disk()->readStream($key);
-        $text = (string) fread($stream, $bytes);
-        fclose($stream);
+        $reader = PrivateFiles::read(Guard::learner($by), $key);
+        try {
+            $text = '';
+            foreach ($reader->chunks(0, min($bytes, $reader->size)) as $chunk) {
+                $text .= $chunk;
+            }
+        } finally {
+            $reader->close();
+        }
 
         // Cut at a whole character.
         return mb_strcut($text, 0, strlen($text), 'UTF-8');

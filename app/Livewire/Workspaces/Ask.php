@@ -10,6 +10,8 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\AppError;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
+use App\Platform\Files\UploadTemps;
+use App\Study\Files;
 use App\Study\FileTypes;
 use App\Study\Folders;
 use App\Study\Sessions;
@@ -160,44 +162,46 @@ final class Ask extends Component
         $pictures = [];
         $documents = [];
 
-        foreach ($files as $file) {
-            if (! $file instanceof UploadedFile) {
-                continue;
-            }
-            $name = mb_scrub($file->getClientOriginalName());
-            $ext = strtolower($file->getClientOriginalExtension());
-            $bytes = (string) file_get_contents($file->getRealPath());
-            $isImage = in_array($ext, ['png', 'jpg', 'jpeg', 'gif', 'webp'], true);
+        try {
+            foreach ($files as $file) {
+                if (! $file instanceof UploadedFile) {
+                    continue;
+                }
+                $name = mb_scrub($file->getClientOriginalName());
+                $ext = strtolower($file->getClientOriginalExtension());
+                $bytes = UploadTemps::bytes($file, Files::maxBytes());
+                $isImage = in_array($ext, ['png', 'jpg', 'jpeg', 'gif', 'webp'], true);
 
-            if ($isImage) {
-                $mime = self::imageMime($bytes) ?: ('image/'.($ext === 'jpg' ? 'jpeg' : $ext));
-                $dataUrl = Attachments::shrink($bytes, $mime);
-                $pictures[] = [
-                    'name' => $name,
-                    'bytes' => $bytes,
-                    'mime' => $mime,
-                    'url' => $dataUrl,
-                ];
-                $attachedLog[] = [
-                    'kind' => 'image',
-                    'name' => $name,
-                    'url' => $dataUrl,
-                ];
-            } else {
-                $documents[] = [
-                    'name' => $name,
-                    'bytes' => $bytes,
-                    'extension' => $ext,
-                ];
-                $attachedLog[] = [
-                    'kind' => 'file',
-                    'name' => $name,
-                    'extension' => $ext,
-                ];
+                if ($isImage) {
+                    $mime = self::imageMime($bytes) ?: ('image/'.($ext === 'jpg' ? 'jpeg' : $ext));
+                    $dataUrl = Attachments::shrink($bytes, $mime);
+                    $pictures[] = [
+                        'name' => $name,
+                        'bytes' => $bytes,
+                        'mime' => $mime,
+                        'url' => $dataUrl,
+                    ];
+                    $attachedLog[] = [
+                        'kind' => 'image',
+                        'name' => $name,
+                        'url' => $dataUrl,
+                    ];
+                } else {
+                    $documents[] = [
+                        'name' => $name,
+                        'bytes' => $bytes,
+                        'extension' => $ext,
+                    ];
+                    $attachedLog[] = [
+                        'kind' => 'file',
+                        'name' => $name,
+                        'extension' => $ext,
+                    ];
+                }
             }
-            if (method_exists($file, 'delete')) {
-                $file->delete();
-            }
+        } finally {
+            UploadTemps::discard($files);
+            $this->uploads = [];
         }
 
         $entry = ['from' => 'you', 'text' => $words];

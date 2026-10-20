@@ -12,6 +12,7 @@ use App\Platform\Errors\AppError;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Platform\Files\UploadTemps;
 use App\Study\Activities;
 use App\Study\CourseProfiles;
 use App\Study\CourseTypes;
@@ -168,7 +169,11 @@ final class CourseSetup extends Component
         }
         try {
             if ($this->file !== null) {
-                $stored = $this->files->upload($by, 'workspace', $this->workspaceId, $this->file->getRealPath(), $this->file->getClientOriginalName());
+                try {
+                    $stored = UploadTemps::using($this->file, fn ($path) => $this->files->upload($by, 'workspace', $this->workspaceId, $path, $this->file->getClientOriginalName()));
+                } finally {
+                    $this->file = null;
+                }
                 $this->profiles->setSyllabus($by, $this->workspaceId, $stored->id, null);
             } else {
                 $this->profiles->setSyllabus($by, $this->workspaceId, null, $this->syllabusText);

@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Identity\PrincipalFactory;
+use App\Platform\Access\Guard;
+use App\Platform\Files\PrivateFileResponse;
+use App\Platform\Files\PrivateFiles;
 use App\Study\FilePreviews;
 use App\Study\Files;
 use Illuminate\Http\Request;
@@ -45,6 +48,6 @@ class FilePreviewController
             ]);
         }
 
-        return Files::disk()->response($key, "{$details->name}.pdf", $headers + ['Content-Type' => 'application/pdf'], 'inline');
+        return PrivateFileResponse::make($request, PrivateFiles::read(Guard::learner($by), $key), "{$details->name}.pdf", $headers + ['Content-Type' => 'application/pdf']);
     }
 }

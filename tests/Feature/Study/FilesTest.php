@@ -8,6 +8,8 @@ use App\Platform\Errors\Conflict;
 use App\Platform\Errors\Gone;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Platform\Files\FileCipher;
+use App\Platform\Files\PrivateFiles;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
 use App\Study\FileDetails;
@@ -72,7 +74,8 @@ class FilesTest extends TestCase
         // Stored under learners/{learner}/files/{id}: never the uploaded name, never public.
         [$file, $key] = $this->files->content($this->by, $kept[0]->id);
         $this->assertSame("learners/{$this->by->learnerId}/files/{$file->id}", $key);
-        $this->assertSame($this->pdf(), Storage::disk('local')->get($key));
+        $this->assertStringStartsWith(FileCipher::MAGIC, Storage::disk('local')->get($key));
+        $this->assertSame($this->pdf(), PrivateFiles::bytes(LearnerScope::of($this->by), $key, Files::maxBytes()));
         $this->assertSame(['PDF', true], [$file->typeLabel(), $file->previewable()]);
         $this->assertFalse($kept[1]->previewable());
     }

@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Identity\PrincipalFactory;
+use App\Platform\Access\Guard;
+use App\Platform\Files\PrivateFileResponse;
+use App\Platform\Files\PrivateFiles;
 use App\Study\Files;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -18,7 +21,8 @@ class FileContentController
 {
     public function __invoke(Request $request, PrincipalFactory $principals, Files $files, string $file): StreamedResponse
     {
-        [$details, $key] = $files->content($principals->fromRequest($request), $file);
+        $by = $principals->fromRequest($request);
+        [$details, $key] = $files->content($by, $file);
         $download = $request->boolean('download') || ! $details->previewable();
 
         $headers = [
@@ -40,6 +44,6 @@ class FileContentController
             $headers['Content-Security-Policy'] = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'; sandbox";
         }
 
-        return Files::disk()->response($key, $details->fileName(), $headers, $download ? 'attachment' : 'inline');
+        return PrivateFileResponse::make($request, PrivateFiles::read(Guard::learner($by), $key), $details->fileName(), $headers, $download);
     }
 }

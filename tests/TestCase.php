@@ -3,10 +3,23 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 
 abstract class TestCase extends BaseTestCase
 {
     private static ?string $testMaster = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $temp = sys_get_temp_dir().'/vistud-test-'.bin2hex(random_bytes(16));
+        config(['vistud.files.temp_root' => $temp]);
+        $this->beforeApplicationDestroyed(fn () => File::deleteDirectory($temp));
+        // New disks are synthetic too: tests must never touch installed artifacts.
+        Storage::fake('derived');
+        Storage::fake('temporary');
+    }
 
     public function createApplication()
     {

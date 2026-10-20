@@ -296,9 +296,7 @@ final class CourseGuide
 
         $urls = [];
         if ($images !== []) {
-            $chosen = $model ?? $this->settings->get($by)->tutorModel;
-            $seeing = $this->models->find($chosen, $this->settings->key($by));
-            Input::refuse($seeing !== null && ! $seeing->images ? ['pictures' => 'This model can\'t see pictures. Choose one that can, or paste the words instead.'] : []);
+            $this->requirePictureModel($by, $model);
             foreach ($images as $image) {
                 $url = Attachments::shrink($image['bytes'], $image['mime']);
                 Input::refuse($url === null ? ['pictures' => '"'.$image['name'].'" couldn\'t be read as a picture. Try a PNG or a JPG.'] : []);
@@ -307,6 +305,14 @@ final class CourseGuide
         }
 
         return [$urls, $read];
+    }
+
+    /** Check before consuming a temporary upload, so a model refusal leaves it available for retry. */
+    public function requirePictureModel(Principal $by, ?string $model = null): void
+    {
+        $chosen = $model ?? $this->settings->get($by)->tutorModel;
+        $seeing = $this->models->find($chosen, $this->settings->key($by));
+        Input::refuse($seeing !== null && ! $seeing->images ? ['pictures' => 'This model can\'t see pictures. Choose one that can, or paste the words instead.'] : []);
     }
 
     /** The kind of picture some bytes are, from the bytes themselves (never the name), or empty when they are not one. */

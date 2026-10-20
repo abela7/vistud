@@ -3,7 +3,9 @@
 namespace Tests\Feature\Study;
 
 use App\Jobs\ExtractFileText;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Files\PrivateFiles;
 use App\Study\FileDetails;
 use App\Study\Files;
 use App\Study\FileText;
@@ -156,7 +158,12 @@ class FileTextsTest extends TestCase
         $file = $this->upload('Marks.xls', $this->ole());
         // What LibreOffice makes beside the preview (App\Study\FilePreviews::make), there already.
         $copy = 'learners/'.$this->by->learnerId."/previews/{$file->id}.xlsx";
-        Storage::disk('local')->put($copy, $this->xlsxBytes(['Marks' => [['Name', 'Mark'], ['Ada', 91]]], core: ['creator' => 'Ada']));
+        $input = fopen($this->temp($this->xlsxBytes(['Marks' => [['Name', 'Mark'], ['Ada', 91]]], core: ['creator' => 'Ada'])), 'rb');
+        try {
+            PrivateFiles::write(LearnerScope::of($this->by), $copy, $input);
+        } finally {
+            fclose($input);
+        }
 
         $text = $this->read($file);
         $this->assertSame([FileText::READY, 'sheet', 'Sheet “Marks”, rows 1–2 (used range A1:B2)'], [$text->state, $text->unit, $text->caption(1)]);
@@ -168,7 +175,7 @@ class FileTextsTest extends TestCase
 
         app(Files::class)->trash($this->by, $file->id);
         app(Files::class)->destroy($this->by, $file->id);
-        Storage::disk('local')->assertMissing($copy);
+        Storage::disk('derived')->assertMissing($copy);
     }
 
     public function test_a_word_document_says_its_pages_and_a_pdf_its_title_and_author(): void

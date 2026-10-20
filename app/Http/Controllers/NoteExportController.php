@@ -10,9 +10,10 @@ use App\Study\NoteExports;
 use App\Study\Notes;
 use App\Study\Workspaces;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\HeaderUtils;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * A note as a file to keep, share, or open elsewhere (the owner's reviews,
@@ -39,7 +40,7 @@ class NoteExportController
             // LibreOffice takes a few seconds, more the first time.
             @set_time_limit(300);
         }
-        $body = NoteExports::make(Guard::learner($by)->learnerId, $opened, $format);
+        $body = NoteExports::make(Guard::learner($by), $opened, $format);
         if ($body === null) {
             return response(FilePreviews::converter() === null
                 ? 'PDF and Word copies need LibreOffice on this computer. Markdown and text work without it.'
@@ -51,8 +52,29 @@ class NoteExportController
 
         $title = $opened->displayTitle();
 
-        return response($body, 200, [
+        return new StreamedResponse(function () use ($body) {
+            $stream = null;
+            try {
+                $stream = fopen($body->path.'/result', 'rb');
+                if ($stream === false) {
+                    throw new \RuntimeException('The export could not be opened.');
+                }
+                while (! feof($stream)) {
+                    $chunk = fread($stream, 65536);
+                    if ($chunk === false || ($chunk === '' && ! feof($stream))) {
+                        throw new \RuntimeException('The export could not be read.');
+                    }
+                    echo $chunk;
+                }
+            } finally {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+                $body->close();
+            }
+        }, 200, [
             'Content-Type' => $type,
+            'Content-Length' => (string) filesize($body->path.'/result'),
             'Content-Disposition' => HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, self::fileName($title, $format), self::asciiName($title, $format)),
             'X-Content-Type-Options' => 'nosniff',
             'Cache-Control' => 'private, no-store',

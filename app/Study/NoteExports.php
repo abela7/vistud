@@ -2,9 +2,11 @@
 
 namespace App\Study;
 
+use App\Platform\Access\LearnerScope;
+use App\Platform\Files\PrivateFiles;
+use App\Platform\Files\TempWorkspace;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -35,55 +37,63 @@ final class NoteExports
     }
 
     /** The note as a $format file; null when LibreOffice isn't on this computer or couldn't make it. */
-    public static function make(string $learnerId, NoteDetails $note, string $format): ?string
+    public static function make(LearnerScope $scope, NoteDetails $note, string $format): ?TempWorkspace
     {
         $title = $note->displayTitle();
         $doc = $note->doc ?? NoteDoc::empty();
-        if ($format === 'md') {
-            return rtrim('# '.$title."\n\n".NoteDoc::markdown($doc))."\n";
-        }
-        if ($format === 'txt') {
-            return rtrim($title."\n\n".NoteDoc::plain($doc))."\n";
-        }
-        if (($converter = FilePreviews::converter()) === null) {
+        $converter = FilePreviews::converter();
+        if (self::FORMATS[$format][1] && $converter === null) {
             return null;
         }
 
-        $work = storage_path('app/private/exports-work/'.Str::random(20));
+        $temp = new TempWorkspace;
+        $work = $temp->path;
         File::ensureDirectoryExists("{$work}/in");
         try {
-            file_put_contents("{$work}/in/note.html", self::page($learnerId, $title, $doc));
+            if ($format === 'md' || $format === 'txt') {
+                $body = $format === 'md' ? '# '.$title."\n\n".NoteDoc::markdown($doc) : $title."\n\n".NoteDoc::plain($doc);
+                File::put($work.'/result', rtrim($body)."\n");
+
+                return $temp;
+            }
+            if ($converter === null) {
+                $temp->close();
+
+                return null;
+            }
+            file_put_contents("{$work}/in/note.html", self::page($scope, $title, $doc));
             $filter = $format === 'pdf' ? 'pdf:writer_pdf_Export' : 'docx:MS Word 2007 XML';
             $made = FilePreviews::convert($converter, $work, "{$work}/in/note.html", $filter, 'HTML (StarWriter)', $problem);
             if ($made !== null) {
-                return (string) file_get_contents($made);
+                File::move($made, $work.'/result');
+
+                return $temp;
             }
         } catch (Throwable $e) {
-            $problem = $e->getMessage();
-        } finally {
-            File::deleteDirectory($work);
+            $problem = 'conversion_failed';
         }
-        Log::warning('A note could not be exported.', ['note' => $note->id, 'format' => $format, 'problem' => Str::limit((string) $problem, 500)]);
+        $temp->close();
+        Log::warning('A note could not be exported.', ['note' => $note->id, 'format' => $format, 'code' => 'conversion_failed']);
 
         return null;
     }
 
     /** The note as a page for LibreOffice, with its own pictures in it. */
-    private static function page(string $learnerId, string $title, array $doc): string
+    private static function page(LearnerScope $scope, string $title, array $doc): string
     {
         $body = MarkdownPreview::html(NoteDoc::markdown($doc));
-        $body = (string) preg_replace_callback('/<img\s[^>]*>/i', function (array $match) use ($learnerId): string {
+        $body = (string) preg_replace_callback('/<img\s[^>]*>/i', function (array $match) use ($scope): string {
             preg_match('/\ssrc="([^"]*)"/i', $match[0], $src);
             preg_match('/\salt="([^"]*)"/i', $match[0], $alt);
             $alt = $alt[1] ?? '';
             $found = preg_match('#^/notes/images/([A-Za-z0-9-]{1,64})$#', html_entity_decode($src[1] ?? ''), $id) === 1
-                ? NoteImages::find($learnerId, $id[1])
+                ? NoteImages::find($scope->learnerId, $id[1])
                 : null;
             if ($found === null) {
                 return $alt === '' ? '' : "<em>[{$alt}]</em>";
             }
             // In the page itself: LibreOffice would only link a picture beside it, and a linked picture is never loaded.
-            $bytes = (string) Files::disk()->get($found[0]);
+            $bytes = PrivateFiles::bytes($scope, $found[0], 10 * 1024 * 1024);
             $width = min(self::MAX_PICTURE_PX, (int) (@getimagesizefromstring($bytes)[0] ?? self::MAX_PICTURE_PX)) ?: self::MAX_PICTURE_PX;
 
             return '<img src="data:'.$found[1].';base64,'.base64_encode($bytes)."\" alt=\"{$alt}\" width=\"{$width}\">";

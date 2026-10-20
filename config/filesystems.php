@@ -30,6 +30,17 @@ return [
 
     'disks' => [
 
+        // Derived artifacts and volatile processing/upload staging are not backups.
+        'derived' => [
+            'driver' => 'local', 'root' => storage_path('app/derived'),
+            'serve' => false, 'throw' => true, 'visibility' => 'private',
+        ],
+        'temporary' => [
+            'driver' => 'local',
+            'root' => env('VISTUD_TEMP_ROOT', sys_get_temp_dir().'/vistud-'.substr(hash('sha256', base_path()), 0, 12)).'/uploads',
+            'serve' => false, 'throw' => true, 'visibility' => 'private',
+        ],
+
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),

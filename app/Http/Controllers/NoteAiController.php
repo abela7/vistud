@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Engine\Helper;
 use App\Identity\PrincipalFactory;
 use App\Platform\Errors\Unprocessable;
+use App\Platform\Files\UploadTemps;
+use App\Study\Files;
 use App\Study\Notes;
 use App\Study\Workspaces;
 use Illuminate\Http\JsonResponse;
@@ -81,7 +83,7 @@ Guidelines:
                 if ($uploadedFile && $uploadedFile->isValid()) {
                     $mime = (string) $uploadedFile->getMimeType();
                     $name = (string) $uploadedFile->getClientOriginalName();
-                    $bytes = (string) file_get_contents($uploadedFile->getRealPath());
+                    $bytes = UploadTemps::bytes($uploadedFile, Files::maxBytes());
                     if (str_starts_with($mime, 'image/')) {
                         $pictures[] = ['bytes' => $bytes, 'mime' => $mime, 'name' => $name];
                     } else {

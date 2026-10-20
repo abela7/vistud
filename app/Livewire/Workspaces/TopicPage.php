@@ -8,6 +8,7 @@ use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Platform\Files\UploadTemps;
 use App\Study\Files;
 use App\Study\Findings;
 use App\Study\Flashcards;
@@ -360,12 +361,12 @@ final class TopicPage extends Component
         };
 
         try {
-            $path = $this->uploadedFile->getRealPath();
             $origName = $this->uploadedFile->getClientOriginalName();
-            $this->files->upload($by, $placeType, $placeId, $path, $origName);
+            UploadTemps::using($this->uploadedFile, fn ($temp) => $this->files->upload($by, $placeType, $placeId, $temp, $origName));
             $this->uploadedFile = null;
             $this->notify("File '{$origName}' uploaded to topic materials.");
         } catch (\Throwable $e) {
+            $this->uploadedFile = null;
             $this->addError('uploadedFile', $e->getMessage());
         }
     }

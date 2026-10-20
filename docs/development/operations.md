@@ -117,6 +117,73 @@ latency, peak memory, lock duration and concurrent-request impact at S9's learne
 sizes and concurrency levels. Add the measured results to ADR 0001 G4 before a
 scale pass; a fast run on this Windows development machine is not a pass.
 
+## Private file storage and temporary bytes (S3a)
+
+Canonical uploads and note images remain on `vistud.files.disk`; encrypted
+previews and modern Office copies use `vistud.files.derived_disk` (default
+`derived`, `storage/app/derived`). Both disks are private local seekable
+filesystems. Unsupported remote adapters fail closed. Keep encrypted sources,
+note images and existing extracted text in matching data/file backups; derived
+previews are rebuildable and excluded. Keys/master need the separate recovery
+arrangements above. S3b still has to encrypt recordings and extracted text and
+convert all old objects; S3a alone must not be deployed over legacy files.
+
+Production plaintext processing must use RAM-backed private storage. Example
+for a dedicated `www-data` PHP/nginx service account (adapt uid/gid and capacity
+to the real server; these are configuration examples, not commands run here):
+
+```fstab
+tmpfs /run/vistud-tmp tmpfs rw,nosuid,nodev,noexec,mode=0700,uid=www-data,gid=www-data,size=1G 0 0
+```
+
+Create `php`, `nginx` and `processing` subdirectories there with mode 0700 and
+the correct service owner. A separate nginx account needs its own restricted
+subdirectory/mount. Supply this setting before config caching:
+
+```dotenv
+VISTUD_TEMP_ROOT=/run/vistud-tmp/processing
+```
+
+Set PHP `upload_tmp_dir=/run/vistud-tmp/php` and
+`sys_temp_dir=/run/vistud-tmp/php` in **both** FPM and worker/CLI php.ini, plus
+`TMPDIR`, `TMP` and `TEMP` for their service environments. Set nginx
+`client_body_temp_path /run/vistud-tmp/nginx;` so request spooling is private RAM
+too. PHP receives uploads before Laravel can handle them; setting only the
+application temp root is insufficient. Verify the mounted filesystem, ownership
+and actual PHP/nginx paths on the real server before reopening. Review swap,
+hibernation, crash dumps and backups so RAM-backed plaintext is not persisted
+through those channels. Size mounts against the real maximum upload, concurrent
+uploads and Office conversions; 1 GiB is an example, not measured S9 capacity.
+Out-of-space failures must fail the operation, never redirect to disk temp.
+
+Livewire's `temporary` private local disk is under
+`VISTUD_TEMP_ROOT/uploads`, outside durable source storage. Every processing
+workspace has a random name and an exclusive lease. LibreOffice input/output,
+profile, HOME and TMPDIR/TMP/TEMP are confined to that workspace. Parsers use a
+decrypted workspace only when needed; range playback uses no plaintext file.
+Exports stream their result and close the workspace afterward. Smalot PDF, GD
+and base64 AI processing retain their existing in-memory caps. Recording/ffmpeg
+temp routing is S3b, not claimed complete here.
+
+Consumed upload temps and processing workspaces are removed in finally blocks;
+model validation can retain an unused Guide attachment for retry. Normal cleanup
+also runs on workspace destruction. The scheduler runs
+`vistud:files:prune-temps` hourly: unlocked workspaces older than one hour and
+Livewire uploads older than one hour are removed (upload time is capped at ten
+minutes). Active workspace leases are preserved regardless of age. Interrupted
+cleanup with a missing lease is retried after the same grace period. Windows
+file locks can defer deletion; a fixed `temporary_cleanup_pending` log code
+records this without contents/paths and the janitor retries. Monitor cleanup
+failures and RAM use. A killed writer's **encrypted** sibling `.writing-*`
+stage is left for S3b's offline reconciliation, not this temp janitor.
+
+On this Windows development machine the normal system temp directory is
+explicitly accepted, with a per-project private application subdirectory.
+This is not the production RAM guarantee. Unlinking a file is not secure media
+erasure; old temp directories and pre-S3 backups need the later offline inventory
+and S4's approved calendar deletion plan. No real student files have been
+converted, deleted or deployed as an S3a development check.
+
 ## Log of drills (results)
 
 | Date | Drill | Result |

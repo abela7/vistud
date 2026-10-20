@@ -17,7 +17,7 @@ final class LearnerKeys
 
     public function derive(LearnerScope $scope, string $purpose): string
     {
-        if (! in_array($purpose, ['content', 'search', 'cache'], true)) {
+        if (! in_array($purpose, ['content', 'search', 'cache', 'files'], true)) {
             throw new \InvalidArgumentException('Unknown learner key purpose.');
         }
         $key = $this->keys[$scope->learnerId] ??= $this->store->load($scope);

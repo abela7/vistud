@@ -13,7 +13,9 @@ use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\AppError;
+use App\Platform\Files\UploadTemps;
 use App\Study\CourseProfiles;
+use App\Study\Files;
 use App\Study\MarkdownPreview;
 use App\Study\Plugins;
 use App\Study\Workspaces;
@@ -158,11 +160,19 @@ final class GuideChat extends Component
         }
 
         try {
-            $pictures = array_map(fn (TemporaryUploadedFile $file) => ['name' => $file->getClientOriginalName(), 'bytes' => (string) file_get_contents($file->getRealPath())], $files);
-            // The reply streams in as it is written, as the tutor's does.
-            @set_time_limit(120);
             $by = $this->principal();
             $chosen = $this->chosenModel($this->settings->get($by));
+            if (array_any($files, fn (TemporaryUploadedFile $file) => self::isPicture($file))) {
+                $this->guide->requirePictureModel($by, $chosen);
+            }
+            try {
+                $pictures = array_map(fn (TemporaryUploadedFile $file) => ['name' => $file->getClientOriginalName(), 'bytes' => UploadTemps::bytes($file, Files::maxBytes())], $files);
+            } finally {
+                UploadTemps::discard($files);
+                $this->pictures = [];
+            }
+            // The reply streams in as it is written, as the tutor's does.
+            @set_time_limit(120);
             $answer = $this->guide->turn($by, $this->workspaceId, $this->history(), $words, $this->for, $pictures,
                 fn (string $reply) => $this->stream->push($this, 'guide-answer', MarkdownPreview::html($reply)), $chosen);
         } catch (AppError $e) {
@@ -174,9 +184,6 @@ final class GuideChat extends Component
         $this->problem = null;
         $this->text = '';
         $this->pictures = [];
-        foreach ($files as $file) {
-            $file->delete();
-        }
         $pictureCount = count(array_filter($files, fn (TemporaryUploadedFile $file) => self::isPicture($file)));
         $fileCount = count($files) - $pictureCount;
         $this->talk[] = ['from' => 'you', 'text' => $words] + array_filter([

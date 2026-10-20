@@ -4,10 +4,12 @@ namespace App\Study;
 
 use App\Jobs\ExtractFileText;
 use App\Platform\Access\Guard;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Files\PrivateFiles;
+use App\Platform\Files\TempWorkspace;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Smalot\PdfParser\Parser;
 use Throwable;
 
@@ -66,7 +68,9 @@ final class FileTexts
 
         $local = null;
         try {
-            $path = fn () => $local ??= self::local($key);
+            $path = function () use (&$local, $by, $key) {
+                return ($local ??= self::local(Guard::learner($by), $key))->path.'/input';
+            };
             $read = match (true) {
                 $file->extension === 'pdf' => self::pdf($path()),
                 $file->extension === 'pptx' => OfficeReader::pptx($path()),
@@ -77,12 +81,10 @@ final class FileTexts
                 default => null,
             };
         } catch (Throwable $e) {
-            Log::warning('A file could not be read for the tutor.', ['file' => $file->id, 'problem' => Str::limit($e->getMessage(), 300)]);
+            Log::warning('A file could not be read for the tutor.', ['file' => $file->id, 'code' => 'parse_failed']);
             $read = null;
         } finally {
-            if ($local !== null && str_starts_with($local, sys_get_temp_dir())) {
-                @unlink($local);
-            }
+            $local?->close();
         }
         if ($read === FilePreviews::PREPARING) {
             return new FileText($file, FileText::PREPARING);
@@ -101,24 +103,22 @@ final class FileTexts
      * Reads a big PDF and keeps its text beside it, for App\Jobs\ExtractFileText. A PDF that can't be read leaves a
      * `.failed` mark, so the tutor is told there is no text instead of "preparing" for ever.
      */
-    public static function extractPdf(string $storageKey): void
+    public static function extractPdf(string $storageKey, LearnerScope $scope): void
     {
         $disk = Files::disk();
         $textKey = self::key($storageKey);
         $local = null;
         try {
-            $local = self::local($storageKey);
-            $read = self::pdf($local);
+            $local = self::local($scope, $storageKey);
+            $read = self::pdf($local->path.'/input');
             $pages = array_map(fn (string $page) => mb_substr(self::tidy($page), 0, self::PAGE_CHARS), $read->pages);
             $disk->put($textKey, (string) json_encode(['v' => self::VERSION, 'unit' => $read->unit, 'pages' => $pages, 'captions' => [], 'facts' => $read->facts]));
             $disk->delete("{$textKey}.failed");
         } catch (Throwable $e) {
-            Log::warning('A file could not be read for the tutor.', ['key' => $storageKey, 'problem' => Str::limit($e->getMessage(), 300)]);
+            Log::warning('A file could not be read for the tutor.', ['key' => $storageKey, 'code' => 'parse_failed']);
             $disk->put("{$textKey}.failed", '1');
         } finally {
-            if ($local !== null && str_starts_with($local, sys_get_temp_dir())) {
-                @unlink($local);
-            }
+            $local?->close();
         }
     }
 
@@ -219,7 +219,8 @@ final class FileTexts
         }
         if (is_array($modern)) {
             [$key, $extension] = $modern;
-            $path = self::local($key);
+            $temp = self::local(Guard::learner($by), $key);
+            $path = $temp->path.'/input';
             try {
                 $read = match ($extension) {
                     'docx' => OfficeReader::docx($path),
@@ -232,11 +233,9 @@ final class FileTexts
 
                 return new OfficeRead($read->pages, $read->unit, $read->captions, $facts);
             } catch (Throwable $e) {
-                Log::warning('The modern copy of a file could not be read; its PDF is read instead.', ['file' => $id, 'problem' => Str::limit($e->getMessage(), 300)]);
+                Log::warning('The modern copy of a file could not be read; its PDF is read instead.', ['file' => $id, 'code' => 'parse_failed']);
             } finally {
-                if (str_starts_with($path, sys_get_temp_dir())) {
-                    @unlink($path);
-                }
+                $temp->close();
             }
         }
 
@@ -245,43 +244,26 @@ final class FileTexts
         return match ($pdf) {
             null => null,
             FilePreviews::PREPARING => FilePreviews::PREPARING,
-            default => $this->readPreview($pdf),
+            default => $this->readPreview(Guard::learner($by), $pdf),
         };
     }
 
-    private function readPreview(string $pdfKey): OfficeRead
+    private function readPreview(LearnerScope $scope, string $pdfKey): OfficeRead
     {
-        $path = self::local($pdfKey);
+        $temp = self::local($scope, $pdfKey);
+        $path = $temp->path.'/input';
         try {
             // What the program that made the PDF says is no use: it is LibreOffice, not the student's file.
             return new OfficeRead($this->pdf($path)->pages, 'page');
         } finally {
-            if (str_starts_with($path, sys_get_temp_dir())) {
-                @unlink($path);
-            }
+            $temp->close();
         }
     }
 
-    /** A path to the bytes at $key: the file itself on a local disk, otherwise a copy in the temporary folder. */
-    private static function local(string $key): string
+    /** A scoped decrypted input, closed by its processing caller. */
+    private static function local(LearnerScope $scope, string $key): TempWorkspace
     {
-        $disk = Files::disk();
-        try {
-            $path = $disk->path($key);
-            if (is_file($path)) {
-                return $path;
-            }
-        } catch (Throwable) {
-            // Not a local disk.
-        }
-        $copy = tempnam(sys_get_temp_dir(), 'vistud-text-');
-        $in = $disk->readStream($key);
-        $out = fopen($copy, 'wb');
-        stream_copy_to_stream($in, $out);
-        fclose($in);
-        fclose($out);
-
-        return $copy;
+        return PrivateFiles::temporary($scope, $key);
     }
 
     /**
