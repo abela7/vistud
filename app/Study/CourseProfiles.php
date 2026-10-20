@@ -131,10 +131,20 @@ final class CourseProfiles
         $scope = Guard::learner($by);
         Input::workspace($scope, $workspaceId);
         $row = $this->row($scope, $workspaceId);
+        // What the reading says nothing about stays as the student has it (a short course page has no assessment
+        // table), and an assessment that already has an assignment keeps it, by name, so a second reading doesn't
+        // offer to make it again.
+        $links = [];
+        foreach (self::decode($row?->assessment) as $item) {
+            if (($item['activity_id'] ?? null) !== null) {
+                $links[mb_strtolower((string) ($item['name'] ?? ''))] = $item['activity_id'];
+            }
+        }
+        $assessment = array_map(fn (array $item) => $item + ['activity_id' => $links[mb_strtolower($item['name'])] ?? null], $reading['assessment']);
         $this->write($scope, $workspaceId, [
             'about' => $reading['about'] !== '' ? $reading['about'] : ($row?->about),
-            'outcomes' => json_encode($reading['outcomes']),
-            'assessment' => json_encode(array_map(fn (array $item) => $item + ['activity_id' => null], $reading['assessment'])),
+            'outcomes' => $reading['outcomes'] !== [] ? json_encode($reading['outcomes']) : ($row?->outcomes),
+            'assessment' => $assessment !== [] ? json_encode($assessment) : ($row?->assessment),
             'textbook' => $reading['textbook'] !== '' ? $reading['textbook'] : ($row?->textbook),
             'proposed_modules' => json_encode($reading['modules']),
             'source' => $row?->syllabus_file_id !== null ? 'file' : 'manual',

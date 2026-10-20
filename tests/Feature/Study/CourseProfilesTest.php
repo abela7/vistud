@@ -146,6 +146,28 @@ class CourseProfilesTest extends TestCase
         $this->assertCount(1, app(Activities::class)->list($this->by, $this->workspace));
     }
 
+    public function test_a_second_reading_keeps_what_it_says_nothing_about_and_the_assignments_already_made(): void
+    {
+        $this->profiles->applyReading($this->by, $this->workspace, $this->reading(), 'fake/quick');
+        $this->profiles->addFromReading($this->by, $this->workspace, [], [0]);
+        $midterm = app(Activities::class)->list($this->by, $this->workspace)[0];
+
+        // A short course page: the reader found modules, but no outcomes or assessment table.
+        $short = ['about' => '', 'outcomes' => [], 'assessment' => [], 'textbook' => '', 'modules' => [['title' => 'Week 4: Memory', 'starts_on' => null, 'ends_on' => null]]];
+        $this->profiles->applyReading($this->by, $this->workspace, $short, 'fake/quick');
+        $profile = $this->profiles->get($this->by, $this->workspace);
+        $this->assertSame(['Explain scheduling policies'], $profile->outcomes);
+        $this->assertSame(['Midterm', 'Final'], array_column($profile->assessment, 'name'));
+        $this->assertSame($midterm->id, $profile->assessment[0]['activity_id']);
+        $this->assertSame(['Week 4: Memory'], array_column($profile->proposedModules, 'title'));
+
+        // The same syllabus read again: the Midterm keeps its assignment, by name, so ticking it adds nothing twice.
+        $this->profiles->applyReading($this->by, $this->workspace, $this->reading(), 'fake/quick');
+        $this->assertSame($midterm->id, $this->profiles->get($this->by, $this->workspace)->assessment[0]['activity_id']);
+        $this->assertSame(['modules' => 0, 'assignments' => 0], $this->profiles->addFromReading($this->by, $this->workspace, [], [0]));
+        $this->assertCount(1, app(Activities::class)->list($this->by, $this->workspace));
+    }
+
     public function test_a_proposal_can_be_dismissed(): void
     {
         $this->profiles->applyReading($this->by, $this->workspace, $this->reading(), 'fake/quick');
