@@ -43,7 +43,7 @@ final class AccountFactory
             throw new Conflict('email_taken', 'An account with this email address already exists.');
         }
 
-        if (DB::transactionLevel() !== 0 && ! app()->runningUnitTests()) {
+        if (DB::transactionLevel() !== 0 && (! app()->runningUnitTests() || config('vistud.testing.enforce_account_transaction_guard', false))) {
             throw new \LogicException('Provision the learner key before opening the account transaction.');
         }
         $learnerId = $student ? Ids::new() : null;

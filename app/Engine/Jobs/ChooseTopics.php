@@ -6,6 +6,7 @@ use App\Engine\EngineFailed;
 use App\Engine\Role;
 use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerCache;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\AppError;
 use App\Platform\Errors\NotFound;
@@ -95,7 +96,7 @@ final class ChooseTopics extends Job
         $suggestions = app(TopicSuggestions::class);
         $waiting = $suggestions->list($by, $moduleId);
         $here = array_values(array_filter($waiting, fn ($s) => $s->folderId === $folderId));
-        $note = Cache::get(self::noteKey($by, $moduleId, $folderId));
+        $note = LearnerCache::get(Guard::learner($by), self::noteKey($by, $moduleId, $folderId));
         try {
             $reply = $run->ask(self::rules(), $this->message($by, $moduleId, $folderId, $read, $here, array_values(array_filter($waiting, fn ($s) => $s->folderId !== $folderId)), is_string($note) ? $note : null), 3_000);
             $choice = self::parse($reply->text, $labels, array_combine(array_keys($labels), array_map(fn (array $r) => $r[0]->fileName(), $read)));
@@ -110,7 +111,7 @@ final class ChooseTopics extends Job
         }
         $suggestions->choose($by, $moduleId, $folderId, $choice['topics']);
         Cache::forget(self::noteKey($by, $moduleId, $folderId));
-        Cache::put(self::reviewKey($by, $moduleId, $folderId), [
+        LearnerCache::put(Guard::learner($by), self::reviewKey($by, $moduleId, $folderId), [
             'at' => now()->toIso8601String(),
             'files' => array_map(fn (array $f) => $f + ['name' => self::nameOf($read, $f['file'])], $choice['files']),
         ], now()->addDays(self::REVIEW_DAYS));
@@ -164,7 +165,7 @@ final class ChooseTopics extends Job
      */
     public static function review(Principal $by, string $moduleId, ?string $folderId): ?array
     {
-        $review = Cache::get(self::reviewKey($by, $moduleId, $folderId));
+        $review = LearnerCache::get(Guard::learner($by), self::reviewKey($by, $moduleId, $folderId));
 
         return is_array($review) ? $review : null;
     }
@@ -190,7 +191,7 @@ final class ChooseTopics extends Job
     public static function again(Principal $by, string $moduleId, ?string $folderId, ?string $note): void
     {
         $note = $note === null ? '' : mb_substr(trim($note), 0, self::MAX_NOTE);
-        $note === '' ? Cache::forget(self::noteKey($by, $moduleId, $folderId)) : Cache::put(self::noteKey($by, $moduleId, $folderId), $note, now()->addHour());
+        $note === '' ? Cache::forget(self::noteKey($by, $moduleId, $folderId)) : LearnerCache::put(Guard::learner($by), self::noteKey($by, $moduleId, $folderId), $note, now()->addHour());
     }
 
     /**

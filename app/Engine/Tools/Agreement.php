@@ -41,7 +41,7 @@ final class Agreement
             return false;
         }
         $asks = LearnerTables::query(Guard::learner($by), 'engine_messages')->where('thread_id', $threadId)->where('role', 'tool')
-            ->where('position', '<', $users[0])->where('position', '>', $users[1] ?? 0)->whereNotNull('effects')->pluck('effects');
+            ->where('position', '<', $users[0])->where('position', '>', $users[1] ?? 0)->pluck('effects')->filter(fn ($effects) => $effects !== null);
         foreach ($asks as $effects) {
             $asked = json_decode((string) $effects, true)['asked'] ?? [];
             if (is_array($asked) && in_array($change, $asked, true)) {

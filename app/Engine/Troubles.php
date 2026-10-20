@@ -4,6 +4,7 @@ namespace App\Engine;
 
 use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerCache;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
@@ -18,7 +19,7 @@ final class Troubles
 
     public function note(Principal $by, string $role, string $model, EngineFailed $e): void
     {
-        Cache::put(self::cacheKey($by), [
+        LearnerCache::put(Guard::learner($by), self::cacheKey($by), [
             'role' => $role, 'model' => $model, 'code' => $e->errorCode, 'message' => mb_substr($e->getMessage(), 0, 600),
             'at' => CarbonImmutable::now()->toIso8601String(),
         ], now()->addDays(self::DAYS));
@@ -27,7 +28,7 @@ final class Troubles
     /** @return ?array{role: string, model: string, code: string, message: string, at: string} */
     public function last(Principal $by): ?array
     {
-        $trouble = Cache::get(self::cacheKey($by));
+        $trouble = LearnerCache::get(Guard::learner($by), self::cacheKey($by));
 
         return is_array($trouble) ? $trouble : null;
     }

@@ -426,7 +426,9 @@ final class OpenRouter implements Engine
             $status = $response->status();
             $who = Providers::name(Credential::provider($key));
             $which = $model !== '' ? " ({$model})" : '';
-            Log::warning('The AI service refused a call.', ['provider' => Credential::provider($key), 'model' => $model, 'status' => $status, 'said' => trim($said)]);
+            // Provider error bodies can echo a prompt. Keep them only in the
+            // learner's response/encrypted Troubles cache, never in logs.
+            Log::warning('The AI service refused a call.', ['provider' => Credential::provider($key), 'model' => $model, 'status' => $status]);
             throw new EngineFailed(match ($status) {
                 401, 403 => 'engine_bad_key', 402 => 'engine_credit', 429 => 'engine_limit', 404 => 'engine_model', default => 'engine_refused'
             }, match ($status) {

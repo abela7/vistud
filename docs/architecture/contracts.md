@@ -39,6 +39,32 @@ Implemented in increment 1 under `app/Platform/`.
 | `Ids` | `new()` gives a UUIDv7. `isToken()` and `isUuid()` check IDs |
 | Response headers | `X-Request-Id` on every response. `X-Account-Id` on every authenticated `/api/v1` response |
 
+## Personal-text storage (S2a)
+
+`LearnerTables::query/insert` remains the service boundary. For tables in
+`Platform\Database\ContentColumns::S2A`, it uses `ContentQuery`: reads return
+plaintext, while inserts/updates store `ContentCipher` envelopes. Partial reads
+fetch identity/version internally without adding those fields to the requested
+result. Metadata counts, filters and aggregates remain SQL and do not unlock keys.
+Content filters, SQL JSON expressions, content aggregates and content sorting are
+refused; decrypt the learner's rows in PHP first. Copies exchange decrypted values,
+and inserts always produce fresh envelopes. Moves/restores re-encrypt their row.
+
+The encrypted JSON payload authenticates version, learner, table, column and row
+identity. Identity is the physical key within the learner, except auto-increment
+`journal_refs`/`outbox`, which receive an immutable, unique `content_identity` UUID
+before INSERT (journal refs also bind their entry, role, reference type and id).
+This permits insert-only journal privileges without a later UPDATE to bind an
+auto-assigned number. These UUIDs are regenerated on copies and cannot be updated
+through the runtime adapter. NULL remains SQL NULL; empty strings are encrypted.
+
+`content_version=0` is legacy maintenance input only, never a runtime plaintext
+fallback. `content_version=1` requires successful authenticated decryption. The
+owner-only, system-principal maintenance methods are reserved for the backfill.
+Journal event formats, capture fingerprints, reference meaning and projection
+rules are unchanged by the storage encoding. S2b is required separately; this
+manifest alone cannot satisfy the second-learner gate.
+
 ## Journal entry specification (Stable)
 
 This is the array format that both the journal writer and the golden replay fixtures use. `App\Brain\Journal\EntryFactory::make()` turns it into a `JournalEntry`, and `EntryValidator::validate()` checks it against ADR 0002 §4–5. Field meanings are in [ADR 0002 §3](../adr/0002-learning-event-schema.md#3-fields-every-event-carries-the-envelope).

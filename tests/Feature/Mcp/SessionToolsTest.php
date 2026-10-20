@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Mcp;
 
+use App\Platform\Access\LearnerScope;
+use App\Platform\Database\LearnerTables;
 use App\Study\Modules;
 use App\Study\Topics;
 use App\Study\Workspaces;
@@ -25,12 +27,15 @@ class SessionToolsTest extends TestCase
 
     private string $topic;
 
+    private LearnerScope $scope;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->travelTo(CarbonImmutable::parse('2026-10-19 09:00:00', 'UTC'));
         $ada = $this->student();
         $by = $this->principal($ada);
+        $this->scope = LearnerScope::of($by);
         $this->course = app(Workspaces::class)->create($by, ['name' => 'Operating systems'])->id;
         $this->module = app(Modules::class)->create($by, $this->course, ['title' => 'Week 2: Scheduling'])->id;
         $this->topic = app(Topics::class)->create($by, $this->course, 'Round robin', $this->module)->id;
@@ -71,7 +76,7 @@ class SessionToolsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('result.structuredContent.topic_id', $this->topic);
 
-        $log = json_decode((string) DB::table('study_sessions')->where('id', $id)->value('topic_log'), true);
+        $log = json_decode((string) LearnerTables::query($this->scope, 'study_sessions')->where('id', $id)->value('topic_log'), true);
         $this->assertSame('tutor', end($log)['by']);
     }
 
@@ -93,7 +98,7 @@ class SessionToolsTest extends TestCase
     public function test_end_keeps_a_summary_written_before_and_says_the_minutes(): void
     {
         $id = $this->start();
-        DB::table('study_sessions')->where('id', $id)->update(['summary' => 'From the app: covered FCFS.']);
+        LearnerTables::query($this->scope, 'study_sessions')->where('id', $id)->update(['summary' => 'From the app: covered FCFS.']);
         $this->travel(20)->minutes();
         $this->callTool($this->token, 'set_checkpoint', ['session_id' => $id, 'checkpoint' => 'Mid-way.'])->assertOk();
         $this->travel(5)->minutes();
@@ -101,7 +106,7 @@ class SessionToolsTest extends TestCase
         $ended = $this->callTool($this->token, 'end_session', ['session_id' => $id, 'summary' => 'Round robin and time slices.', 'checkpoint' => 'Next: priority scheduling.'])->assertOk();
 
         $this->assertStringContainsString('min studied', (string) $ended->json('result.content.0.text'));
-        $row = DB::table('study_sessions')->where('id', $id)->first();
+        $row = LearnerTables::query($this->scope, 'study_sessions')->where('id', $id)->first();
         $this->assertSame('ended', $row->state);
         $this->assertSame("From the app: covered FCFS.\n\nRound robin and time slices.", $row->summary);
         $this->assertSame('Next: priority scheduling.', $row->checkpoint);
@@ -119,7 +124,7 @@ class SessionToolsTest extends TestCase
         $this->callTool($this->token, 'set_checkpoint', ['session_id' => $id, 'checkpoint' => 'Taught round robin.'])->assertOk();
         $this->callTool($this->token, 'end_session', ['session_id' => $id])->assertOk();
 
-        $exposure = DB::table('journal_entries')->where('kind', 'exposure')->orderByDesc('position')->first();
+        $exposure = LearnerTables::query($this->scope, 'journal_entries')->where('kind', 'exposure')->orderByDesc('position')->first();
         $this->assertNotNull($exposure);
         $this->assertSame('explanation', json_decode((string) $exposure->body, true)['format']);
     }

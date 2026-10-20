@@ -113,7 +113,11 @@ final class LearnerTables
             throw new InvalidArgumentException("'{$table}' is not a registered learner table.");
         }
 
-        return DB::connection($connection)->table($table)->where($table.'.learner_id', $scope->learnerId);
+        $database = DB::connection($connection);
+        $query = ContentColumns::fields($table) === [] ? $database->query()
+            : (new ContentQuery($database, $database->getQueryGrammar(), $database->getPostProcessor()))->forContent($scope, $table);
+
+        return $query->from($table)->where($table.'.learner_id', $scope->learnerId);
     }
 
     /** Shared rows in canonical_files (learner_id is null and visibility is shared). */
@@ -139,9 +143,41 @@ final class LearnerTables
         }
         $rows = array_is_list($rows) ? $rows : [$rows];
 
-        DB::connection($connection)->table($table)->insert(array_map(
+        self::query($scope, $table, $connection)->insert(array_map(
             fn (array $row) => ['learner_id' => $scope->learnerId] + $row,
             $rows,
         ));
+    }
+
+    /** Raw rows only for the reviewed owner-run backfill, never a request path. */
+    public static function contentForMaintenance(Principal $by, LearnerScope $scope, string $table): Builder
+    {
+        if (! $by->isSystem() || ContentColumns::fields($table) === []) {
+            throw new Forbidden('system_required', 'This needs the console.');
+        }
+
+        return DB::connection(config('vistud.database.owner_connection'))->table($table)->where('learner_id', $scope->learnerId);
+    }
+
+    public static function contentLearnersForMaintenance(Principal $by, string $table): array
+    {
+        if (! $by->isSystem() || ContentColumns::fields($table) === []) {
+            throw new Forbidden('system_required', 'This needs the console.');
+        }
+
+        return DB::connection(config('vistud.database.owner_connection'))->table($table)->distinct()->pluck('learner_id')->all();
+    }
+
+    public static function contentOrphansForMaintenance(Principal $by, string $table, ?string $learnerId): Builder
+    {
+        if (! $by->isSystem() || ContentColumns::fields($table) === []) {
+            throw new Forbidden('system_required', 'This needs the console.');
+        }
+        $database = DB::connection(config('vistud.database.owner_connection'));
+        if ($learnerId !== null && $database->table('learners')->where('id', $learnerId)->exists()) {
+            throw new Forbidden('learner_exists', 'Use the learner scope.');
+        }
+
+        return $database->table($table)->where('learner_id', $learnerId);
     }
 }

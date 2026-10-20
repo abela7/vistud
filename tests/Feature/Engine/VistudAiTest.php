@@ -13,7 +13,9 @@ use App\Engine\VistudAi;
 use App\Livewire\Study\VistudAiPage;
 use App\Livewire\Workspaces\TutorChat;
 use App\Models\User;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Study\Activities;
 use App\Study\Modules;
 use App\Study\Sessions;
@@ -79,6 +81,28 @@ class VistudAiTest extends TestCase
         return new Context('', null, null, 'UTC', threadId: null);
     }
 
+    public function test_encrypted_title_search_filters_before_the_limit_and_matches_unicode_and_literal_wildcards(): void
+    {
+        $scope = LearnerScope::of($this->by);
+        $make = function ($scope, $id, $title, $at) {
+            LearnerTables::insert($scope, 'engine_threads', [
+                'id' => $id, 'purpose' => VistudAi::PURPOSE, 'title' => $title, 'turns' => 1,
+                'model' => 'fake/tutor', 'created_at' => $at, 'updated_at' => $at,
+            ]);
+        };
+        $make($scope, 'older-match', 'ÄPFEL 中文 %_ literal', now()->subYear());
+        for ($i = 0; $i < 130; $i++) {
+            $make($scope, 'newer-'.$i, 'Another conversation '.$i, now()->subMinutes($i));
+        }
+        $other = LearnerScope::of($this->principal($this->student()));
+        $make($other, 'other-learner', 'ÄPFEL 中文 %_ literal', now());
+        $ai = app(VistudAi::class);
+        foreach (['äpfel', '中文', '%_'] as $search) {
+            $this->assertSame(['older-match'], array_column($ai->conversations($this->by, $search), 'id'));
+        }
+        $this->assertSame([], $ai->conversations($this->by, 'missing'));
+    }
+
     public function test_it_is_not_the_tutor_its_own_rules_conversation_and_tools(): void
     {
         $this->engine->will(Fake::says('Start with Stable marriage problem in Algorithm Design.', 1_000, 'fake/tutor'));
@@ -104,7 +128,9 @@ class VistudAiTest extends TestCase
 
         // A conversation of its own: no session, no topic, no course; and no session is made.
         $thread = DB::table('engine_threads')->where('id', $id)->first();
-        $this->assertSame([VistudAi::PURPOSE, null, null, null, 'What should I study today?'], [$thread->purpose, $thread->session_id, $thread->topic_id, $thread->workspace_id, $thread->title]);
+        $this->assertSame([VistudAi::PURPOSE, null, null, null], [$thread->purpose, $thread->session_id, $thread->topic_id, $thread->workspace_id]);
+        $this->assertStringNotContainsString('What should I study today?', $thread->title);
+        $this->assertSame('What should I study today?', LearnerTables::query(LearnerScope::of($this->by), 'engine_threads')->where('id', $id)->value('title'));
         $this->assertSame(0, DB::table('study_sessions')->count());
         $this->assertSame([['role' => 'user', 'text' => 'What should I study today?'], ['role' => 'assistant', 'text' => 'Start with Stable marriage problem in Algorithm Design.']], array_map(fn ($t) => ['role' => $t['role'], 'text' => $t['text']], $ai->transcript($this->by, $id)));
     }
@@ -144,7 +170,7 @@ class VistudAiTest extends TestCase
             $at = CarbonImmutable::parse('2023-10-12 08:00:00', 'UTC')->addDays($i * 2);
             $rows[] = ['id' => (string) Str::uuid(), 'learner_id' => $this->by->learnerId, 'workspace_id' => $ids[$i % 30], 'mode' => 'topic', 'state' => 'ended', 'manual' => 1, 'started_at' => $at, 'ended_at' => $at->addHour(), 'last_activity_at' => $at->addHour(), 'study_seconds' => 3600, 'break_seconds' => 0, 'revision' => 1, 'created_at' => $at, 'updated_at' => $at];
         }
-        DB::table('study_sessions')->insert($rows);
+        LearnerTables::insert(LearnerScope::of($this->by), 'study_sessions', $rows);
         foreach (array_slice($ids, 12, TutorMemories::MAX_EACH) as $n => $id) {
             for ($j = 1; $j <= TutorMemories::MAX_EACH; $j++) {
                 $memories->add($this->by, $id, "Line {$j} for course {$n}.", 'tutor');

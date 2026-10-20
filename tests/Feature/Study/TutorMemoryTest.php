@@ -14,7 +14,9 @@ use App\Livewire\Study\Memories;
 use App\Livewire\Workspaces\Instructions;
 use App\Livewire\Workspaces\TutorChat;
 use App\Models\User;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\Briefings;
@@ -163,7 +165,7 @@ class TutorMemoryTest extends TestCase
 
         $this->assertStringContainsString('Remembered for all courses: "Anxious about maths; build from the basics."', $run(['note' => 'Anxious about maths; build from the basics.', 'all_courses' => true]));
         $this->assertStringContainsString('Remembered for this course', $run(['note' => 'Mixes up O(n) and O(log n).']));
-        $row = DB::table('tutor_memories')->where('text', 'Mixes up O(n) and O(log n).')->first();
+        $row = LearnerTables::query(LearnerScope::of($this->by), 'tutor_memories')->get()->first(fn ($memory) => $memory->text === 'Mixes up O(n) and O(log n).');
         $this->assertSame(['tutor', $session->id, $this->algorithms], [$row->by, $row->session_id, $row->workspace_id]);
         $this->assertSame(['Anxious about maths; build from the basics.', 'Mixes up O(n) and O(log n).'], array_column($context->effects->take()['remembered'], 'text'));
 

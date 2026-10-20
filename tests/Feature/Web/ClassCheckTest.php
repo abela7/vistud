@@ -8,7 +8,9 @@ use App\Engine\Request;
 use App\Engine\Settings;
 use App\Livewire\Workspaces\ClassRecorder;
 use App\Models\User;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Study\ClassNote;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
@@ -115,8 +117,8 @@ class ClassCheckTest extends TestCase
 
         $class = app(ClassSessions::class)->find($this->by, $this->class);
         $this->assertSame([$this->slides], $class->checkFiles);
-        $this->assertSame('Class check · Lecture · 20 Oct 2026', DB::table('notes')->where('id', $class->checkNoteId)->value('title'));
-        $this->assertStringContainsString('says four', (string) DB::table('note_versions')->where('note_id', $class->checkNoteId)->orderByDesc('version')->value('doc'));
+        $this->assertSame('Class check · Lecture · 20 Oct 2026', LearnerTables::query(LearnerScope::of($this->by), 'notes')->where('id', $class->checkNoteId)->value('title'));
+        $this->assertStringContainsString('says four', (string) LearnerTables::query(LearnerScope::of($this->by), 'note_versions')->where('note_id', $class->checkNoteId)->orderByDesc('version')->value('doc'));
         $this->assertSame(1, DB::table('engine_jobs')->where('kind', 'class_check')->where('status', 'done')->count());
     }
 
@@ -132,7 +134,7 @@ class ClassCheckTest extends TestCase
         $second = app(ClassSessions::class)->find($this->by, $this->class)->checkNoteId;
 
         $this->assertSame($first, $second);
-        $this->assertSame(1, DB::table('notes')->where('title', 'like', 'Class check%')->count());
+        $this->assertCount(1, LearnerTables::query(LearnerScope::of($this->by), 'notes')->get(['title'])->filter(fn ($row) => str_starts_with($row->title, 'Class check')));
     }
 
     public function test_with_no_file_ticked_it_says_so_and_asks_nothing_of_the_ai(): void

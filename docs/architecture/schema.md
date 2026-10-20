@@ -285,4 +285,31 @@ A learner table (M6.1; written from M6.2): what each MCP call did, without its t
 ### `mcp_confirmations`
 A learner table (M6.1; used from M6.5): a change an AI app asked for that the student must confirm on a ViStud page. `id`, `learner_id`, `connection_id` (FK `ON DELETE CASCADE`), `tool`, `target_id`, `input` (JSON), `input_hash`, `expires_at`, `used_at`, `created_at`. Cutting a connection deletes its open rows.
 
-Note blocks arrive with the next M2 steps ([docs/specs/workspaces.md §8](../specs/workspaces.md#8-for-developers), [ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)). Encryption columns and the key database arrive before another real learner joins (ADR 0001).
+Note blocks arrive with the next M2 steps ([docs/specs/workspaces.md §8](../specs/workspaces.md#8-for-developers), [ADR 0003 §9](../adr/0003-web-workspaces-and-study-content.md#9-study-content-model)).
+
+### Core text encryption (S2a)
+
+The exact table/column and original-type manifest is
+`App\Platform\Database\ContentColumns::S2A`. Those columns now hold AES-256-GCM
+envelopes in LONGTEXT, with `content_version` (unsigned tinyint, default 0 for
+existing rows; runtime writes 1). The logical values above, including JSON
+objects, remain unchanged when read through services. No content SQL searches,
+sorts, JSON extraction, grouping or aggregates are supported.
+
+LONGTEXT is deliberate: Laravel base64-encodes a JSON envelope containing base64
+ciphertext, giving roughly 16/9 growth before envelope/JSON escaping overhead.
+The inner authenticated payload also contains row metadata; quotes/backslashes
+in JSON documents expand further. A near-2,000,000-byte note exceeds TEXT and can
+exceed 3 MB encrypted. Original MEDIUMTEXT capacity also needs LONGTEXT after
+encryption. LONGTEXT has a 4 GiB storage ceiling; application limits and MySQL's
+`max_allowed_packet` still apply. Services retain their existing input limits.
+
+`journal_refs` and `outbox` also have nullable, unique `content_identity` CHAR(36):
+null only in unconverted rows, otherwise an immutable UUID reserved before INSERT.
+Their numeric keys remain unchanged. Other tables bind their existing physical
+keys, including composite journal-content and snapshot keys. The explicit
+backfill converts/verifies each row atomically as the owner. Schema rollback
+requires the verified offline decrypt procedure in deploy.md first.
+
+S2b adds the remaining personal columns; S3 adds file encryption. Neither is
+delivered by S2a, and admission remains closed.

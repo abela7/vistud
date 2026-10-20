@@ -236,7 +236,7 @@ test('the tutor saves cards and writes in a note that updates while it is open',
     await box.fill('Please make cards from the first slides');
     await box.press('Enter');
     await expect(done.last()).toContainText('Saved 2 flashcards', { timeout: 15_000 });
-    const cards = JSON.parse(tinker(`echo json_encode(DB::table('flashcards')->where('workspace_id', '${student.workspace}')->orderBy('front')->pluck('front')->all());`));
+    const cards = JSON.parse(tinker(`$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::where('email', '${student.email}')->firstOrFail(), 'web'); echo json_encode(array_values(collect(app(\\App\\Study\\Flashcards::class)->list($p, '${student.workspace}'))->pluck('front')->sort()->all()));`));
     expect(cards).toEqual(['What is a kernel?', 'What is an OS?']);
 
     // The first note: the session's study note, linked from the answer.

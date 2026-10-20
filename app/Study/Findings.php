@@ -124,7 +124,10 @@ final class Findings
     private function sourceNames(LearnerScope $scope, string $workspaceId): array
     {
         $names = [];
-        foreach (LearnerTables::query($scope, 'notes')->where('workspace_id', $workspaceId)->whereNull('trashed_at')->orderBy('title')->get(['id', 'title']) as $note) {
+        $collator = new \Collator('root');
+        $collator->setStrength(\Collator::PRIMARY);
+        $notes = LearnerTables::query($scope, 'notes')->where('workspace_id', $workspaceId)->whereNull('trashed_at')->get(['id', 'title']);
+        foreach ($notes->sort(fn ($left, $right) => $collator->compare($left->title, $right->title) ?: strcmp($left->id, $right->id)) as $note) {
             $names["note:{$note->id}"] = $note->title === '' ? 'Untitled note' : $note->title;
         }
         foreach (LearnerTables::query($scope, 'files')->where('workspace_id', $workspaceId)->whereNull('trashed_at')->orderBy('name')->get(['id', 'name', 'extension']) as $file) {

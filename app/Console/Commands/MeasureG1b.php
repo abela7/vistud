@@ -21,15 +21,15 @@ class MeasureG1b extends Command
     {
         $mcp = [];
         $chat = [];
-        // The via only, one learner at a time. The entry's text stays in the database.
+        // Decrypt one learner's rows in PHP; SQL cannot inspect the content envelope.
         foreach (DB::table('learners')->pluck('id') as $learnerId) {
             $rows = LearnerTables::query(LearnerScope::forJob((string) $learnerId), 'journal_entries')
-                ->selectRaw("recorded_at, JSON_UNQUOTE(JSON_EXTRACT(body, '$.judge.via')) as via")
-                ->get();
+                ->get(['recorded_at', 'body']);
             foreach ($rows as $row) {
-                if ($row->via === 'mcp') {
+                $via = json_decode($row->body, true, flags: JSON_THROW_ON_ERROR)['judge']['via'] ?? null;
+                if ($via === 'mcp') {
                     $mcp[] = (string) $row->recorded_at;
-                } elseif ($row->via === 'chat') {
+                } elseif ($via === 'chat') {
                     $chat[] = (string) $row->recorded_at;
                 }
             }

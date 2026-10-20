@@ -3,7 +3,9 @@
 namespace Tests\Feature\Mcp;
 
 use App\Mcp\ToolInfo;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Study\Modules;
 use App\Study\Notes;
@@ -83,8 +85,12 @@ class McpIsolationSuiteTest extends TestCase
         $module = app(Modules::class)->create($grace, $course, ['title' => 'Week'])->id;
         $note = app(Notes::class)->create($grace, 'module', $module, 'Note '.self::CANARY);
 
-        $unscoped = (string) DB::table('notes')->where('id', $note->id)->value('title');
-        $this->assertStringContainsString(self::CANARY, $unscoped, 'Without the learner filter the other student\'s title is readable, and the suite must notice.');
+        $raw = (string) DB::table('notes')->where('id', $note->id)->value('title');
+        $this->assertStringNotContainsString(self::CANARY, $raw);
+        // A deliberately broken reader uses the other learner's authorized scope.
+        // Merely removing the SQL filter no longer reveals encrypted text.
+        $unscoped = (string) LearnerTables::query(LearnerScope::of($grace), 'notes')->where('id', $note->id)->value('title');
+        $this->assertStringContainsString(self::CANARY, $unscoped);
 
         $cache = ['note:'.$note->id => $unscoped];
         $this->assertStringContainsString(self::CANARY, $cache['note:'.$note->id]);

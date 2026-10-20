@@ -77,13 +77,50 @@ Only after Abel approves and a verified backup is available:
    **This gives Abel's existing learner its key. Do not omit it or reopen first:** MCP checks it immediately.
 5. Resolve every missing/unreadable-key error; never generate a replacement for a previously provisioned learner.
 6. Verify a key-backed round trip and `php artisan vistud:gate:second-learner` (still closed after S1).
-7. Restart all workers with the environment above, resume the scheduler and reopen the app.
+7. If this release includes S2a, complete its procedure below before restarting anything.
+   Otherwise restart workers with the environment above, resume the scheduler and reopen the app.
 
 Never run `migrate:fresh` on either real database. Reverting the key migration deletes
 keys and makes encrypted content unreadable; its `down()` exists for synthetic tests,
 not for a live rollback. Restore a matching key backup instead.
 
 Master rotation and recovery are in [operations.md](operations.md).
+
+### Core personal text (S2a): offline conversion before reopening
+
+Abel runs these steps; they have not been run on his local database by the builder.
+S1 key migrations and provisioning (including Abel's learner) must be complete.
+Take and verify matching content/key backups and retain the master key privately.
+Stop workers and the scheduler, then put the app in maintenance. Do not run old
+workers alongside the new code: legacy rows are deliberately unreadable at runtime.
+
+1. `php artisan migrate --database=mysql_owner --force` (S2a widens content columns).
+2. `php artisan vistud:encrypt:backfill --dry-run`. Resolve every blocker first.
+3. `php artisan vistud:encrypt:backfill --backup-confirmed`. A stopped command is
+   resumed by repeating it; committed rows are verified and skipped.
+4. `php artisan vistud:encrypt:backfill --verify`. It must exit successfully with
+   zero blocked rows. Save its count-only report, never student text.
+5. With the production database cache selected, run
+   `php artisan vistud:encrypt:clear-text-caches --dry-run`, then
+   `php artisan vistud:encrypt:clear-text-caches`. This deletes ChooseTopics and
+   Troubles entries (including stale entries for deleted folders), without
+   converting them. They refill encrypted. No global cache flush is needed.
+6. Check opening/saving an existing note, note search, tutor history, a class
+   transcript and an MCP read as Abel. Check a raw scratch row is ciphertext.
+7. Restart workers, resume the scheduler, and reopen for Abel only.
+
+S2a covers only [its manifest](../../app/Platform/Database/ContentColumns.php).
+S2b and S3 still have plaintext to convert; the second-learner gate stays closed
+until **both S2a and S2b**, files, validation and the later admission checks pass.
+The ordinary release procedure below must include these steps for the S2a release.
+
+Rollback is also offline and needs a verified backup and readable learner keys:
+run `php artisan vistud:encrypt:backfill --decrypt --backup-confirmed`, then roll
+back the S2a migration as the owner, and deploy the preceding application code.
+The migration refuses encrypted rows or values that would not fit the original
+types. Never shrink ciphertext, recreate keys, or restore plaintext to a running
+application. If conversion or DDL fails, keep maintenance on and resolve it or
+restore matching backups; do not blindly use the generic release rollback.
 
 Abel's study history is in the local MySQL and `storage/`. 2FA secrets, recovery codes and his own OpenRouter key are encrypted with `APP_KEY`, so the server must use the same key.
 

@@ -6,7 +6,9 @@ use App\Audit\AuditAction;
 use App\Mcp\Confirmations;
 use App\Mcp\Connections;
 use App\Models\User;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Topics;
@@ -103,7 +105,7 @@ class ConfirmationTest extends TestCase
 
         $this->assertSame('Virtual memory', DB::table('topics')->where('id', $this->topic)->value('name'));
         $this->assertSame('OS', DB::table('workspaces')->where('id', $this->course)->value('name'));
-        $this->assertSame('CPU scheduling', DB::table('notes')->where('id', $this->note)->value('title'));
+        $this->assertSame('CPU scheduling', LearnerTables::query(LearnerScope::of($this->by), 'notes')->where('id', $this->note)->value('title'));
     }
 
     public function test_what_lands_in_every_prompt_asks_for_the_password_first(): void
@@ -114,7 +116,7 @@ class ConfirmationTest extends TestCase
         $this->assertSame(0, DB::table('tutor_memories')->count());
 
         $this->withSession(['auth.password_confirmed_at' => now()->getTimestamp()])->post($url)->assertOk();
-        $this->assertSame('Prefers worked examples.', DB::table('tutor_memories')->value('text'));
+        $this->assertSame('Prefers worked examples.', LearnerTables::query(LearnerScope::of($this->by), 'tutor_memories')->value('text'));
     }
 
     public function test_forgetting_and_replacing_a_note_also_wait_for_the_student(): void
@@ -129,7 +131,7 @@ class ConfirmationTest extends TestCase
         $this->post($replace)->assertOk();
 
         $this->assertSame(0, DB::table('tutor_memories')->count());
-        $this->assertStringContainsString('Everything new.', (string) DB::table('note_versions')->where('note_id', $this->note)->orderByDesc('version')->value('doc'));
+        $this->assertStringContainsString('Everything new.', (string) LearnerTables::query(LearnerScope::of($this->by), 'note_versions')->where('note_id', $this->note)->orderByDesc('version')->value('doc'));
     }
 
     public function test_a_wrong_expired_or_other_students_link_is_not_found(): void

@@ -60,8 +60,8 @@ final class VistudAi
         $search = trim($search);
 
         return LearnerTables::query(Guard::learner($by), 'engine_threads')->where('purpose', self::PURPOSE)->where('turns', '>', 0)
-            ->when($search !== '', fn ($q) => $q->where('title', 'like', '%'.addcslashes($search, '%_\\').'%'))
-            ->orderByDesc('updated_at')->limit(self::LIST)->get(['id', 'title', 'updated_at'])
+            ->orderByDesc('updated_at')->orderBy('id')->get(['id', 'title', 'updated_at'])
+            ->filter(fn ($row) => $search === '' || mb_stripos((string) $row->title, $search) !== false)->take(self::LIST)
             ->map(fn ($row) => ['id' => (string) $row->id, 'title' => (string) ($row->title ?: 'A conversation'), 'updated_at' => (string) $row->updated_at])->all();
     }
 

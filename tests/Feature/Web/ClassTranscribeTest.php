@@ -8,7 +8,9 @@ use App\Engine\Request;
 use App\Engine\Settings;
 use App\Livewire\Workspaces\ClassRecorder;
 use App\Models\User;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Study\AudioPieces;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
@@ -106,12 +108,12 @@ class ClassTranscribeTest extends TestCase
         $this->page()->assertSee('Write this class down')->call('transcribe')->assertSee('Lecture notes')->assertSee('Full transcript');
 
         $class = app(ClassSessions::class)->find($this->by, $this->class);
-        $titles = DB::table('notes')->where('module_id', $this->module)->pluck('title')->all();
+        $titles = LearnerTables::query(LearnerScope::of($this->by), 'notes')->where('module_id', $this->module)->pluck('title')->all();
         $this->assertContains('Transcript · Week 3 lecture', $titles);
         $this->assertContains('Lecture notes · Week 3 lecture', $titles);
-        $transcript = (string) DB::table('note_versions')->where('note_id', $class->transcriptNoteId)->orderByDesc('version')->value('doc');
+        $transcript = (string) LearnerTables::query(LearnerScope::of($this->by), 'note_versions')->where('note_id', $class->transcriptNoteId)->orderByDesc('version')->value('doc');
         $this->assertStringContainsString('[unclear]', $transcript);
-        $this->assertStringContainsString('Mitosis', (string) DB::table('note_versions')->where('note_id', $class->lectureNotesId)->orderByDesc('version')->value('doc'));
+        $this->assertStringContainsString('Mitosis', (string) LearnerTables::query(LearnerScope::of($this->by), 'note_versions')->where('note_id', $class->lectureNotesId)->orderByDesc('version')->value('doc'));
         $this->assertSame(1, DB::table('engine_jobs')->where('kind', 'transcribe_class')->where('status', 'done')->count());
         $this->assertSame(3000, (int) DB::table('engine_jobs')->where('kind', 'transcribe_class')->value('cost_micros'));
     }
@@ -127,8 +129,8 @@ class ClassTranscribeTest extends TestCase
         $again = app(ClassSessions::class)->find($this->by, $this->class);
 
         $this->assertSame([$first->transcriptNoteId, $first->lectureNotesId], [$again->transcriptNoteId, $again->lectureNotesId]);
-        $this->assertSame(2, DB::table('notes')->where('module_id', $this->module)->where('title', 'like', '%Week 3 lecture')->count());
-        $this->assertStringContainsString('Better notes', (string) DB::table('note_versions')->where('note_id', $again->lectureNotesId)->orderByDesc('version')->value('doc'));
+        $this->assertCount(2, LearnerTables::query(LearnerScope::of($this->by), 'notes')->where('module_id', $this->module)->get(['title'])->filter(fn ($row) => str_ends_with($row->title, 'Week 3 lecture')));
+        $this->assertStringContainsString('Better notes', (string) LearnerTables::query(LearnerScope::of($this->by), 'note_versions')->where('note_id', $again->lectureNotesId)->orderByDesc('version')->value('doc'));
     }
 
     public function test_without_a_key_it_says_where_to_add_one_and_keeps_nothing(): void
@@ -139,7 +141,7 @@ class ClassTranscribeTest extends TestCase
         $this->page()->call('transcribe')->assertSee('Settings, AI');
 
         $this->assertNull(app(ClassSessions::class)->find($this->by, $this->class)->lectureNotesId);
-        $this->assertSame(0, DB::table('notes')->where('title', 'like', 'Lecture notes%')->count());
+        $this->assertCount(0, LearnerTables::query(LearnerScope::of($this->by), 'notes')->get(['title'])->filter(fn ($row) => str_starts_with($row->title, 'Lecture notes')));
     }
 
     public function test_another_student_cannot_write_down_this_class(): void

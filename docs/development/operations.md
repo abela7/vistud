@@ -76,8 +76,30 @@ with the app down and workers stopped, `vistud:keys:provision --prune-orphans`
 reports and removes keys with no learner after a one-hour grace period. Run the
 dry run first. No live maintenance command has been run as part of S1 development.
 
+## Core text migration and recovery (S2a)
+
+Use the offline sequence in [deploy.md](deploy.md#core-personal-text-s2a-offline-conversion-before-reopening).
+The app and workers must not serve mixed legacy/encrypted rows. Backfill reports
+only counts; keep the dry-run and verification reports with the private release
+record. Unowned/outstanding rows and missing/destroyed keys are blockers, never a
+reason to make a replacement key. The schema owner converts append-only journal
+storage; runtime journal privileges remain unchanged.
+
+Clear the named ChooseTopics/Troubles learner caches during that release; they
+refill encrypted. Do not convert them, flush unrelated caches, or leave an old
+worker writing plaintext after the purge. Provider refusal logs retain status,
+provider and model only: a provider's error body can echo personal text.
+
+An S2a rollback requires maintenance, a verified backup and working learner keys:
+verified `vistud:encrypt:backfill --decrypt --backup-confirmed`, schema rollback,
+then the earlier application. Keep the app down throughout. A restore must pair
+the content schema/encoding, separate key database and correct master environment.
+Never test this against Abel's database as a development check. Pre-S2/S3 backups
+are still readable; the S4 retention/deletion decision above remains pending.
+
 ## Log of drills (results)
 
 | Date | Drill | Result |
 |---|---|---|
+| 2026-10-20 | S2a schema/data rollback and redeployment on Windows, `vistud_test` / `vistud_keys_test` only | Passed: verified decrypt, original types restored, migrate/encrypt again, note/title preserved (16 assertions). Not a production restore or an S9 scale result. |
 | | | |

@@ -4,6 +4,8 @@ namespace Tests\Feature\Web;
 
 use App\Mcp\NoteApps;
 use App\Models\User;
+use App\Platform\Access\LearnerScope;
+use App\Platform\Database\LearnerTables;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Topics;
@@ -105,7 +107,7 @@ class NoteConflictTest extends TestCase
 
         $this->putJson("/api/v1/notes/{$this->note}", $this->save(3, 'My later words, and the app added this.', 'save-0003', 'conflict_resolution'))->assertOk();
 
-        $texts = DB::table('note_versions')->where('note_id', $this->note)->orderBy('version')->pluck('doc')->implode(' ');
+        $texts = LearnerTables::query(LearnerScope::of($this->principal($this->ada)), 'note_versions')->where('note_id', $this->note)->orderBy('version')->pluck('doc')->implode(' ');
         $this->assertStringContainsString('My first words.', $texts);
         $this->assertStringContainsString('The app added this.', $texts);
         $this->assertStringContainsString('My later words', $texts);

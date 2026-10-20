@@ -5,7 +5,9 @@ namespace Tests\Feature\Mcp;
 use App\Livewire\Study\Connections;
 use App\Mcp\Undo;
 use App\Models\User;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Study\Flashcards;
 use App\Study\Modules;
 use App\Study\Questions;
@@ -138,7 +140,7 @@ class UndoConnectionTest extends TestCase
         $this->callTool($this->token, 'make_flashcards', ['session_id' => $this->session, 'cards' => [['front' => 'New?', 'back' => 'New.']]])->assertOk();
 
         $this->assertSame(1, $this->undo('hour')['flashcards']);
-        $this->assertSame(['Old?'], DB::table('flashcards')->pluck('front')->all());
+        $this->assertSame(['Old?'], LearnerTables::query(LearnerScope::of($this->by), 'flashcards')->pluck('front')->all());
 
         $this->assertSame(1, $this->undo('day')['flashcards']);
         $this->assertSame(0, DB::table('flashcards')->count());

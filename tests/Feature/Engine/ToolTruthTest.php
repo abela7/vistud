@@ -6,6 +6,7 @@ use App\Engine\Toolbox;
 use App\Engine\Tools\Context;
 use App\Models\User;
 use App\Platform\Access\Guard;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
 use App\Study\Briefings;
@@ -16,7 +17,6 @@ use App\Study\TopicDetails;
 use App\Study\Topics;
 use App\Study\Workspaces;
 use Carbon\CarbonImmutable;
-use Illuminate\Support\Facades\DB;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
@@ -175,7 +175,7 @@ class ToolTruthTest extends TestCase
 
         // The same forms went to the journal, where the rules read them.
         $written = [];
-        foreach (DB::table('journal_entries')->where('type', 'core.attempt')->orderBy('position')->pluck('body') as $body) {
+        foreach (LearnerTables::query(LearnerScope::of($this->by), 'journal_entries')->where('type', 'core.attempt')->orderBy('position')->pluck('body') as $body) {
             $written[] = json_decode((string) $body, true)['form'];
         }
         $this->assertSame(['recall', 'explain', 'apply', 'recognise', 'recognise', 'recall', 'apply'], $written);

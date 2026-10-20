@@ -5,6 +5,7 @@ namespace Tests\Feature\Study;
 use App\Brain\Store\JournalReader;
 use App\Models\User;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
 use App\Study\CardMaker;
@@ -206,7 +207,7 @@ class FlashcardsTest extends TestCase
     {
         $before = count($this->entries(fn () => true));
         $id = (string) Str::uuid7();
-        DB::table('flashcards')->insert([
+        LearnerTables::insert($this->learnerScopeOf($this->ada), 'flashcards', [
             'id' => $id, 'learner_id' => $this->learnerScopeOf($this->ada)->learnerId, 'workspace_id' => $this->databases->id,
             'topic_id' => $this->joins->id, 'front' => 'Front', 'back' => 'Back', 'author' => 'ai', 'created_at' => now(), 'updated_at' => now(),
         ]);

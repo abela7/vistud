@@ -335,3 +335,18 @@ Plan: [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md). On
 - **Admission remains closed.** Abel prepared the key databases/grants, but no live
   migration or provisioning was run. S2-S9 are not delivered by this phase.
 
+## Second-learner readiness: S2a core text (2026-10-20)
+
+- **Owner:** GPT-6, assigned by Abel. **State:** Delivered, awaiting review.
+- S1 was approved by Abel/Claude after clean-copy key tests. S2 is split into
+  separately reviewed S2a and S2b commits; S2b has not started.
+- **Handoff:** [second-learner-S2a.md](../handoff/second-learner-S2a.md), including
+  the exact registry, offline backfill/cache purge and reversible schema procedure.
+- **Evidence:** clean snapshot `b20fee89f08f89d56b057346a8765998f3338351`:
+  1,500 passing, only the acknowledged assignment-folder error and existing
+  Windows skip (1,502 tests, 11,433 assertions). Focused checks: 85 passing;
+  separate schema rollback/redeployment drill: 1 passing. Pint passes; PHPStan
+  app/new tests pass. Five unchanged legacy-test diagnostics are in the handoff.
+- No local live deployment, S1 provisioning or live conversion was performed.
+  Admission remains closed; the gate requires both S2a and S2b plus later phases.
+

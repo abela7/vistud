@@ -5,6 +5,8 @@ namespace Tests\Feature\Mcp;
 use App\Audit\AuditAction;
 use App\Mcp\Tools\McpTool;
 use App\Models\User;
+use App\Platform\Access\LearnerScope;
+use App\Platform\Database\LearnerTables;
 use App\Study\Flashcards;
 use App\Study\Modules;
 use App\Study\Topics;
@@ -35,6 +37,8 @@ class WriteToolsTest extends TestCase
 
     private string $userId;
 
+    private LearnerScope $scope;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -42,6 +46,7 @@ class WriteToolsTest extends TestCase
         $ada = $this->student();
         $this->userId = $ada->id;
         $by = $this->principal($ada);
+        $this->scope = LearnerScope::of($by);
         $this->course = app(Workspaces::class)->create($by, ['name' => 'Operating systems'])->id;
         $module = app(Modules::class)->create($by, $this->course, ['title' => 'Week 2: Scheduling'])->id;
         $this->topic = app(Topics::class)->create($by, $this->course, 'Round robin', $module)->id;
@@ -117,7 +122,7 @@ class WriteToolsTest extends TestCase
             'questions' => [['asked' => 'What happens when a time slice ends?', 'answer' => 'The next process runs.', 'result' => 'correct']],
         ])->assertOk()->assertJsonPath('result.structuredContent.status', 'recorded');
 
-        $attempt = DB::table('journal_entries')->where('kind', 'attempt')->orderByDesc('position')->first();
+        $attempt = LearnerTables::query($this->scope, 'journal_entries')->where('kind', 'attempt')->orderByDesc('position')->first();
         $this->assertNotNull($attempt);
         $body = json_decode((string) $attempt->body, true);
         $this->assertSame('mcp', $attempt->actor_channel);
@@ -145,7 +150,7 @@ class WriteToolsTest extends TestCase
         $this->callTool($this->token, 'answer_flashcard', ['course_id' => $this->course, 'card_id' => $card, 'result' => 'partial', 'graded_by' => 'student'])
             ->assertOk()->assertJsonPath('result.structuredContent.graded_by', 'student');
 
-        $judged = DB::table('journal_entries')->where('kind', 'attempt')->orderBy('position')->get()->map(fn ($e) => json_decode((string) $e->body, true)['judged_by'])->all();
+        $judged = LearnerTables::query($this->scope, 'journal_entries')->where('kind', 'attempt')->orderBy('position')->get()->map(fn ($e) => json_decode((string) $e->body, true)['judged_by'])->all();
         $this->assertSame(['ai', 'self'], array_slice($judged, -2));
     }
 

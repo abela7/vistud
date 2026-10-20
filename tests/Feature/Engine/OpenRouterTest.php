@@ -8,6 +8,7 @@ use App\Engine\OpenRouter;
 use App\Engine\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
 
@@ -259,5 +260,14 @@ class OpenRouterTest extends TestCase
             ['id' => 'anthropic/claude-sonnet-5.5:batch', 'name' => 'Claude Sonnet 5.5 (batch)', 'pricing' => ['prompt' => '0.000001', 'completion' => '0.000005']],
         ]])]);
         $this->assertSame(['anthropic/claude-sonnet-5.5'], array_map(fn ($m) => $m->id, app(Models::class)->all()));
+    }
+
+    public function test_provider_error_bodies_that_echo_personal_text_are_not_logged(): void
+    {
+        $marker = 'private-'.bin2hex(random_bytes(16));
+        $log = Log::spy();
+        Http::fake(['engine.test/*' => Http::response(['error' => ['message' => 'Rejected prompt '.$marker]], 400)]);
+        $this->assertThrows(fn () => app(OpenRouter::class)->reply(new Request('m', 's', [])), EngineFailed::class);
+        $log->shouldHaveReceived('warning')->once()->with('The AI service refused a call.', \Mockery::on(fn ($context) => array_keys($context) === ['provider', 'model', 'status'] && ! str_contains(json_encode($context), $marker)));
     }
 }
