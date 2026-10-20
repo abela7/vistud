@@ -78,7 +78,7 @@ class FileTextsTest extends TestCase
 
         // The worker reads it; from then on the text is there at once.
         [, $key] = app(Files::class)->content($this->by, $file->id);
-        (new ExtractFileText($file->id, $key))->handle();
+        (new ExtractFileText($file->id, $key, $this->by->learnerId))->handle();
         $text = $this->read($file);
         $this->assertSame(FileText::READY, $text->state);
         $this->assertStringContainsString('Mitosis makes two identical cells.', $text->pages[0]);
@@ -93,7 +93,7 @@ class FileTextsTest extends TestCase
         // The bytes on disk are damaged after the upload was checked.
         Storage::disk('local')->put($key, "%PDF-1.4\nnot really a pdf\n%%EOF");
 
-        (new ExtractFileText($file->id, $key))->handle();
+        (new ExtractFileText($file->id, $key, $this->by->learnerId))->handle();
 
         $this->assertSame(FileText::NONE, $this->read($file)->state);
     }

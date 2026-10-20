@@ -15,11 +15,17 @@
 
 CREATE DATABASE IF NOT EXISTS vistud CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE DATABASE IF NOT EXISTS vistud_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS vistud_keys CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS vistud_keys_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE USER IF NOT EXISTS 'vistud_owner'@'%' IDENTIFIED BY 'owner-local-only';
 CREATE USER IF NOT EXISTS 'vistud_app'@'%' IDENTIFIED BY 'app-local-only';
 
 GRANT ALL PRIVILEGES ON vistud.* TO 'vistud_owner'@'%' WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON vistud_test.* TO 'vistud_owner'@'%' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON vistud_keys.* TO 'vistud_owner'@'%' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON vistud_keys_test.* TO 'vistud_owner'@'%' WITH GRANT OPTION;
+GRANT SELECT, INSERT, UPDATE, DELETE ON vistud_keys.* TO 'vistud_app'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON vistud_keys_test.* TO 'vistud_app'@'%';
 
 FLUSH PRIVILEGES;

@@ -3,6 +3,7 @@
 namespace App\Platform\Access;
 
 use App\Platform\Errors\Forbidden;
+use Illuminate\Encryption\Encrypter;
 
 /**
  * The one learner stream a piece of data access may touch (ADR 0001 I3).
@@ -14,6 +15,17 @@ use App\Platform\Errors\Forbidden;
 final readonly class LearnerScope
 {
     private function __construct(public string $learnerId) {}
+
+    /** Loaded only at the first cryptographic use in this request/job. */
+    public function key(string $purpose): string
+    {
+        return app(LearnerKeys::class)->derive($this, $purpose);
+    }
+
+    public function encrypter(): Encrypter
+    {
+        return new Encrypter($this->key('content'), 'aes-256-gcm');
+    }
 
     /** The acting user's own stream. Needs the student role; being an admin grants nothing. */
     public static function of(Principal $principal): self

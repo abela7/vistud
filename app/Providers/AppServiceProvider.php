@@ -10,6 +10,7 @@ use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureTwoFactorEnrolled;
 use App\Http\Middleware\EnterAdminArea;
 use App\Mcp\Http\AuthorizeConnection;
+use App\Platform\Access\LearnerKeys;
 use App\Platform\Access\Principal;
 use App\Platform\Database\RuntimeGrants;
 use Carbon\CarbonInterval;
@@ -18,6 +19,7 @@ use Illuminate\Contracts\Auth\StatefulGuard;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\MigrationsEnded;
 use Illuminate\Http\Request;
+use Illuminate\Queue\Events\JobAttempted;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\Looping;
 use Illuminate\Support\Facades\Auth;
@@ -33,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->scoped(LearnerKeys::class);
         $this->app->singleton(Themes::class, fn () => new Themes(resource_path('themes')));
         // The built-in chat's engine: OpenRouter, or any service with the OpenAI chat format (config/vistud.php).
         $this->app->bind(Engine::class, OpenRouter::class);
@@ -63,6 +66,18 @@ class AppServiceProvider extends ServiceProvider
         // jobs go on the queue only while one is (App\Engine\Jobs\Runner), otherwise they run after the response.
         Event::listen(Looping::class, fn () => Heartbeat::beat());
         Event::listen(JobProcessing::class, fn () => Heartbeat::beat());
+        // A sync/after-response job shares its caller's container. Unlike queue:work,
+        // it does not flush scoped instances itself. Never retain keys across either boundary.
+        Event::listen(JobProcessing::class, function () {
+            if ($this->app->resolved(LearnerKeys::class)) {
+                $this->app->make(LearnerKeys::class)->forget();
+            }
+        });
+        Event::listen(JobAttempted::class, function () {
+            if ($this->app->resolved(LearnerKeys::class)) {
+                $this->app->make(LearnerKeys::class)->forget();
+            }
+        });
 
         // AI apps over MCP (docs/specs/mcp-connections-plan.md §3.2): an hour per access token, 30 days per refresh token,
         // ViStud's consent page; calls limited per student (a reconnect does not reset it) and, before sign-in, per IP.

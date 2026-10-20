@@ -3,6 +3,8 @@
 namespace App\Study;
 
 use App\Jobs\MakeFilePreview;
+use App\Jobs\StoredFileScope;
+use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use Illuminate\Contracts\Cache\Lock;
 use Illuminate\Support\Facades\Cache;
@@ -103,7 +105,7 @@ final class FilePreviews
         }
 
         // Queued once for a file (the job is unique); with the sync queue it has been made by now.
-        MakeFilePreview::dispatch($file->id, $key, $file->extension);
+        MakeFilePreview::dispatch($file->id, $key, $file->extension, Guard::learner($by)->learnerId);
 
         return match (true) {
             $disk->exists($pdfKey) => $pdfKey,
@@ -119,7 +121,7 @@ final class FilePreviews
     public static function prepare(FileDetails $file, string $key): void
     {
         if (self::converts($file) && self::converter() !== null && config('queue.default') !== 'sync') {
-            MakeFilePreview::dispatch($file->id, $key, $file->extension);
+            MakeFilePreview::dispatch($file->id, $key, $file->extension, StoredFileScope::learnerId($key));
         }
     }
 
@@ -220,7 +222,7 @@ final class FilePreviews
         $target = self::modernKey($key, $modern[0]);
         if (! $disk->exists($target) && ! $disk->exists("{$target}.failed") && self::converter() !== null) {
             // Queued once for a file (the job is unique); with the sync queue it has been made by now.
-            MakeFilePreview::dispatch($file->id, $key, $file->extension);
+            MakeFilePreview::dispatch($file->id, $key, $file->extension, Guard::learner($by)->learnerId);
         }
 
         return match (true) {

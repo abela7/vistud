@@ -323,3 +323,15 @@ Plan: [docs/specs/mcp-connections-plan.md](../specs/mcp-connections-plan.md). On
 - Tests: `tests/Feature/Engine/ToolTruthTest.php`, `tests/Feature/Study/TopicsTest.php`, `tests/Feature/Study/WriteBackTest.php`, `tests/Feature/Study/OrphanWriteTest.php`, `tests/Feature/Engine/ProvenanceTest.php`, `tests/Feature/Engine/FenceTest.php`, `tests/Feature/Engine/EngineCommandsTest.php`, `tests/Architecture/LearnerIsolationTest.php`, `tests/Feature/Web/TopicSheetScreenTest.php`.
 - Guard tests green: `tests/Feature/Engine/ToolboxTest.php`, `tests/Feature/Engine/SessionChatTest.php`, `tests/Feature/Engine/AgreementTest.php`, `tests/Feature/Engine/ToolTruthTest.php`, `tests/Feature/Engine/StackTest.php`, `tests/Feature/Engine/VistudAiTest.php`.
 
+## Second-learner readiness: S1 keys (2026-10-20)
+
+- **Owner:** GPT-6, assigned by Abel. **State:** Delivered, awaiting review; only S1.
+- **Branch:** `claude-latest`. Brief: `docs/handoff/GPT6-MANY-STUDENTS.md`.
+- **Handoff:** [second-learner-S1.md](../handoff/second-learner-S1.md): key lifecycle,
+  migration/provisioning order (including Abel), rotation/recovery and test results.
+- **Evidence:** isolated snapshot `6920fbd09bd863aa9818b6ea3475600eb20560e7`:
+  1,446 passing, 5 failures and 12 errors reproduced on unchanged HEAD `665c18c`,
+  1 existing Windows skip. All 19 S1 lifecycle tests pass; Pint/PHPStan pass.
+- **Admission remains closed.** Abel prepared the key databases/grants, but no live
+  migration or provisioning was run. S2-S9 are not delivered by this phase.
+

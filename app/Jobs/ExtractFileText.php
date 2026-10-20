@@ -23,7 +23,7 @@ final class ExtractFileText implements ShouldBeUnique, ShouldQueue
     /** If a worker dies holding it, the file can be queued again after this long. */
     public int $uniqueFor = 600;
 
-    public function __construct(public string $fileId, public string $storageKey) {}
+    public function __construct(public string $fileId, public string $storageKey, public string $learnerId) {}
 
     public function uniqueId(): string
     {
@@ -32,6 +32,9 @@ final class ExtractFileText implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
+        // An already-queued pre-S1 job has no learnerId property: its trusted canonical
+        // path supplies it, and the same scoped ownership check still applies.
+        StoredFileScope::check(isset($this->learnerId) ? $this->learnerId : StoredFileScope::learnerId($this->storageKey), $this->fileId, $this->storageKey);
         FileTexts::extractPdf($this->storageKey);
     }
 }

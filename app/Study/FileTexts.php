@@ -3,6 +3,7 @@
 namespace App\Study;
 
 use App\Jobs\ExtractFileText;
+use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use DateTimeImmutable;
 use Illuminate\Support\Facades\Log;
@@ -57,7 +58,7 @@ final class FileTexts
         // page waits for nobody (docs/specs/mcp-connections-plan.md M6.2). Queued once per file; with the sync queue
         // it has been read by now.
         if ($file->extension === 'pdf' && $file->size > (int) config('vistud.files.inline_pdf_bytes', self::INLINE_PDF_BYTES)) {
-            ExtractFileText::dispatch($file->id, $key);
+            ExtractFileText::dispatch($file->id, $key, Guard::learner($by)->learnerId);
 
             return self::kept($file, $textKey)
                 ?? new FileText($file, $disk->exists("{$textKey}.failed") ? FileText::NONE : FileText::PREPARING);

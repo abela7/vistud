@@ -3,6 +3,8 @@
 namespace App\Platform\Database;
 
 use App\Platform\Access\LearnerScope;
+use App\Platform\Access\Principal;
+use App\Platform\Errors\Forbidden;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -20,6 +22,28 @@ use InvalidArgumentException;
  */
 final class LearnerTables
 {
+    /** Kept in a physically separate database and migration path. */
+    public const KEY_TABLES = ['learner_keys'];
+
+    public static function keyRowsForMaintenance(Principal $by): Builder
+    {
+        if (! $by->isSystem()) {
+            throw new Forbidden('system_required', 'This needs the console.');
+        }
+        self::assertKeyDatabase();
+
+        return DB::connection('mysql_keys')->table('learner_keys');
+    }
+
+    public static function assertKeyDatabase(): void
+    {
+        $keys = config('database.connections.mysql_keys.database');
+        if (! is_string($keys) || $keys === '' || $keys === config('database.connections.mysql.database')
+            || $keys !== config('database.connections.mysql_keys_owner.database')) {
+            throw new \RuntimeException('The learner key database must be separate from the content database.');
+        }
+    }
+
     /** @var list<string> */
     public const TABLES = [
         'journal_entries',
@@ -77,6 +101,14 @@ final class LearnerTables
     /** `$connection`: another than the default, such as the owner's for what the runtime user may not do (journal rebuilds). */
     public static function query(LearnerScope $scope, string $table, ?string $connection = null): Builder
     {
+        if (in_array($table, self::KEY_TABLES, true)) {
+            self::assertKeyDatabase();
+            if ($connection !== null && $connection !== 'mysql_keys') {
+                throw new InvalidArgumentException('Learner keys use only mysql_keys.');
+            }
+
+            return DB::connection('mysql_keys')->table($table)->where($table.'.learner_id', $scope->learnerId);
+        }
         if (! in_array($table, self::TABLES, true)) {
             throw new InvalidArgumentException("'{$table}' is not a registered learner table.");
         }

@@ -3,6 +3,21 @@
 use Illuminate\Support\Str;
 use Pdo\Mysql;
 
+$keyConnection = static fn (bool $owner): array => [
+    'driver' => 'mysql',
+    'host' => env('DB_KEYS_HOST', env('DB_HOST', '127.0.0.1')),
+    'port' => env('DB_KEYS_PORT', env('DB_PORT', '3306')),
+    'database' => env('DB_KEYS_DATABASE', 'vistud_keys'),
+    'username' => $owner ? env('DB_KEYS_OWNER_USERNAME', env('DB_OWNER_USERNAME')) : env('DB_KEYS_USERNAME', env('DB_USERNAME')),
+    'password' => $owner ? env('DB_KEYS_OWNER_PASSWORD', env('DB_OWNER_PASSWORD')) : env('DB_KEYS_PASSWORD', env('DB_PASSWORD')),
+    'unix_socket' => env('DB_KEYS_SOCKET', env('DB_SOCKET', '')),
+    'charset' => 'utf8mb4', 'collation' => 'utf8mb4_unicode_ci', 'prefix' => '',
+    'prefix_indexes' => true, 'strict' => true, 'engine' => 'InnoDB', 'timezone' => '+00:00',
+    'options' => extension_loaded('pdo_mysql') ? array_filter([
+        Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+    ]) : [],
+];
+
 return [
 
     /*
@@ -31,6 +46,9 @@ return [
     */
 
     'connections' => [
+
+        'mysql_keys' => $keyConnection(false),
+        'mysql_keys_owner' => $keyConnection(true),
 
         'sqlite' => [
             'driver' => 'sqlite',

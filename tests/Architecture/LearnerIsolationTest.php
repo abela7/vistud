@@ -22,10 +22,8 @@ class LearnerIsolationTest extends TestCase
         'app/Jobs/',
         'app/Console/Commands/',
         'app/Brain/Redaction/',
+        'app/Identity/AccountFactory.php',
     ];
-
-    /** Code that may query shared canonical_files rows. */
-    private const SHARED_ALLOWED = [];
 
     public function test_every_learner_table_carries_learner_id(): void
     {
@@ -41,11 +39,17 @@ class LearnerIsolationTest extends TestCase
             }
         }
         $this->assertSame([], $unregistered, 'Every table with a learner_id column must be registered in LearnerTables::TABLES.');
+
+        LearnerTables::assertKeyDatabase();
+        foreach (LearnerTables::KEY_TABLES as $table) {
+            $this->assertFalse(Schema::hasTable($table), 'Keys must never enter the content database.');
+            $this->assertTrue(Schema::connection('mysql_keys')->hasColumn($table, 'learner_id'));
+        }
     }
 
     public function test_learner_tables_are_reached_only_through_the_isolation_layer(): void
     {
-        $tables = implode('|', array_map('preg_quote', LearnerTables::TABLES));
+        $tables = implode('|', array_map('preg_quote', [...LearnerTables::TABLES, ...LearnerTables::KEY_TABLES]));
         $direct = '/(?:table|from|join|leftJoin|rightJoin)\(\s*[\'"](?:'.$tables.')[\'"]|\$table\s*=\s*[\'"](?:'.$tables.')[\'"]/';
         $rawSql = '/\bDB::(?i:select|selectOne|statement|unprepared|affectingStatement|scalar|insert|update|delete|raw)\s*\([^;]*\b(?:'.$tables.')\b|\b(?i:from|join|into|update)\s+`?(?:'.$tables.')`?\b/s';
 
@@ -71,8 +75,7 @@ class LearnerIsolationTest extends TestCase
             if ($file === 'app/Platform/Database/LearnerTables.php') {
                 continue;
             }
-            $allowed = array_filter(self::SHARED_ALLOWED, fn ($prefix) => str_starts_with($file, $prefix));
-            if ($allowed === [] && str_contains(file_get_contents(base_path($file)), 'LearnerTables::shared(')) {
+            if (str_contains(file_get_contents(base_path($file)), 'LearnerTables::shared(')) {
                 $offenders[] = $file;
             }
         }

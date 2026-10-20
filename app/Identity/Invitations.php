@@ -111,30 +111,43 @@ final class Invitations
      */
     public function accept(string $token, string $name, string $password, ?string $timezone = null): User
     {
-        return DB::transaction(function () use ($token, $name, $password, $timezone) {
-            $invitation = DB::table('invitations')
-                ->where('token_hash', hash('sha256', $token))
-                ->lockForUpdate()
-                ->first();
+        $pending = DB::table('invitations')->where('token_hash', hash('sha256', $token))->first();
+        if ($pending === null || $pending->accepted_at !== null || $pending->revoked_at !== null
+            || now()->greaterThanOrEqualTo($pending->expires_at)
+            || User::query()->where('email', $pending->email)->exists()) {
+            throw new Unprocessable('invitation_invalid', 'This invitation is not valid. Ask for a new one.');
+        }
 
-            if ($invitation === null
-                || $invitation->accepted_at !== null
-                || $invitation->revoked_at !== null
-                || now()->greaterThanOrEqualTo($invitation->expires_at)
-                || User::query()->where('email', $invitation->email)->exists()) {
+        // The factory provisions the key first, then consumes the invitation in the account transaction.
+        try {
+            return $this->factory->create($name, $pending->email, $password, student: true, timezone: $timezone, grantedBy: $pending->invited_by,
+                afterCreate: function (User $user) use ($token) {
+                    $invitation = DB::table('invitations')
+                        ->where('token_hash', hash('sha256', $token))
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($invitation === null
+                        || $invitation->accepted_at !== null
+                        || $invitation->revoked_at !== null
+                        || now()->greaterThanOrEqualTo($invitation->expires_at)) {
+                        throw new Unprocessable('invitation_invalid', 'This invitation is not valid. Ask for a new one.');
+                    }
+
+                    DB::table('invitations')->where('id', $invitation->id)->update([
+                        'accepted_at' => now(),
+                        'accepted_user_id' => $user->id,
+                        'updated_at' => now(),
+                    ]);
+                    $this->audit->record($this->principals->forUser($user, 'web'), AuditAction::INVITATION_ACCEPTED, 'invitation', $invitation->id);
+                });
+        } catch (Conflict $e) {
+            // Another acceptance can win after the preliminary read. Preserve the
+            // same neutral invitation failure as an already-consumed token.
+            if ($e->errorCode === 'email_taken') {
                 throw new Unprocessable('invitation_invalid', 'This invitation is not valid. Ask for a new one.');
             }
-
-            $user = $this->factory->create($name, $invitation->email, $password, student: true, timezone: $timezone, grantedBy: $invitation->invited_by);
-
-            DB::table('invitations')->where('id', $invitation->id)->update([
-                'accepted_at' => now(),
-                'accepted_user_id' => $user->id,
-                'updated_at' => now(),
-            ]);
-            $this->audit->record($this->principals->forUser($user, 'web'), AuditAction::INVITATION_ACCEPTED, 'invitation', $invitation->id);
-
-            return $user;
-        });
+            throw $e;
+        }
     }
 }

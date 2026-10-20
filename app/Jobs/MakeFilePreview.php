@@ -27,7 +27,7 @@ final class MakeFilePreview implements ShouldBeUnique, ShouldQueue
     /** If a worker dies holding it, the file can be queued again after this long. */
     public int $uniqueFor = 900;
 
-    public function __construct(public string $fileId, public string $storageKey, public string $extension) {}
+    public function __construct(public string $fileId, public string $storageKey, public string $extension, public string $learnerId) {}
 
     public function uniqueId(): string
     {
@@ -42,6 +42,7 @@ final class MakeFilePreview implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
+        StoredFileScope::check(isset($this->learnerId) ? $this->learnerId : StoredFileScope::learnerId($this->storageKey), $this->fileId, $this->storageKey);
         $wait = FilePreviews::make($this->fileId, $this->storageKey, $this->extension);
         if ($wait !== null) {
             $this->release($wait);

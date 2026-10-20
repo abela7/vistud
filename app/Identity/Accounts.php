@@ -35,12 +35,10 @@ final class Accounts
     {
         Guard::protectedAdmin($by, allowSystem: true);
 
-        return DB::transaction(function () use ($by, $name, $email, $password, $student, $timezone) {
-            $user = $this->factory->create($name, $email, $password, $student, $timezone, $by->userId);
-            $this->audit->record($by, AuditAction::ACCOUNT_CREATED, 'user', $user->id, ['student' => $student], role: $this->adminRole($by));
-
-            return $user;
-        });
+        return $this->factory->create($name, $email, $password, $student, $timezone, $by->userId,
+            afterCreate: function (User $user) use ($by, $student) {
+                $this->audit->record($by, AuditAction::ACCOUNT_CREATED, 'user', $user->id, ['student' => $student], role: $this->adminRole($by));
+            });
     }
 
     public function suspend(Principal $by, string $userId): void

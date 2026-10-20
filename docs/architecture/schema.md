@@ -54,6 +54,19 @@ The learner stream (ADR 0002 §3), created together with the `student` role.
 | `timezone` | string(64) | IANA name, used for day and week precision |
 | `journal_position` | unsigned bigint | Last position assigned. The writer locks this row to assign the next |
 | `cache_version` | unsigned int | Increased by redaction, so cached briefs become unreachable |
+| `key_provisioned_at` | timestamp, null | S1: once set, a missing key is an error; provisioning never replaces it |
+
+### `learner_keys` (S1, separate key database)
+
+Registered separately as `LearnerTables::KEY_TABLES`, queried through the same
+isolation layer on `mysql_keys`. Migrations: `database/key-migrations`, run with
+`mysql_keys_owner`; never included in the content database's migration path or dumps.
+`learner_id` is the UUID primary key (no cross-database foreign key), `key_version`
+is the payload/derivation version (1), `master_version` is the SHA-256 identifier of
+the wrapping master, `wrapped_key` is Laravel AES-256-GCM ciphertext, plus timestamps.
+The authenticated inner payload repeats the learner ID, key version and master
+version and contains the random 32-byte data key. All are checked when loaded.
+Master secrets are runtime environment values, not database/config-cache fields.
 
 ### `invitations`
 

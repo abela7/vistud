@@ -3,6 +3,8 @@
 namespace Database\Factories;
 
 use App\Models\User;
+use App\Platform\Access\LearnerKeyStore;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Ids;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\DB;
@@ -38,12 +40,15 @@ class UserFactory extends Factory
         return $this->afterCreating(function (User $user) use ($timezone) {
             DB::table('user_roles')->insertOrIgnore(['user_id' => $user->id, 'role' => 'student', 'granted_at' => now()]);
             if (! DB::table('learners')->where('user_id', $user->id)->exists()) {
+                $learnerId = Ids::new();
+                app(LearnerKeyStore::class)->provision(LearnerScope::forJob($learnerId));
                 DB::table('learners')->insert([
-                    'id' => Ids::new(),
+                    'id' => $learnerId,
                     'user_id' => $user->id,
                     'timezone' => $timezone,
                     'created_at' => now(),
                     'updated_at' => now(),
+                    'key_provisioned_at' => now(),
                 ]);
             }
         });

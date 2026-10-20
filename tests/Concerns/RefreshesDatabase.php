@@ -13,7 +13,30 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
  */
 trait RefreshesDatabase
 {
-    use RefreshDatabase;
+    use RefreshDatabase {
+        connectionsToTransact as protected contentConnectionsToTransact;
+        migrateDatabases as protected migrateContentDatabases;
+    }
+
+    protected function connectionsToTransact()
+    {
+        $connections = $this->contentConnectionsToTransact();
+
+        return $connections === [] ? [] : array_values(array_unique([...$connections, 'mysql_keys']));
+    }
+
+    protected function migrateDatabases()
+    {
+        // Only named test databases may ever be wiped by this trait.
+        if (config('database.connections.mysql.database') !== 'vistud_test'
+            || config('database.connections.mysql_keys.database') !== 'vistud_keys_test') {
+            throw new \RuntimeException('Refusing to refresh a non-test database.');
+        }
+        $this->migrateContentDatabases();
+        $this->artisan('migrate:fresh', [
+            '--database' => 'mysql_keys_owner', '--path' => 'database/key-migrations', '--force' => true,
+        ])->assertSuccessful();
+    }
 
     protected function migrateFreshUsing()
     {
