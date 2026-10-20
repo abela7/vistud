@@ -38,8 +38,17 @@ class ContentSchemaRollbackTest extends TestCase
             $migration = require database_path('migrations/2026_10_21_100000_encrypt_core_learner_text.php');
             $this->assertThrows(fn () => $migration->down(), \RuntimeException::class);
             $this->assertTrue(Schema::hasColumn('notes', 'content_version'));
-            $this->artisan('vistud:encrypt:backfill', ['--decrypt' => true])->assertSuccessful();
+            $remaining = require database_path('migrations/2026_10_21_110000_encrypt_remaining_learner_text.php');
+            $this->assertThrows(fn () => $remaining->down(), \RuntimeException::class);
+            $this->artisan('vistud:encrypt:backfill', ['--phase' => 'S2b', '--decrypt' => true])->assertSuccessful();
             $this->artisan('migrate:rollback', ['--database' => 'mysql_owner', '--step' => 1, '--force' => true])->assertSuccessful();
+            $this->assertFalse(Schema::hasColumn('workspaces', 'content_version'));
+            $this->assertSame('Synthetic rollback course', DB::table('workspaces')->where('id', $workspace->id)->value('name'));
+            $this->assertSame(1, (int) DB::table('notes')->where('id', $note->id)->value('content_version'));
+            $this->artisan('migrate', ['--database' => 'mysql_owner', '--force' => true])->assertSuccessful();
+            $this->artisan('vistud:encrypt:backfill', ['--phase' => 'S2b'])->assertSuccessful();
+            $this->artisan('vistud:encrypt:backfill', ['--decrypt' => true])->assertSuccessful();
+            $this->artisan('migrate:rollback', ['--database' => 'mysql_owner', '--step' => 2, '--force' => true])->assertSuccessful();
             $this->assertFalse(Schema::hasColumn('notes', 'content_version'));
             $this->assertSame('varchar', collect(Schema::getColumns('notes'))->firstWhere('name', 'title')['type_name']);
             $this->assertSame('Rollback 中文', DB::table('notes')->where('id', $note->id)->value('title'));

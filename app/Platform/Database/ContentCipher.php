@@ -46,6 +46,9 @@ final class ContentCipher
     public function encodeRow(LearnerScope $scope, string $table, array $row): array
     {
         $scope->encrypter();
+        if ($table === 'topic_suggestions' && isset($row['name'])) {
+            $row['name_key'] = ContentIndexes::suggestion($scope, $row['name']);
+        }
         foreach (ContentColumns::fields($table) as $field) {
             if (array_key_exists($field, $row)) {
                 $row[$field] = $this->encrypt($scope, $table, $row, $field, $row[$field]);
@@ -69,8 +72,19 @@ final class ContentCipher
                 $row[$field] = $this->decrypt($scope, $table, $row, $field, $row[$field]);
             }
         }
+        if ($table === 'topic_suggestions' && isset($row['name'], $row['name_key'])) {
+            $this->verifyIndexes($scope, $table, $row);
+        }
 
         return $row;
+    }
+
+    public function verifyIndexes(LearnerScope $scope, string $table, array $row): void
+    {
+        if ($table === 'topic_suggestions' && (! isset($row['name'], $row['name_key'])
+            || ! hash_equals(ContentIndexes::suggestion($scope, $row['name']), $row['name_key']))) {
+            throw new RuntimeException('Learner content index authentication failed.');
+        }
     }
 
     private function identity(string $table, array $row): array

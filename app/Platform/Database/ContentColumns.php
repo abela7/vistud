@@ -2,7 +2,7 @@
 
 namespace App\Platform\Database;
 
-/** The S2a storage manifest. S2b adds the remaining study content. */
+/** Personal text storage manifest. Historical migrations own their frozen copies. */
 final class ContentColumns
 {
     public const VERSION = 1;
@@ -29,9 +29,38 @@ final class ContentColumns
         'class_reviews' => ['body' => 'json NOT NULL'],
     ];
 
+    public const S2B = [
+        'workspaces' => ['name' => 'varchar(80) NOT NULL', 'code' => 'varchar(20) NULL', 'term' => 'varchar(40) NULL'],
+        'modules' => ['title' => 'varchar(120) NOT NULL', 'about' => 'varchar(300) NULL'],
+        'folders' => ['name' => 'varchar(120) NOT NULL'],
+        'files' => ['name' => 'varchar(200) NOT NULL'],
+        'topics' => ['name' => 'varchar(120) NOT NULL'],
+        'links' => ['title' => 'varchar(200) NOT NULL', 'url' => 'varchar(2000) NOT NULL'],
+        'instructions' => ['text' => 'varchar(2000) NOT NULL'],
+        'activities' => ['title' => 'varchar(200) NOT NULL'],
+        'activity_items' => ['title' => 'varchar(200) NOT NULL', 'notes' => 'text NULL', 'labels' => 'json NULL'],
+        'activity_members' => ['name' => 'varchar(80) NOT NULL'],
+        'activity_sources' => ['title' => 'varchar(200) NULL', 'text' => 'longtext NOT NULL'],
+        'activity_understandings' => ['body' => 'json NOT NULL', 'changes' => 'text NULL', 'sources' => 'json NOT NULL'],
+        'activity_log' => ['text' => 'varchar(500) NOT NULL'],
+        'course_profiles' => ['about' => 'text NULL', 'outcomes' => 'json NULL', 'assessment' => 'json NULL', 'textbook' => 'varchar(200) NULL', 'syllabus_text' => 'mediumtext NULL', 'proposed_modules' => 'json NULL', 'language' => 'varchar(40) NULL', 'tools' => 'json NULL', 'exam_format' => 'varchar(300) NULL'],
+        'learner_profiles' => ['preferences' => 'json NULL', 'note' => 'text NULL'],
+        'engine_settings' => ['language' => 'varchar(40) NULL'],
+        'file_digests' => ['summary' => 'text NULL', 'outline' => 'json NULL', 'topics' => 'json NULL', 'language' => 'varchar(30) NULL'],
+        'topic_suggestions' => ['name' => 'varchar(120) NOT NULL', 'reason' => 'varchar(300) NULL', 'note' => 'varchar(500) NULL', 'covers' => 'text NULL', 'sources' => 'text NULL'],
+        'module_briefs' => ['text' => 'mediumtext NOT NULL'],
+        'folder_briefs' => ['text' => 'mediumtext NOT NULL'],
+        'quizzes' => ['questions' => 'json NOT NULL'],
+    ];
+
+    public static function all(): array
+    {
+        return self::S2A + self::S2B;
+    }
+
     public static function fields(string $table): array
     {
-        return array_keys(self::S2A[$table] ?? []);
+        return array_keys(self::all()[$table] ?? []);
     }
 
     /** Physical primary keys, within one learner. */
@@ -40,6 +69,8 @@ final class ContentColumns
         return match ($table) {
             'journal_content' => ['entry_id', 'field'],
             'projection_snapshots' => ['rules_version'],
+            'module_briefs' => ['module_id'],
+            'folder_briefs' => ['folder_id'],
             default => ['id'],
         };
     }

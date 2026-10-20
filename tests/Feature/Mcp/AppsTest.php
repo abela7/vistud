@@ -147,7 +147,7 @@ class AppsTest extends TestCase
         $text = (string) $asked->json('result.content.0.text');
         $this->assertStringContainsString('/connections/confirm/', $text);
         $this->assertStringContainsString('only the student can', $text);
-        $this->assertSame('Week 2', DB::table('modules')->where('title', 'Week 2')->value('title'));
+        $this->assertSame('Week 2', app(Modules::class)->find($this->by, $this->module)->title);
         $this->assertSame(Panels::meta('rename_module')['resourceUri'], collect($this->mcp($full, 'tools/list')->json('result.tools'))->keyBy('name')['rename_module']['_meta']['ui']['resourceUri']);
     }
 }

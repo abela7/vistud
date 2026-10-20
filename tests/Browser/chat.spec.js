@@ -157,7 +157,11 @@ test('notes and pictures go with a message: picked, uploaded or pasted', async (
     await expect(chat.getByRole('list', { name: 'Attached to your message' })).toBeHidden();
 
     // The uploads landed in the module's "From the chat" folder.
-    const kept = tinker(`echo json_encode(DB::table('files')->join('folders', 'folders.id', '=', 'files.folder_id')->where('files.workspace_id', '${student.workspace}')->orderBy('files.name')->get(['files.name', 'files.extension', 'folders.name as folder'])->map(fn ($r) => $r->folder.'/'.$r->name.'.'.$r->extension)->all());`);
+    const kept = tinker([
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `$folders = collect(app(\\App\\Study\\Folders::class)->tree($p, '${student.workspace}'))->keyBy('id');`,
+        `echo json_encode(collect(app(\\App\\Study\\Files::class)->list($p, '${student.workspace}'))->filter(fn ($f) => isset($folders[$f->folderId]))->sortBy('name')->map(fn ($f) => $folders[$f->folderId]->name.'/'.$f->fileName())->values()->all());`,
+    ].join(' '));
     expect(JSON.parse(kept).map((path) => path.replace(/ \d{4}-\d{2}-\d{2} \d{2}\.\d{2}/, ''))).toEqual(['From the chat/Onion cells.png', 'From the chat/Pasted picture.png']);
 
     const violations = (await new AxeBuilder({ page }).include('.chat').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze())
@@ -374,7 +378,11 @@ test('the tutor marks a topic as its own, with a tap to undo it, and the end scr
     await group.getByLabel('Studying').check();
     await end.getByRole('button', { name: 'End session' }).click();
     await expect(end.getByRole('heading', { name: 'Session ended' })).toBeVisible();
-    const status = JSON.parse(tinker(`echo json_encode(DB::table('topics')->where('workspace_id', '${student.workspace}')->where('name', 'Self joins')->first(['status', 'status_by']));`));
+    const status = JSON.parse(tinker([
+        `$p = app(\\App\\Identity\\PrincipalFactory::class)->forUser(\\App\\Models\\User::query()->where('email', '${student.email}')->firstOrFail(), 'web');`,
+        `$s = \\App\\Platform\\Access\\LearnerScope::of($p);`,
+        `echo json_encode(\\App\\Platform\\Database\\LearnerTables::query($s, 'topics')->where('workspace_id', '${student.workspace}')->get()->firstWhere('name', 'Self joins'));`,
+    ].join(' ')));
     expect([status.status, status.status_by]).toEqual(['covered', 'student']);
 });
 

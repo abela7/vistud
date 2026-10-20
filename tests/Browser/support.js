@@ -325,7 +325,7 @@ export function makeStudentWithProgressTree() {
         `$w = '${student.workspace}'; $t = app(\\App\\Study\\Topics::class);`,
         `$m2 = app(\\App\\Study\\Modules::class)->create($p, $w, ['title' => 'Week 2: Transactions']);`,
         `$acid = $t->create($p, $w, 'ACID', $m2->id); $t->create($p, $w, 'Isolation levels', $m2->id); $t->mark($p, $acid->id, 'understood');`,
-        `\\Illuminate\\Support\\Facades\\DB::table('topics')->where('workspace_id', $w)->where('name', 'Primary and foreign keys')->update(['status_at' => now()->subDays(9)]);`,
+        `$scope = \\App\\Platform\\Access\\LearnerScope::of($p); $topics = \\App\\Platform\\Database\\LearnerTables::query($scope, 'topics'); $topic = (clone $topics)->where('workspace_id', $w)->get()->firstWhere('name', 'Primary and foreign keys'); $topics->where('id', $topic->id)->update(['status_at' => now()->subDays(9)]);`,
         `echo json_encode(['workspace' => $w]);`,
     ].join(' ');
     execFileSync(process.env.PHP_BINARY || 'php', ['artisan', 'tinker', '--execute', code], { cwd: appRoot, stdio: 'pipe' });

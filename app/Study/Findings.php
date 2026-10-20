@@ -130,7 +130,8 @@ final class Findings
         foreach ($notes->sort(fn ($left, $right) => $collator->compare($left->title, $right->title) ?: strcmp($left->id, $right->id)) as $note) {
             $names["note:{$note->id}"] = $note->title === '' ? 'Untitled note' : $note->title;
         }
-        foreach (LearnerTables::query($scope, 'files')->where('workspace_id', $workspaceId)->whereNull('trashed_at')->orderBy('name')->get(['id', 'name', 'extension']) as $file) {
+        $files = LearnerTables::query($scope, 'files')->where('workspace_id', $workspaceId)->whereNull('trashed_at')->get(['id', 'name', 'extension']);
+        foreach ($files->sort(fn ($left, $right) => $collator->compare($left->name, $right->name) ?: strcmp($left->id, $right->id)) as $file) {
             $names["file:{$file->id}"] = "{$file->name}.{$file->extension}";
         }
 

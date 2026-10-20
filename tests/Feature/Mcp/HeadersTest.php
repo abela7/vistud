@@ -4,7 +4,6 @@ namespace Tests\Feature\Mcp;
 
 use App\Study\Modules;
 use App\Study\Workspaces;
-use Illuminate\Support\Facades\DB;
 use Tests\Concerns\ConnectsAiApps;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
@@ -51,7 +50,7 @@ class HeadersTest extends TestCase
         $this->assertStringContainsString("frame-ancestors 'none'", $policy);
         $this->assertStringNotContainsString('form-action', $policy);
         $this->assertSame('DENY', $page->headers->get('X-Frame-Options'));
-        $this->assertSame('Week 2', DB::table('modules')->where('id', $module)->value('title'));
+        $this->assertSame('Week 2', app(Modules::class)->find($by, $module)->title);
     }
 
     public function test_the_tunnel_guard_hides_the_rest_of_the_app(): void

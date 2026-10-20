@@ -5,6 +5,7 @@ namespace App\Study;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\ContentIndexes;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Platform\Ids;
@@ -91,7 +92,7 @@ final class TopicSuggestions
 
             $existing = LearnerTables::query($scope, 'topic_suggestions')
                 ->where('module_id', $moduleId)
-                ->where('name_key', $key)
+                ->where('name_key', ContentIndexes::suggestion($scope, $name))
                 ->first();
 
             if ($existing === null) {
@@ -181,7 +182,7 @@ final class TopicSuggestions
                     'folder_id' => $folderId,
                     'source_file_id' => $topic['sources'][0]['file'] ?? null,
                 ];
-                $existing = LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('name_key', $key)->first();
+                $existing = LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('name_key', ContentIndexes::suggestion($scope, $name))->first();
                 if ($existing === null) {
                     LearnerTables::insert($scope, 'topic_suggestions', $fields + ['id' => Ids::new(), 'module_id' => $moduleId, 'name' => $name, 'name_key' => $key, 'status' => 'suggested', 'created_at' => now()]);
                 } elseif ($existing->status === 'suggested') {
@@ -210,7 +211,11 @@ final class TopicSuggestions
         $scope = Guard::learner($by);
         $this->module($scope, $moduleId);
 
-        return LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('status', 'dismissed')->orderBy('name')->pluck('name')->all();
+        $collator = new \Collator('root');
+        $collator->setStrength(\Collator::PRIMARY);
+
+        return LearnerTables::query($scope, 'topic_suggestions')->where('module_id', $moduleId)->where('status', 'dismissed')->get(['id', 'name'])
+            ->sort(fn ($left, $right) => $collator->compare($left->name, $right->name) ?: strcmp($left->id, $right->id))->pluck('name')->values()->all();
     }
 
     /** Adds every waiting suggestion of the module (or of some of its folders) as a topic, in order. Returns how many. */

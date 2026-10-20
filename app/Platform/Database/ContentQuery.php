@@ -147,6 +147,9 @@ final class ContentQuery extends Builder
                         $patch[$field] = $encrypted[$field];
                     }
                 }
+                if ($this->contentTable === 'topic_suggestions') {
+                    $patch['name_key'] = $encrypted['name_key'];
+                }
                 $count += $write->update($patch);
             }
 

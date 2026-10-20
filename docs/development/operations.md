@@ -97,9 +97,29 @@ the content schema/encoding, separate key database and correct master environmen
 Never test this against Abel's database as a development check. Pre-S2/S3 backups
 are still readable; the S4 retention/deletion decision above remains pending.
 
+## Remaining text conversion (S2b)
+
+S2b uses the same offline procedure and adds `--phase=S2b` to select just its
+tables. The default command selects both phases. A dry run counts rows, non-null
+content cells, legacy/encrypted row versions, learners and blocked rows without
+writing data or caches. Each suggestion row also has one derived name hash;
+verification checks it against the decrypted name. Converting, resuming and
+verified decryption all include this hash. Never roll back S2a's schema while
+leaving encrypted rows in it. See [deploy.md](deploy.md#core-personal-text-s2a-offline-conversion-before-reopening).
+
+### S9 measurement follow-up from S2b
+
+Measure bulk metadata updates on the real server or an equally sized copy,
+including trashing/restoring a heavy module's notes and moving a large folder.
+`ContentQuery::update` currently locks, decrypts and re-encrypts every matched row
+even when only metadata changes. Record rows affected, rows/second, p50/p95/p99
+latency, peak memory, lock duration and concurrent-request impact at S9's learner
+sizes and concurrency levels. Add the measured results to ADR 0001 G4 before a
+scale pass; a fast run on this Windows development machine is not a pass.
+
 ## Log of drills (results)
 
 | Date | Drill | Result |
 |---|---|---|
 | 2026-10-20 | S2a schema/data rollback and redeployment on Windows, `vistud_test` / `vistud_keys_test` only | Passed: verified decrypt, original types restored, migrate/encrypt again, note/title preserved (16 assertions). Not a production restore or an S9 scale result. |
-| | | |
+| 2026-10-20 | S2b-only and combined S2a/S2b schema/data rollback and redeployment on Windows, named test schemas only | Passed in focused validation: refuses encrypted schema rollback, verified decrypt, original types restored, S2a stays encrypted during S2b-only rollback, both phases re-encrypt and preserve the note. No local deploy, production restore or S9 scale result. |

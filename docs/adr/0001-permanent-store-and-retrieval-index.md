@@ -513,6 +513,12 @@ The pass thresholds below are proposals. The owner confirms them before any data
 - **Indexing:** how far indexing falls behind during a burst, and how long it takes to catch up.
 - **Rebuilds:** time to rebuild from canonical text for one learner and for everyone.
 - **MySQL:** write times with and without indexing load.
+- **Bulk metadata updates (S2 follow-up for S9):** trash/restore a heavy module's
+  notes and move a large folder. The content query adapter currently locks,
+  decrypts and re-encrypts every matched row even for metadata-only changes.
+  Measure rows/second, p50/p95/p99, peak memory, lock duration and impact on other
+  requests, on the real server or an equally sized copy. Record results here;
+  Windows development timings do not satisfy the scale gate.
 - **Erasure:** how long the erasure job takes.
 
 **Proposed pass:**

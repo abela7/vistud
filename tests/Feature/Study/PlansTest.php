@@ -3,7 +3,9 @@
 namespace Tests\Feature\Study;
 
 use App\Models\User;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
@@ -225,7 +227,7 @@ class PlansTest extends TestCase
 
     public function test_a_plan_holds_at_most_200_things(): void
     {
-        DB::table('activity_items')->insert(array_map(fn ($i) => [
+        LearnerTables::query(LearnerScope::of($this->by), 'activity_items')->insert(array_map(fn ($i) => [
             'id' => 'bulk-'.$i, 'learner_id' => DB::table('activities')->where('id', $this->essay->id)->value('learner_id'), 'workspace_id' => $this->databases->id,
             'activity_id' => $this->essay->id, 'kind' => 'step', 'parent_id' => null, 'title' => "Step {$i}", 'weight' => null, 'state' => 'todo',
             'position' => $i, 'created_at' => now(), 'updated_at' => now(),
@@ -265,7 +267,7 @@ class PlansTest extends TestCase
         $this->plans->addStep($this->by, $other->id, 'Run it');
 
         $this->activities->delete($this->by, $this->essay->id);
-        $this->assertSame(['Run it'], DB::table('activity_items')->pluck('title')->all());
+        $this->assertSame(['Run it'], LearnerTables::query(LearnerScope::of($this->by), 'activity_items')->pluck('title')->all());
 
         app(Workspaces::class)->delete($this->by, $this->databases->id);
         $this->assertSame(0, DB::table('activity_items')->count());

@@ -3,7 +3,10 @@
 namespace Tests\Feature\Study;
 
 use App\Models\User;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\ContentIndexes;
+use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\NotFound;
 use App\Study\Files;
 use App\Study\Findings;
@@ -208,7 +211,9 @@ class FolderStudyTest extends TestCase
         $this->assertSame([], $suggestions->list($this->by, $this->week1, $first));
         app(Files::class)->move($this->by, $lecture->id, 'folder', $this->second);
         app(Files::class)->move($this->by, $lecture->id, 'module', $this->week2);
-        $this->assertSame([$this->week1, $this->second], [DB::table('topic_suggestions')->where('name', 'Interrupts')->value('module_id'), DB::table('topic_suggestions')->where('name', 'Interrupts')->value('folder_id')]);
+        $scope = LearnerScope::of($this->by);
+        $suggestion = LearnerTables::query($scope, 'topic_suggestions')->where('name_key', ContentIndexes::suggestion($scope, 'Interrupts'))->first();
+        $this->assertSame([$this->week1, $this->second], [$suggestion->module_id, $suggestion->folder_id]);
     }
 
     public function test_moving_a_folder_to_another_module_takes_what_was_studied_in_it(): void

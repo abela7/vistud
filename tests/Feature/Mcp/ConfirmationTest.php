@@ -70,7 +70,7 @@ class ConfirmationTest extends TestCase
         $url = $this->ask('rename_module', ['module_id' => $this->module, 'new_title' => 'Scheduling']);
 
         $this->assertStringContainsString('/connections/confirm/', $url);
-        $this->assertSame('Week 2', DB::table('modules')->where('id', $this->module)->value('title'));
+        $this->assertSame('Week 2', app(Modules::class)->find($this->by, $this->module)->title);
         $this->assertSame(1, DB::table('mcp_confirmations')->count());
     }
 
@@ -80,7 +80,7 @@ class ConfirmationTest extends TestCase
 
         $this->actingAs($this->ada)->get($url)->assertOk()->assertSee('Rename the module')->assertSee('Week 2')->assertSee('Scheduling')->assertSee('Anthropic');
         $this->get($url)->assertOk();
-        $this->assertSame('Week 2', DB::table('modules')->where('id', $this->module)->value('title'));
+        $this->assertSame('Week 2', app(Modules::class)->find($this->by, $this->module)->title);
         $this->assertNull(DB::table('mcp_confirmations')->value('used_at'));
     }
 
@@ -89,7 +89,7 @@ class ConfirmationTest extends TestCase
         $url = $this->ask('rename_module', ['module_id' => $this->module, 'new_title' => 'Scheduling']);
 
         $this->actingAs($this->ada)->post($url)->assertOk()->assertSee('The module is renamed');
-        $this->assertSame('Scheduling', DB::table('modules')->where('id', $this->module)->value('title'));
+        $this->assertSame('Scheduling', app(Modules::class)->find($this->by, $this->module)->title);
         $this->assertCount(1, $this->auditRows(AuditAction::MCP_DESTRUCTIVE_CONFIRMED));
 
         $this->post($url)->assertNotFound();
@@ -103,8 +103,8 @@ class ConfirmationTest extends TestCase
         $this->post($this->ask('rename_course', ['course_id' => $this->course, 'new_name' => 'OS']))->assertOk();
         $this->post($this->ask('rename_note', ['note_id' => $this->note, 'new_title' => 'CPU scheduling']))->assertOk();
 
-        $this->assertSame('Virtual memory', DB::table('topics')->where('id', $this->topic)->value('name'));
-        $this->assertSame('OS', DB::table('workspaces')->where('id', $this->course)->value('name'));
+        $this->assertSame('Virtual memory', app(Topics::class)->find($this->by, $this->topic)->name);
+        $this->assertSame('OS', app(Workspaces::class)->find($this->by, $this->course)->name);
         $this->assertSame('CPU scheduling', LearnerTables::query(LearnerScope::of($this->by), 'notes')->where('id', $this->note)->value('title'));
     }
 
@@ -145,7 +145,7 @@ class ConfirmationTest extends TestCase
         $this->travel(11)->minutes();
         $this->actingAs($this->ada)->get($url)->assertNotFound();
         $this->post($url)->assertNotFound();
-        $this->assertSame('Week 2', DB::table('modules')->where('id', $this->module)->value('title'));
+        $this->assertSame('Week 2', app(Modules::class)->find($this->by, $this->module)->title);
     }
 
     public function test_disconnecting_voids_a_waiting_change(): void
@@ -155,7 +155,7 @@ class ConfirmationTest extends TestCase
         app(Connections::class)->disconnect($this->by, (string) DB::table('mcp_connections')->value('id'));
 
         $this->actingAs($this->ada)->post($url)->assertNotFound();
-        $this->assertSame('Week 2', DB::table('modules')->where('id', $this->module)->value('title'));
+        $this->assertSame('Week 2', app(Modules::class)->find($this->by, $this->module)->title);
     }
 
     public function test_an_id_that_is_not_the_students_is_refused_before_anything_is_stored(): void

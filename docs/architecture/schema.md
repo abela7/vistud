@@ -311,5 +311,23 @@ keys, including composite journal-content and snapshot keys. The explicit
 backfill converts/verifies each row atomically as the owner. Schema rollback
 requires the verified offline decrypt procedure in deploy.md first.
 
-S2b adds the remaining personal columns; S3 adds file encryption. Neither is
-delivered by S2a, and admission remains closed.
+### Remaining personal text (S2b)
+
+`ContentColumns::S2B` lists course, module, folder, file and topic names; links;
+instructions; assignment titles, plans, team names, sources, understandings and
+logs; course and learner profiles; file digests, topic suggestions, module/folder
+briefs; quiz questions; and `engine_settings.language`. The same LONGTEXT format,
+row version, authenticated identities and query restrictions apply. Module and
+folder briefs bind `module_id` and `folder_id` respectively. Both migrations own
+frozen original-type lists; changes to the runtime registry cannot change old DDL.
+
+`topic_suggestions.name_key` retains its existing unique index with learner and
+module IDs, but holds a 64-character HMAC-SHA256 using the learner's HKDF search
+key, a purpose label and the existing PHP lowercase/120-character normalization.
+Writes always derive it from the decrypted name, including renames and moves.
+Backfill verification checks it; offline decryption restores the normalized name.
+It allows exact duplicate checks within a learner, not general text search. File
+source names and dismissed suggestions are sorted with a root PRIMARY Collator
+in PHP after scoped decryption, with stable ID ties.
+
+S3 still adds file encryption. Admission remains closed until all later checks pass.

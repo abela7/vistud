@@ -6,6 +6,7 @@ use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
 use App\Platform\Database\ContentCipher;
 use App\Platform\Database\ContentColumns;
+use App\Platform\Database\ContentIndexes;
 use App\Platform\Database\LearnerTables;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -14,9 +15,9 @@ use RuntimeException;
 
 final class EncryptLearnerContent extends Command
 {
-    protected $signature = 'vistud:encrypt:backfill {--dry-run} {--verify} {--decrypt} {--backup-confirmed} {--learner=} {--table=*} {--batch=100} {--limit=0}';
+    protected $signature = 'vistud:encrypt:backfill {--dry-run} {--verify} {--decrypt} {--backup-confirmed} {--learner=} {--phase=} {--table=*} {--batch=100} {--limit=0}';
 
-    protected $description = 'Count, encrypt or verify S2a personal text; resumable by committed row version.';
+    protected $description = 'Count, encrypt or verify S2 personal text; resumable by committed row version.';
 
     public function handle(ContentCipher $cipher): int
     {
@@ -34,9 +35,15 @@ final class EncryptLearnerContent extends Command
 
             return self::FAILURE;
         }
-        $tables = $this->option('table') ?: array_keys(ContentColumns::S2A);
-        if (array_diff($tables, array_keys(ContentColumns::S2A)) !== [] || (int) $this->option('batch') < 1 || (int) $this->option('limit') < 0) {
-            $this->error('Choose registered S2a tables and positive batch sizes.');
+        $registered = match ($this->option('phase')) {
+            null => ContentColumns::all(),
+            'S2a' => ContentColumns::S2A,
+            'S2b' => ContentColumns::S2B,
+            default => [],
+        };
+        $tables = $this->option('table') ?: array_keys($registered);
+        if ($registered === [] || array_diff($tables, array_keys($registered)) !== [] || (int) $this->option('batch') < 1 || (int) $this->option('limit') < 0) {
+            $this->error('Choose registered tables, phase S2a or S2b, and positive batch sizes.');
 
             return self::FAILURE;
         }
@@ -103,7 +110,7 @@ final class EncryptLearnerContent extends Command
                             $scope->key('content');
                             if ($dry || $verify) {
                                 if ((int) $row->content_version !== 0) {
-                                    $cipher->decodeRow($scope, $table, (array) $row);
+                                    $cipher->verifyIndexes($scope, $table, $cipher->decodeRow($scope, $table, (array) $row));
                                 } elseif ($verify) {
                                     throw new RuntimeException('Unconverted row.');
                                 }
@@ -116,11 +123,15 @@ final class EncryptLearnerContent extends Command
                                     $row = (array) ($locked->lockForUpdate()->first() ?? throw new RuntimeException('Row disappeared.'));
                                     if ((int) $row['content_version'] !== 0) {
                                         $plain = $cipher->decodeRow($scope, $table, $row);
+                                        $cipher->verifyIndexes($scope, $table, $plain);
                                         if (! $decrypt) {
                                             return false;
                                         }
                                         $replacement = $plain;
                                         $replacement['content_version'] = 0;
+                                        if ($table === 'topic_suggestions') {
+                                            $replacement['name_key'] = ContentIndexes::normalizedSuggestion($plain['name']);
+                                        }
                                     } else {
                                         if ($decrypt) {
                                             return false;
@@ -132,12 +143,20 @@ final class EncryptLearnerContent extends Command
                                         $replacement = $cipher->encodeRow($scope, $table, $plain);
                                     }
                                     $fields = [...ContentColumns::fields($table), 'content_version'];
+                                    if ($table === 'topic_suggestions') {
+                                        $fields[] = 'name_key';
+                                    }
                                     if (array_key_exists('content_identity', $replacement)) {
                                         $fields[] = 'content_identity';
                                     }
                                     $locked->update(array_intersect_key($replacement, array_flip($fields)));
                                     $stored = (array) $locked->first();
                                     $checked = $decrypt ? $stored : $cipher->decodeRow($scope, $table, $stored);
+                                    if (! $decrypt) {
+                                        $cipher->verifyIndexes($scope, $table, $checked);
+                                    } elseif ($table === 'topic_suggestions' && $checked['name_key'] !== ContentIndexes::normalizedSuggestion($plain['name'])) {
+                                        throw new RuntimeException('Index rollback verification failed.');
+                                    }
                                     foreach (ContentColumns::fields($table) as $field) {
                                         if ($checked[$field] !== $plain[$field]) {
                                             throw new RuntimeException('Round-trip verification failed.');

@@ -77,7 +77,7 @@ Only after Abel approves and a verified backup is available:
    **This gives Abel's existing learner its key. Do not omit it or reopen first:** MCP checks it immediately.
 5. Resolve every missing/unreadable-key error; never generate a replacement for a previously provisioned learner.
 6. Verify a key-backed round trip and `php artisan vistud:gate:second-learner` (still closed after S1).
-7. If this release includes S2a, complete its procedure below before restarting anything.
+7. If this release includes S2a or S2b, complete the text conversion procedure below before restarting anything.
    Otherwise restart workers with the environment above, resume the scheduler and reopen the app.
 
 Never run `migrate:fresh` on either real database. Reverting the key migration deletes
@@ -88,13 +88,18 @@ Master rotation and recovery are in [operations.md](operations.md).
 
 ### Core personal text (S2a): offline conversion before reopening
 
+This procedure now covers **S2a and S2b**. The default backfill selects both;
+`--phase=S2a` or `--phase=S2b` selects only that part for a staged release or
+rollback. If neither has been deployed, convert and verify both before reopening.
+Do not run these steps on Abel's local database as a development check.
+
 Abel runs these steps; they have not been run on his local database by the builder.
 S1 key migrations and provisioning (including Abel's learner) must be complete.
 Take and verify matching content/key backups and retain the master key privately.
 Stop workers and the scheduler, then put the app in maintenance. Do not run old
 workers alongside the new code: legacy rows are deliberately unreadable at runtime.
 
-1. `php artisan migrate --database=mysql_owner --force` (S2a widens content columns).
+1. `php artisan migrate --database=mysql_owner --force` (both parts widen content columns).
 2. `php artisan vistud:encrypt:backfill --dry-run`. Resolve every blocker first.
 3. `php artisan vistud:encrypt:backfill --backup-confirmed`. A stopped command is
    resumed by repeating it; committed rows are verified and skipped.
@@ -109,14 +114,19 @@ workers alongside the new code: legacy rows are deliberately unreadable at runti
    transcript and an MCP read as Abel. Check a raw scratch row is ciphertext.
 7. Restart workers, resume the scheduler, and reopen for Abel only.
 
-S2a covers only [its manifest](../../app/Platform/Database/ContentColumns.php).
-S2b and S3 still have plaintext to convert; the second-learner gate stays closed
+The [manifest](../../app/Platform/Database/ContentColumns.php) separates both parts.
+S3 still has files to convert; the second-learner gate stays closed
 until **both S2a and S2b**, files, validation and the later admission checks pass.
-The ordinary release procedure below must include these steps for the S2a release.
+The ordinary release procedure below must include these steps for either text release.
 
 Rollback is also offline and needs a verified backup and readable learner keys:
 run `php artisan vistud:encrypt:backfill --decrypt --backup-confirmed`, then roll
-back the S2a migration as the owner, and deploy the preceding application code.
+back both text migrations as the owner, and deploy the application preceding S2a.
+To roll back **only S2b** to the approved S2a release, use
+`php artisan vistud:encrypt:backfill --phase=S2b --decrypt --backup-confirmed`,
+then `php artisan migrate:rollback --database=mysql_owner --step=1 --force`
+only after checking S2b is the latest migration, then deploy the S2a code. S2a
+rows stay encrypted. Stay in maintenance until code and schema match.
 The migration refuses encrypted rows or values that would not fit the original
 types. Never shrink ciphertext, recreate keys, or restore plaintext to a running
 application. If conversion or DDL fails, keep maintenance on and resolve it or
