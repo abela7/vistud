@@ -16,6 +16,7 @@ use App\Study\Folders;
 use App\Study\Input;
 use App\Study\LearnerProfiles;
 use App\Study\Modules;
+use App\Study\Sessions;
 use App\Study\Topics;
 use App\Study\WorkspaceDetails;
 use App\Study\Workspaces;
@@ -66,7 +67,7 @@ final class CourseGuide
     /** Adding modules: up to six modules with their lines, topics and parts, and room for a model that thinks first. */
     public const MAX_TOKENS_MODULES = 6_000;
 
-    public function __construct(private Runner $runner, private Workspaces $workspaces, private CourseProfiles $profiles, private Modules $modules, private Activities $activities, private Settings $settings, private Models $models, private LearnerProfiles $learner, private Topics $topics, private Folders $folders) {}
+    public function __construct(private Runner $runner, private Workspaces $workspaces, private CourseProfiles $profiles, private Modules $modules, private Activities $activities, private Settings $settings, private Models $models, private LearnerProfiles $learner, private Topics $topics, private Folders $folders, private Sessions $sessions) {}
 
     /** The guide's rules for one of its jobs (`modules`, or the course's setup when empty), without the file's opening comment (for people). */
     public static function rules(string $for = ''): string
@@ -101,7 +102,8 @@ final class CourseGuide
         $this->workspaces->find($by, $workspaceId);
         $model = trim((string) $model);
         [$shown, $read] = $this->prepared($by, $pictures, $model !== '' ? $model : null);
-        $system = self::rules($for)."\n\n## Today\n".CarbonImmutable::now()->toDateString()."\n\n## What is set up\n".$this->state($by, $workspaceId, $for);
+        // The student's own day, not the server's: the guide counts weeks and dates from it.
+        $system = self::rules($for)."\n\n## Today\n".CarbonImmutable::now($this->sessions->timezone($by))->toDateString()."\n\n## What is set up\n".$this->state($by, $workspaceId, $for);
         $messages = self::remembered($history);
         $messages[] = ['role' => 'user', 'content' => self::said($message, $shown, $read)];
 

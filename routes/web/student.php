@@ -43,11 +43,16 @@ Route::redirect('/courses', '/', 301);
 
 Route::middleware('auth')->group(function () {
     // Settings, one page with four parts: the AI engine (the student's key, models, limits and consent: docs/specs/study-memory.md §6),
-    // Appearance, Security and Your data (docs/specs/vistud-2-blueprint.md §3.4). The old address of the first still works.
-    Route::get('/settings', function (Request $request) {
+    // Appearance, Security (and the time zone, for accounts with a learner) and Your data (docs/specs/vistud-2-blueprint.md §3.4).
+    // The old address of the first still works.
+    Route::get('/settings', function (Request $request, PrincipalFactory $principals) {
         $part = in_array($request->query('part'), ['ai', 'appearance', 'security', 'data'], true) ? $request->query('part') : 'ai';
 
-        return view('settings.index', ['part' => $part, 'twoFactor' => $request->user()?->two_factor_confirmed_at !== null]);
+        return view('settings.index', [
+            'part' => $part,
+            'twoFactor' => $request->user()?->two_factor_confirmed_at !== null,
+            'learner' => $principals->fromRequest($request)->learnerId !== null,
+        ]);
     })->name('settings');
     Route::redirect('/ai-engine', '/settings?part=ai', 301)->name('engine.settings');
     // The install package for a chat app (Claude, ChatGPT, Gemini), built from resources/skills (docs/specs/mcp-connections-plan.md M6.4).

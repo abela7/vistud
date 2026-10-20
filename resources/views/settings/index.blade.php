@@ -1,7 +1,8 @@
 {{--
     Settings, one page with four parts (docs/specs/vistud-2-blueprint.md §3.4): the AI (the student's key, models and
     what they cost: App\Livewire\Study\EngineSettings), Appearance, Security and Your data (the journal). The part is
-    `?part=`; the strip above is the way between them. Every part is built like the AI part: folded panels
+    `?part=`; the strip above is the way between them. Security also holds the student's time zone (App\Livewire\Study\TimezoneSettings),
+    for accounts with a learner. Every part is built like the AI part: folded panels
     (x-accordion) with an icon, a title and one line of where it stands, two columns on a wide screen, all at one width.
     The parts other than the AI are short, so their panels start open.
 --}}
@@ -9,7 +10,7 @@
     $parts = [
         'ai' => ['AI', 'AI settings', 'Your key, your models and what they cost.', 'brain'],
         'appearance' => ['Appearance', 'Appearance', 'Your theme, and whether it is light or dark.', 'palette'],
-        'security' => ['Security', 'Security', 'How you sign in.', 'shield-check'],
+        'security' => ['Security', 'Security', 'How you sign in, and your time zone.', 'shield-check'],
         'data' => ['Your data', 'Your data', 'What ViStud has recorded about your studying.', 'notebook-text'],
     ];
     [$label, $title, $context] = $parts[$part];
@@ -75,6 +76,10 @@
                         @endif
                     </dl>
                 </x-accordion>
+
+                @if ($learner)
+                    <livewire:study.timezone-settings />
+                @endif
             </div>
         @else
             <div class="acc-cols">

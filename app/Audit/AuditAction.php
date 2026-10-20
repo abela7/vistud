@@ -13,6 +13,8 @@ final class AuditAction
 
     public const ACCOUNT_DELETION_REQUESTED = 'account.deletion_requested';
 
+    public const ACCOUNT_TIMEZONE_CHANGED = 'account.timezone_changed';
+
     public const INVITATION_CREATED = 'invitation.created';
 
     public const INVITATION_REVOKED = 'invitation.revoked';

@@ -6,6 +6,7 @@ use App\Platform\Access\Principal;
 use App\Study\Calendar;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
+use DateTimeZone;
 
 /** What is on the student's calendar between two days: deadlines, plan dates and milestones, study time and cards due. */
 final class CalendarTool implements Tool
@@ -32,9 +33,10 @@ final class CalendarTool implements Tool
 
     public function run(Principal $by, Context $context, array $input): string
     {
+        // Every day on the student's own clock, so a day given and a day defaulted compare as the same kind of thing.
         $today = CarbonImmutable::now($context->zone)->startOfDay();
-        $from = self::day(Lookup::text($input, 'from')) ?? $today;
-        $to = self::day(Lookup::text($input, 'to')) ?? $from->addDays(14);
+        $from = self::day(Lookup::text($input, 'from'), $context->zone) ?? $today;
+        $to = self::day(Lookup::text($input, 'to'), $context->zone) ?? $from->addDays(14);
         if ($to < $from) {
             [$from, $to] = [$to, $from];
         }
@@ -56,12 +58,12 @@ final class CalendarTool implements Tool
         return $rows === [] ? "Nothing on the calendar from {$from->toDateString()} to {$to->toDateString()}." : Lookup::json(['from' => $from->toDateString(), 'to' => $to->toDateString(), 'entries' => array_slice($rows, 0, 100)]);
     }
 
-    private static function day(?string $value): ?CarbonImmutable
+    private static function day(?string $value, string $zone): ?CarbonImmutable
     {
         if ($value === null) {
             return null;
         }
-        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $value, new DateTimeZone($zone));
 
         return $parsed !== false && $parsed->format('Y-m-d') === $value ? CarbonImmutable::instance($parsed) : null;
     }

@@ -11,6 +11,7 @@ use App\Study\FileText;
 use App\Study\FileTexts;
 use App\Study\ModuleParts;
 use App\Study\Modules;
+use App\Study\Sessions;
 use Carbon\CarbonImmutable;
 use DateTimeImmutable;
 
@@ -46,7 +47,8 @@ final class ProfileCourse extends Job
         if ($text === '') {
             $run->skip('no_text');
         }
-        $today = CarbonImmutable::now()->toDateString();
+        // The student's own day, not the server's: the reader works out term dates and what is due from it.
+        $today = CarbonImmutable::now(app(Sessions::class)->timezone($by))->toDateString();
         $reply = $run->ask(self::rules(), "Today is {$today}. The syllabus is between the quotes.\n\"\"\"\n{$text}\n\"\"\"", 3_500);
         $reading = self::parse($reply->text);
 

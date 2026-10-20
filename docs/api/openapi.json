@@ -29,6 +29,44 @@
             "$ref": "#/components/responses/Error"
           }
         }
+      },
+      "patch": {
+        "operationId": "updateMe",
+        "summary": "Changes what the current student may change about themselves: their time zone (an IANA name, used for every day the app works out). Answers with the account as GET does",
+        "x-stability": "provisional",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The current account, with the change made",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error",
+            "description": "student_role_required: an account without a learner has no time zone to change"
+          },
+          "422": {
+            "$ref": "#/components/responses/Error",
+            "description": "validation_failed: details.fields.timezone when the name is not a time zone the server knows"
+          }
+        }
       }
     },
     "/api/v1/journal/entries/{id}": {
@@ -471,6 +509,19 @@
               "admin",
               null
             ]
+          }
+        }
+      },
+      "MeUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "timezone"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "description": "An IANA time zone name, like Europe/London; DateTimeZone::listIdentifiers() on the server"
           }
         }
       },

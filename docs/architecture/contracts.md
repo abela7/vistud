@@ -215,6 +215,7 @@ Conventions are in [conventions.md](conventions.md#json-api). The OpenAPI defini
 | Endpoint | Status | Arrives | Purpose |
 |---|---|---|---|
 | `GET /api/v1/me` | Provisional | Increment 2 (implemented) | The account, its roles, its learner ID and the active area (`area`; called `workspace` before M2 step 0) |
+| `PATCH /api/v1/me` | Provisional | 2026-10-16 (implemented) | Changes the student's own time zone (`timezone`, an IANA name) and answers with the account as GET does. `422 validation_failed` (`details.fields.timezone`) for a name the server doesn't know; `403 student_role_required` for an account without a learner |
 | `GET /api/v1/journal/entries/{id}` | Provisional | Increment 3 (implemented) | One of the learner's own entries, with content unless blocked. Another learner's ID gets the same 404 as a missing one; an account without a learner stream gets `403 student_role_required` |
 | `GET /api/v1/notes/{id}`, `PUT /api/v1/notes/{id}` | Provisional | M2 step 3a (implemented) | The editor's read and autosave ([ADR 0003 §5.3](../adr/0003-web-workspaces-and-study-content.md#53-autosave-drafts-ordering-and-conflicts)). `PUT` only updates; its body is read raw, so no request middleware changes the note's text. `409 version_conflict`, `410 gone`, `422 validation_failed` |
 | `POST /api/v1/notes` | Provisional | The owner's review, 2026-09-27 (implemented) | A new note made by its first words: `place` (`workspace`, `module` or `folder` and its id), `create_id` (the editor's; the same one answers with the same note), `title`, `doc`. Refused (`422`) with neither a title nor any text, so an empty new note is never kept. `201` with `id`, `version`, `url`, `save_url`; `404` for a place that isn't the learner's |
@@ -261,7 +262,7 @@ Implemented in increment 2 (`App\Audit\AuditAction`). Provisional until the PM a
 
 | Action | Target |
 |---|---|
-| `account.created`, `account.suspended`, `account.reactivated`, `account.deletion_requested` | user |
+| `account.created`, `account.suspended`, `account.reactivated`, `account.deletion_requested`, `account.timezone_changed` (2026-10-16, by the student themselves) | user |
 | `invitation.created`, `invitation.revoked`, `invitation.accepted` | invitation |
 | `role.granted`, `role.revoked` (`metadata.role`) | user |
 | `two_factor.reset` | user |

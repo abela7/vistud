@@ -39,6 +39,9 @@ class OpenApiContractTest extends TestCase
 
         $response = $this->actingAs($this->admin(student: false))->getJson('/api/v1/me');
         $this->assertSame([], $spec->validateResponse('GET', '/api/v1/me', 200, $response->json()));
+
+        $response = $this->actingAs($this->student())->patchJson('/api/v1/me', ['timezone' => 'Europe/London']);
+        $this->assertSame([], $spec->validateResponse('PATCH', '/api/v1/me', 200, $response->json()));
     }
 
     public function test_errors_match_the_envelope_schema(): void
@@ -48,6 +51,9 @@ class OpenApiContractTest extends TestCase
 
         $response = $this->getJson('/api/v1/me')->assertUnauthorized();
         $this->assertSame([], $spec->validateResponse('GET', '/api/v1/me', 401, $response->json()));
+
+        $response = $this->actingAs($this->student())->patchJson('/api/v1/me', ['timezone' => 'Mars/Olympus'])->assertUnprocessable();
+        $this->assertSame([], $spec->validateResponse('PATCH', '/api/v1/me', 422, $response->json()));
     }
 
     public function test_the_validator_catches_undocumented_fields(): void
