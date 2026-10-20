@@ -6,6 +6,7 @@ use App\Engine\EngineFailed;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Study\AudioPieces;
+use App\Study\ClassHeader;
 use App\Study\ClassNote;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
@@ -73,7 +74,8 @@ final class TranscribeClass extends Job
         if ($parts === []) {
             $run->skip('no_recording');
         }
-        $about = self::about($by, $class->workspaceId, $class->moduleId, $class->title);
+        $headers = app(ClassHeader::class);
+        $about = self::about($by, $class->workspaceId, $class->moduleId, $class->title, $headers->fileNames($by, $class));
         $work = storage_path('app/transcribe/'.$class->id.'-'.bin2hex(random_bytes(4)));
 
         try {
@@ -110,8 +112,9 @@ final class TranscribeClass extends Job
             throw new EngineFailed('engine_empty', 'The AI wrote nothing. Try again.');
         }
 
-        $transcriptId = $this->keep($by, $class->transcriptNoteId, $class->moduleId, $class->workspaceId, 'Transcript · '.$class->title, $transcript);
-        $notesId = $this->keep($by, $class->lectureNotesId, $class->moduleId, $class->workspaceId, 'Lecture notes · '.$class->title, $notes);
+        // Each note starts by saying which class it is and which files the teacher taught from: whoever reads it knows.
+        $transcriptId = $this->keep($by, $class->transcriptNoteId, $class->moduleId, $class->workspaceId, 'Transcript · '.$class->title, $headers->markdown($by, $class, 'transcript').$transcript);
+        $notesId = $this->keep($by, $class->lectureNotesId, $class->moduleId, $class->workspaceId, 'Lecture notes · '.$class->title, $headers->markdown($by, $class, 'lecture').$notes);
         $classes->keepTranscript($by, $class->id, $transcriptId, $notesId);
     }
 
@@ -138,11 +141,12 @@ final class TranscribeClass extends Job
     }
 
     /** What the class is, so the model hears the subject's words right. */
-    public static function about(Principal $by, string $workspaceId, ?string $moduleId, string $title): string
+    public static function about(Principal $by, string $workspaceId, ?string $moduleId, string $title, array $files = []): string
     {
         return 'Course: '.app(Workspaces::class)->find($by, $workspaceId)->name
             .($moduleId !== null ? '. Module: '.app(Modules::class)->find($by, $moduleId)->title : '')
-            .'. Class: '.$title.'.';
+            .'. Class: '.$title.'.'
+            .($files !== [] ? ' The teacher taught from these files, so their words are the words to expect: '.implode('; ', $files).'.' : '');
     }
 
     public static function clock(int $seconds): string

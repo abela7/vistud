@@ -10,6 +10,7 @@ use App\Livewire\Workspaces\ClassRecorder;
 use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Study\ClassNote;
+use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
 use App\Study\Files;
 use App\Study\MarkdownDoc;
@@ -69,6 +70,15 @@ class ClassCheckTest extends TestCase
         app(ClassSessions::class)->keepTranscript($this->by, $this->class, $two->id, $one->id);
     }
 
+    private function recorded(): void
+    {
+        $recordings = app(ClassRecordings::class);
+        $recordings->allow($this->by, $this->class);
+        $part = $recordings->start($this->by, $this->class);
+        $recordings->accept($this->by, $this->class, $part->id, 1, $this->temp('webm bytes'), 'audio/webm');
+        $recordings->finish($this->by, $this->class, $part->id, 600);
+    }
+
     private function page()
     {
         return Livewire::actingAs($this->ada)->test(ClassRecorder::class, ['workspaceId' => $this->course, 'moduleId' => $this->module, 'classId' => $this->class]);
@@ -79,12 +89,14 @@ class ClassCheckTest extends TestCase
         $this->page()->assertDontSee('Check against your files');
 
         $this->lectureNotes();
+        $this->recorded();
         $this->page()->assertSee('Check against your files')->assertSee('Week 3 slides.txt');
     }
 
     public function test_the_ticked_files_are_compared_with_the_lecture_notes_and_kept_as_one_note_in_the_module(): void
     {
         $this->lectureNotes();
+        $this->recorded();
         app(ClassNote::class)->write($this->by, $this->class, [['from' => '2:00', 'until' => '2:30', 'about' => 'Phases?', 'body' => 'How many phases are there?']], live: true);
         $this->engine->will(function (Request $request) {
             $this->assertSame('fake/quick', $request->model);
@@ -111,6 +123,7 @@ class ClassCheckTest extends TestCase
     public function test_checking_again_adds_a_version_to_the_same_note(): void
     {
         $this->lectureNotes();
+        $this->recorded();
         $this->engine->will(Fake::says('## Different from your files\n\nFirst.', 1000), Fake::says('## Different from your files\n\nSecond.', 1000));
 
         $this->page()->set('checkFiles', [$this->slides])->call('check');
@@ -125,8 +138,9 @@ class ClassCheckTest extends TestCase
     public function test_with_no_file_ticked_it_says_so_and_asks_nothing_of_the_ai(): void
     {
         $this->lectureNotes();
+        $this->recorded();
 
-        $this->page()->set('checkFiles', [])->call('check')->assertSee('Tick the files the lecture used');
+        $this->page()->set('checkFiles', [])->call('check')->assertSee('Tick the files the teacher used');
 
         $this->assertSame(0, DB::table('engine_jobs')->where('kind', 'class_check')->count());
     }
@@ -134,6 +148,7 @@ class ClassCheckTest extends TestCase
     public function test_a_file_with_nothing_to_read_is_left_out_and_if_none_can_be_read_it_says_so(): void
     {
         $this->lectureNotes();
+        $this->recorded();
         $empty = app(Files::class)->upload($this->by, 'module', $this->module, $this->temp('   '), 'Blank.txt')->id;
 
         $this->page()->set('checkFiles', [$empty])->call('check')->assertSee('None of the ticked files has text to compare');
@@ -144,12 +159,13 @@ class ClassCheckTest extends TestCase
     public function test_another_students_file_cannot_be_ticked(): void
     {
         $this->lectureNotes();
+        $this->recorded();
         $grace = $this->principal($this->student());
         $graceCourse = app(Workspaces::class)->create($grace, ['name' => 'Chemistry'])->id;
         $graceModule = app(Modules::class)->create($grace, $graceCourse, ['title' => 'Acids'])->id;
         $theirs = app(Files::class)->upload($grace, 'module', $graceModule, $this->temp('Secret slides'), 'Theirs.txt')->id;
 
-        $this->page()->set('checkFiles', [$theirs])->call('check')->assertSee('Tick the files the lecture used');
+        $this->page()->set('checkFiles', [$theirs])->call('check')->assertSee('Tick the files the teacher used');
 
         $this->assertSame(0, DB::table('engine_jobs')->where('kind', 'class_check')->count());
     }

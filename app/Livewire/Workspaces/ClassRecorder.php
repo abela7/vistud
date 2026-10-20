@@ -12,6 +12,7 @@ use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\ClassHeader;
 use App\Study\ClassNote;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessionDetails;
@@ -95,21 +96,32 @@ final class ClassRecorder extends Component
         $this->checkFiles = $this->class()->checkFiles;
     }
 
-    /** Checks the lecture notes against the ticked files, in the background (ClassCheck). */
+    /**
+     * The student ticks (or unticks) a file the teacher taught from. It is kept at once with the class, so the AI that
+     * writes the class down, the tutor that reads its notes, and anyone sent them know which files the teacher used; the
+     * line at the top of the transcript and the lecture notes is rewritten to say so (App\Study\ClassHeader).
+     */
+    public function updatedCheckFiles(): void
+    {
+        $by = $this->principal();
+        $this->class();
+        $mine = array_map(fn ($f) => $f->id, $this->moduleFiles($by));
+        $this->checkFiles = array_slice(array_values(array_intersect($this->checkFiles, $mine)), 0, ClassCheck::MAX_FILES);
+        $this->classes->keepCheckFiles($by, $this->classId, $this->checkFiles);
+        app(ClassHeader::class)->refresh($by, $this->class());
+    }
+
+    /** Checks the lecture notes against the files the teacher used, in the background (ClassCheck). */
     public function check(): void
     {
         $by = $this->principal();
         $this->class();
         $this->checkProblem = null;
-        $mine = array_map(fn ($f) => $f->id, $this->moduleFiles($by));
-        $ticked = array_slice(array_values(array_intersect($this->checkFiles, $mine)), 0, ClassCheck::MAX_FILES);
-        if ($ticked === []) {
-            $this->checkProblem = 'Tick the files the lecture used, up to '.ClassCheck::MAX_FILES.'.';
+        if ($this->class()->checkFiles === []) {
+            $this->checkProblem = 'Tick the files the teacher used in this class first.';
 
             return;
         }
-        $this->classes->keepCheckFiles($by, $this->classId, $ticked);
-        $this->checkFiles = $ticked;
         $this->checkJob = $this->runner->pending($by, 'class_check', 'class_session', $this->classId)
             ?? $this->runner->start($by, new ClassCheck($this->workspaceId, $this->classId));
     }
@@ -311,7 +323,7 @@ final class ClassRecorder extends Component
         }
 
         return view('livewire.workspaces.class-recorder', [
-            'moduleFiles' => $class->lectureNotesId !== null ? $this->moduleFiles($by) : [],
+            'moduleFiles' => $class->durationSeconds > 0 ? $this->moduleFiles($by) : [],
             'class' => $class,
             'open' => $open,
             'tracks' => $tracks,
