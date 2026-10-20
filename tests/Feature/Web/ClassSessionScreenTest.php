@@ -68,7 +68,7 @@ class ClassSessionScreenTest extends TestCase
             ->assertOk()
             ->assertSee('Lab · 14 Oct 2026')
             ->assertSee('Not recorded yet')
-            ->assertSee('Only record this class when the people in the room have agreed.')
+            ->assertSee('Record only if everyone in the room agrees.')
             ->assertSee('I have permission to record');
     }
 

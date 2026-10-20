@@ -13,9 +13,7 @@
         <div class="space-y-1">
             <p class="text-sm font-medium">{{ $class->statusLabel() }}@if ($class->durationSeconds > 0) · {{ ClassRecordingDetails::length($class->durationSeconds) }}@endif</p>
             @unless ($class->hasConsent())
-                <p class="max-w-xl text-sm text-fg-muted">Only record this class when the people in the room have agreed. The audio stays in your account.</p>
-            @else
-                <p class="max-w-xl text-sm text-fg-muted">One recording for this class. Pause for a break, finish when the class is over. Keep this screen open while you record.</p>
+                <p class="text-sm text-fg-muted">Record only if everyone in the room agrees.</p>
             @endunless
         </div>
 
@@ -147,67 +145,54 @@
                     <option value="0.75">0.75×</option>
                 </select>
             </div>
-            @if (count($tracks) > 1)
-                <p class="text-sm text-fg-muted">This class was kept in more than one take. It still plays as one recording, on one clock.</p>
-            @endif
         </div>
     @endif
 
     @if ($tracks !== [])
-        <div class="card space-y-3 p-5" data-test="transcript" @if ($transcribeJob) wire:poll.5s @endif>
-            <h2 class="text-sm font-medium">Transcript and lecture notes</h2>
+        <div class="card space-y-4 p-5" data-test="after" @if ($transcribeJob || $checkJob) wire:poll.5s @endif>
+            <h2 class="text-sm font-medium">Notes from the recording</h2>
             @if ($transcribeJob)
-                <p class="text-sm" role="status">Writing the class down… An hour of class takes a few minutes. You can leave this page; the notes appear in this module when they are ready.</p>
+                <p class="text-sm" role="status">Writing the class down… You can leave this page.</p>
+            @elseif ($checkJob)
+                <p class="text-sm" role="status">Checking against your files… You can leave this page.</p>
             @else
                 @if ($class->lectureNotesId && $class->transcriptNoteId)
                     <div class="flex flex-wrap gap-2">
                         <a href="{{ route('workspaces.notes.show', [$workspaceId, $class->lectureNotesId]) }}" class="btn btn-primary btn-sm no-underline">Lecture notes</a>
                         <a href="{{ route('workspaces.notes.show', [$workspaceId, $class->transcriptNoteId]) }}" class="btn btn-secondary btn-sm no-underline">Full transcript</a>
+                        @if ($class->checkNoteId)
+                            <a href="{{ route('workspaces.notes.show', [$workspaceId, $class->checkNoteId]) }}" class="btn btn-secondary btn-sm no-underline">Class check</a>
+                        @endif
                     </div>
                 @endif
-                <p class="text-sm text-fg-muted">The AI writes the class down word for word, then turns it into lecture notes with the times, so you can go back to the recording. What it can't make out is marked, never guessed. It uses your AI key.</p>
+
+                @if ($moduleFiles !== [])
+                    <details data-test="class-files">
+                        <summary class="cursor-pointer text-sm">Files the teacher used @if (count($checkFiles) > 0)<span class="text-fg-muted">· {{ count($checkFiles) }}</span>@endif</summary>
+                        <fieldset class="mt-2 space-y-1">
+                            <legend class="sr-only">Files the teacher used</legend>
+                            @foreach ($moduleFiles as $file)
+                                <label class="flex min-h-[44px] items-center gap-3 rounded-lg px-2 text-sm hover:bg-surface-sunken" wire:key="check-file-{{ $file->id }}">
+                                    <input type="checkbox" value="{{ $file->id }}" wire:model.live="checkFiles">
+                                    <span class="min-w-0 break-words">{{ $file->fileName() }}</span>
+                                </label>
+                            @endforeach
+                        </fieldset>
+                    </details>
+                @endif
+
                 @if ($transcribeProblem)
                     <x-alert tone="danger">{{ $transcribeProblem }}</x-alert>
                 @endif
-                <x-button size="sm" wire:click="transcribe" busy-label="Starting…">{{ $class->lectureNotesId ? 'Write it down again' : 'Write this class down' }}</x-button>
-            @endif
-        </div>
-    @endif
-
-    @if ($class->durationSeconds > 0)
-        <div class="card space-y-3 p-5" data-test="class-files">
-            <h2 class="text-sm font-medium">Files the teacher used</h2>
-            <p class="text-sm text-fg-muted">Tick the slides or handouts the teacher taught from. It is kept with the class: the AI that writes the class down uses their words, and the transcript, the lecture notes and your tutor all say which files the class was about.</p>
-            @if ($moduleFiles === [])
-                <p class="text-sm text-fg-muted">This module has no files yet. Add the slides in its Files tab, then come back.</p>
-            @else
-                <fieldset class="space-y-1">
-                    <legend class="sr-only">Files the teacher used</legend>
-                    @foreach ($moduleFiles as $file)
-                        <label class="flex min-h-[44px] items-center gap-3 rounded-lg px-2 text-sm hover:bg-surface-sunken" wire:key="check-file-{{ $file->id }}">
-                            <input type="checkbox" value="{{ $file->id }}" wire:model.live="checkFiles">
-                            <span class="min-w-0 break-words">{{ $file->fileName() }}</span>
-                        </label>
-                    @endforeach
-                </fieldset>
-            @endif
-        </div>
-    @endif
-
-    @if ($class->lectureNotesId)
-        <div class="card space-y-3 p-5" data-test="class-check" @if ($checkJob) wire:poll.5s @endif>
-            <h2 class="text-sm font-medium">Check against your files</h2>
-            @if ($checkJob)
-                <p class="text-sm" role="status">Comparing the class with your files… This takes a minute or two. You can leave this page; the check appears in this module when it is ready.</p>
-            @else
-                @if ($class->checkNoteId)
-                    <a href="{{ route('workspaces.notes.show', [$workspaceId, $class->checkNoteId]) }}" class="btn btn-primary w-full justify-center no-underline sm:w-auto">Open the class check</a>
-                @endif
-                <p class="text-sm text-fg-muted">The AI sets what the teacher said beside what is in the files ticked above: what was only said in class, what the class skipped, and where the two differ. It never decides who is right. It uses your AI key.</p>
                 @if ($checkProblem)
                     <x-alert tone="danger">{{ $checkProblem }}</x-alert>
                 @endif
-                <x-button variant="secondary" class="w-full justify-center sm:w-auto" wire:click="check" busy-label="Starting…">{{ $class->checkNoteId ? 'Check again' : 'Check the class against these files' }}</x-button>
+                <div class="flex flex-col gap-2 sm:flex-row">
+                    <x-button size="sm" class="w-full justify-center sm:w-auto" wire:click="transcribe" busy-label="Starting…">{{ $class->lectureNotesId ? 'Write it down again' : 'Write this class down' }}</x-button>
+                    @if ($class->lectureNotesId)
+                        <x-button size="sm" variant="secondary" class="w-full justify-center sm:w-auto" wire:click="check" busy-label="Starting…">{{ $class->checkNoteId ? 'Check again' : 'Check against your files' }}</x-button>
+                    @endif
+                </div>
             @endif
         </div>
     @endif
@@ -217,7 +202,7 @@
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="max-w-xl space-y-1">
                     <h2 class="text-sm font-medium">The class note</h2>
-                    <p class="text-sm text-fg-muted">One note for this class. A mark is a stretch of the recording, with your writing under it. Whatever else you write in the note itself stays as you left it.</p>
+                    <p class="text-sm text-fg-muted">Your notes, with their minutes.</p>
                 </div>
                 @if ($class->noteId)
                     <a href="{{ route('workspaces.notes.show', [$workspaceId, $class->noteId]) }}" class="btn btn-secondary btn-sm no-underline">
@@ -263,8 +248,6 @@
             <details class="@if ($marks !== []) border-t border-divider pt-5 @endif">
             <summary class="cursor-pointer text-sm font-medium">Add a note by its time</summary>
             <form wire:submit="addMark" class="mt-3 space-y-3">
-                <p class="text-sm text-fg-muted">While you record, the Note button is easier: it takes the minute for you. Here you choose the minutes yourself.</p>
-                <p class="text-sm text-fg-muted">Play the recording to where the stretch begins, press <em>Use player time</em>, then do the same for where it ends. Or type a time like 10:00.</p>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div class="space-y-1">
                         <label for="mark-from-{{ $uid }}" class="field-label">From</label>
@@ -303,18 +286,10 @@
         </div>
     @endif
 
-    @if ($class->durationSeconds > 0 || $open !== [])
-        <div class="card space-y-2 p-5" data-test="delete">
-            <h2 class="text-sm font-medium">Delete</h2>
-            <p class="text-sm text-fg-muted">Finish recording first. Your notes, the transcript and the lecture notes are notes in this module: they stay unless you delete them there.</p>
-            <div class="flex flex-wrap gap-2">
-                <x-button variant="danger" size="sm" icon="trash-2" wire:click="deleteRecording" wire:confirm="Delete the recording of this class for good? The class and your notes stay.">Delete the recording</x-button>
-                <x-button variant="ghost" size="sm" wire:click="deleteClass" wire:confirm="Delete this class and its recording for good? Your notes stay in the module.">Delete this class</x-button>
-            </div>
-        </div>
-    @else
-        <div class="flex justify-end">
-            <x-button variant="ghost" size="sm" icon="trash-2" wire:click="deleteClass" wire:confirm="Delete this class?">Delete this class</x-button>
-        </div>
-    @endif
+    <div class="flex flex-wrap items-center justify-end gap-2" data-test="delete">
+        @if ($class->durationSeconds > 0 || $open !== [])
+            <x-button variant="ghost" size="sm" icon="trash-2" wire:click="deleteRecording" wire:confirm="Delete the recording of this class for good? The class and your notes stay.">Delete the recording</x-button>
+        @endif
+        <x-button variant="ghost" size="sm" wire:click="deleteClass" wire:confirm="Delete this class and its recording for good? Your notes stay in the module.">Delete this class</x-button>
+    </div>
 </div>

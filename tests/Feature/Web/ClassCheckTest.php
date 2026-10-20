@@ -111,7 +111,7 @@ class ClassCheckTest extends TestCase
             return Fake::says("## Different from your files\n\n- At 00:00 the class said five phases; Week 3 slides, page 1 says four.", 3000);
         });
 
-        $this->page()->set('checkFiles', [$this->slides])->call('check')->assertSee('Open the class check')->assertSee('Check again');
+        $this->page()->set('checkFiles', [$this->slides])->call('check')->assertSee('Class check')->assertSee('Check again');
 
         $class = app(ClassSessions::class)->find($this->by, $this->class);
         $this->assertSame([$this->slides], $class->checkFiles);
