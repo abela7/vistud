@@ -27,6 +27,9 @@ final readonly class ClassSessionDetails
         public ?string $noteId = null,
         public ?string $transcriptNoteId = null,
         public ?string $lectureNotesId = null,
+        /** @var list<string> the module's files the lecture used, ticked by the student */
+        public array $checkFiles = [],
+        public ?string $checkNoteId = null,
     ) {}
 
     public function kindLabel(): string

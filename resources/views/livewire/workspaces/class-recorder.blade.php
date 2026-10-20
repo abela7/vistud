@@ -174,6 +174,37 @@
         </div>
     @endif
 
+    @if ($class->lectureNotesId)
+        <div class="card space-y-3 p-5" data-test="class-check" @if ($checkJob) wire:poll.5s @endif>
+            <h2 class="text-sm font-medium">Check against your files</h2>
+            @if ($checkJob)
+                <p class="text-sm" role="status">Comparing the class with your files… This takes a minute or two. You can leave this page; the check appears in this module when it is ready.</p>
+            @else
+                @if ($class->checkNoteId)
+                    <a href="{{ route('workspaces.notes.show', [$workspaceId, $class->checkNoteId]) }}" class="btn btn-primary w-full justify-center no-underline sm:w-auto">Open the class check</a>
+                @endif
+                <p class="text-sm text-fg-muted">Tick the slides or handouts this lecture used. The AI sets what the teacher said beside what is in them: what was only said in class, what the class skipped, and where the two differ. It never decides who is right. It uses your AI key.</p>
+                @if ($moduleFiles === [])
+                    <p class="text-sm text-fg-muted">This module has no files yet. Add the slides in its Files tab, then come back.</p>
+                @else
+                    <fieldset class="space-y-1">
+                        <legend class="sr-only">Files the lecture used</legend>
+                        @foreach ($moduleFiles as $file)
+                            <label class="flex min-h-[44px] items-center gap-3 rounded-lg px-2 text-sm hover:bg-surface-sunken" wire:key="check-file-{{ $file->id }}">
+                                <input type="checkbox" value="{{ $file->id }}" wire:model="checkFiles">
+                                <span class="min-w-0 break-words">{{ $file->fileName() }}</span>
+                            </label>
+                        @endforeach
+                    </fieldset>
+                    @if ($checkProblem)
+                        <x-alert tone="danger">{{ $checkProblem }}</x-alert>
+                    @endif
+                    <x-button variant="secondary" class="w-full justify-center sm:w-auto" wire:click="check" busy-label="Starting…">{{ $class->checkNoteId ? 'Check again' : 'Check the class against these files' }}</x-button>
+                @endif
+            @endif
+        </div>
+    @endif
+
     @if ($class->durationSeconds > 0)
         <div class="card space-y-5 p-5">
             <div class="flex flex-wrap items-start justify-between gap-3">

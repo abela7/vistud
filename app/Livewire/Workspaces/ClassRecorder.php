@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire\Workspaces;
 
+use App\Engine\Jobs\ClassCheck;
 use App\Engine\Jobs\Runner;
 use App\Engine\Jobs\TranscribeClass;
 use App\Identity\PrincipalFactory;
@@ -15,6 +16,8 @@ use App\Study\ClassNote;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessionDetails;
 use App\Study\ClassSessions;
+use App\Study\FileDetails;
+use App\Study\Files;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
@@ -50,6 +53,16 @@ final class ClassRecorder extends Component
     /** Why the last transcription did not finish, in plain words. */
     public ?string $transcribeProblem = null;
 
+    /** The module's files ticked for the check of this class against its files. */
+    public array $checkFiles = [];
+
+    #[Locked]
+    public ?string $checkJob = null;
+
+    public ?string $checkProblem = null;
+
+    private Files $files;
+
     private Runner $runner;
 
     private ClassSessions $classes;
@@ -60,9 +73,10 @@ final class ClassRecorder extends Component
 
     private PrincipalFactory $principals;
 
-    public function boot(ClassSessions $classes, ClassRecordings $recordings, ClassNote $classNote, PrincipalFactory $principals, Runner $runner): void
+    public function boot(ClassSessions $classes, ClassRecordings $recordings, ClassNote $classNote, PrincipalFactory $principals, Runner $runner, Files $files): void
     {
         $this->runner = $runner;
+        $this->files = $files;
         $this->classes = $classes;
         $this->recordings = $recordings;
         $this->classNote = $classNote;
@@ -77,6 +91,33 @@ final class ClassRecorder extends Component
         $this->class();
         $this->marks = $this->classNote->read($this->principal(), $this->classId);
         $this->transcribeJob = $this->runner->pending($this->principal(), 'transcribe_class', 'class_session', $this->classId);
+        $this->checkJob = $this->runner->pending($this->principal(), 'class_check', 'class_session', $this->classId);
+        $this->checkFiles = $this->class()->checkFiles;
+    }
+
+    /** Checks the lecture notes against the ticked files, in the background (ClassCheck). */
+    public function check(): void
+    {
+        $by = $this->principal();
+        $this->class();
+        $this->checkProblem = null;
+        $mine = array_map(fn ($f) => $f->id, $this->moduleFiles($by));
+        $ticked = array_slice(array_values(array_intersect($this->checkFiles, $mine)), 0, ClassCheck::MAX_FILES);
+        if ($ticked === []) {
+            $this->checkProblem = 'Tick the files the lecture used, up to '.ClassCheck::MAX_FILES.'.';
+
+            return;
+        }
+        $this->classes->keepCheckFiles($by, $this->classId, $ticked);
+        $this->checkFiles = $ticked;
+        $this->checkJob = $this->runner->pending($by, 'class_check', 'class_session', $this->classId)
+            ?? $this->runner->start($by, new ClassCheck($this->workspaceId, $this->classId));
+    }
+
+    /** @return list<FileDetails> the module's files, not in the trash */
+    private function moduleFiles(Principal $by): array
+    {
+        return array_values(array_filter($this->files->list($by, $this->workspaceId), fn ($f) => $f->moduleId === $this->moduleId));
     }
 
     /** Writes the class down and makes lecture notes from it, in the background (TranscribeClass). */
@@ -260,7 +301,17 @@ final class ClassRecorder extends Component
             }
         }
 
+        if ($this->checkJob !== null) {
+            $run = $this->runner->status($by, $this->checkJob);
+            if (! in_array($run['status'], ['queued', 'running'], true)) {
+                $this->checkJob = null;
+                $this->checkProblem = $run['status'] === 'done' ? null : self::problem($run['error_code']);
+                $class = $this->class();
+            }
+        }
+
         return view('livewire.workspaces.class-recorder', [
+            'moduleFiles' => $class->lectureNotesId !== null ? $this->moduleFiles($by) : [],
             'class' => $class,
             'open' => $open,
             'tracks' => $tracks,
@@ -279,6 +330,8 @@ final class ClassRecorder extends Component
             'engine_model' => 'The model that writes classes down is not available with your key. Check Settings, AI.',
             'ffmpeg_missing' => 'The recording could not be cut into pieces on this server.',
             'no_recording' => 'There is no finished recording to write down.',
+            'no_lecture_notes' => 'Write the class down first: the check starts from its lecture notes.',
+            'no_files' => 'None of the ticked files has text to compare (a scan or a picture cannot be checked).',
             default => 'Writing the class down didn\'t work. Try again.',
         };
     }

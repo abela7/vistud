@@ -136,6 +136,30 @@ final class ClassSessions
         LearnerTables::query($scope, 'class_sessions')->where('id', $id)->update(['transcript_note_id' => $transcriptNoteId, 'lecture_notes_id' => $lectureNotesId, 'updated_at' => now()]);
     }
 
+    /** Which of the module's files this class is checked against (ticked by the student); the note comes when the check has run. */
+    public function keepCheckFiles(Principal $by, string $id, array $fileIds): void
+    {
+        $scope = Guard::learner($by);
+        $this->find($by, $id);
+        LearnerTables::query($scope, 'class_sessions')->where('id', $id)->update(['check_files' => json_encode(array_values(array_unique(array_map('strval', $fileIds)))), 'updated_at' => now()]);
+    }
+
+    /** Keeps the note a check wrote (App\Engine\Jobs\ClassCheck). */
+    public function keepCheck(Principal $by, string $id, array $fileIds, string $noteId): void
+    {
+        $scope = Guard::learner($by);
+        $this->find($by, $id);
+        LearnerTables::query($scope, 'class_sessions')->where('id', $id)->update(['check_files' => json_encode(array_values($fileIds)), 'check_note_id' => $noteId, 'updated_at' => now()]);
+    }
+
+    /** @return list<string> */
+    private static function ids(mixed $json): array
+    {
+        $list = is_string($json) ? json_decode($json, true) : $json;
+
+        return is_array($list) ? array_values(array_filter($list, 'is_string')) : [];
+    }
+
     private static function zone(LearnerScope $scope): string
     {
         $zone = DB::table('learners')->where('id', $scope->learnerId)->value('timezone');
@@ -160,6 +184,8 @@ final class ClassSessions
             noteId: $row->note_id !== null ? (string) $row->note_id : null,
             transcriptNoteId: ($row->transcript_note_id ?? null) !== null ? (string) $row->transcript_note_id : null,
             lectureNotesId: ($row->lecture_notes_id ?? null) !== null ? (string) $row->lecture_notes_id : null,
+            checkFiles: self::ids($row->check_files ?? null),
+            checkNoteId: ($row->check_note_id ?? null) !== null ? (string) $row->check_note_id : null,
         );
     }
 }
