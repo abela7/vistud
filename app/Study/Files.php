@@ -91,8 +91,11 @@ final class Files
             DB::transaction(function () use ($scope, $placeType, $placeId, $path, $id, $key, $disk, $name, $extension, $kind, $mime, $size) {
                 [$workspaceId, $moduleId, $folderId] = Input::place($scope, $placeType, $placeId);
                 $quota = (int) config('vistud.files.quota_bytes');
-                if ((int) LearnerTables::query($scope, 'files')->lockForUpdate()->sum('size') + $size > $quota) {
-                    throw new Conflict('quota_exceeded', 'This would go over your '.Number::fileSize($quota).' of storage. Empty the trash or delete files you no longer need.');
+                // One quota for files and class recordings alike (App\Study\ClassRecordings::withinQuota counts both too).
+                $used = (int) LearnerTables::query($scope, 'files')->lockForUpdate()->sum('size')
+                    + (int) LearnerTables::query($scope, 'class_recordings')->whereNull('deleted_at')->sum('bytes');
+                if ($used + $size > $quota) {
+                    throw new Conflict('quota_exceeded', 'This would go over your '.Number::fileSize($quota).' of storage. Empty the trash, or delete files or class recordings you no longer need.');
                 }
 
                 $stream = fopen($path, 'rb');

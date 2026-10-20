@@ -8,6 +8,8 @@ use App\Platform\Errors\Conflict;
 use App\Platform\Errors\Gone;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Study\ClassRecordings;
+use App\Study\ClassSessions;
 use App\Study\FileDetails;
 use App\Study\Files;
 use App\Study\Folders;
@@ -145,6 +147,24 @@ class FilesTest extends TestCase
         config(['vistud.files.max_bytes' => 1000, 'vistud.files.quota_bytes' => strlen($this->pdf()) + 10]);
         $this->assertThrows(fn () => $this->upload('Third.pdf', $this->pdf()), Conflict::class);
         $this->assertCount(2, Storage::disk('local')->allFiles());
+    }
+
+    public function test_class_recordings_count_against_the_same_storage_as_files(): void
+    {
+        config(['vistud.files.quota_bytes' => strlen($this->pdf()) + 10]);
+        $class = app(ClassSessions::class)->create($this->by, $this->biology->id, $this->cells->id, ['title' => 'Week 3 lecture']);
+        $recordings = app(ClassRecordings::class);
+        $recordings->allow($this->by, $class->id);
+        $part = $recordings->start($this->by, $class->id);
+        $piece = (string) tempnam(sys_get_temp_dir(), 'class');
+        file_put_contents($piece, str_repeat('a', 11));
+        $recordings->accept($this->by, $class->id, $part->id, 1, $piece, 'audio/webm');
+
+        // Eleven bytes of recording leave less than the file needs.
+        $this->assertThrows(fn () => $this->upload('Lecture.pdf', $this->pdf()), Conflict::class);
+        // A discarded take gives its bytes back.
+        $recordings->discard($this->by, $class->id, $part->id);
+        $this->assertSame('Lecture.pdf', $this->upload('Lecture.pdf', $this->pdf())->fileName());
     }
 
     public function test_files_are_renamed_moved_trashed_restored_and_deleted_with_their_bytes(): void
