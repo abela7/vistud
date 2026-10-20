@@ -50,6 +50,7 @@ function uploadOne(upload, file) {
 export function tutorChat({ upload, account, mentionItems = [], mentions = true, review = false }) {
     return {
         draft: '',
+        suggested: '',
         quoteText: '',
         selectedQuoteText: '',
         pending: '',
@@ -119,6 +120,14 @@ export function tutorChat({ upload, account, mentionItems = [], mentions = true,
 
         init() {
             this.turnCount = this.$refs.log ? this.$refs.log.querySelectorAll('li[data-turn]').length : 0;
+            this.readSuggested();
+            if (window.Livewire?.hook) {
+                const mine = this.$wire.id;
+                window.Livewire.hook('commit', ({ component, succeed }) => {
+                    if (component.id !== mine) return;
+                    succeed(() => this.$nextTick(() => this.readSuggested()));
+                });
+            }
             this.initTypewriter();
             this.scrollDown(false);
             this.$nextTick(() => this.scrollDown(false));
@@ -492,6 +501,11 @@ export function tutorChat({ upload, account, mentionItems = [], mentions = true,
                     this.submit();
                     return;
                 }
+            }
+            if (event.key === 'Tab' && !event.shiftKey && !this.live && this.draft.trim() === '' && (this.suggested || '').trim() !== '') {
+                event.preventDefault();
+                this.acceptSuggested();
+                return;
             }
             if (event.key === 'Enter') {
                 const val = el.value || '';
@@ -918,7 +932,31 @@ export function tutorChat({ upload, account, mentionItems = [], mentions = true,
                 }
                 this.decorate();
                 this.resize();
+                this.readSuggested();
                 this.$refs.box?.focus();
+            });
+        },
+
+        /** The placeholder is the reply the tutor recommends. Empty once the student has started their own. */
+        get boxPlaceholder() {
+            if (this.transcribing) return 'Speak now. Your words appear here as you say them.';
+            const recommended = (this.suggested || '').trim();
+            if (recommended !== '') return recommended;
+            return this.$refs.box?.dataset.idlePlaceholder || '';
+        },
+
+        readSuggested() {
+            this.suggested = (this.$refs.suggested?.textContent || '').replace(/\s+/g, ' ').trim();
+        },
+
+        /** Tab, with the box empty: the recommended reply becomes the message, ready to send or change. */
+        acceptSuggested() {
+            const recommended = (this.suggested || '').trim();
+            if (recommended === '' || this.draft.trim() !== '' || this.live) return;
+            this.draft = recommended;
+            this.$nextTick(() => {
+                this.resize();
+                this.focusBoxEnd();
             });
         },
 
@@ -934,6 +972,7 @@ export function tutorChat({ upload, account, mentionItems = [], mentions = true,
         submit() {
             this.stopDictation();
             let words = this.draft.trim();
+            if (words !== '' || this.quoteText.trim() !== '' || this.attached.length > 0) this.suggested = '';
             const hasQuote = this.quoteText.trim() !== '';
             if ((words === '' && !hasQuote && this.attached.length === 0) || this.busy) return;
 

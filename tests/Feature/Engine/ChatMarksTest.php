@@ -39,4 +39,13 @@ class ChatMarksTest extends TestCase
         $this->assertStringContainsString("> **Result:** partly right\n> **What was right:** You know it keeps the matches.\n> **To fix:** It keeps every left row, matched or not.", $shown);
         $this->assertStringNotContainsString('<right>', $shown);
     }
+
+    public function test_the_recommended_reply_is_hidden_while_the_answer_is_shown(): void
+    {
+        $reply = "Shall I install it? I recommend you do.\n\n<suggest>Yes, install it.</suggest>";
+
+        $this->assertSame('Shall I install it? I recommend you do.', ChatMarks::present($reply));
+        $this->assertSame('Shall I install it? I recommend you do.', trim(ChatMarks::partial($reply)));
+        $this->assertStringNotContainsString('Yes, install it.', ChatMarks::partial("Shall I install it?\n<suggest>Yes, inst"));
+    }
 }

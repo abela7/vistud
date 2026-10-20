@@ -232,7 +232,7 @@ class StackTest extends TestCase
 
         // What both keep: the role, the order of rules, the path, the marks ViStud reads, the diagrams, the ending.
         foreach ([$with, $plain] as $rules) {
-            foreach (['## Your job', '## When instructions clash', '## The path of a session', '## Words the student can use', '```mermaid', 'Write formulas in $…$ inside a line or $$…$$', '<checkpoint>', '## Study modes', '<attempt topic="Topic name" form="apply" support="unaided" result="partial">', '<asked>', '<right>', '<fix>', '<summary>', '## Ending', 'Don\'t write graded work'] as $needle) {
+            foreach (['## Your job', '## When instructions clash', '## The path of a session', '## Words the student can use', '```mermaid', 'Write formulas in $…$ inside a line or $$…$$', '<checkpoint>', '## Study modes', '<attempt topic="Topic name" form="apply" support="unaided" result="partial">', '<asked>', '<right>', '<fix>', '<summary>', '## Ending', '## How every message ends', '<suggest>Can I have a hint?</suggest>', 'Don\'t write graded work'] as $needle) {
                 $this->assertStringContainsString($needle, $rules);
             }
         }

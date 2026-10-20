@@ -19,6 +19,7 @@ final class ChatMarks
      */
     public static function partial(string $text): string
     {
+        $text = SuggestedReply::hide($text);
         $kinds = implode('|', Capture::KINDS);
         if (preg_match_all('/<('.$kinds.')\b/i', $text, $m, PREG_OFFSET_CAPTURE) > 0) {
             $last = array_key_last($m[0]);
@@ -34,6 +35,7 @@ final class ChatMarks
     /** The reply as Markdown with each mark turned into a labelled quote. */
     public static function present(string $text): string
     {
+        [$text] = SuggestedReply::split($text);
         $kinds = implode('|', Capture::KINDS);
 
         return (string) preg_replace_callback('/<('.$kinds.')\b([^>]*)>(.*?)<\/\1\s*>/si', function (array $m) {

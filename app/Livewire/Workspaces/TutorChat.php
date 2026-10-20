@@ -10,6 +10,7 @@ use App\Engine\EngineFailed;
 use App\Engine\Models;
 use App\Engine\SessionChat;
 use App\Engine\Settings;
+use App\Engine\SuggestedReply;
 use App\Engine\Toolbox;
 use App\Engine\Troubles;
 use App\Engine\VistudAi;
@@ -611,6 +612,7 @@ final class TutorChat extends Component
                 'thumbUrl' => ($a['kind'] === 'picture' && str_starts_with($a['ref'], 'file:')) ? route('files.content', str_replace('file:', '', $a['ref'])) : null,
             ], $turn['attachments']);
             if ($turn['role'] === 'assistant') {
+                [$turn['text'], $turn['suggest']] = SuggestedReply::split($turn['text']);
                 $presented = ChatMarks::present($turn['text']);
                 $turn['html'] = MarkdownPreview::html($presented);
                 $turn['looked'] = array_values(array_unique(array_map(Toolbox::words(...), array_filter($turn['tools'], fn (string $tool) => ! Toolbox::writes($tool)))));
@@ -624,6 +626,13 @@ final class TutorChat extends Component
             }
         }
         unset($turn);
+        $suggestedReply = '';
+        foreach (array_reverse($turns) as $turn) {
+            if (($turn['role'] ?? '') === 'assistant' && (($turn['text'] ?? '') !== '' || ($turn['suggest'] ?? '') !== '')) {
+                $suggestedReply = (string) ($turn['suggest'] ?? '');
+                break;
+            }
+        }
 
         $latestText = $latestAssistant['text'] ?? '';
         $latestHasMarks = $latestAssistant !== null && ChatMarks::present($latestText) !== $latestText;
@@ -665,6 +674,7 @@ final class TutorChat extends Component
             'ready' => $ready,
             'choices' => $choices,
             'turns' => $turns,
+            'suggestedReply' => $suggestedReply,
             'topicChangeAfter' => $onTopic === null && $ai === null && $activity === null && ($change = $this->chat->topicChangeSinceLastMessage($by, $this->sessionId)) !== null ? self::topicChangeWords($change) : null,
             'marked' => $marked,
             'marksDismissed' => $this->marksDismissed,

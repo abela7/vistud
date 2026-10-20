@@ -591,15 +591,18 @@
 
                     @php $boxWords = $vistud ? 'Ask ViStud AI… (Enter sends, Shift+Enter for a new line)' : 'Write to your tutor… (Enter sends, Shift+Enter for a new line, @ to mention files & notes)'; @endphp
                     <label for="chat-box-{{ $this->getId() }}" class="sr-only">{{ $vistud ? 'Ask ViStud AI' : 'Write to your tutor' }}</label>
+                    <span x-ref="suggested" hidden>{{ $suggestedReply ?? '' }}</span>
                     <textarea id="chat-box-{{ $this->getId() }}" class="chat-box" rows="1" x-model="draft" x-ref="box" maxlength="8000"
-                        placeholder="{{ $boxWords }}" x-bind:disabled="live"
+                        placeholder="{{ $boxWords }}" data-idle-placeholder="{{ $boxWords }}" x-bind:disabled="live"
                         x-bind:class="{ 'is-dictating': transcribing }"
-                        x-bind:placeholder="transcribing ? 'Speak now. Your words appear here as you say them.' : @js($boxWords)"
+                        x-bind:placeholder="boxPlaceholder"
+                        x-bind:title="suggested !== '' && draft.trim() === '' ? 'Press Tab to use this' : null"
                         x-on:input="handleInput($event)"
                         x-on:click="checkMentionTrigger()"
                         x-on:keyup="checkMentionTrigger()"
                         x-on:paste="paste($event); $nextTick(() => { resize(); checkMentionTrigger(); })"
                         x-on:keydown="handleKeydown($event)"></textarea>
+                    <p class="chat-suggest-hint" x-show="suggested !== '' && draft.trim() === '' && !live && !transcribing" x-cloak>Tab uses this</p>
                 </div>
 
                 <div class="chat-compose-bar">
