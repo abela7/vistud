@@ -7,6 +7,7 @@ use App\Engine\Jobs\Run;
 use App\Engine\Jobs\Runner;
 use App\Engine\Jobs\TranscribeClass;
 use App\Engine\Role;
+use App\Engine\Settings;
 use App\Identity\PrincipalFactory;
 use App\Models\User;
 use App\Platform\Access\Guard;
@@ -31,7 +32,7 @@ use Illuminate\Console\Command;
  * the student's reader model. Both results are written to a file and printed with what each step cost. The class,
  * its recording and its note are not changed; the runs are recorded and counted against the month's limit like any.
  */
-#[Signature('vistud:transcribe:try {class : The class\'s id} {--user= : The student\'s email; the only account when there is one} {--model=google/gemini-2.5-flash : An audio model on the service} {--minutes=10 : How long each piece is}')]
+#[Signature('vistud:transcribe:try {class : The class\'s id} {--user= : The student\'s email; the only account when there is one} {--model= : An audio model on your own service} {--minutes=10 : How long each piece is}')]
 #[Description('Try transcribing one class recording: a word-for-word transcript, then lecture notes, with the cost')]
 class TranscribeTry extends Command
 {
@@ -46,11 +47,16 @@ class TranscribeTry extends Command
         }
         $by = $principals->forUser($user, 'console');
         $minutes = max(1, min(20, (int) $this->option('minutes')));
-        $model = (string) $this->option('model');
+        $model = '';
 
         $temp = new TempWorkspace;
         try {
             $class = $classes->find($by, (string) $this->argument('class'));
+            app(Settings::class)->ready($by, Role::Reader);
+            $model = (new TranscribeClass('', ''))->model($by);
+            if ((string) $this->option('model') !== '') {
+                $model = (string) $this->option('model');
+            }
             $parts = array_values(array_filter($recordings->forClass($by, $class->id), fn ($p) => $p->finishedAt !== null && $p->deletedAt === null && $p->path !== null));
             if ($parts === []) {
                 $this->error('This class has no finished recording.');

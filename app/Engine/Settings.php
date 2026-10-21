@@ -2,16 +2,16 @@
 
 namespace App\Engine;
 
+use App\Identity\RoleStore;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\ContentCipher;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
 use App\Study\Input;
-use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Crypt;
 
 /**
  * Each student's engine settings (docs/specs/study-memory.md §6, docs/specs/vistud-2-blueprint.md §3.6): which
@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Crypt;
  * which to try when the tutor's fails, how much a session and a month may cost, whether their words may be used
  * for training (no, unless they say so), the toggles they trust the AI with, and their consent to the chat
  * sending their study material to the service. The owner's defaults (config) apply until they choose. The key is
- * the owner's and lives in .env.
+ * private to the student. Installation credentials are reserved for admin accounts.
  */
 final class Settings
 {
@@ -37,7 +37,7 @@ final class Settings
     {
         $row = LearnerTables::query(Guard::learner($by), 'engine_settings')->first();
         $defaults = $this->setup->defaultModels();
-        $key = self::decrypt($row);
+        $key = $this->decrypt(Guard::learner($by), $row);
         $rawFavorites = $row->favorite_models ?? null;
         $favoriteModels = is_string($rawFavorites) ? (json_decode($rawFavorites, true) ?: []) : (is_array($rawFavorites) ? $rawFavorites : []);
 
@@ -70,14 +70,14 @@ final class Settings
     public function key(Principal $by): ?string
     {
         $row = LearnerTables::query(Guard::learner($by), 'engine_settings')->first();
-        $secret = self::decrypt($row);
+        $secret = $this->decrypt(Guard::learner($by), $row);
 
         return $secret === null ? null : Credential::pack(self::providerOf($row), $secret);
     }
 
     /**
      * The student's choices, their key and the model for $role, once a call may be made: a key (their own, or the
-     * one set up for everyone), a model for the role and the student's consent.
+     * installation key for an admin account), a model for the role and the student's consent.
      *
      * @return array{0: Choices, 1: ?string, 2: string}
      *
@@ -86,8 +86,8 @@ final class Settings
     public function ready(Principal $by, Role $role): array
     {
         $choices = $this->get($by);
-        $key = $this->key($by);
-        if ($key === null && ! $this->setup->keySet()) {
+        $key = $this->credential($by);
+        if ($key === '') {
             throw new Unprocessable('engine_key', 'Add your key in your AI settings first.');
         }
         $model = $choices->modelFor($role);
@@ -101,10 +101,10 @@ final class Settings
         return [$choices, $key, $model];
     }
 
-    /** Whether this student's chats can reach the service at all: their own key, or the one set up for everyone. */
+    /** Whether this student's chats can reach the service at all: their own key, or the installation key for an admin account. */
     public function keyAvailable(Principal $by): bool
     {
-        return $this->key($by) !== null || $this->setup->keySet();
+        return $this->credential($by) !== '';
     }
 
     /**
@@ -133,7 +133,7 @@ final class Settings
             ? ['tutor_model' => $tutor, 'reader_model' => $quick, 'helper_model' => $quick, 'fallback_model' => $quick !== $tutor ? $quick : null, 'favorite_models' => null]
             : (self::providerOf(LearnerTables::query($scope, 'engine_settings')->first()) !== Providers::OPENROUTER ? ['tutor_model' => null, 'reader_model' => null, 'helper_model' => null, 'fallback_model' => null, 'favorite_models' => null] : []);
         LearnerTables::query($scope, 'engine_settings')->update($roles + [
-            'key_encrypted' => Crypt::encryptString($key), 'key_provider' => $provider === Providers::OPENROUTER ? null : $provider,
+            'key_encrypted' => $this->seal($scope, LearnerTables::query($scope, 'engine_settings')->first(), $key), 'key_provider' => $provider === Providers::OPENROUTER ? null : $provider,
             'key_updated_at' => now(), 'updated_at' => now(),
         ]);
 
@@ -216,14 +216,14 @@ final class Settings
     }
 
     /**
-     * Asks the service for its models with the student's key (or the one set up for everyone): proof it works.
+     * Asks the service for its models with the student's key (or the installation key for an admin account): proof it works.
      *
      * @return array{ok: bool, message: string, models: int}
      */
     public function test(Principal $by): array
     {
-        $key = $this->key($by);
-        if ($key === null && ! $this->setup->keySet()) {
+        $key = $this->credential($by);
+        if ($key === '') {
             return ['ok' => false, 'message' => 'No key yet. Paste your key above.', 'models' => 0];
         }
         try {
@@ -243,7 +243,7 @@ final class Settings
     /**
      * Sends one message to one model with the student's own key and nothing else (no fallback, no study material), so
      * they see whether the model answers before a session leans on it (the owner's ask, 2026-10-12): a provider can list
-     * a model its plan won't run. Only with their own key: the one set up for everyone isn't for trying things out.
+     * a model its plan won't run. Only with their own key: the installation key for an admin account isn't for trying things out.
      *
      * @return array{ok: bool, model: string, reply: string, message: string, ms: int, cost: ?int}
      */
@@ -359,15 +359,48 @@ final class Settings
         }
     }
 
-    private static function decrypt(?object $row): ?string
+    /** Explicit credential for every learner call. Empty never means installation fallback. */
+    public function credential(Principal $by): string
+    {
+        $own = $this->key($by);
+        if ($own !== null) {
+            return $own;
+        }
+
+        return $by->userId !== null && app(RoleStore::class)->has($by->userId, \App\Platform\Access\Role::Admin)
+            ? $this->setup->key() : '';
+    }
+
+    /** Audio through the existing chat adapter; unsupported providers fail before processing bytes. */
+    public function audioModel(Principal $by): ?string
+    {
+        $key = $this->credential($by);
+        if ($key === '') {
+            return null;
+        }
+
+        return match (Credential::provider($key)) {
+            Providers::OPENROUTER => (string) config('vistud.engine.audio_model', 'google/gemini-2.5-flash'),
+            'google' => str_starts_with($this->get($by)->readerModel, 'gemini-') ? $this->get($by)->readerModel : 'gemini-2.5-flash',
+            'openai' => 'gpt-audio',
+            default => null,
+        };
+    }
+
+    public function seal(LearnerScope $scope, object $row, string $secret): string
+    {
+        return 'vsk1:'.app(ContentCipher::class)->encrypt($scope, 'engine_settings', (array) $row, 'key_encrypted', $secret);
+    }
+
+    private function decrypt(LearnerScope $scope, ?object $row): ?string
     {
         if ($row === null || $row->key_encrypted === null) {
             return null;
         }
-        try {
-            return Crypt::decryptString($row->key_encrypted);
-        } catch (DecryptException) {
-            return null;
+        if (! str_starts_with($row->key_encrypted, 'vsk1:')) {
+            throw new Unprocessable('engine_key', 'Your saved key needs the offline key conversion.');
         }
+
+        return app(ContentCipher::class)->decrypt($scope, 'engine_settings', (array) $row, 'key_encrypted', substr($row->key_encrypted, 5));
     }
 }

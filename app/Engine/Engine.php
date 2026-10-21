@@ -25,8 +25,8 @@ interface Engine
     public function stream(Request $request, Closure $onText): Reply;
 
     /**
-     * The models the service offers, with their prices and what they can take; asked with the given key, or
-     * the one set up for everyone.
+     * The models the service offers, with their prices and what they can take. $key is required; an empty
+     * one is refused. Admin tools pass the installation key themselves.
      *
      * @return list<Model>
      *

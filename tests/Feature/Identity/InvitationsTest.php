@@ -17,13 +17,14 @@ use Tests\TestCase;
 /** ADR 0003 D4 (invite-only) and T5 (a role field changes nothing). */
 class InvitationsTest extends TestCase
 {
-    use CreatesAccounts, RefreshesDatabase;
+    use CreatesAccounts, \Tests\Concerns\JoiningPolicyFixture, RefreshesDatabase;
 
     private Invitations $invitations;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->joiningPolicy();
         $this->invitations = app(Invitations::class);
     }
 
@@ -53,13 +54,13 @@ class InvitationsTest extends TestCase
     {
         $issued = $this->invitations->invite($this->principal($this->admin()), 'new@example.test');
 
-        $user = $this->invitations->accept($issued->token, 'New Student', 'a-long-enough-password');
+        $user = $this->invitations->accept($issued->token, 'New Student', 'a-long-enough-password', privacyVersion: app(\App\Identity\JoiningPolicy::class)->version());
 
         $this->assertSame(['student'], DB::table('user_roles')->where('user_id', $user->id)->pluck('role')->all());
         $this->assertTrue(DB::table('learners')->where('user_id', $user->id)->exists());
         $this->assertCount(1, $this->auditRows(AuditAction::INVITATION_ACCEPTED));
 
-        $this->assertThrows(fn () => $this->invitations->accept($issued->token, 'Again', 'a-long-enough-password'), Unprocessable::class);
+        $this->assertThrows(fn () => $this->invitations->accept($issued->token, 'Again', 'a-long-enough-password', privacyVersion: app(\App\Identity\JoiningPolicy::class)->version()), Unprocessable::class);
     }
 
     public function test_expired_revoked_and_unknown_tokens_get_the_same_answer(): void
@@ -72,7 +73,7 @@ class InvitationsTest extends TestCase
 
         foreach ([$expired->token, $revoked->token, 'no-such-token'] as $token) {
             try {
-                $this->invitations->accept($token, 'Someone', 'a-long-enough-password');
+                $this->invitations->accept($token, 'Someone', 'a-long-enough-password', privacyVersion: app(\App\Identity\JoiningPolicy::class)->version());
                 $this->fail('The invitation was accepted.');
             } catch (Unprocessable $e) {
                 $this->assertSame(['invitation_invalid', []], [$e->errorCode, $e->details]);
@@ -85,6 +86,7 @@ class InvitationsTest extends TestCase
         $issued = $this->invitations->invite($this->principal($this->admin()), 'sneaky@example.test');
 
         $this->postJson('/invitations/accept', [
+            'privacy' => '1', 'privacy_version' => app(\App\Identity\JoiningPolicy::class)->version(),
             'token' => $issued->token,
             'name' => 'Sneaky',
             'password' => 'a-long-enough-password',
@@ -110,7 +112,7 @@ class InvitationsTest extends TestCase
         $revoked = $this->invitations->invite($by, 'revoked@example.test');
         $this->invitations->revoke($by, $revoked->id);
         $accepted = $this->invitations->invite($by, 'accepted@example.test');
-        $this->invitations->accept($accepted->token, 'Accepted', 'a-long-enough-password');
+        $this->invitations->accept($accepted->token, 'Accepted', 'a-long-enough-password', privacyVersion: app(\App\Identity\JoiningPolicy::class)->version());
 
         $pending = $this->invitations->pending($by);
 

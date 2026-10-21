@@ -199,6 +199,7 @@ class TutorMemoryTest extends TestCase
     public function test_the_chat_shows_what_was_remembered_with_forget_in_a_session_and_on_a_topic(): void
     {
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         $engine = new Fake;
         $this->app->instance(Engine::class, $engine);
         $this->actingAs($this->ada);

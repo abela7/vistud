@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Engine\EngineFailed;
 use App\Engine\Model;
 use App\Engine\Models;
+use App\Engine\Setup;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -14,10 +15,16 @@ use Illuminate\Console\Command;
 #[Description('List the models the engine offers, with their prices and what they take')]
 class EngineModels extends Command
 {
-    public function handle(Models $models): int
+    public function handle(Models $models, Setup $setup): int
     {
+        $key = $setup->key();
+        if ($key === '') {
+            $this->error('No installation key is set. Set one on the admin AI engine page, then try again.');
+
+            return self::FAILURE;
+        }
         try {
-            $list = $models->all((bool) $this->option('fresh'));
+            $list = $models->all((bool) $this->option('fresh'), $key);
         } catch (EngineFailed $e) {
             $this->error($e->getMessage());
 
@@ -26,7 +33,7 @@ class EngineModels extends Command
         $find = mb_strtolower((string) $this->option('find'));
         $list = array_values(array_filter($list, fn (Model $m) => $find === '' || str_contains(mb_strtolower($m->id.' '.$m->name), $find)));
         if ($list === []) {
-            $this->warn($models->all() === [] ? 'No models: is VISTUD_ENGINE_KEY set and the service reachable? Try `php artisan vistud:doctor`.' : 'No model matches.');
+            $this->warn($models->all(key: $key) === [] ? 'No models: is the installation key valid and the service reachable? Try `php artisan vistud:doctor`.' : 'No model matches.');
 
             return self::FAILURE;
         }

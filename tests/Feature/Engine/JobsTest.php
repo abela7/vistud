@@ -59,6 +59,7 @@ class JobsTest extends TestCase
         $this->by = $this->principal($this->ada);
         $this->workspace = app(Workspaces::class)->create($this->by, ['name' => 'Databases'])->id;
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'helper_model' => 'fake/plain', 'consent' => true]);
         $this->runner = app(Runner::class);
         Heartbeat::forget();
@@ -119,6 +120,7 @@ class JobsTest extends TestCase
 
     public function test_a_run_that_isnt_set_up_is_recorded_as_refused_and_asks_the_engine_nothing(): void
     {
+        app(Settings::class)->removeKey($this->by);
         config(['vistud.engine.key' => '']);
 
         try {
@@ -135,6 +137,7 @@ class JobsTest extends TestCase
     public function test_the_month_limit_counts_every_role_and_stops_the_next_call(): void
     {
         // A cap of one cent, and a reader's run that has cost 0.8 cents already.
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'helper_model' => 'fake/plain', 'consent' => true, 'month_cap' => '0.01']);
         $this->engine->will(Fake::says('First.', 8_000, 'fake/quick'), Fake::says('Second.', 8_000, 'fake/quick'));
 

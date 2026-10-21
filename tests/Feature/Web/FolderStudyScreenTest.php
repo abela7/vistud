@@ -289,6 +289,7 @@ class FolderStudyScreenTest extends TestCase
         $engine = new Fake;
         $this->app->instance(Engine::class, $engine);
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $slides = app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Process lifecycle, states and scheduling.\n"), 'Processes.txt');
         $handbook = app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Office hours and deadlines.\n"), 'Handbook.txt');
@@ -318,6 +319,7 @@ class FolderStudyScreenTest extends TestCase
         $engine = new Fake;
         $this->app->instance(Engine::class, $engine);
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $slides = app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Graphs, BFS and DFS.\n"), 'Graphs.txt');
         app(FileDigests::class)->keep($this->by, $slides->id, ['summary' => 'Graphs, BFS and DFS.', 'outline' => [], 'topics' => ['Graphs', 'BFS', 'DFS'], 'language' => 'English'], 3, 100, 'fake/quick');
@@ -351,6 +353,7 @@ class FolderStudyScreenTest extends TestCase
         $engine = new Fake;
         $this->app->instance(Engine::class, $engine);
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $slides = app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Process states.\n"), 'Slides.txt');
         $revision = app(Files::class)->upload($this->by, 'folder', $this->first, $this->temp("Last year's revision.\n"), 'Revision.txt');

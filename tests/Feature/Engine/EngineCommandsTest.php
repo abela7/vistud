@@ -28,6 +28,7 @@ class EngineCommandsTest extends TestCase
     public function test_the_models_are_listed_and_a_session_is_spoken_to(): void
     {
         Cache::flush();
+        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
         $engine = new Fake;
         $this->app->instance(Engine::class, $engine);
 
@@ -42,7 +43,7 @@ class EngineCommandsTest extends TestCase
         $session = app(Sessions::class)->start($by, $workspace->id);
         $this->artisan('vistud:engine:ask', ['session' => $session->id, 'text' => 'Hi', '--user' => 'ada@example.test'])->expectsOutputToContain('Add your key')->assertFailed();
 
-        config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($by);
         $this->artisan('vistud:engine:ask', ['session' => $session->id, 'text' => 'Hi', '--user' => 'ada@example.test'])->expectsOutputToContain('Choose a model')->assertFailed();
         app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $engine->will(Fake::calls('topics'), Fake::says('Hello, Ada\'s course has no topics yet.', 2_000));

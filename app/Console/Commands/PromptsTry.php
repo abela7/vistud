@@ -75,7 +75,7 @@ class PromptsTry extends Command
             $this->line("<options=bold>{$number}. {$title}</>");
             $this->line('   Student: '.$messages[array_key_last($messages)]['content']);
             try {
-                $reply = $engine->reply(new Request($model, $built->system, $messages, $built->tools, [], 1500, true));
+                $reply = $engine->reply(new Request($model, $built->system, $messages, $built->tools, [], 1500, true, app(Setup::class)->key()));
             } catch (EngineFailed $e) {
                 $this->error($e->getMessage());
 
@@ -106,7 +106,7 @@ class PromptsTry extends Command
             $this->newLine();
             $this->line("<options=bold>{$number}. {$title}</>");
             try {
-                $reply = $engine->reply(new Request($model, ProfileCourse::rules(), [['role' => 'user', 'content' => "Today is 2026-10-07. The syllabus is between the quotes.\n\"\"\"\n{$syllabus}\n\"\"\""]], [], [], 3500, true));
+                $reply = $engine->reply(new Request($model, ProfileCourse::rules(), [['role' => 'user', 'content' => "Today is 2026-10-07. The syllabus is between the quotes.\n\"\"\"\n{$syllabus}\n\"\"\""]], [], [], 3500, true, app(Setup::class)->key()));
             } catch (EngineFailed $e) {
                 $this->error($e->getMessage());
 
@@ -141,7 +141,7 @@ class PromptsTry extends Command
             $this->line("<options=bold>{$number}. {$title}</>");
             $system = CourseGuide::rules($for)."\n\n## Today\n2026-10-08\n\n## What is set up\n{$set}";
             try {
-                $reply = $engine->reply(new Request($model, $system, [['role' => 'user', 'content' => $message]], [], [], CourseGuide::MAX_TOKENS, true));
+                $reply = $engine->reply(new Request($model, $system, [['role' => 'user', 'content' => $message]], [], [], CourseGuide::MAX_TOKENS, true, app(Setup::class)->key()));
             } catch (EngineFailed $e) {
                 $this->error($e->getMessage());
 

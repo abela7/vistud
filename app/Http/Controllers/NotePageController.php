@@ -126,7 +126,7 @@ class NotePageController
         if ($choices->helperModel !== '' && ! in_array($choices->helperModel, $chatModelIds, true)) {
             array_unshift($chatModelIds, $choices->helperModel);
         }
-        $key = $settings->key($by);
+        $key = $settings->credential($by);
         $allModels = $models->all(key: $key);
         $modelsById = [];
         foreach ($allModels as $m) {

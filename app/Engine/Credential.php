@@ -17,8 +17,8 @@ final class Credential
     }
 
     /**
-     * The provider and the secret of a key; null (the key set up for everyone) is OpenRouter's, at the address the
-     * owner set up.
+     * The provider and the secret of a key. Null has no secret: the caller must pass one. OpenRouter is the
+     * provider when the key has none named in front.
      *
      * @return array{0: string, 1: ?string}
      */

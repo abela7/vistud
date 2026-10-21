@@ -13,6 +13,8 @@ use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 /**
@@ -54,6 +56,7 @@ final class Invitations
                 'updated_at' => now(),
             ]);
             $this->audit->record($by, AuditAction::INVITATION_CREATED, 'invitation', $id, role: 'admin');
+            DB::afterCommit(fn () => Notification::route('mail', $email)->notify(new InvitationMail($token)));
         });
 
         return new IssuedInvitation($id, $token, $expiresAt);
@@ -86,6 +89,7 @@ final class Invitations
 
         return DB::table('invitations')
             ->leftJoin('users as inviters', 'inviters.id', '=', 'invitations.invited_by')
+            ->where('invitations.kind', 'email')
             ->whereNull('invitations.accepted_at')
             ->whereNull('invitations.revoked_at')
             ->whereNotExists(fn ($q) => $q->select(DB::raw(1))->from('users')->whereColumn('users.email', 'invitations.email'))
@@ -109,9 +113,10 @@ final class Invitations
      * a student (ADR 0003 T5). Every failure gets the same answer, so a
      * token's state can't be probed.
      */
-    public function accept(string $token, string $name, string $password, ?string $timezone = null): User
+    public function accept(string $token, string $name, string $password, ?string $timezone = null, ?string $privacyVersion = null): User
     {
-        $pending = DB::table('invitations')->where('token_hash', hash('sha256', $token))->first();
+        $privacyVersion = app(JoiningPolicy::class)->requireAcceptance($privacyVersion);
+        $pending = DB::table('invitations')->where('kind', 'email')->where('token_hash', hash('sha256', $token))->first();
         if ($pending === null || $pending->accepted_at !== null || $pending->revoked_at !== null
             || now()->greaterThanOrEqualTo($pending->expires_at)
             || User::query()->where('email', $pending->email)->exists()) {
@@ -121,7 +126,7 @@ final class Invitations
         // The factory provisions the key first, then consumes the invitation in the account transaction.
         try {
             return $this->factory->create($name, $pending->email, $password, student: true, timezone: $timezone, grantedBy: $pending->invited_by,
-                afterCreate: function (User $user) use ($token) {
+                afterCreate: function (User $user) use ($token, $privacyVersion) {
                     $invitation = DB::table('invitations')
                         ->where('token_hash', hash('sha256', $token))
                         ->lockForUpdate()
@@ -139,6 +144,7 @@ final class Invitations
                         'accepted_user_id' => $user->id,
                         'updated_at' => now(),
                     ]);
+                    $user->forceFill(['privacy_version' => $privacyVersion, 'privacy_accepted_at' => now()])->save();
                     $this->audit->record($this->principals->forUser($user, 'web'), AuditAction::INVITATION_ACCEPTED, 'invitation', $invitation->id);
                 });
         } catch (Conflict $e) {
@@ -149,5 +155,57 @@ final class Invitations
             }
             throw $e;
         }
+    }
+
+    public function classLink(Principal $by, int $places, string $expires): IssuedInvitation
+    {
+        Guard::protectedAdmin($by);
+        Validator::make(['places' => $places, 'expires' => $expires], [
+            'places' => ['required', 'integer', 'min:1', 'max:10000'],
+            'expires' => ['required', 'date_format:Y-m-d H:i:s', 'after:now'],
+        ])->validate();
+        $id = Ids::new();
+        $token = Str::random(48);
+        DB::transaction(function () use ($by, $id, $token, $places, $expires) {
+            DB::table('invitations')->insert([
+                'id' => $id, 'kind' => 'class', 'email' => null, 'token_hash' => hash('sha256', $token),
+                'places' => $places, 'uses' => 0, 'invited_by' => $by->userId, 'expires_at' => $expires,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $this->audit->record($by, AuditAction::INVITATION_CREATED, 'invitation', $id, role: 'admin');
+
+        });
+
+        return new IssuedInvitation($id, $token, CarbonImmutable::parse($expires, 'UTC')->toDateTimeImmutable());
+    }
+
+    public function classLinks(Principal $by): array
+    {
+        Guard::admin($by);
+
+        return DB::table('invitations')->where('kind', 'class')->orderByDesc('created_at')->limit(200)
+            ->get(['id', 'places', 'uses', 'expires_at', 'revoked_at'])->all();
+    }
+
+    public function joinClass(string $token, string $email, string $name, string $password, ?string $timezone, ?string $privacyVersion): User
+    {
+        $privacyVersion = app(JoiningPolicy::class)->requireAcceptance($privacyVersion);
+        $pending = DB::table('invitations')->where('kind', 'class')->where('token_hash', hash('sha256', $token))->first();
+        $valid = fn ($row) => $row !== null && $row->revoked_at === null && now()->lt($row->expires_at) && $row->uses < $row->places;
+        if (! $valid($pending)) {
+            throw new Unprocessable('invitation_invalid', 'This invitation is not valid. Ask for a new one.');
+        }
+
+        return $this->factory->create($name, $email, $password, student: true, timezone: $timezone, grantedBy: $pending->invited_by,
+            afterCreate: function (User $user) use ($pending, $valid, $privacyVersion) {
+                // Capacity is checked and consumed under the same lock/account transaction.
+                $row = DB::table('invitations')->where('id', $pending->id)->lockForUpdate()->first();
+                if (! $valid($row)) {
+                    throw new Unprocessable('invitation_invalid', 'This invitation is not valid. Ask for a new one.');
+                }
+                DB::table('invitations')->where('id', $row->id)->increment('uses');
+                $this->audit->record($this->principals->forUser($user, 'web'), AuditAction::INVITATION_ACCEPTED, 'invitation', $row->id);
+                $user->forceFill(['email_verified_at' => null, 'privacy_version' => $privacyVersion, 'privacy_accepted_at' => now()])->save();
+            });
     }
 }

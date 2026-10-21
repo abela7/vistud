@@ -51,7 +51,7 @@ class SettingsTest extends TestCase
         $this->app->instance(Engine::class, $engine = new Fake);
 
         $this->assertNull($settings->key($by));
-        $this->assertTrue($settings->keyAvailable($by));
+        $this->assertFalse($settings->keyAvailable($by));
         $this->assertNull($settings->get($by)->ownKeyHint);
 
         $choices = $settings->setKey($by, ' sk-or-v1-abcdefghijklmnopqrstuvwxyz0123456789 ');

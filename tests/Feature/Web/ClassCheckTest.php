@@ -56,6 +56,7 @@ class ClassCheckTest extends TestCase
         $this->app->instance(Engine::class, $this->engine);
         $this->ada = $this->student();
         $this->by = $this->principal($this->ada);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $this->course = app(Workspaces::class)->create($this->by, ['name' => 'Biology'])->id;
         $this->module = app(Modules::class)->create($this->by, $this->course, ['title' => 'Cells'])->id;

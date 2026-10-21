@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Notifications\VerifyStudentEmail;
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -20,10 +22,15 @@ use Laravel\Passport\HasApiTokens;
  */
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token', 'two_factor_secret', 'two_factor_recovery_codes'])]
-class User extends Authenticatable implements OAuthenticatable
+class User extends Authenticatable implements MustVerifyEmail, OAuthenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasUuids, Notifiable, TwoFactorAuthenticatable;
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new VerifyStudentEmail);
+    }
 
     protected function casts(): array
     {

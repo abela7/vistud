@@ -21,7 +21,7 @@ final class ModelChoices
     {
         $choices = $this->settings->get($by);
         $known = [];
-        foreach ($this->models->all(key: $this->settings->key($by)) as $model) {
+        foreach ($this->models->all(key: $this->settings->credential($by)) as $model) {
             $known[$model->id] = $model;
         }
         $ids = array_values(array_unique(array_filter([
@@ -48,7 +48,7 @@ final class ModelChoices
     {
         $id = $this->settings->get($by)->tutorModel;
 
-        return $id === '' ? 'your tutor model' : self::name($this->models->find($id, $this->settings->key($by))->name ?? '', $id);
+        return $id === '' ? 'your tutor model' : self::name($this->models->find($id, $this->settings->credential($by))->name ?? '', $id);
     }
 
     /** A model's name without its maker's prefix ("Anthropic: Claude 3.5 Sonnet" is "Claude 3.5 Sonnet"). */

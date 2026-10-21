@@ -58,6 +58,7 @@ class SessionChatFirstTest extends TestCase
         $this->module = app(Modules::class)->create($this->by, $this->workspace, ['title' => 'Week 2: SQL joins'])->id;
         $this->joins = app(Topics::class)->create($this->by, $this->workspace, 'Joins', $this->module)->id;
         $this->keys = app(Topics::class)->create($this->by, $this->workspace, 'Keys', $this->module)->id;
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $this->actingAs($this->ada);
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
@@ -202,6 +203,7 @@ class SessionChatFirstTest extends TestCase
         $chat->call('undoStatus', $this->joins)->call('undoStatus', 'not-a-topic');
 
         // With "Let the tutor mark topics" off, it is only a suggestion with a tap.
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true, 'tutor_marks_topics' => false]);
         $this->engine->will(Fake::calls('set_topic_status', ['topic' => 'Keys', 'status' => 'confusing', 'reason' => 'Mixed up two keys.'], 'c2'), Fake::says('Keys are worth another look.'));
         $chat->set('text', 'Next.')->call('send')->assertSee('Keys: not understood?')->assertSee('Mark it');

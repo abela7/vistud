@@ -28,6 +28,12 @@ final class Invitations extends Component
 
     public string $email = '';
 
+    public int $places = 30;
+
+    public string $ends = '';
+
+    private ?string $classLink = null;
+
     /** The new invitation's address, once one is issued. Never its token. */
     #[Locked]
     public ?string $issuedTo = null;
@@ -116,12 +122,38 @@ final class Invitations extends Component
         return null;
     }
 
+    public function createClassLink(): mixed
+    {
+        $this->validate(['places' => ['required', 'integer', 'min:1', 'max:10000'], 'ends' => ['required', 'date_format:Y-m-d', 'after:today']]);
+        try {
+            $issued = $this->invitations->classLink($this->principal(), $this->places, $this->ends.' 23:59:59');
+        } catch (PasswordConfirmationRequired) {
+            return $this->confirmPasswordFirst();
+        }
+        $this->classLink = route('class-links.show').'#'.$issued->token;
+
+        return null;
+    }
+
+    public function disableClassLink(string $id): mixed
+    {
+        try {
+            $this->invitations->revoke($this->principal(), $id);
+        } catch (PasswordConfirmationRequired) {
+            return $this->confirmPasswordFirst();
+        }
+
+        return null;
+    }
+
     public function render(): View
     {
         $pending = $this->invitations->pending($this->principal());
 
         return view('livewire.admin.accounts.invitations', [
             'pending' => $pending,
+            'classLinks' => $this->invitations->classLinks($this->principal()),
+            'classLink' => $this->classLink,
             'link' => $this->link,
             'cancellingEmail' => $this->cancelling === null ? null : collect($pending)->firstWhere('id', $this->cancelling)?->email,
             'ttlHours' => (int) config('vistud.invitations.ttl_hours', 72),

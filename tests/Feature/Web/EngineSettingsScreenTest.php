@@ -115,7 +115,7 @@ class EngineSettingsScreenTest extends TestCase
         $admin = $this->admin();
         app(Setup::class)->setKey($this->principal($admin), 'sk-or-v1-owner-key-00000000000');
         $this->actingAs($this->student());
-        Livewire::test(EngineSettings::class)->assertSee("Using the owner's", false)->assertSee('Paste your own to pay yourself')->assertDontSee(route('admin.engine'));
+        Livewire::test(EngineSettings::class)->assertSee('Not set up')->assertDontSee("Using the owner's", false)->assertDontSee(route('admin.engine'));
 
         app(Setup::class)->removeKey($this->principal($admin));
         $this->actingAs($admin);
@@ -180,6 +180,7 @@ class EngineSettingsScreenTest extends TestCase
         $module = app(Modules::class)->create($by, $workspace->id, ['title' => 'Week 2: SQL joins'])->id;
         $topic = app(Topics::class)->create($by, $workspace->id, 'Joins', $module)->id;
         $session = app(Sessions::class)->start($by, $workspace->id, $topic, $module);
+        $this->ownAiKey($by);
 
         Livewire::test(EngineSettings::class)->assertSee('Usage this month')->assertSeeHtml('<dd data-usage-role="tutor">$0.00</dd>')->assertSee('$0.00 of $20.00, all three together');
 

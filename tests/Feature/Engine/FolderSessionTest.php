@@ -196,6 +196,7 @@ class FolderSessionTest extends TestCase
     {
         $this->app->instance(Engine::class, new Fake);
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $this->actingAs($this->ada);
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));

@@ -43,6 +43,7 @@ class TranscribeTryTest extends TestCase
         $this->app->instance(Engine::class, $this->engine);
         $ada = $this->student();
         $this->by = $this->principal($ada);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $course = app(Workspaces::class)->create($this->by, ['name' => 'Biology']);
         $cells = app(Modules::class)->create($this->by, $course->id, ['title' => 'Cells']);

@@ -122,8 +122,11 @@ final class PrincipalFactory
     ): Principal {
         // Status and 2FA come from the database, not the in-memory model, so
         // a suspension or a 2FA reset takes effect on the very next request.
-        $state = DB::table('users')->where('id', $user->id)->first(['status', 'two_factor_secret', 'two_factor_confirmed_at']);
+        $state = DB::table('users')->where('id', $user->id)->first(['status', 'email_verified_at', 'two_factor_secret', 'two_factor_confirmed_at']);
         self::assertStatus($state?->status);
+        if ($state->email_verified_at === null) {
+            throw new Forbidden('email_unverified', 'Confirm your email address first.');
+        }
 
         $roles = $this->roles->rolesOf($user->id);
 

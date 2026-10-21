@@ -124,6 +124,10 @@ class RolesTest extends TestCase
 
         $this->assertSame('engine_key', $refusal(Role::Helper));
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        // The installation key is not this student's. Their own key is.
+        $this->assertSame('engine_key', $refusal(Role::Tutor));
+        $secret = bin2hex(random_bytes(32));
+        $settings->setKey($by, $secret);
         $this->assertSame('engine_model', $refusal(Role::Tutor));
         $settings->set($by, ['helper_model' => 'c/helper']);
         // The helper has a model of its own, the reader and the tutor still have none.
@@ -131,7 +135,7 @@ class RolesTest extends TestCase
         $settings->set($by, ['helper_model' => 'c/helper', 'consent' => true]);
         $this->assertSame('ready', $refusal(Role::Helper));
         [$choices, $key, $model] = $settings->ready($by, Role::Helper);
-        $this->assertSame(['c/helper', null], [$model, $key]);
+        $this->assertSame(['c/helper', $secret], [$model, $key]);
         $this->assertTrue($choices->consentedAt !== null);
     }
 

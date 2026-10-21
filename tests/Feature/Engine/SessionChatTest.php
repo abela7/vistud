@@ -61,6 +61,7 @@ class SessionChatTest extends TestCase
         app(Notes::class)->save($this->by, $note->id, ['base_version' => 1, 'save_id' => 'engine-save-1', 'client_id' => 'engine-tab-1', 'title' => 'Lecture 3: joins', 'doc' => ['type' => 'doc', 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'A left join keeps every left row.']]]]]]);
         $this->session = app(Sessions::class)->start($this->by, $this->databases->id, $joins, $week2);
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'fallback_model' => 'fake/plain', 'consent' => true]);
     }
 
@@ -165,6 +166,7 @@ class SessionChatTest extends TestCase
 
     public function test_a_model_without_tools_gets_none_and_the_look_up_rounds_are_limited(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/plain', 'consent' => true]);
         $this->engine->will(Fake::says('Hello.'));
         $this->chat()->send($this->by, $this->session->id, 'Hi');
@@ -172,6 +174,7 @@ class SessionChatTest extends TestCase
         $this->assertStringNotContainsString('## Your tools in this chat', $this->engine->last()->system);
 
         config(['vistud.engine.tool_rounds' => 2]);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $this->engine->will(Fake::calls('topics', [], 'a'), Fake::calls('topics', [], 'b'), Fake::says('Enough.'));
         $reply = $this->chat()->send($this->by, $this->session->id, 'Loop');
@@ -184,18 +187,24 @@ class SessionChatTest extends TestCase
     {
         $this->engine->will(Fake::says('Hi.', 1_500_000));
         $this->chat()->send($this->by, $this->session->id, 'Hi');
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'session_cap' => '1.00', 'consent' => true]);
         $this->expectCode(fn () => $this->chat()->send($this->by, $this->session->id, 'More'), 'engine_cap', '$1.00');
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'session_cap' => '5.00', 'month_cap' => '1.00', 'consent' => true]);
         $this->expectCode(fn () => $this->chat()->send($this->by, $this->session->id, 'More'), 'engine_cap', 'month');
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'session_cap' => '0', 'month_cap' => '0', 'consent' => true]);
         $this->engine->will(Fake::says('No limits.'));
         $this->assertSame('No limits.', $this->chat()->send($this->by, $this->session->id, 'More')->text);
+
+        $this->ownAiKey($this->by);
 
         app(Settings::class)->set($this->by, ['tutor_model' => '', 'consent' => true]);
         $this->expectCode(fn () => $this->chat()->send($this->by, $this->session->id, 'Hi'), 'engine_model');
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => false]);
         $this->expectCode(fn () => $this->chat()->send($this->by, $this->session->id, 'Hi'), 'engine_consent');
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $this->expectCode(fn () => $this->chat()->send($this->by, $this->session->id, '   '), 'validation_failed');
 
@@ -241,6 +250,7 @@ class SessionChatTest extends TestCase
     {
         // fake/plain holds 8,000 tokens: far less than the 60,000 characters a chat may otherwise grow to.
         config(['vistud.engine.fold_at' => 60_000, 'vistud.engine.keep_recent' => 2]);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/plain', 'reader_model' => 'fake/quick', 'consent' => true]);
         $long = str_repeat('Joins join tables. ', 160);
         $this->engine->will(Fake::says($long), Fake::says($long));
@@ -261,7 +271,7 @@ class SessionChatTest extends TestCase
     {
         $this->engine->will(Fake::says('Hi.'));
         $this->chat()->send($this->by, $this->session->id, 'Hi');
-        $this->assertNull($this->engine->last()->key);
+        $this->assertSame(app(Settings::class)->key($this->by), $this->engine->last()->key);
 
         app(Settings::class)->setKey($this->by, 'sk-or-v1-abcdefghijklmnopqrstuvwxyz');
         $this->engine->will(Fake::says('Hi again.'));
@@ -464,6 +474,7 @@ class SessionChatTest extends TestCase
         $refused([$note, $deck, $photo, "note:{$other->id}", 'file:x'], 'up to 4');
         $refused(['topic:abc'], 'isn\'t a note or a file');
         // A model that can't see pictures is not sent one.
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/quick', 'consent' => true]);
         $refused([$photo], 'can\'t see pictures');
         $this->assertSame([], $this->chat()->transcript($this->by, $this->session->id));
@@ -481,6 +492,8 @@ class SessionChatTest extends TestCase
         $this->chat()->send($this->by, $this->session->id, 'Hi');
         $this->assertStringNotContainsString('## Language', $this->engine->last()->system);
 
+        $this->ownAiKey($this->by);
+
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'Amharic']);
         $this->chat()->send($this->by, $this->session->id, 'Hi again');
         $system = $this->engine->last()->system;
@@ -497,6 +510,8 @@ class SessionChatTest extends TestCase
         $this->assertStringContainsString('**Keep the topics** (add_topics, set_topic)', $system);
         $this->assertStringContainsString('Topics: keep them yourself, as you teach, and say so in one line.', $system);
         $this->assertStringNotContainsString('Topics: ask before you add or switch them', $system);
+
+        $this->ownAiKey($this->by);
 
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'ask_topics' => true]);
         $this->assertTrue(app(Settings::class)->get($this->by)->askTopics);
@@ -589,6 +604,7 @@ class SessionChatTest extends TestCase
         $this->assertSame(['user', 'assistant', 'tool', 'assistant', 'user', 'user'], array_column($messages, 'role'));
 
         // Another model never gets a model's reasoning.
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/plain', 'consent' => true]);
         $this->engine->will(Fake::says('Hi.'));
         $this->chat()->send($this->by, $this->session->id, 'Hi');

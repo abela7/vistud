@@ -5,6 +5,8 @@
     Every invalid link gets the same answer, whatever the reason.
 --}}
 @php
+    $classLink = $classLink ?? false;
+    $policyVersion = app(\App\Identity\JoiningPolicy::class)->version();
     $invalid = $errors->has('invitation');
     $fieldErrors = collect($errors->get('timezone'))->merge($errors->get('token'));
 @endphp
@@ -57,10 +59,14 @@
                                 <x-alert tone="danger">{{ $fieldErrors->first() }}</x-alert>
                             @endif
 
-                            <form method="POST" action="{{ route('invitations.accept.store') }}" class="space-y-5" novalidate data-busy-on-submit data-invitation-form>
+                            <form method="POST" action="{{ route($classLink ? 'class-links.accept' : 'invitations.accept.store') }}" class="space-y-5" novalidate data-busy-on-submit data-invitation-form>
                                 @csrf
                                 <input type="hidden" name="token" value="">
                                 <input type="hidden" name="timezone" value="">
+                                <input type="hidden" name="privacy_version" value="{{ $policyVersion }}">
+                                @if ($classLink)
+                                    <x-field name="email" label="Your email address" type="email" :value="old('email')" autocomplete="email" required />
+                                @endif
 
                                 <x-field name="name" label="Your name" :value="old('name')" autocomplete="name" enterkeyhint="next" required autofocus />
 
@@ -70,7 +76,14 @@
                                 <x-field name="password_confirmation" label="Confirm password" type="password" revealable
                                     autocomplete="new-password" enterkeyhint="go" required />
 
-                                <x-button type="submit" variant="primary" size="lg" class="w-full" busy-label="Creating your account…">Create my account</x-button>
+                                @if ($policyVersion)
+                                    <label class="flex items-start gap-3"><input type="checkbox" name="privacy" value="1" required class="mt-1"> <span>I accept the <a href="{{ route('privacy') }}" target="_blank" rel="noopener" class="text-link">privacy policy</a>.</span></label>
+                                    @error('privacy')<p role="alert">{{ $message }}</p>@enderror
+                                    @error('privacy_version')<p role="alert">{{ $message }}</p>@enderror
+                                @else
+                                    <x-alert tone="warning">Joining is not available yet. Please come back later.</x-alert>
+                                @endif
+                                <x-button :disabled="! $policyVersion" type="submit" variant="primary" size="lg" class="w-full" busy-label="Creating your account…">Create my account</x-button>
                             </form>
 
                             <p class="border-t border-divider pt-5 text-sm text-fg-muted">

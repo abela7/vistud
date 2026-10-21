@@ -7,6 +7,7 @@ namespace App\Livewire\Workspaces;
 use App\Engine\Jobs\ClassCheck;
 use App\Engine\Jobs\Runner;
 use App\Engine\Jobs\TranscribeClass;
+use App\Engine\Settings;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
@@ -138,6 +139,11 @@ final class ClassRecorder extends Component
         $by = $this->principal();
         $this->class();
         $this->transcribeProblem = null;
+        if (app(Settings::class)->audioModel($by) === null) {
+            $this->transcribeProblem = 'Your AI provider cannot write down recordings. Add a key that supports audio in Settings, AI.';
+
+            return;
+        }
         $this->transcribeJob = $this->runner->pending($by, 'transcribe_class', 'class_session', $this->classId)
             ?? $this->runner->start($by, new TranscribeClass($this->workspaceId, $this->classId));
     }
@@ -323,6 +329,8 @@ final class ClassRecorder extends Component
         }
 
         return view('livewire.workspaces.class-recorder', [
+            'hasKey' => app(Settings::class)->credential($by) !== '',
+            'audioAvailable' => app(Settings::class)->audioModel($by) !== null,
             'moduleFiles' => $class->durationSeconds > 0 ? $this->moduleFiles($by) : [],
             'class' => $class,
             'open' => $open,

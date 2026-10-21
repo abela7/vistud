@@ -45,6 +45,7 @@ class AssignmentMemoryTest extends TestCase
         $this->app->instance(Engine::class, $this->engine);
         $this->by = $this->principal($this->student());
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'fallback_model' => 'fake/plain', 'consent' => true, 'auto_read_files' => false]);
         $this->workspaceId = app(Workspaces::class)->create($this->by, ['name' => 'Nursing'])->id;
         $module = app(Modules::class)->create($this->by, $this->workspaceId, ['title' => 'Research methods'])->id;

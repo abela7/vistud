@@ -31,7 +31,7 @@ class OpenRouterTest extends TestCase
             'usage' => ['prompt_tokens' => 1200, 'completion_tokens' => 40, 'cost' => 0.00123],
         ])]);
 
-        $reply = app(OpenRouter::class)->reply(new Request('openai/gpt-4.1-mini', 'You are the tutor.', [['role' => 'user', 'content' => 'What is a left join?']], [['type' => 'function', 'function' => ['name' => 'topics']]], ['google/gemini-flash']));
+        $reply = app(OpenRouter::class)->reply(new Request('openai/gpt-4.1-mini', 'You are the tutor.', [['role' => 'user', 'content' => 'What is a left join?']], [['type' => 'function', 'function' => ['name' => 'topics']]], ['google/gemini-flash'], key: 'test-key'));
 
         $this->assertSame(['A left join keeps every row of the left table.', [], 'openai/gpt-4.1-mini', 1200, 40, 1230, 'stop'], [$reply->text, $reply->toolCalls, $reply->model, $reply->tokensIn, $reply->tokensOut, $reply->costMicros, $reply->finish]);
         Http::assertSent(function ($request) {
@@ -52,7 +52,7 @@ class OpenRouterTest extends TestCase
             ['id' => 'call_b', 'type' => 'function', 'function' => ['name' => 'topics', 'arguments' => '']],
         ]], 'finish_reason' => 'tool_calls']], 'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5]])]);
 
-        $reply = app(OpenRouter::class)->reply(new Request('m', 's', [], noTraining: false));
+        $reply = app(OpenRouter::class)->reply(new Request('m', 's', [], noTraining: false, key: 'test-key'));
 
         $this->assertTrue($reply->wantsTools());
         $this->assertSame(['', 'tool_calls', null], [$reply->text, $reply->finish, $reply->costMicros]);
@@ -73,7 +73,7 @@ class OpenRouterTest extends TestCase
         Http::fake(['engine.test/*' => $sequence]);
         foreach ($statuses as $status => $words) {
             try {
-                $engine->reply(new Request('m', 's', []));
+                $engine->reply(new Request('m', 's', [], key: 'test-key'));
                 $this->fail("A {$status} should fail.");
             } catch (EngineFailed $e) {
                 $this->assertStringContainsString($words, $e->getMessage(), "For {$status}");
@@ -82,31 +82,34 @@ class OpenRouterTest extends TestCase
         }
 
         $this->expectException(EngineFailed::class);
-        $engine->reply(new Request('m', 's', []));
+        $engine->reply(new Request('m', 's', [], key: 'test-key'));
     }
 
     public function test_without_a_key_nothing_is_sent_and_the_message_says_where_to_put_one(): void
     {
-        config(['vistud.engine.key' => '']);
         Http::fake();
         try {
             app(OpenRouter::class)->reply(new Request('m', 's', []));
             $this->fail('Should fail without a key.');
         } catch (EngineFailed $e) {
-            $this->assertStringContainsString('AI settings', $e->getMessage());
+            $this->assertSame('engine_key', $e->errorCode);
         }
         Http::assertNothingSent();
     }
 
-    public function test_a_students_own_key_is_used_before_the_one_set_up_for_everyone(): void
+    public function test_a_missing_key_is_never_filled_from_the_installation(): void
     {
         Http::fake(['engine.test/*' => Http::response(['choices' => [['message' => ['content' => 'Hi'], 'finish_reason' => 'stop']], 'data' => []])]);
         app(OpenRouter::class)->reply(new Request('m', 's', [], key: 'sk-or-own-key'));
         app(OpenRouter::class)->models('sk-or-own-key');
-        Http::assertSentCount(2);
         Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer sk-or-own-key'));
-        app(OpenRouter::class)->reply(new Request('m', 's', []));
-        Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer test-key'));
+        try {
+            app(OpenRouter::class)->reply(new Request('m', 's', []));
+            $this->fail('A missing key must not use the installation key.');
+        } catch (EngineFailed $e) {
+            $this->assertSame('engine_key', $e->errorCode);
+        }
+        Http::assertNotSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer test-key'));
     }
 
     public function test_the_models_are_listed_with_prices_per_million_and_what_they_take_and_kept_for_a_day(): void
@@ -118,7 +121,7 @@ class OpenRouterTest extends TestCase
         ]])]);
         Cache::flush();
 
-        $models = app(Models::class)->all();
+        $models = app(Models::class)->all(key: 'test-key');
         $this->assertSame(['Llama (free)', 'OpenAI: GPT-4.1 Mini'], array_map(fn ($m) => $m->name, $models));
         $mini = app(Models::class)->find('openai/gpt-4.1-mini');
         $this->assertSame([0.4, 1.6, 1047576, true, true, true], [$mini->inPerMillion, $mini->outPerMillion, $mini->contextLength, $mini->tools, $mini->images, $mini->files]);
@@ -127,9 +130,9 @@ class OpenRouterTest extends TestCase
         $this->assertFalse(app(Models::class)->find('meta/llama-free')->tools);
 
         // The second call reads the kept list; a fresh one asks again.
-        app(Models::class)->all();
+        app(Models::class)->all(key: 'test-key');
         Http::assertSentCount(1);
-        app(Models::class)->all(fresh: true);
+        app(Models::class)->all(fresh: true, key: 'test-key');
         Http::assertSentCount(2);
     }
 
@@ -137,8 +140,8 @@ class OpenRouterTest extends TestCase
     {
         Cache::flush();
         Http::fake(['engine.test/*' => Http::sequence()->push('', 503)->push(['data' => [['id' => 'a/b', 'name' => 'B', 'pricing' => ['prompt' => '0.000001', 'completion' => '0.000002']]]])]);
-        $this->assertSame([], app(Models::class)->all());
-        $this->assertCount(1, app(Models::class)->all());
+        $this->assertSame([], app(Models::class)->all(key: 'test-key'));
+        $this->assertCount(1, app(Models::class)->all(key: 'test-key'));
     }
 
     /** The service's server-sent events, as OpenRouter writes them. */
@@ -158,7 +161,7 @@ class OpenRouterTest extends TestCase
         ]), 200, ['Content-Type' => 'text/event-stream'])]);
 
         $heard = [];
-        $reply = app(OpenRouter::class)->stream(new Request('openai/gpt-4.1-mini', 'You are the tutor.', [['role' => 'user', 'content' => 'Left join?']]), function (string $words) use (&$heard) {
+        $reply = app(OpenRouter::class)->stream(new Request('openai/gpt-4.1-mini', 'You are the tutor.', [['role' => 'user', 'content' => 'Left join?']], key: 'test-key'), function (string $words) use (&$heard) {
             $heard[] = $words;
         });
 
@@ -177,7 +180,7 @@ class OpenRouterTest extends TestCase
         ]), 200, ['Content-Type' => 'text/event-stream; charset=utf-8'])]);
 
         $heard = [];
-        $reply = app(OpenRouter::class)->stream(new Request('m', 's', []), function (string $words) use (&$heard) {
+        $reply = app(OpenRouter::class)->stream(new Request('m', 's', [], key: 'test-key'), function (string $words) use (&$heard) {
             $heard[] = $words;
         });
 
@@ -196,13 +199,13 @@ class OpenRouterTest extends TestCase
             ->push(": OPENROUTER PROCESSING\n\ndata: [DONE]\n\n", 200, ['Content-Type' => 'text/event-stream'])]);
 
         try {
-            app(OpenRouter::class)->stream(new Request('m', 's', []), $quiet);
+            app(OpenRouter::class)->stream(new Request('m', 's', [], key: 'test-key'), $quiet);
             $this->fail('A refusal should fail.');
         } catch (EngineFailed $e) {
             $this->assertStringContainsString('out of credit', $e->getMessage());
         }
         try {
-            app(OpenRouter::class)->stream(new Request('m', 's', []), $quiet);
+            app(OpenRouter::class)->stream(new Request('m', 's', [], key: 'test-key'), $quiet);
             $this->fail('A cut-off stream should fail.');
         } catch (EngineFailed $e) {
             $this->assertSame('engine_cut', $e->errorCode);
@@ -210,13 +213,13 @@ class OpenRouterTest extends TestCase
         }
         // A service that ignores streaming answers whole: its words arrive in one piece.
         $heard = [];
-        $reply = app(OpenRouter::class)->stream(new Request('m', 's', []), function (string $words) use (&$heard) {
+        $reply = app(OpenRouter::class)->stream(new Request('m', 's', [], key: 'test-key'), function (string $words) use (&$heard) {
             $heard[] = $words;
         });
         $this->assertSame([['Whole at once.'], 'Whole at once.'], [$heard, $reply->text]);
         // A stream with nothing in it is an empty answer.
         $this->expectException(EngineFailed::class);
-        app(OpenRouter::class)->stream(new Request('m', 's', []), $quiet);
+        app(OpenRouter::class)->stream(new Request('m', 's', [], key: 'test-key'), $quiet);
     }
 
     public function test_a_models_reasoning_comes_back_with_its_reply_whole_or_in_pieces(): void
@@ -231,8 +234,8 @@ class OpenRouterTest extends TestCase
                 ['choices' => [['index' => 0, 'delta' => ['content' => 'Here.'], 'finish_reason' => 'stop']]],
             ]), 200, ['Content-Type' => 'text/event-stream'])]);
 
-        $this->assertSame($reasoning, app(OpenRouter::class)->reply(new Request('m', 's', []))->reasoning);
-        $streamed = app(OpenRouter::class)->stream(new Request('m', 's', []), function () {});
+        $this->assertSame($reasoning, app(OpenRouter::class)->reply(new Request('m', 's', [], key: 'test-key'))->reasoning);
+        $streamed = app(OpenRouter::class)->stream(new Request('m', 's', [], key: 'test-key'), function () {});
         $this->assertSame([['type' => 'reasoning.text', 'text' => 'The student wants a card.', 'id' => 'r1', 'format' => 'anthropic-claude-v1', 'index' => 0, 'signature' => 'sig-1']], $streamed->reasoning);
         $this->assertSame('Here.', $streamed->text);
     }
@@ -245,7 +248,7 @@ class OpenRouterTest extends TestCase
         ]]], 400)]);
 
         try {
-            app(OpenRouter::class)->reply(new Request('m', 's', []));
+            app(OpenRouter::class)->reply(new Request('m', 's', [], key: 'test-key'));
             $this->fail('Expected a refusal.');
         } catch (EngineFailed $e) {
             $this->assertStringContainsString('It said: Provider returned error Anthropic says: messages.3: thinking blocks must precede tool_use', $e->getMessage());
@@ -259,7 +262,7 @@ class OpenRouterTest extends TestCase
             ['id' => 'anthropic/claude-sonnet-5.5', 'name' => 'Claude Sonnet 5.5', 'pricing' => ['prompt' => '0.000002', 'completion' => '0.00001']],
             ['id' => 'anthropic/claude-sonnet-5.5:batch', 'name' => 'Claude Sonnet 5.5 (batch)', 'pricing' => ['prompt' => '0.000001', 'completion' => '0.000005']],
         ]])]);
-        $this->assertSame(['anthropic/claude-sonnet-5.5'], array_map(fn ($m) => $m->id, app(Models::class)->all()));
+        $this->assertSame(['anthropic/claude-sonnet-5.5'], array_map(fn ($m) => $m->id, app(Models::class)->all(key: 'test-key')));
     }
 
     public function test_provider_error_bodies_that_echo_personal_text_are_not_logged(): void
@@ -267,7 +270,7 @@ class OpenRouterTest extends TestCase
         $marker = 'private-'.bin2hex(random_bytes(16));
         $log = Log::spy();
         Http::fake(['engine.test/*' => Http::response(['error' => ['message' => 'Rejected prompt '.$marker]], 400)]);
-        $this->assertThrows(fn () => app(OpenRouter::class)->reply(new Request('m', 's', [])), EngineFailed::class);
+        $this->assertThrows(fn () => app(OpenRouter::class)->reply(new Request('m', 's', [], key: 'test-key')), EngineFailed::class);
         $log->shouldHaveReceived('warning')->once()->with('The AI service refused a call.', \Mockery::on(fn ($context) => array_keys($context) === ['provider', 'model', 'status'] && ! str_contains(json_encode($context), $marker)));
     }
 }

@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Platform\Access\LearnerKeys;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Database\ContentCipher;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Forbidden;
 use App\Platform\Files\TempWorkspace;
@@ -198,12 +199,16 @@ class Erasure
                 Cache::lock('laravel_unique_job:'.$jobClass.':'.$file->id)->forceRelease();
             }
         }
-        $row = LearnerTables::forErasure(Principal::system(), $scope, 'engine_settings')->first(['key_encrypted', 'key_provider']);
+        $row = LearnerTables::forErasure(Principal::system(), $scope, 'engine_settings')->first();
         if ($row?->key_encrypted !== null) {
-            $key = Credential::pack($row->key_provider ?? Providers::OPENROUTER, Crypt::decryptString($row->key_encrypted));
-            $catalogue = Models::cacheKey($key);
-            if ($catalogue !== Models::cacheKey(null)) {
-                Cache::forget($catalogue);
+            $provider = is_string($row->key_provider) && $row->key_provider !== '' ? $row->key_provider : Providers::OPENROUTER;
+            // OpenRouter shares one catalogue. A provider key has its own, named by a hash of the secret.
+            if (Providers::direct($provider)) {
+                $stored = (string) $row->key_encrypted;
+                $secret = str_starts_with($stored, 'vsk1:')
+                    ? app(ContentCipher::class)->decrypt($scope, 'engine_settings', (array) $row, 'key_encrypted', substr($stored, 5))
+                    : Crypt::decryptString($stored);
+                Cache::forget(Models::cacheKey(Credential::pack($provider, $secret)));
             }
         }
         $prefixes = ['topic-again:'.$scope->learnerId.':', 'topic-review:'.$scope->learnerId.':', 'topic-files-out:'.$scope->learnerId.':', 'engine-trouble:'.$scope->learnerId];

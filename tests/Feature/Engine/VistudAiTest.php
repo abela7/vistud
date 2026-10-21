@@ -61,6 +61,7 @@ class VistudAiTest extends TestCase
         $this->app->instance(Engine::class, $this->engine);
         $this->ada = $this->student();
         $this->by = $this->principal($this->ada);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
 
         $this->algorithms = app(Workspaces::class)->create($this->by, ['name' => 'Algorithm Design', 'code' => 'CS301'])->id;

@@ -58,6 +58,7 @@ class AiMenuScreenTest extends TestCase
         $this->module = app(Modules::class)->create($this->by, $this->workspace, ['title' => 'Week 3'])->id;
         $this->topic = app(Topics::class)->create($this->by, $this->workspace, 'CPU scheduling', $this->module)->id;
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/plain', 'helper_model' => 'fake/plain', 'consent' => true]);
     }
 

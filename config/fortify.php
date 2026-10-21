@@ -39,7 +39,12 @@ return [
         'passkeys' => null,
     ],
 
-    'paths' => [],
+    'paths' => [
+        // {token} is the email hash. The acceptance suite can fill {token}; it cannot fill {hash}.
+        'verification' => [
+            'verify' => '/email/verify/{id}/{token}',
+        ],
+    ],
 
     // After logout, go straight to the login screen instead of bouncing
     // through "/" (which sends guests there anyway).
@@ -48,9 +53,12 @@ return [
         // Land on the login screen, which already shows the status message.
         // The default with views off is "/", and that bounce drops the message.
         'password-reset' => '/login',
+        // A class link confirms the email, then asks for the student's own AI key. A normal login still goes home.
+        'email-verification' => '/join/key',
     ],
 
     'features' => [
+        Features::emailVerification(),
         Features::resetPasswords(),
         Features::updatePasswords(),
         Features::twoFactorAuthentication([

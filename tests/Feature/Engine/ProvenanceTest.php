@@ -59,6 +59,7 @@ class ProvenanceTest extends TestCase
         $joins = app(Topics::class)->create($this->by, $this->databases->id, 'Joins', $week2)->id;
         $this->session = app(Sessions::class)->start($this->by, $this->databases->id, $joins, $week2);
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
     }
 

@@ -57,6 +57,7 @@ class CourseSetupScreenTest extends TestCase
     private function ready(): void
     {
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
     }
 

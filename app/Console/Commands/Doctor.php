@@ -115,7 +115,7 @@ class Doctor extends Command
         );
         if ($setup->keySet()) {
             try {
-                $count = count($this->laravel->make(Engine::class)->models());
+                $count = count($this->laravel->make(Engine::class)->models($setup->key()));
                 $check('The engine answers at '.$setup->url()." ({$count} models)", $count > 0, 'The service listed no models. Check its address on the AI engine page.', needed: false);
             } catch (EngineFailed $e) {
                 $check('The engine answers at '.$setup->url(), false, $e->getMessage(), needed: false);

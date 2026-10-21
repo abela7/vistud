@@ -28,7 +28,9 @@ class CourseNewScreenTest extends TestCase
     private function aiReady(): void
     {
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
-        app(Settings::class)->set($this->principal($this->ada), ['tutor_model' => 'fake/tutor', 'consent' => true]);
+        $by = $this->principal($this->ada);
+        $this->ownAiKey($by);
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
     }
 
     private function page()

@@ -73,7 +73,7 @@ final class Runner
     /** Runs a started job (the queue's worker, or the end of the request). Whatever goes wrong is on the row. */
     public function execute(string $id, Principal $by, Job $job): void
     {
-        $this->perform($by, $id, $job->role(), fn (Run $run) => $job->handle($by, $run), swallow: true, modelOverride: $job->model($by));
+        $this->perform($by, $id, $job->role(), fn (Run $run) => $job->handle($by, $run), swallow: true, job: $job);
     }
 
     /**
@@ -148,13 +148,14 @@ final class Runner
 
     // ---------- Inside ----------
 
-    private function perform(Principal $by, string $id, Role $role, Closure $work, bool $swallow, ?string $modelOverride = null): mixed
+    private function perform(Principal $by, string $id, Role $role, Closure $work, bool $swallow, ?string $modelOverride = null, ?Job $job = null): mixed
     {
         $scope = Guard::learner($by);
         $this->update($scope, $id, ['status' => 'running', 'started_at' => now(), 'attempts' => DB::raw('attempts + 1')]);
         $model = '';
         try {
             [$choices, $key, $model] = $this->settings->ready($by, $role);
+            $modelOverride ??= $job?->model($by);
             if ($modelOverride !== null && trim($modelOverride) !== '') {
                 $model = trim($modelOverride);
             }

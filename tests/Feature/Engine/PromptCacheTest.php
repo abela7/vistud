@@ -43,7 +43,7 @@ class PromptCacheTest extends TestCase
     {
         $this->answer(['prompt_tokens' => 9000, 'completion_tokens' => 40, 'cost' => 0.004, 'prompt_tokens_details' => ['cached_tokens' => 8200]]);
 
-        $reply = app(OpenRouter::class)->reply(new Request('anthropic/claude-sonnet-5.5', 'You are the tutor.', [['role' => 'user', 'content' => 'Hi']]));
+        $reply = app(OpenRouter::class)->reply(new Request('anthropic/claude-sonnet-5.5', 'You are the tutor.', [['role' => 'user', 'content' => 'Hi']], key: 'test-key'));
 
         $this->assertSame([9000, 8200], [$reply->tokensIn, $reply->tokensCached]);
         Http::assertSent(fn ($request) => $request->data()['cache_control'] === ['type' => 'ephemeral']);
@@ -53,7 +53,7 @@ class PromptCacheTest extends TestCase
     {
         $this->answer(['prompt_tokens' => 5000, 'completion_tokens' => 10]);
 
-        $reply = app(OpenRouter::class)->reply(new Request('openai/gpt-5.5-mini', 'You are the tutor.', [['role' => 'user', 'content' => 'Hi']]));
+        $reply = app(OpenRouter::class)->reply(new Request('openai/gpt-5.5-mini', 'You are the tutor.', [['role' => 'user', 'content' => 'Hi']], key: 'test-key'));
 
         $this->assertSame(0, $reply->tokensCached);
         Http::assertSent(fn ($request) => ! array_key_exists('cache_control', $request->data()));

@@ -641,7 +641,7 @@ final class TutorChat extends Component
         $marked = $onTopic === null && $ai === null && $activity === null && $latestHasMarks && ($this->dismissedMarkFingerprint !== $latestFingerprint);
 
         $chatModelIds = $choices->chatModels();
-        $key = $this->settings->key($by);
+        $key = $this->settings->credential($by);
         $allModels = $this->models->all(key: $key);
         $modelsById = [];
         foreach ($allModels as $m) {
@@ -718,7 +718,7 @@ final class TutorChat extends Component
             'chatModels' => $chatModels,
             'activeModel' => $currentModelId,
             'activeModelName' => $activeModelName,
-            'sees' => ($model = $this->models->find($currentModelId, $this->settings->key($by))) === null || $model->images,
+            'sees' => ($model = $this->models->find($currentModelId, $this->settings->credential($by))) === null || $model->images,
             'tutoring' => $tutoring,
             'tutoringChoices' => Tutoring::CHOICES,
             'tutoringQuestions' => Tutoring::QUESTIONS,

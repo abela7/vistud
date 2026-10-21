@@ -8,12 +8,14 @@ use App\Http\Middleware\LogOAuthAttempt;
 use App\Http\Middleware\McpTunnelOnly;
 use App\Http\Middleware\RequirePasswordConfirmation;
 use App\Http\Middleware\ShowRecoveryCodesOnce;
+use App\Platform\Errors\AccountDeleted;
 use App\Platform\Errors\AppError;
 use App\Platform\Errors\NotFound;
 use App\Platform\Http\ErrorEnvelope;
 use App\Platform\Http\Middleware\AddAccountHeader;
 use App\Platform\Http\Middleware\AssignRequestId;
 use App\Platform\Http\WebErrors;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -83,9 +85,20 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->shouldRenderJsonWhen($wantsJson);
 
+        // Auth rejects a missing user before the rest of the pipeline. A draft save from a
+        // browser whose account was erased must still hear account_deleted, not a plain 401.
+        $exceptions->render(function (AuthenticationException $e, Request $request) use ($wantsJson) {
+            if (! EnsureAccountActive::namesErasedAccount($request)) {
+                return null;
+            }
+            $deleted = new AccountDeleted;
+
+            return $wantsJson($request) ? ErrorEnvelope::render($deleted, $request) : WebErrors::render($deleted, $request);
+        });
+
         // A form sent back with errors keeps what was typed, but never a
         // token (invitation and reset links) or a password.
-        $exceptions->dontFlash(['token', 'password', 'password_confirmation', 'current_password']);
+        $exceptions->dontFlash(['token', 'key', 'password', 'password_confirmation', 'current_password']);
 
         $exceptions->render(function (Throwable $e, Request $request) use ($wantsJson) {
             if ($e instanceof HttpResponseException) {

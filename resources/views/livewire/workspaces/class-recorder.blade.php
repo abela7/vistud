@@ -188,7 +188,10 @@
                     <x-alert tone="danger">{{ $checkProblem }}</x-alert>
                 @endif
                 <div class="flex flex-col gap-2 sm:flex-row">
-                    <x-button size="sm" class="w-full justify-center sm:w-auto" wire:click="transcribe" busy-label="Starting…">{{ $class->lectureNotesId ? 'Write it down again' : 'Write this class down' }}</x-button>
+                    <x-button :disabled="! $audioAvailable" size="sm" class="w-full justify-center sm:w-auto" wire:click="transcribe" busy-label="Starting…">{{ $class->lectureNotesId ? 'Write it down again' : 'Write this class down' }}</x-button>
+                    @unless ($audioAvailable)
+                        <p class="text-sm text-fg-muted">{{ $hasKey ? "Your AI provider can't write down recordings. An OpenRouter key can." : 'Add your AI key in settings to write this class down.' }}</p>
+                    @endunless
                     @if ($class->lectureNotesId)
                         <x-button size="sm" variant="secondary" class="w-full justify-center sm:w-auto" wire:click="check" busy-label="Starting…">{{ $class->checkNoteId ? 'Check again' : 'Check against your files' }}</x-button>
                     @endif

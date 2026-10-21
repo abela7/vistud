@@ -311,7 +311,7 @@ final class CourseGuide
     public function requirePictureModel(Principal $by, ?string $model = null): void
     {
         $chosen = $model ?? $this->settings->get($by)->tutorModel;
-        $seeing = $this->models->find($chosen, $this->settings->key($by));
+        $seeing = $this->models->find($chosen, $this->settings->credential($by));
         Input::refuse($seeing !== null && ! $seeing->images ? ['pictures' => 'This model can\'t see pictures. Choose one that can, or paste the words instead.'] : []);
     }
 

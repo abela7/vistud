@@ -57,6 +57,7 @@ class SessionAllInOnePanesTest extends TestCase
         $this->workspace = app(Workspaces::class)->create($this->by, ['name' => 'Databases'])->id;
         $this->module = app(Modules::class)->create($this->by, $this->workspace, ['title' => 'Week 2: SQL joins'])->id;
         $this->joins = app(Topics::class)->create($this->by, $this->workspace, 'Joins', $this->module)->id;
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $this->actingAs($this->ada);
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));

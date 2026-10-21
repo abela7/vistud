@@ -6,7 +6,6 @@ use App\Engine\Models;
 use App\Engine\Providers;
 use App\Engine\Role as EngineRole;
 use App\Engine\Settings;
-use App\Engine\Setup;
 use App\Engine\Troubles;
 use App\Engine\Usage;
 use App\Identity\PrincipalFactory;
@@ -92,17 +91,14 @@ final class EngineSettings extends Component
 
     private Models $models;
 
-    private Setup $setup;
-
     private PrincipalFactory $principals;
 
     private Usage $usage;
 
-    public function boot(Settings $settings, Models $models, Setup $setup, PrincipalFactory $principals, Usage $usage): void
+    public function boot(Settings $settings, Models $models, PrincipalFactory $principals, Usage $usage): void
     {
         $this->settings = $settings;
         $this->models = $models;
-        $this->setup = $setup;
         $this->principals = $principals;
         $this->usage = $usage;
     }
@@ -250,8 +246,8 @@ final class EngineSettings extends Component
         $by = $this->principal();
         $choices = $this->settings->get($by);
         $ownKey = $this->settings->key($by);
-        $keyState = $ownKey !== null ? 'own' : ($this->setup->keySet() ? 'shared' : 'none');
-        $models = $keyState === 'none' ? [] : $this->models->all(key: $ownKey);
+        $keyState = $ownKey !== null ? 'own' : ($this->settings->keyAvailable($by) ? 'shared' : 'none');
+        $models = $keyState === 'none' ? [] : $this->models->all(key: $this->settings->credential($by));
         $byId = [];
         foreach ($models as $model) {
             $byId[$model->id] = $model;

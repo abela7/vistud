@@ -22,10 +22,15 @@ class InvitationAcceptanceController
             'name' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string', 'confirmed', 'max:255'],
             'timezone' => ['nullable', 'string', 'max:64'],
+            'privacy' => ['required', 'accepted'],
+            'privacy_version' => ['required', 'string', 'size:64'],
+            'email' => ['nullable', 'string', 'email', 'max:255'],
         ]);
 
         try {
-            $user = $invitations->accept($input['token'], $input['name'], $input['password'], $input['timezone'] ?? null);
+            $user = $request->routeIs('class-links.accept')
+                ? $invitations->joinClass($input['token'], $request->validate(['email' => ['required', 'email', 'max:255']])['email'], $input['name'], $input['password'], $input['timezone'] ?? null, $input['privacy_version'])
+                : $invitations->accept($input['token'], $input['name'], $input['password'], $input['timezone'] ?? null, $input['privacy_version']);
         } catch (Unprocessable $e) {
             if ($request->expectsJson() || $e->errorCode !== 'invitation_invalid') {
                 throw $e;
@@ -33,16 +38,20 @@ class InvitationAcceptanceController
 
             // The page shows its "this link doesn't work" answer. No input is
             // kept: there is nothing left to correct.
-            return redirect()->route('invitations.show')->withErrors(['invitation' => $e->getMessage()]);
+            return redirect()->route($request->routeIs('class-links.accept') ? 'class-links.show' : 'invitations.show')->withErrors(['invitation' => $e->getMessage()]);
         }
 
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
 
+        if (! $user->hasVerifiedEmail()) {
+            $user->sendEmailVerificationNotification();
+        }
+
         if ($request->expectsJson()) {
             return response()->json(['id' => $user->id], 201);
         }
 
-        return redirect('/')->with('status', 'invitation-accepted');
+        return redirect()->route($user->hasVerifiedEmail() ? 'joining.key' : 'verification.notice');
     }
 }

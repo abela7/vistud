@@ -56,6 +56,7 @@ class GuideScreenTest extends TestCase
         $by = $this->principal($this->ada);
         $this->os = app(Workspaces::class)->create($by, ['name' => 'Operating Systems']);
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($by);
         app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
     }
 

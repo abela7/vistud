@@ -34,7 +34,7 @@
         @endif
         @if ($confirmingRemoval)
             <div class="plan-confirm" role="alert">
-                <p class="font-medium">Remove your key? {{ $setupUrl !== null || $keyState === 'own' ? 'Chats stop answering unless the owner set up a key for everyone.' : '' }}</p>
+                <p class="font-medium">Remove your key? {{ $setupUrl !== null || $keyState === 'own' ? 'Your AI chats stop until you add a key.' : '' }}</p>
                 <div class="flex flex-wrap gap-2">
                     <x-button variant="danger" size="sm" wire:click="removeKey">Remove it</x-button>
                     <x-button size="sm" wire:click="keepKey">Keep it</x-button>
@@ -97,7 +97,7 @@
             </div>
         </form>
         @if ($keyState === 'none' && $setupUrl)
-            <p class="acc-note">Admin: <a href="{{ $setupUrl }}" class="text-link">set up one key for everyone</a>.</p>
+            <p class="acc-note">Admin: <a href="{{ $setupUrl }}" class="text-link">set up one key for admin accounts</a>.</p>
         @endif
     </x-panel>
 

@@ -61,6 +61,7 @@ class ReadFileJobTest extends TestCase
         $this->workspace = app(Workspaces::class)->create($this->by, ['name' => 'Operating Systems'])->id;
         $this->module = app(Modules::class)->create($this->by, $this->workspace, ['title' => 'Week 3'])->id;
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
     }
 
@@ -237,6 +238,7 @@ class ReadFileJobTest extends TestCase
         $this->assertNull($reading->afterUpload($this->by, $this->upload("Top level.\n", 'Top.txt', $this->workspace)));
 
         // Turned off: it waits for Read now.
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true, 'auto_read_files' => false]);
         $waiting = $this->upload("Another lecture.\n", 'Lecture 4.txt');
         $this->assertNull($reading->afterUpload($this->by, $waiting));

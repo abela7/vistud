@@ -48,7 +48,7 @@ class SetupTest extends TestCase
 
         // The engine calls the service with it.
         Http::fake(['engine.test/*' => Http::response(['choices' => [['message' => ['content' => 'Hi'], 'finish_reason' => 'stop']]])]);
-        app(OpenRouter::class)->reply(new Request('m', 's', []));
+        app(OpenRouter::class)->reply(new Request('m', 's', [], key: app(Setup::class)->key()));
         Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer sk-or-v1-abcdefghijklmnopqrstuvwxyz0123456789'));
 
         app(Setup::class)->removeKey($admin);

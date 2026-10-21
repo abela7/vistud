@@ -382,13 +382,12 @@ final class OpenRouter implements Engine
         return str_starts_with(ltrim($model, '~'), 'anthropic/');
     }
 
-    /** Sends a request with the key (the student's, or the one set up for everyone); a connection that fails says so. */
+    /** Sends a request with the key it was given. A missing key is refused; the installation key is never filled in. */
     private function send(callable $send, ?string $key = null): Response
     {
         [$provider, $secret] = Credential::unpack($key);
-        $secret = $secret !== null && $secret !== '' ? $secret : $this->setup->key();
-        if ($secret === '') {
-            throw new EngineFailed('engine_not_set_up', 'No key for the AI yet. Add your own key in your AI settings, or ask the owner to set one up for everyone.');
+        if ($secret === null || $secret === '') {
+            throw new EngineFailed('engine_key', 'Add your key in your AI settings first.');
         }
         $http = Http::baseUrl(rtrim(Providers::url($provider) ?? $this->setup->url(), '/'))
             ->withToken($secret)

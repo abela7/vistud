@@ -20,6 +20,9 @@ final class Models
     /** @return list<Model> */
     public function all(bool $fresh = false, ?string $key = null): array
     {
+        if ($key === '') {
+            return [];
+        }
         $cacheKey = self::cacheKey($key);
         if ($fresh) {
             Cache::forget($cacheKey);

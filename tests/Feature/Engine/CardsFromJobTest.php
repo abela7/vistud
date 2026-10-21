@@ -64,6 +64,7 @@ class CardsFromJobTest extends TestCase
         $this->module = app(Modules::class)->create($this->by, $this->workspace, ['title' => 'Week 3'])->id;
         $this->scheduling = app(Topics::class)->create($this->by, $this->workspace, 'CPU scheduling', $this->module)->id;
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
     }
 
@@ -193,6 +194,8 @@ class CardsFromJobTest extends TestCase
         } catch (Unprocessable $e) {
             $this->assertSame([], $this->engine->requests);
         }
+
+        $this->ownAiKey($this->by);
 
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $bob = $this->principal($this->student());

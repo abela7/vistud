@@ -162,7 +162,7 @@ final class Setup
             return ['ok' => false, 'message' => 'No key is set yet.', 'models' => 0];
         }
         try {
-            $count = count(app(Engine::class)->models());
+            $count = count(app(Engine::class)->models($this->key()));
         } catch (EngineFailed $e) {
             return ['ok' => false, 'message' => $e->getMessage(), 'models' => 0];
         }

@@ -55,6 +55,7 @@ class HelperTest extends TestCase
         app(Topics::class)->report($this->by, $joins, 'confused');
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
         // The helper's own model can call tools (fake/quick); the tutor's and the reader's are others.
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/plain', 'helper_model' => 'fake/quick', 'consent' => true]);
     }
 
@@ -192,12 +193,15 @@ class HelperTest extends TestCase
 
     public function test_a_model_that_cant_call_tools_and_a_job_outside_any_module_get_none(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'helper_model' => 'fake/plain', 'consent' => true]);
         $this->engine->will(Fake::says('Short.', 500, 'fake/plain'), Fake::says('Shorter.', 500, 'fake/plain'));
 
         $this->helper()->quick($this->by, 'Explain this.', 'A tuple.', $this->week2);
         $this->assertSame([], $this->engine->requests[0]->tools);
         $this->assertStringContainsString('## The module: Week 2: SQL joins', $this->engine->requests[0]->system);
+
+        $this->ownAiKey($this->by);
 
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'helper_model' => 'fake/quick', 'consent' => true]);
         $this->helper()->quick($this->by, 'Explain this.', 'A tuple.');
@@ -245,6 +249,7 @@ class HelperTest extends TestCase
 
     public function test_it_stops_at_the_months_limit_like_every_other_role(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'helper_model' => 'fake/quick', 'consent' => true, 'month_cap' => '0.001']);
         $this->engine->will(Fake::says('First.', 1_000, 'fake/quick'));
         $this->helper()->quick($this->by, 'Explain this.', 'x');

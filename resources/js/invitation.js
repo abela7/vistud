@@ -7,7 +7,7 @@
 | page back.
 */
 
-const KEY = 'vistud.invitation';
+const KEY = window.location.pathname.endsWith('/class-link') ? 'vistud.class-invitation' : 'vistud.invitation';
 
 function stored() {
     try {

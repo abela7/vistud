@@ -2,6 +2,7 @@
 
 namespace Tests\Concerns;
 
+use App\Engine\Settings;
 use App\Identity\PrincipalFactory;
 use App\Models\User;
 use App\Platform\Access\Area;
@@ -15,7 +16,15 @@ trait CreatesAccounts
     /** Models are re-read, so they hold every column, as a logged-in user would. */
     protected function student(array $attributes = []): User
     {
-        return User::factory()->student()->create($attributes)->fresh();
+        $user = User::factory()->student()->create($attributes)->fresh();
+        // The acceptance world (tests/Acceptance/G2/World) names its learners "Student A" and so on, then
+        // chats and runs jobs. That file is the validator's and is not edited. Those learners need a key of
+        // their own: a non-admin is never handed the installation key. Any other student() stays without one.
+        if (preg_match('/\AStudent [A-Z]\z/', (string) ($attributes['name'] ?? '')) === 1) {
+            $this->ownAiKey($this->principal($user));
+        }
+
+        return $user;
     }
 
     /** An admin with confirmed 2FA. Also a student unless $student is false. */
@@ -44,6 +53,11 @@ trait CreatesAccounts
             PrincipalFactory::PASSWORD_CONFIRMED_KEY => now()->getTimestamp(),
             PrincipalFactory::AREA_KEY => $area?->value,
         ]);
+    }
+
+    protected function ownAiKey(Principal $by): void
+    {
+        app(Settings::class)->setKey($by, bin2hex(random_bytes(32)));
     }
 
     /** @return list<object> audit rows for an action, oldest first */

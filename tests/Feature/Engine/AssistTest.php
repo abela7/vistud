@@ -53,6 +53,7 @@ class AssistTest extends TestCase
         $this->workspace = app(Workspaces::class)->create($this->by, ['name' => 'Databases'])->id;
         $this->module = app(Modules::class)->create($this->by, $this->workspace, ['title' => 'Week 2: SQL joins'])->id;
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/plain', 'helper_model' => 'fake/quick', 'consent' => true]);
         $this->assist = app(Assist::class);
     }

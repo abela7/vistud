@@ -21,6 +21,24 @@
         <x-toast :message="$notice" />
     </div>
 
+    <section class="card space-y-4 p-5" aria-labelledby="class-link-heading">
+        <h2 id="class-link-heading" class="font-semibold">Class links</h2>
+        <form wire:submit="createClassLink" class="flex flex-wrap items-end gap-3">
+            <x-field name="places" label="Places" type="number" wire:model="places" min="1" max="10000" required />
+            <x-field name="ends" label="Last day (UTC)" type="date" wire:model="ends" required />
+            <x-button type="submit">Create class link</x-button>
+        </form>
+        @if ($classLink)
+            <label for="class-link">Copy this link now. It is shown once.</label>
+            <input id="class-link" class="input w-full" type="text" value="{{ $classLink }}" readonly x-on:focus="$el.select()">
+        @endif
+        @foreach ($classLinks as $item)
+            <div wire:key="class-link-{{ $item->id }}" class="flex flex-wrap items-center justify-between gap-3">
+                <span>{{ $item->uses }} / {{ $item->places }} places used · ends {{ $item->expires_at }} UTC{{ $item->revoked_at ? ' · switched off' : '' }}</span>
+                @unless ($item->revoked_at)<x-button wire:click="disableClassLink('{{ $item->id }}')">Switch off</x-button>@endunless
+            </div>
+        @endforeach
+    </section>
     @if ($pending !== [])
         <section aria-labelledby="pending-heading" class="space-y-3">
             <h2 id="pending-heading" class="text-sm font-semibold text-fg-muted">Waiting to be accepted ({{ count($pending) }})</h2>

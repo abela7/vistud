@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Audit\AuditAction;
 use App\Audit\AuditLog;
+use App\Http\Requests\VerifyStudentEmailRequest;
 use App\Http\Responses\NeutralPasswordResetLinkResponse;
 use App\Identity\AccountFactory;
 use App\Identity\AccountStatus;
@@ -25,6 +26,7 @@ use Laravel\Fortify\Events\TwoFactorAuthenticationConfirmed;
 use Laravel\Fortify\Events\TwoFactorAuthenticationDisabled;
 use Laravel\Fortify\Events\TwoFactorAuthenticationEnabled;
 use Laravel\Fortify\Fortify;
+use Laravel\Fortify\Http\Requests\VerifyEmailRequest;
 
 /**
  * Fortify's authentication backend (ADR 0003 §10.3). Views are registered
@@ -42,6 +44,8 @@ class FortifyServiceProvider extends ServiceProvider
         $this->app->singleton(FailedPasswordResetLinkRequestResponse::class, NeutralPasswordResetLinkResponse::class);
         $this->app->singleton(SuccessfulPasswordResetLinkRequestResponse::class, NeutralPasswordResetLinkResponse::class);
 
+        $this->app->bind(VerifyEmailRequest::class, VerifyStudentEmailRequest::class);
+
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::updateUserPasswordsUsing(UpdateUserPassword::class);
 
@@ -56,6 +60,8 @@ class FortifyServiceProvider extends ServiceProvider
                 ? $user
                 : null;
         });
+
+        RateLimiter::for('joining', fn (Request $request) => Limit::perMinute(10)->by((string) $request->ip()));
 
         RateLimiter::for('login', function (Request $request) {
             $key = mb_strtolower((string) $request->input(Fortify::username())).'|'.$request->ip();

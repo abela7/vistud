@@ -17,7 +17,7 @@ Route::post('/area/{area}', [AreaController::class, 'update'])
     ->name('area.switch');
 
 Route::post('/invitations/accept', [InvitationAcceptanceController::class, 'store'])
-    ->middleware(['guest', 'throttle:10,1'])
+    ->middleware(['guest', 'throttle:joining'])
     ->name('invitations.accept.store');
 
 Route::post('/account/delete', DeleteAccountController::class)

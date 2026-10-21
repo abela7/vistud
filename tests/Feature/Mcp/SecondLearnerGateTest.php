@@ -12,9 +12,10 @@ class SecondLearnerGateTest extends TestCase
         $this->artisan('vistud:gate:second-learner')
             ->expectsOutputToContain('per-learner keys loaded: no')
             ->expectsOutputToContain('notes, journal, files encrypted: no')
-            ->expectsOutputToContain('g2 suite: not present')
-            ->expectsOutputToContain('g3 erasure drill: not present')
-            ->expectsOutputToContain('privacy policy: missing')
+            ->expectsOutputToContain('g2 suite: present')
+            ->expectsOutputToContain('g3 erasure drill: present')
+            ->expectsOutputToContain('privacy policy: present')
+            ->expectsOutputToContain('student uses own AI key only: yes')
             ->expectsOutputToContain('result: closed')
             ->assertFailed();
     }

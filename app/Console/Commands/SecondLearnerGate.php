@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Engine\StudentKeyGate;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -27,6 +28,12 @@ class SecondLearnerGate extends Command
         $this->line('g2 suite: '.($g2 ? 'present' : 'not present (a validator writes it)'));
         $this->line('g3 erasure drill: '.($g3 ? 'present' : 'not present (a validator writes it)'));
         $this->line('privacy policy: '.($policy ? 'present' : 'missing'));
+        try {
+            $ownKeys = app(StudentKeyGate::class)->check();
+        } catch (\Throwable) {
+            $ownKeys = false;
+        }
+        $this->line('student uses own AI key only: '.($ownKeys ? 'yes' : 'unproven'));
         $this->line('result: closed');
 
         return self::FAILURE;

@@ -13,6 +13,9 @@ final class Fake implements Engine
     /** @var list<Request> */
     public array $requests = [];
 
+    /** @var list<?string> Credentials used for model discovery, kept only by this test fake. */
+    public array $modelKeys = [];
+
     /** @var list<Reply|Closure> */
     private array $script = [];
 
@@ -70,6 +73,8 @@ final class Fake implements Engine
 
     public function models(?string $key = null): array
     {
+        $this->modelKeys[] = $key;
+
         return $this->models;
     }
 

@@ -390,7 +390,7 @@ final class GuideChat extends Component
             'toModules' => $this->for === '' && $profile->about !== '',
             'chatModels' => $this->modelChoices($by, $choices),
             'activeModel' => $activeModel,
-            'activeModelName' => self::modelName($this->models->find($activeModel, $this->settings->key($by))?->name, $activeModel),
+            'activeModelName' => self::modelName($this->models->find($activeModel, $this->settings->credential($by))?->name, $activeModel),
             'spentWords' => self::spentWords($this->usage->month($by)['tutor'], $choices->monthCapMicros),
             // What the AI knows about the course, question by question (setting it up only).
             'questions' => $this->for === '' ? $this->guide->questions($by, $this->workspaceId) : [],
@@ -534,7 +534,7 @@ final class GuideChat extends Component
     private function modelChoices(Principal $by, Choices $choices): array
     {
         $byId = [];
-        foreach ($this->models->all(key: $this->settings->key($by)) as $model) {
+        foreach ($this->models->all(key: $this->settings->credential($by)) as $model) {
             $byId[$model->id] = $model;
         }
         $out = [];

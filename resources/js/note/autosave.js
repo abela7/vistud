@@ -136,7 +136,7 @@ export function createAutosave(o) {
                 response = await fetch(o.url, {
                     method: 'PUT',
                     credentials: 'same-origin',
-                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf() },
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': xsrf(), 'X-Account-Id': o.accountId },
                     body: JSON.stringify(pending.body),
                 });
                 data = await response.json().catch(() => null);

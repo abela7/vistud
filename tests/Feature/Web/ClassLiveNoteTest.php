@@ -107,6 +107,7 @@ class ClassLiveNoteTest extends TestCase
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
         $engine = new Fake;
         $this->app->instance(Engine::class, $engine);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $recordings = app(ClassRecordings::class);
         $part = $recordings->start($this->by, $this->class);

@@ -44,6 +44,7 @@ class NoteAiTest extends TestCase
         $this->noteId = app(Notes::class)->create($this->by, 'workspace', $this->workspaceId, 'Mitosis Notes')->id;
 
         config(['vistud.engine.key' => 'sk-or-owner-000000000000000']);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, [
             'tutor_model' => 'fake/tutor',
             'reader_model' => 'fake/plain',

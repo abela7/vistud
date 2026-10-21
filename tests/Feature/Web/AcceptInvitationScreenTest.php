@@ -12,11 +12,12 @@ use Tests\TestCase;
 /** The invitation acceptance page (WP6; ADR 0003 D4 and T5, PM decision Q3). */
 class AcceptInvitationScreenTest extends TestCase
 {
-    use CreatesAccounts, RefreshesDatabase;
+    use CreatesAccounts, \Tests\Concerns\JoiningPolicyFixture, RefreshesDatabase;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->joiningPolicy();
         $this->withoutVite();
     }
 
@@ -46,8 +47,7 @@ class AcceptInvitationScreenTest extends TestCase
         $token = $this->invite('new@example.test');
 
         $this->post('/invitations/accept', $this->form($token))
-            ->assertRedirect('/')
-            ->assertSessionHas('status', 'invitation-accepted');
+            ->assertRedirect(route('joining.key'));
 
         $user = User::query()->where('email', 'new@example.test')->firstOrFail();
         $this->assertAuthenticatedAs($user);
@@ -102,6 +102,7 @@ class AcceptInvitationScreenTest extends TestCase
     private function form(string $token): array
     {
         return [
+            'privacy' => '1', 'privacy_version' => app(\App\Identity\JoiningPolicy::class)->version(),
             'token' => $token,
             'name' => 'Ada Lovelace',
             'password' => 'a-long-enough-password',

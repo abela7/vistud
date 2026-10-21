@@ -3,9 +3,12 @@
 namespace App\Engine\Jobs;
 
 use App\Engine\EngineFailed;
+use App\Engine\Role;
+use App\Engine\Settings;
 use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
+use App\Platform\Errors\Unprocessable;
 use App\Platform\Files\PrivateFiles;
 use App\Platform\Files\TempWorkspace;
 use App\Study\AudioPieces;
@@ -62,7 +65,10 @@ final class TranscribeClass extends Job
     /** An audio model (the student's tutor and reader models may not hear). */
     public function model(Principal $by): string
     {
-        return (string) config('vistud.engine.audio_model', 'google/gemini-2.5-flash');
+        app(Settings::class)->ready($by, Role::Reader);
+
+        return app(Settings::class)->audioModel($by)
+            ?? throw new Unprocessable('engine_audio', 'Your AI provider cannot write down recordings.');
     }
 
     public function handle(Principal $by, Run $run): void

@@ -204,7 +204,7 @@ final class VistudAi
     private function answer(Principal $by, object $thread, Choices $choices, int $position, ?Closure $onEvent, string $activeModel): Reply
     {
         $scope = Guard::learner($by);
-        $key = $this->settings->key($by);
+        $key = $this->settings->credential($by);
         $activeModel = $activeModel !== '' ? $activeModel : $choices->tutorModel;
         $model = $this->models->find($activeModel, $key);
         $tools = $model === null || $model->tools ? $this->toolbox->definitions() : [];
@@ -313,10 +313,7 @@ final class VistudAi
     /** The student's choices, when the AI is set up (a model, consent and a key); refused otherwise. */
     private function ready(Principal $by): Choices
     {
-        $choices = $this->settings->get($by);
-        if (! $choices->ready() || ! $this->settings->keyAvailable($by)) {
-            throw new Unprocessable('engine_not_ready', 'Set up your AI first: your key, a model and your consent, in Settings.');
-        }
+        [$choices] = $this->settings->ready($by, Role::Tutor);
 
         return $choices;
     }

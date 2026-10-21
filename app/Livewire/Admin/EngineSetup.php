@@ -133,7 +133,7 @@ final class EngineSetup extends Component
 
         return view('livewire.admin.engine-setup', [
             'status' => $status,
-            'models' => $status['key_set'] ? $this->models->all() : [],
+            'models' => $status['key_set'] ? $this->models->all(key: $this->setup->key()) : [],
         ]);
     }
 

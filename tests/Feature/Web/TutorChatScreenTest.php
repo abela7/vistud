@@ -70,12 +70,14 @@ class TutorChatScreenTest extends TestCase
     public function test_the_chat_waits_for_the_set_up_then_offers_openings(): void
     {
         $this->get(route('workspaces.sessions.show', [$this->databases->id, $this->session->id]))->assertOk()->assertSee('Your tutor')->assertSee('Set up your AI first')->assertSee(route('settings', ['part' => 'ai']))->assertDontSee('Another AI');
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $this->chat()->assertSee('Say hello, or ask anything about this course.')->assertSee('Quiz me on what I should know by now.')->assertSee('fake/tutor · $0.00 of $2.00 this session')->assertDontSee('Keep what the tutor marked');
     }
 
     public function test_a_turn_shows_both_sides_the_look_ups_the_cost_and_the_marks_as_quotes_then_keeps_them(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $this->engine->will(Fake::calls('topics'), Fake::says("**Joins** still confuse you.\n\n<finding topic=\"Joins\">A left join keeps every row of the left table.</finding>", 12_000));
 
@@ -97,6 +99,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_refusals_show_under_the_box_and_an_ended_session_only_reads(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'session_cap' => '0.01', 'consent' => true]);
         $this->engine->will(Fake::says('Hi.', 20_000));
         $chat = $this->chat()->set('text', 'Hi')->call('send')->assertSet('error', null);
@@ -108,6 +111,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_ending_the_session_from_its_page_saves_the_chats_summary_for_the_next_one(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true]);
         $this->engine->will(Fake::says('A left join keeps every left row.'));
         $this->chat()->set('text', 'What is a left join?')->call('send');
@@ -140,6 +144,7 @@ class TutorChatScreenTest extends TestCase
             }
         };
         $this->app->instance(ChatStream::class, $stream);
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $this->engine->will(Fake::calls('questions'), Fake::says("**Joins** first.\n\n<finding topic=\"Joins\">A left join keeps every left row.</finding>"));
 
@@ -164,6 +169,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_a_failed_answer_offers_to_try_again_and_refused_words_go_back_to_the_box(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'session_cap' => '0.01', 'consent' => true]);
         $this->engine->will(fn () => throw new EngineFailed('engine_busy', 'The engine is busy right now.'));
         $chat = $this->chat()->call('send', 'What is a join?')
@@ -184,6 +190,7 @@ class TutorChatScreenTest extends TestCase
     public function test_the_modules_notes_and_files_can_be_attached_and_show_on_the_message(): void
     {
         Storage::fake('local');
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $week2 = $this->session->moduleId;
         $note = app(Notes::class)->create($this->by, 'module', $week2, 'Lecture 3: joins');
@@ -208,6 +215,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_quiz_me_offers_the_topic_the_module_and_what_is_hardest(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $chat = $this->chat()->assertSeeInOrder(['Quiz me', 'On Joins', 'On Week 2: SQL joins', 'On what I find hardest']);
 
@@ -224,6 +232,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_an_answer_shows_what_was_saved_and_links_the_note_written_in_and_open_notes_are_told(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $this->engine->will(
             Fake::calls('make_flashcards', ['cards' => [['front' => 'What is a join?', 'back' => 'Rows combined.']]], 'call_1'),
@@ -241,6 +250,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_a_topic_the_tutor_sets_shows_on_the_answer_and_the_session_page_is_told(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $this->engine->will(
             Fake::calls('set_topic', ['topic' => 'Outer joins'], 'call_1'),
@@ -254,6 +264,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_student_can_switch_models_mid_chat(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, [
             'tutor_model' => 'fake/tutor',
             'favorite_models' => ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet'],
@@ -280,6 +291,7 @@ class TutorChatScreenTest extends TestCase
 
     public function test_student_can_tune_tutoring_choices_in_real_time(): void
     {
+        $this->ownAiKey($this->by);
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
 
         $chat = $this->chat()
