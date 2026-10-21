@@ -37,6 +37,11 @@ async function fillAcceptance(page, name) {
     await page.getByLabel('Your name').fill(name);
     await page.getByLabel('Password', { exact: true }).fill('a-long-enough-password');
     await page.getByLabel('Confirm password').fill('a-long-enough-password');
+    // Joining asks for the privacy policy to be accepted (second-learner S8).
+    const privacy = page.getByRole('checkbox', { name: /privacy policy/i });
+    if (await privacy.count()) {
+        await privacy.check();
+    }
     await page.getByRole('button', { name: 'Create my account' }).click();
 }
 
