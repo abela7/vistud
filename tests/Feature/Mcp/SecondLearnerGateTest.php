@@ -157,7 +157,7 @@ class SecondLearnerGateTest extends TestCase
         $checked = 0;
         foreach (['CACHE_STORE', 'QUEUE_CONNECTION', 'SESSION_DRIVER', 'MAIL_MAILER', 'VISTUD_MASTER_KEY', 'APP_KEY'] as $name) {
             if (preg_match('/^\s*'.$name.'\s*=/m', $dotenv) === 1) {
-                $this->assertArrayNotHasKey($name, $env, "{$name} would leak from .env into the acceptance run");
+                $this->assertFalse($env[$name] ?? false, "{$name} would leak from .env into the acceptance run");
                 $checked++;
             }
         }

@@ -60,7 +60,11 @@ class RecordAcceptance extends Command
         return $passed ? self::SUCCESS : self::FAILURE;
     }
 
-    /** The child always uses the named test databases, whatever this process was started with. */
+    /**
+     * The child always uses the named test databases, whatever this process was started with.
+     *
+     * @return array<string, string|false> `false` removes the name from the inherited environment
+     */
     public function childEnvironment(): array
     {
         $env = [];
@@ -75,7 +79,8 @@ class RecordAcceptance extends Command
         // where the database server is stays, because that is machine-specific.
         foreach ($this->definedByDotEnv() as $name) {
             if (! in_array($name, ['DB_HOST', 'DB_PORT'], true)) {
-                unset($env[$name]);
+                // A process inherits its parent's environment; only `false` removes a name.
+                $env[$name] = false;
             }
         }
         $env['DB_CONNECTION'] = 'mysql';
