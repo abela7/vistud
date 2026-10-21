@@ -117,6 +117,10 @@ final class AdmissionGate
             foreach (array_unique([config('vistud.files.disk'), config('vistud.files.derived_disk')]) as $name) {
                 $disk = Storage::disk($name);
                 foreach ($disk->allFiles('learners') as $path) {
+                    // The converter's own sealed receipts and lock are not student files.
+                    if (str_contains($path, '/file-conversion/')) {
+                        continue;
+                    }
                     $handle = $disk->readStream($path);
                     $head = is_resource($handle) ? (string) fread($handle, strlen(FileCipher::MAGIC)) : '';
                     if (is_resource($handle)) {

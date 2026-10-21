@@ -48,3 +48,19 @@ it answers `open`.
 database named like the content database, a row with an old content version, a plain file and a half-written
 stage, an admin principal, a missing/stale/failed acceptance record, a draft or unreviewed policy), the gate
 opens only when all pass, and the acceptance run always targets the test databases.
+
+## The first local setup (2026-10-21, Abel's machine)
+
+Done by Claude with Abel's go, after a verified backup. What it found, for the real deployment:
+
+- The local database already held the S1-S8 schema and test accounts with keys, from builder runs against it. The
+  provisioning dry run is the place to see that: it lists who would get a key.
+- 1,630 old test accounts (`@example.test`) owned 12,915 stored files of accounts that no longer exist, plus
+  disposable work folders. The converter blocks on unmapped files by design. They were **moved, not deleted**, to the
+  backup folder; three throwaway test uploads whose bytes no longer matched their record were deleted with the app's
+  own permanent delete. On the real server, run the dry run first and expect to reconcile the same way.
+- The conversion left `learners/<id>/file-conversion/*.state` receipts (sealed, no file marker). The gate now skips
+  that folder, as the converter does.
+- Order that worked: backup, `down`, both migrations, `vistud:keys:provision`, `vistud:encrypt:backfill` (dry run,
+  `--backup-confirmed`, `--verify`), `vistud:encrypt:clear-text-caches`, `vistud:encrypt:files` (dry run,
+  `--backup-confirmed`, `--verify`), `vistud:encrypt:ai-keys`, `up`.

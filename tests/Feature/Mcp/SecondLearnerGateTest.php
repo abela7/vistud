@@ -96,6 +96,8 @@ class SecondLearnerGateTest extends TestCase
 
         Storage::disk('local')->put($path, $sealed);
         $this->assertTrue(app(AdmissionGate::class)->filesEncrypted());
+        Storage::disk('local')->put('learners/'.$by->learnerId.'/file-conversion/'.str_repeat('b', 64).'.state', 'sealed receipt');
+        $this->assertTrue(app(AdmissionGate::class)->filesEncrypted(), 'conversion receipts are not student files');
         Storage::disk('local')->put($path.'.writing-'.str_repeat('a', 32), 'half written');
         $this->assertFalse(app(AdmissionGate::class)->filesEncrypted(), 'a half-written stage is left behind');
     }
