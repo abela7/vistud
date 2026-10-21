@@ -42,6 +42,9 @@ final class MakeFilePreview implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
+        if (! ActiveLearner::check(isset($this->learnerId) ? $this->learnerId : StoredFileScope::learnerId($this->storageKey))) {
+            return;
+        }
         $scope = StoredFileScope::check(isset($this->learnerId) ? $this->learnerId : StoredFileScope::learnerId($this->storageKey), $this->fileId, $this->storageKey);
         $wait = FilePreviews::make($this->fileId, $this->storageKey, $this->extension, $scope);
         if ($wait !== null) {

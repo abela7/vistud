@@ -225,3 +225,25 @@ Gemini's redirect hosts are not in `config/mcp.php` yet: the first refused regis
 ## Restore drill (monthly)
 
 Restore last night's backup into a scratch database on the server, run `php artisan vistud:doctor` against it, and delete it. Note the date in [operations.md](operations.md).
+
+## Delayed account erasure (S4a; release waits for S4b)
+
+Do not enable real erasure until S4b independent ledger export and restore replay
+are reviewed. See [S4a handoff](../handoff/second-learner-S4a.md) for the inventory,
+retry procedure and privileged audit exception. Abel runs setup; no local account
+or file deletion is part of development validation.
+
+Apply the new main migration as `mysql_owner` after verified S2/S3 conversion.
+Keep the database worker (job timeout 360 s, retry_after 420 s) and minute
+scheduler running; due unfinished erasures are requeued every ten minutes.
+The three-hour minimum grace must exceed every request, job and temporary-file
+expiry plus janitor interval. Enforce FPM `request_terminate_timeout = 1800s` and
+`request_terminate_timeout_track_finished = yes` so after-response work is bounded.
+Use supervisor wall-clock termination for stuck CLI workers and subprocesses;
+PHP timers alone exclude blocked I/O on Linux. Keep hourly temp pruning and S3's
+memory-backed production temporary paths. Longer workloads require a longer grace.
+
+The runtime may insert/read requests but cannot mark completion; only the
+privileged worker updates progress and inserts the content-free ledger. Never
+roll back nonempty erasure tables or restore an old ledger over the latest one.
+Backup retention and independent recovery procedures are delivered in S4b.

@@ -10,6 +10,7 @@ Artisan::command('inspire', function () {
 
 Schedule::command('vistud:trash:purge')->daily();
 Schedule::command('vistud:files:prune-temps')->hourly();
+Schedule::command('vistud:erasure:retry-pending')->everyTenMinutes();
 Schedule::command('vistud:sessions:settle')->everyTenMinutes();
 Schedule::command('vistud:journal:rebuild')->daily();
 Schedule::command('vistud:engine:prune-threads')->daily();

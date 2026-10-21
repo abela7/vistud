@@ -11,6 +11,9 @@ final class StoredFileScope
 {
     public static function check(string $learnerId, string $fileId, string $storageKey): LearnerScope
     {
+        if (! ActiveLearner::check($learnerId)) {
+            throw new NotFound;
+        }
         $scope = LearnerScope::forJob($learnerId);
         if (! LearnerTables::query($scope, 'files')->where('id', $fileId)->where('storage_key', $storageKey)->whereNull('trashed_at')->exists()) {
             throw new NotFound;

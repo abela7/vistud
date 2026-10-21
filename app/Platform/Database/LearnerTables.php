@@ -120,6 +120,16 @@ final class LearnerTables
         return $query->from($table)->where($table.'.learner_id', $scope->learnerId);
     }
 
+    /** Erasure must work without decrypting content, including after key destruction. */
+    public static function forErasure(Principal $by, LearnerScope $scope, string $table): Builder
+    {
+        if (! $by->isSystem() || ! in_array($table, self::TABLES, true)) {
+            throw new Forbidden('system_required', 'This needs the maintenance worker.');
+        }
+
+        return DB::connection(config('vistud.database.owner_connection'))->table($table)->where('learner_id', $scope->learnerId);
+    }
+
     /** Shared rows in canonical_files (learner_id is null and visibility is shared). */
     public static function shared(string $table, ?string $connection = null): Builder
     {

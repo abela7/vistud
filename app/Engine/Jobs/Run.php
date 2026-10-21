@@ -10,9 +10,11 @@ use App\Engine\Reply;
 use App\Engine\Request;
 use App\Engine\Role;
 use App\Engine\Usage;
+use App\Jobs\ActiveLearner;
 use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use App\Platform\Database\LearnerTables;
+use App\Platform\Errors\AccountDeleted;
 use App\Platform\Errors\Unprocessable;
 use Closure;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +26,8 @@ use Illuminate\Support\Facades\DB;
  */
 final class Run
 {
+    private float $startedAt;
+
     public function __construct(
         public readonly string $id,
         public readonly Role $role,
@@ -35,7 +39,9 @@ final class Run
         private readonly Engine $engine,
         private readonly Usage $usage,
         private readonly Models $models,
-    ) {}
+    ) {
+        $this->startedAt = microtime(true);
+    }
 
     /** Whether this run's model can call tools (one the service doesn't list is given the benefit of the doubt). */
     public function canUseTools(): bool
@@ -82,12 +88,22 @@ final class Run
      */
     private function call(string $system, string|array $messages, int $maxTokens, array $tools, ?Closure $onText = null): Reply
     {
+        if (! ActiveLearner::check((string) $this->by->learnerId)) {
+            throw new AccountDeleted;
+        }
+        if (microtime(true) - $this->startedAt > 1800) {
+            throw new EngineFailed('engine_timeout', 'This work took too long. Try again.');
+        }
         $scope = Guard::learner($this->by);
         $this->usage->refuseOverMonthCap($scope, $this->choices, $this->zone);
         $messages = is_string($messages) ? [['role' => 'user', 'content' => $messages]] : $messages;
 
         $request = new Request($this->model, $system, $messages, $tools, [], $maxTokens, $this->choices->noTraining, $this->key);
         $reply = $onText === null ? $this->engine->reply($request) : $this->engine->stream($request, $onText);
+
+        if (! ActiveLearner::check((string) $this->by->learnerId)) {
+            throw new AccountDeleted;
+        }
 
         LearnerTables::query($scope, 'engine_jobs')->where('id', $this->id)->update([
             'model' => $reply->model !== '' ? $reply->model : $this->model,

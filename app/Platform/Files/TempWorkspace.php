@@ -50,7 +50,7 @@ final class TempWorkspace
     }
 
     /** Only our old, unlocked work directories; never follows links or clears uploads. */
-    public static function prune(int $olderThanSeconds = 3600): int
+    public static function prune(int $olderThanSeconds = 3600, bool $strict = false): int
     {
         $root = (string) config('vistud.files.temp_root');
         if (! is_dir($root)) {
@@ -67,7 +67,11 @@ final class TempWorkspace
                 // Interrupted cleanup can have removed the lease first. A fresh
                 // workspace always creates it before putting any private input in it.
                 if ($entry->getMTime() < time() - $olderThanSeconds) {
-                    $removed += File::deleteDirectory($path) ? 1 : 0;
+                    $deleted = File::deleteDirectory($path);
+                    if (! $deleted && $strict) {
+                        throw new RuntimeException('Temporary cleanup pending.');
+                    }
+                    $removed += $deleted ? 1 : 0;
                 }
 
                 continue;
@@ -77,15 +81,26 @@ final class TempWorkspace
             }
             $lease = @fopen($leasePath, 'r+b');
             if ($lease === false) {
+                if ($strict) {
+                    throw new RuntimeException('Temporary cleanup pending.');
+                }
+
                 continue;
             }
             if (! flock($lease, LOCK_EX | LOCK_NB)) {
                 fclose($lease);
+                if ($strict) {
+                    throw new RuntimeException('Expired processing lease is still active.');
+                }
 
                 continue;
             }
             fclose($lease); // Windows must release every handle before deletion.
-            $removed += File::deleteDirectory($path) ? 1 : 0;
+            $deleted = File::deleteDirectory($path);
+            if (! $deleted && $strict) {
+                throw new RuntimeException('Temporary cleanup pending.');
+            }
+            $removed += $deleted ? 1 : 0;
         }
 
         return $removed;

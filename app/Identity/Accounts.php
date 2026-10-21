@@ -4,13 +4,16 @@ namespace App\Identity;
 
 use App\Audit\AuditAction;
 use App\Audit\AuditLog;
+use App\Jobs\EraseLearner;
 use App\Jobs\RevokeConnections;
 use App\Models\User;
 use App\Platform\Access\Guard;
+use App\Platform\Access\LearnerKeys;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\PasswordConfirmationRequired;
+use App\Platform\Ids;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -102,6 +105,16 @@ final class Accounts
             $this->changeStatus($user, AccountStatus::Deleted);
             $this->endSessions($user);
             $this->audit->record($by, AuditAction::ACCOUNT_DELETION_REQUESTED, 'user', $user->id, ['self' => $self], role: $self ? null : 'admin');
+            $id = Ids::new();
+            $notBefore = now()->addSeconds(max(10800, (int) config('vistud.erasure.delay_seconds', 10800)));
+            DB::table('erasure_requests')->insert([
+                'id' => $id, 'user_id' => $userId,
+                'learner_ref' => DB::table('learners')->where('user_id', $userId)->value('id'),
+                'requested_at' => now(), 'not_before' => $notBefore,
+                'stage' => 'pending',
+            ]);
+            // Sync/after-response mode must never bypass the grace period.
+            EraseLearner::dispatch($id)->onConnection('database')->delay($notBefore)->afterCommit();
         }, 3);
     }
 
@@ -199,6 +212,7 @@ final class Accounts
     {
         DB::table('sessions')->where('user_id', $user->id)->delete();
         $user->forceFill(['remember_token' => null])->save();
+        app(LearnerKeys::class)->forget();
         // Connected AI apps stop with the sessions (docs/specs/mcp-connections-plan.md M6.1).
         RevokeConnections::dispatchSync($user->id, 'account');
     }

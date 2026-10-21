@@ -106,6 +106,16 @@
                     </ul>
                     <p class="settings-note"><x-icon name="info" class="size-4" />Open a note, then use <strong>Save</strong> or <strong>Share</strong> at its top.</p>
                 </x-accordion>
+                <x-accordion id="delete-account" title="Delete your account" icon="trash-2" :open="false">
+                    <x-slot:status>Close your account and delete your data</x-slot:status>
+                    <p class="acc-note">You will be signed out at once. Your study data will then be deleted. This cannot be undone.</p>
+                    <p class="acc-note">Save anything you want to keep first. Clear saved drafts on your other devices too.</p>
+                    <form method="POST" action="{{ route('account.delete') }}">
+                        @csrf
+                        <label><input type="checkbox" required name="confirm_deletion" value="1"> I understand that my account and study data will be deleted.</label>
+                        <button type="submit" class="btn btn-danger btn-sm">Delete my account</button>
+                    </form>
+                </x-accordion>
             </div>
         @endif
     </div>

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AreaController;
+use App\Http\Controllers\DeleteAccountController;
 use App\Http\Controllers\InvitationAcceptanceController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,3 +19,7 @@ Route::post('/area/{area}', [AreaController::class, 'update'])
 Route::post('/invitations/accept', [InvitationAcceptanceController::class, 'store'])
     ->middleware(['guest', 'throttle:10,1'])
     ->name('invitations.accept.store');
+
+Route::post('/account/delete', DeleteAccountController::class)
+    ->middleware(['auth', 'password.confirm'])
+    ->name('account.delete');

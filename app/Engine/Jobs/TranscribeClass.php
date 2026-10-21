@@ -68,7 +68,7 @@ final class TranscribeClass extends Job
     public function handle(Principal $by, Run $run): void
     {
         // An hour of class is six calls and the notes: longer than a web request may run.
-        set_time_limit(0);
+        set_time_limit(1800);
         $classes = app(ClassSessions::class);
         $class = $classes->find($by, (string) $this->targetId);
         $parts = array_values(array_filter(app(ClassRecordings::class)->forClass($by, $class->id), fn ($p) => $p->finishedAt !== null && $p->deletedAt === null && $p->path !== null));

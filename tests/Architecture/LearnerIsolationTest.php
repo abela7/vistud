@@ -23,6 +23,7 @@ class LearnerIsolationTest extends TestCase
         'app/Console/Commands/',
         'app/Brain/Redaction/',
         'app/Identity/AccountFactory.php',
+        'app/Identity/Erasure.php', // System-only delayed erasure/retry, never a request principal.
     ];
 
     public function test_every_learner_table_carries_learner_id(): void

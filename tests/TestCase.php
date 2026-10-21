@@ -12,6 +12,10 @@ abstract class TestCase extends BaseTestCase
 
     protected function setUp(): void
     {
+        // HTTP/MCP handlers set a PHP request timer. PHPUnit handles many
+        // simulated requests in one CLI process; never inherit the previous
+        // request's timer into this test. Production limits stay in the handlers.
+        set_time_limit(0);
         parent::setUp();
         $temp = sys_get_temp_dir().'/vistud-test-'.bin2hex(random_bytes(16));
         config(['vistud.files.temp_root' => $temp]);

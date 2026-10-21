@@ -331,3 +331,21 @@ source names and dismissed suggestions are sorted with a root PRIMARY Collator
 in PHP after scoped decryption, with stable ID ties.
 
 S3 still adds file encryption. Admission remains closed until all later checks pass.
+
+## Account erasure (S4a; ADR 0004)
+
+`erasure_requests` is durable control metadata: UUID `id`, unique `user_id`,
+nullable indexed `learner_ref`, `requested_at`, indexed `not_before`, `stage`,
+nullable fixed `error_code` and `completed_at`. Runtime has SELECT/INSERT only;
+progress updates use the owner connection. No identity foreign keys.
+
+`erasure_log` has primary `request_id`, unique `user_id`, nullable indexed
+`learner_ref`, `requested_at`, `erased_at` and version (1). Runtime is SELECT-only;
+the privileged worker inserts it in the completion transaction. UUID references
+survive erased identities for S4b restore replay. Neither table contains content,
+email, name, IP, user agent, paths or free-form errors. Schema rollback refuses
+nonempty tables to avoid destroying restore protection.
+
+Audit schema-contract exception: the privileged erasure worker may anonymise
+identifying fields and associated metadata in existing `audit_log` rows, retaining
+every event/action/time/role. Runtime retains SELECT/INSERT only. See ADR 0004.

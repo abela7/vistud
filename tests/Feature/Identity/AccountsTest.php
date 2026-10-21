@@ -4,6 +4,7 @@ namespace Tests\Feature\Identity;
 
 use App\Audit\AuditAction;
 use App\Identity\Accounts;
+use App\Jobs\EraseLearner;
 use App\Models\User;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\Conflict;
@@ -12,6 +13,7 @@ use App\Platform\Errors\NotFound;
 use App\Platform\Errors\PasswordConfirmationRequired;
 use App\Platform\Errors\TwoFactorRequired;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
@@ -213,5 +215,38 @@ class AccountsTest extends TestCase
         $this->assertSame('Grace Hopper', $names[$admin->id]);
         $this->assertSame('Ada Lovelace', $names[$ada->id]);
         $this->assertThrows(fn () => $this->accounts->names($this->principal($ada), [$admin->id]), Forbidden::class);
+    }
+
+    public function test_student_can_request_erasure_with_confirmation_and_is_signed_out(): void
+    {
+        Queue::fake();
+        $user = $this->student();
+        $this->actingAs($user)->withSession($this->confirmedSession())
+            ->post(route('account.delete'), [])->assertSessionHasErrors('confirm_deletion');
+        $this->assertSame('active', $user->fresh()->status);
+        $this->post(route('account.delete'), ['confirm_deletion' => '1'])
+            ->assertOk()->assertSee('Your account is closed')
+            ->assertSee('Your data is being deleted.')
+            ->assertHeader('Cache-Control', 'no-store, private');
+        $this->assertGuest();
+        $this->assertSame('deleted', $user->fresh()->status);
+        $this->assertSame(1, DB::table('erasure_requests')->where('user_id', $user->id)->count());
+        Queue::assertPushed(EraseLearner::class);
+    }
+
+    public function test_pending_scan_discovers_pre_s4_deleted_accounts_with_a_full_new_grace(): void
+    {
+        Queue::fake();
+        $this->travelTo(now()->startOfSecond());
+        $user = $this->student();
+        $user->forceFill(['status' => 'deleted', 'status_changed_at' => now()->subDays(10)])->save();
+        $this->artisan('vistud:erasure:retry-pending')->assertSuccessful();
+        $this->artisan('vistud:erasure:retry-pending')->assertSuccessful();
+        $this->assertSame(1, DB::table('erasure_requests')->where('user_id', $user->id)->count());
+        $this->assertSame(now()->addHours(3)->toDateTimeString(), DB::table('erasure_requests')->where('user_id', $user->id)->value('not_before'));
+        Queue::assertNothingPushed();
+        $this->travel(3)->hours();
+        $this->artisan('vistud:erasure:retry-pending')->assertSuccessful();
+        Queue::assertPushed(EraseLearner::class, 1);
     }
 }

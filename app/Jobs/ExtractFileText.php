@@ -32,6 +32,9 @@ final class ExtractFileText implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
+        if (! ActiveLearner::check(isset($this->learnerId) ? $this->learnerId : StoredFileScope::learnerId($this->storageKey))) {
+            return;
+        }
         // An already-queued pre-S1 job has no learnerId property: its trusted canonical
         // path supplies it, and the same scoped ownership check still applies.
         $scope = StoredFileScope::check(isset($this->learnerId) ? $this->learnerId : StoredFileScope::learnerId($this->storageKey), $this->fileId, $this->storageKey);

@@ -301,3 +301,19 @@ Implemented in increment 2 (`App\Audit\AuditAction`). Provisional until the PM a
 | `mcp.rate_limited` (reserved for M6.3's daily caps) | — |
 
 AI-app connections log only their lifecycle and exceptions here, never a row per call: this log is admin-readable and kept for good, and a per-call trail would be an admin path to what a student studied (docs/specs/mcp-connections-plan.md §3.4).
+
+## Account deletion and privileged erasure (S4a)
+
+`Accounts::requestDeletion` immediately blocks login and revokes access, persists
+a request, then queues database erasure after at least three hours. Settings
+POST `/account/delete` requires authentication, recent password confirmation and
+an explicit checkbox; it signs the student out and shows deletion is pending.
+A completion is reported only after content/files/cache/auth cleanup, learner-key
+destruction and a final metadata sweep. Failures remain retryable and never
+record private exception text. `vistud:erasure:retry-pending` recovers lost dispatch.
+
+ADR 0004 is the sole privileged exception to audit immutability: anonymise the
+erased account's identifiers, IP, user agent, correlation ID and associated
+metadata while retaining every event. It adds no runtime audit UPDATE permission.
+The content-free completion ledger survives identity deletion. Independent export
+and replay on backup restoration are S4b, still required before release.
