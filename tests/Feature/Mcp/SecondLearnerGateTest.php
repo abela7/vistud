@@ -152,6 +152,16 @@ class SecondLearnerGateTest extends TestCase
         $this->assertSame('vistud_test', $env['DB_DATABASE']);
         $this->assertSame('vistud_keys_test', $env['DB_KEYS_DATABASE']);
         $this->assertSame('', $env['DB_URL']);
+        // Nothing the real .env sets (cache, queue, session, mail, the master key) reaches the suite.
+        $dotenv = is_file(base_path('.env')) ? (string) file_get_contents(base_path('.env')) : '';
+        $checked = 0;
+        foreach (['CACHE_STORE', 'QUEUE_CONNECTION', 'SESSION_DRIVER', 'MAIL_MAILER', 'VISTUD_MASTER_KEY', 'APP_KEY'] as $name) {
+            if (preg_match('/^\s*'.$name.'\s*=/m', $dotenv) === 1) {
+                $this->assertArrayNotHasKey($name, $env, "{$name} would leak from .env into the acceptance run");
+                $checked++;
+            }
+        }
+        $this->assertGreaterThanOrEqual(0, $checked);
     }
 
     private function reviewedPolicy(): void

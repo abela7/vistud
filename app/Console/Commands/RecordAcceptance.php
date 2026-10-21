@@ -69,6 +69,15 @@ class RecordAcceptance extends Command
                 $env[$key] = $value;
             }
         }
+        // This process has already loaded the project's .env (real cache, queue, session, mail and keys). Environment
+        // variables beat phpunit.xml, so the child would run the suite on those, and could carry the real master key.
+        // Drop everything the .env defines: the suite then runs on phpunit.xml and its own generated keys. Only
+        // where the database server is stays, because that is machine-specific.
+        foreach ($this->definedByDotEnv() as $name) {
+            if (! in_array($name, ['DB_HOST', 'DB_PORT'], true)) {
+                unset($env[$name]);
+            }
+        }
         $env['DB_CONNECTION'] = 'mysql';
         $env['DB_DATABASE'] = 'vistud_test';
         $env['DB_KEYS_DATABASE'] = 'vistud_keys_test';
@@ -79,6 +88,18 @@ class RecordAcceptance extends Command
         }
 
         return $env;
+    }
+
+    /** @return list<string> the names the project's .env file sets */
+    private function definedByDotEnv(): array
+    {
+        $file = base_path('.env');
+        if (! is_file($file)) {
+            return [];
+        }
+        preg_match_all('/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/m', (string) file_get_contents($file), $found);
+
+        return array_values(array_unique($found[1]));
     }
 
     private function outsideTemp(): string
