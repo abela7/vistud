@@ -25,7 +25,9 @@
         <h2 id="class-link-heading" class="font-semibold">Class links</h2>
         <form wire:submit="createClassLink" class="flex flex-wrap items-end gap-3">
             <x-field name="places" label="Places" type="number" wire:model="places" min="1" max="10000" required />
-            <x-field name="ends" label="Last day (UTC)" type="date" wire:model="ends" required />
+            <div class="min-w-0 max-w-full">
+                <x-field name="ends" label="Last day (UTC)" type="date" wire:model="ends" class="min-w-0 max-w-full" required />
+            </div>
             <x-button type="submit">Create class link</x-button>
         </form>
         @if ($classLink)

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Web;
 
 use App\Identity\Invitations;
+use App\Identity\JoiningPolicy;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Tests\Concerns\CreatesAccounts;
@@ -12,7 +13,7 @@ use Tests\TestCase;
 /** The invitation acceptance page (WP6; ADR 0003 D4 and T5, PM decision Q3). */
 class AcceptInvitationScreenTest extends TestCase
 {
-    use CreatesAccounts, \Tests\Concerns\JoiningPolicyFixture, RefreshesDatabase;
+    use CreatesAccounts, RefreshesDatabase, \Tests\Concerns\JoiningPolicyFixture;
 
     protected function setUp(): void
     {
@@ -102,7 +103,7 @@ class AcceptInvitationScreenTest extends TestCase
     private function form(string $token): array
     {
         return [
-            'privacy' => '1', 'privacy_version' => app(\App\Identity\JoiningPolicy::class)->version(),
+            'privacy' => '1', 'privacy_version' => app(JoiningPolicy::class)->version(),
             'token' => $token,
             'name' => 'Ada Lovelace',
             'password' => 'a-long-enough-password',

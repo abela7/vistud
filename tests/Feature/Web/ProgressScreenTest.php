@@ -76,6 +76,7 @@ class ProgressScreenTest extends TestCase
         $this->page()
             ->assertSeeInOrder(['Week 1', '0/4', 'In the module, not in a folder', '1', 'Stable marriage', 'Lecture', '2', 'Keys', 'Joins', 'Lab', '1', 'Lab joins']);
     }
+
     public function test_the_module_the_student_is_in_is_open_and_the_others_are_folded(): void
     {
         $by = $this->principal($this->ada);

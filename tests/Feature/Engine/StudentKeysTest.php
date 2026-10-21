@@ -2,24 +2,31 @@
 
 namespace Tests\Feature\Engine;
 
+use App\Engine\CourseGuide;
 use App\Engine\Engine;
 use App\Engine\EngineFailed;
 use App\Engine\Fake;
-use App\Engine\OpenRouter;
-use App\Engine\Request;
-use App\Engine\SessionChat;
+use App\Engine\Helper;
 use App\Engine\Jobs\Job;
 use App\Engine\Jobs\Runner;
 use App\Engine\Models;
+use App\Engine\OpenRouter;
+use App\Engine\Request;
 use App\Engine\Role;
+use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Engine\StudentKeyGate;
-use App\Platform\Access\Principal;
+use App\Engine\VistudAi;
 use App\Platform\Access\LearnerScope;
+use App\Platform\Access\Principal;
+use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
+use App\Study\Sessions;
+use App\Study\Workspaces;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
 use Tests\TestCase;
@@ -44,8 +51,12 @@ class StudentKeysTest extends TestCase
         $this->app->instance(Engine::class, $engine = new Fake);
         $settings->set($a, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         foreach (Role::cases() as $role) {
-            try { $settings->ready($a, $role); $this->fail('Missing key accepted'); }
-            catch (Unprocessable $e) { $this->assertSame('engine_key', $e->errorCode); }
+            try {
+                $settings->ready($a, $role);
+                $this->fail('Missing key accepted');
+            } catch (Unprocessable $e) {
+                $this->assertSame('engine_key', $e->errorCode);
+            }
         }
         $this->assertSame([], app(Models::class)->all(key: $settings->credential($a)));
         $secret = bin2hex(random_bytes(32));
@@ -70,16 +81,18 @@ class StudentKeysTest extends TestCase
         config(['vistud.engine.key' => bin2hex(random_bytes(32))]);
         $this->app->instance(Engine::class, $engine = new Fake);
         $by = $this->principal($this->student());
-        $course = app(\App\Study\Workspaces::class)->create($by, ['name' => 'Synthetic']);
+        $course = app(Workspaces::class)->create($by, ['name' => 'Synthetic']);
         app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
         $count = 0;
         foreach (glob(app_path('Engine/Jobs/*.php')) as $file) {
             $class = 'App\\Engine\\Jobs\\'.basename($file, '.php');
             $reflection = new \ReflectionClass($class);
-            if (! $reflection->isSubclassOf(Job::class) || $reflection->isAbstract()) { continue; }
+            if (! $reflection->isSubclassOf(Job::class) || $reflection->isAbstract()) {
+                continue;
+            }
             $job = $reflection->newInstanceWithoutConstructor();
             $id = Ids::new();
-            \App\Platform\Database\LearnerTables::insert(LearnerScope::of($by), 'engine_jobs', [
+            LearnerTables::insert(LearnerScope::of($by), 'engine_jobs', [
                 'id' => $id, 'workspace_id' => $course->id, 'role' => $job->role()->value, 'kind' => $job->kind(),
                 'status' => 'queued', 'created_at' => now(),
             ]);
@@ -118,7 +131,9 @@ class StudentKeysTest extends TestCase
             $this->artisan('vistud:encrypt:ai-keys --decrypt')->assertSuccessful();
             $this->assertSame($secret, Crypt::decryptString(DB::table('engine_settings')->where('learner_id', $a->learnerId)->value('key_encrypted')));
             $this->artisan('vistud:encrypt:ai-keys')->assertSuccessful();
-        } finally { app()->maintenanceMode()->deactivate(); }
+        } finally {
+            app()->maintenanceMode()->deactivate();
+        }
     }
 
     public function test_audio_model_uses_the_credentials_provider_or_refuses_before_processing(): void
@@ -130,7 +145,7 @@ class StudentKeysTest extends TestCase
         $this->assertSame(config('vistud.engine.audio_model'), $settings->audioModel($by));
         $scope = LearnerScope::of($by);
         foreach (['google' => 'gemini-2.5-flash', 'openai' => 'gpt-audio', 'anthropic' => null] as $provider => $model) {
-            \App\Platform\Database\LearnerTables::query($scope, 'engine_settings')->update(['key_provider' => $provider, 'reader_model' => 'gemini-2.5-flash']);
+            LearnerTables::query($scope, 'engine_settings')->update(['key_provider' => $provider, 'reader_model' => 'gemini-2.5-flash']);
             $this->assertSame($model, $settings->audioModel($by));
         }
     }
@@ -142,14 +157,14 @@ class StudentKeysTest extends TestCase
         $by = $this->principal($this->student());
         app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'helper_model' => 'fake/quick', 'consent' => true]);
         $this->app->instance(Engine::class, $engine = new Fake);
-        $course = app(\App\Study\Workspaces::class)->create($by, ['name' => 'Synthetic']);
-        $session = app(\App\Study\Sessions::class)->start($by, $course->id);
+        $course = app(Workspaces::class)->create($by, ['name' => 'Synthetic']);
+        $session = app(Sessions::class)->start($by, $course->id);
 
         foreach ([
             fn () => app(SessionChat::class)->send($by, $session->id, 'Hello'),
-            fn () => app(\App\Engine\VistudAi::class)->send($by, \App\Platform\Ids::new(), 'Hello'),
-            fn () => app(\App\Engine\Helper::class)->quick($by, 'Explain this.', 'Processes', workspaceId: $course->id),
-            fn () => app(\App\Engine\CourseGuide::class)->turn($by, $course->id, [], 'Hello'),
+            fn () => app(VistudAi::class)->send($by, Ids::new(), 'Hello'),
+            fn () => app(Helper::class)->quick($by, 'Explain this.', 'Processes', workspaceId: $course->id),
+            fn () => app(CourseGuide::class)->turn($by, $course->id, [], 'Hello'),
         ] as $call) {
             try {
                 $call();
@@ -166,13 +181,13 @@ class StudentKeysTest extends TestCase
         $mcp = new Principal($by->userId, $by->learnerId, [\App\Platform\Access\Role::Student], true, null, 'mcp');
         $this->assertSame('', app(Settings::class)->credential($mcp));
         try {
-            app(\App\Engine\Jobs\Runner::class)->run($mcp, \App\Engine\Role::Reader, 'mcp_key_probe', $course->id, 'course', $course->id, fn ($run) => $run->ask('Synthetic', 'Synthetic', 20));
+            app(Runner::class)->run($mcp, Role::Reader, 'mcp_key_probe', $course->id, 'course', $course->id, fn ($run) => $run->ask('Synthetic', 'Synthetic', 20));
             $this->fail('An MCP reader job ran without a key.');
         } catch (Unprocessable $e) {
             $this->assertSame('engine_key', $e->errorCode);
         }
 
-        \Illuminate\Support\Facades\Http::fake();
+        Http::fake();
         $this->app->forgetInstance(Engine::class);
         try {
             app(OpenRouter::class)->reply(new Request('fake/tutor', 'Synthetic', [['role' => 'user', 'content' => 'Hi']]));
@@ -180,7 +195,7 @@ class StudentKeysTest extends TestCase
         } catch (EngineFailed $e) {
             $this->assertSame('engine_key', $e->errorCode);
         }
-        \Illuminate\Support\Facades\Http::assertNothingSent();
+        Http::assertNothingSent();
         $this->assertTrue(app(StudentKeyGate::class)->check());
     }
 }

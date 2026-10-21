@@ -102,8 +102,8 @@ class FolderSessionTest extends TestCase
         $this->assertStringContainsString('- Lab 01 - Command Line Basics.txt (not read yet)', $system);
         $this->assertStringContainsString("Mode: whole folder. Go through the folder's material in order, topic by topic.", $system);
         // The module's own topics (in no folder) belong to each of its parts; the other folders' topics and files are another session's.
-        $this->assertStringContainsString("In the module but in no folder (they belong to every part of it):
-- Week 1 overview: not started (nothing said or studied yet)", $system);
+        $this->assertStringContainsString('In the module but in no folder (they belong to every part of it):
+- Week 1 overview: not started (nothing said or studied yet)', $system);
         foreach (['- Threads:', 'Lecture 2 - Processes', '## The module:'] as $elsewhere) {
             $this->assertStringNotContainsString($elsewhere, $system);
         }
