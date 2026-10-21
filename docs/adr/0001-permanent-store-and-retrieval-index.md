@@ -568,6 +568,21 @@ The retention periods are proposals for the owner to confirm. Erasure is the doc
 | External chat LLMs | Outside our control | Briefs already sent during chats | The provider's policy | The learner started these disclosures, and we tell them so |
 | The learner's own export | Outside our control | The learner's copy | The learner's choice | The learner owns it |
 
+### G3 measured (2026-10-21, `tests/Acceptance/G3/ErasureDrillTest.php`)
+
+Measured on the development machine against synthetic learners: A and C kept, B erased. Before the job, B held content in every learner table, uploaded and derived files, a class recording, an AI-app connection with tokens, cache entries in the database cache store, and journal events.
+
+| Location | Measured |
+|---|---|
+| MySQL (live) | **Confirmed.** No column of any table holds B's marker, email, user ID or learner ID, except `erasure_requests` and `erasure_log`. Those hold IDs and times only, by design (ADR 0004). The audit log's entries for B are anonymised. |
+| Key database | **Confirmed.** B's key row is gone. A's and C's keys remain. |
+| Canonical, derived and temporary files | **Confirmed.** No file path or content holds B's learner ID or marker. C uploaded the very same bytes as B, and C's copy survives (no cross-learner deduplication). |
+| Caches | **Confirmed** for the database cache store: B's entries are gone. |
+| Logs | **Confirmed.** No log line written during the drill holds any learner's text, email or ID. |
+| MySQL data backups | **Confirmed by a restore.** B's rows from a backup taken before the erasure were restored without B's key, as after the key backups expire. The raw rows hold none of B's text, and reading them fails. Replay from the independent ledger erased them again; A survived. |
+| Browser drafts | **Corrected.** During the three-hour grace period, a returning device gets `401 account_deleted` before any draft is saved, and the editor purges its drafts. **After the erasure completes, it gets a plain `401 unauthenticated`**, because the session and the account are gone. The editor then keeps the drafts for a later sign-in, and they wait for local expiry (30 days, and only when the editor next opens). The drill's last test fails until this is fixed. |
+| Not measured here | Binlogs, real backup retention, freed database pages, and the external processors. These need the production server and the operations runbook. There is no Qdrant yet. |
+
 ## When to revisit this decision
 
 - **A validation gate fails.** Each gate says what it reopens.
