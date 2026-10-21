@@ -35,7 +35,16 @@ class Erasure
         }
         $db = DB::connection(config('vistud.database.owner_connection'));
         $request = $db->table('erasure_requests')->where('id', $requestId)->first();
-        if ($request === null || $request->completed_at !== null) {
+        if ($request === null) {
+            return true;
+        }
+        $intent = app(ErasureLedger::class)->intent($request);
+        if ($intent['request_id'] !== $request->id) {
+            throw new RuntimeException('Restore replay is required.');
+        }
+        if ($request->completed_at !== null) {
+            app(ErasureLedger::class)->completed($request, $request->completed_at);
+
             return true;
         }
         if (now()->lt($request->not_before)) {
@@ -93,11 +102,13 @@ class Erasure
             $this->verifyContent($by, $scope);
 
             $this->stage($requestId, 'complete');
-            $db->transaction(function () use ($db, $request) {
+            $erasedAt = now()->toDateTimeString();
+            app(ErasureLedger::class)->completed($request, $erasedAt);
+            $db->transaction(function () use ($db, $request, $erasedAt) {
                 $db->table('erasure_log')->insertOrIgnore([
                     'request_id' => $request->id, 'user_id' => $request->user_id,
                     'learner_ref' => $request->learner_ref, 'requested_at' => $request->requested_at,
-                    'erased_at' => now(), 'version' => 1,
+                    'erased_at' => $erasedAt, 'version' => 1,
                 ]);
                 $db->table('erasure_requests')->where('id', $request->id)->update([
                     'completed_at' => now(), 'stage' => 'complete', 'error_code' => null,

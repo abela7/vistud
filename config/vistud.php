@@ -39,6 +39,9 @@ return [
     'erasure' => [
         // Includes 30-minute processing plus expiry and an hourly janitor pass.
         'delay_seconds' => 10800,
+        // Independent mount, never inside the checkout or restored with data.
+        'ledger_path' => env('VISTUD_ERASURE_LEDGER_PATH', ''),
+        'ledger_id' => env('VISTUD_ERASURE_LEDGER_ID', ''),
     ],
 
     'files' => [

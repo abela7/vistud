@@ -317,3 +317,17 @@ erased account's identifiers, IP, user agent, correlation ID and associated
 metadata while retaining every event. It adds no runtime audit UPDATE permission.
 The content-free completion ledger survives identity deletion. Independent export
 and replay on backup restoration are S4b, still required before release.
+
+### Independent erasure evidence and restored data (S4b)
+
+Deletion intent is durably authenticated outside MySQL before acknowledgement.
+An already durable intent survives a failed database commit or HTTP response;
+retry/import preserves its UUID and original grace. Missing independent storage,
+key or checkpoint blocks acceptance/cleanup instead of losing recovery evidence.
+Completion is independently persisted after actual cleanup and before local log
+commit. Restore replay validates the latest independent intent set before any
+writes, requires maintenance/stopped workers, blocks all named accounts first and
+forces S4a cleanup even for locally completed rows (key/file-only restores too).
+A nonzero/deferred result forbids reopening. Export/status/recover do not require
+MySQL or a learner/master key. Only explicit bootstrap `sync` reads S4a DB history.
+See ADR 0004 and operations.md; independent G3 acceptance remains S6.

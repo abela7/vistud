@@ -107,12 +107,17 @@ final class Accounts
             $this->audit->record($by, AuditAction::ACCOUNT_DELETION_REQUESTED, 'user', $user->id, ['self' => $self], role: $self ? null : 'admin');
             $id = Ids::new();
             $notBefore = now()->addSeconds(max(10800, (int) config('vistud.erasure.delay_seconds', 10800)));
-            DB::table('erasure_requests')->insert([
+            // The independent intent is authoritative even if the database
+            // commit is lost. A retry reuses its UUID and original grace period.
+            $intent = app(ErasureLedger::class)->intent((object) [
                 'id' => $id, 'user_id' => $userId,
                 'learner_ref' => DB::table('learners')->where('user_id', $userId)->value('id'),
-                'requested_at' => now(), 'not_before' => $notBefore,
-                'stage' => 'pending',
+                'requested_at' => now()->toDateTimeString(), 'not_before' => $notBefore->toDateTimeString(),
             ]);
+            $id = $intent['request_id'];
+            $notBefore = CarbonImmutable::parse($intent['not_before'], 'UTC');
+            unset($intent['kind'], $intent['request_id']);
+            DB::table('erasure_requests')->insert(['id' => $id, 'stage' => 'pending'] + $intent);
             // Sync/after-response mode must never bypass the grace period.
             EraseLearner::dispatch($id)->onConnection('database')->delay($notBefore)->afterCommit();
         }, 3);

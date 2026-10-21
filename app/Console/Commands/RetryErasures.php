@@ -2,7 +2,10 @@
 
 namespace App\Console\Commands;
 
+use App\Identity\ErasureLedger;
+use App\Identity\RestoreErasures;
 use App\Jobs\EraseLearner;
+use App\Platform\Access\Principal;
 use App\Platform\Ids;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +18,7 @@ final class RetryErasures extends Command
 
     public function handle(): int
     {
+        app(RestoreErasures::class)->recoverPending(Principal::system());
         // Accounts marked deleted before S4 had no durable erasure request.
         // Discover them without shortening the grace period or changing content.
         foreach (DB::table('users')->where('status', 'deleted')->whereNotExists(function ($query) {
@@ -25,12 +29,14 @@ final class RetryErasures extends Command
                 if ($current?->status !== 'deleted') {
                     return;
                 }
-                DB::table('erasure_requests')->insertOrIgnore([
+                $intent = app(ErasureLedger::class)->intent((object) [
                     'id' => Ids::new(), 'user_id' => $user->id,
                     'learner_ref' => DB::table('learners')->where('user_id', $user->id)->value('id'),
-                    'requested_at' => now(), 'not_before' => now()->addSeconds(max(10800, (int) config('vistud.erasure.delay_seconds', 10800))),
-                    'stage' => 'pending',
+                    'requested_at' => now()->toDateTimeString(), 'not_before' => now()->addSeconds(max(10800, (int) config('vistud.erasure.delay_seconds', 10800)))->toDateTimeString(),
                 ]);
+                $id = $intent['request_id'];
+                unset($intent['kind'], $intent['request_id']);
+                DB::table('erasure_requests')->insertOrIgnore(['id' => $id, 'stage' => 'pending'] + $intent);
             });
         }
         foreach (DB::table('erasure_requests')->whereNull('completed_at')->where('not_before', '<=', now())->orderBy('id')->cursor() as $request) {

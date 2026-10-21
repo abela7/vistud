@@ -224,12 +224,12 @@ Gemini's redirect hosts are not in `config/mcp.php` yet: the first refused regis
 
 ## Restore drill (monthly)
 
-Restore last night's backup into a scratch database on the server, run `php artisan vistud:doctor` against it, and delete it. Note the date in [operations.md](operations.md).
+Use the complete [S4b restore procedure](operations.md#every-restore-replay-before-any-access) monthly in an isolated scratch installation. Fetch the latest independent ledger/head, restore content and keys separately, replay before any access, verify erased and unrelated learners, then run `vistud:doctor`. Record the drill privately; never test a restore over Abel's local installation.
 
-## Delayed account erasure (S4a; release waits for S4b)
+## Account erasure and independent restore protection (S4)
 
-Do not enable real erasure until S4b independent ledger export and restore replay
-are reviewed. See [S4a handoff](../handoff/second-learner-S4a.md) for the inventory,
+Before enabling erasure, provision and initialise S4b's independent ledger as
+[operations.md](operations.md#independent-durable-ledger-setup-first-deployment-only) describes; import S4a history and verify the off-site checkpoint. See [S4a handoff](../handoff/second-learner-S4a.md) for the inventory,
 retry procedure and privileged audit exception. Abel runs setup; no local account
 or file deletion is part of development validation.
 
@@ -246,4 +246,8 @@ memory-backed production temporary paths. Longer workloads require a longer grac
 The runtime may insert/read requests but cannot mark completion; only the
 privileged worker updates progress and inserts the content-free ledger. Never
 roll back nonempty erasure tables or restore an old ledger over the latest one.
-Backup retention and independent recovery procedures are delivered in S4b.
+Use the approved S4b retention and restore procedures in operations.md. Missing
+independent ledger storage/key/checkpoint blocks erasure and restore replay; no
+new database schema is required beyond S4a. Every restore, including keys/files
+only, must replay the latest independent intent before reopening. Never place
+the ledger key in config cache or bundle key backups into 35-day data backups.
