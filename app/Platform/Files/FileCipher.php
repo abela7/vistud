@@ -23,11 +23,24 @@ final class FileCipher
      */
     public static function write($input, $output, string $key, FileIdentity $identity): array
     {
+        return self::writeChunks((function () use ($input) {
+            while (($bytes = self::upTo($input, self::CHUNK)) !== '') {
+                yield $bytes;
+            }
+        })(), $output, $key, $identity);
+    }
+
+    /** @param iterable<string> $input
+     * @param  resource  $output
+     * @return array{size:int, hash:string}
+     */
+    public static function writeChunks(iterable $input, $output, string $key, FileIdentity $identity): array
+    {
         self::put($output, str_repeat("\0", self::HEADER));
         $generation = random_bytes(16);
         $hash = hash_init('sha256');
         $size = $index = 0;
-        while (($bytes = self::upTo($input, self::CHUNK)) !== '') {
+        foreach (self::frames($input) as $bytes) {
             $size += strlen($bytes);
             if ($size > self::MAX_BYTES) {
                 throw new RuntimeException('Private file is too large.');
@@ -45,6 +58,26 @@ final class FileCipher
         }
 
         return ['size' => $size, 'hash' => $digest];
+    }
+
+    /** Reframe a sequence of independently authenticated pieces without joining it in memory. */
+    private static function frames(iterable $input): \Generator
+    {
+        $buffer = '';
+        foreach ($input as $bytes) {
+            for ($offset = 0, $size = strlen($bytes); $offset < $size;) {
+                $take = min(self::CHUNK - strlen($buffer), $size - $offset);
+                $buffer .= substr($bytes, $offset, $take);
+                $offset += $take;
+                if (strlen($buffer) === self::CHUNK) {
+                    yield $buffer;
+                    $buffer = '';
+                }
+            }
+        }
+        if ($buffer !== '') {
+            yield $buffer;
+        }
     }
 
     public static function seal(string $bytes, string $key, string $aad): string

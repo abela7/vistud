@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Study;
 
+use App\Platform\Access\LearnerScope;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Platform\Files\FileCipher;
+use App\Platform\Files\PrivateFiles;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
 use App\Study\Files;
@@ -68,8 +71,8 @@ class ClassRecordingsTest extends TestCase
         $this->assertNotNull($done->finishedAt);
         $this->assertNotNull($done->path);
         $this->assertSame(12, $done->durationSeconds);
-        $this->assertSame('hello world', Files::disk()->get($done->path));
-        $this->assertSame(hash('sha256', 'hello world'), hash_file('sha256', Files::disk()->path($done->path)));
+        $this->assertStringStartsWith(FileCipher::MAGIC, Files::disk()->get($done->path));
+        $this->assertSame('hello world', PrivateFiles::bytes(LearnerScope::of($by), $done->path, 100));
         $this->assertSame(ClassSessions::RECORDED, app(ClassSessions::class)->find($by, $class->id)->status);
         $this->assertSame('Part 1 · 12 s', $done->line());
         $this->assertFalse(Files::disk()->exists($done->path.'.chunks'));
@@ -135,7 +138,7 @@ class ClassRecordingsTest extends TestCase
 
         $this->assertNotNull($kept->finishedAt);
         $this->assertSame(11, $kept->durationSeconds);
-        $this->assertSame('onetwothree', Files::disk()->get((string) $kept->path));
+        $this->assertSame('onetwothree', PrivateFiles::bytes(LearnerScope::of($by), (string) $kept->path, 100));
         $class = app(ClassSessions::class)->find($by, $class->id);
         $this->assertSame(ClassSessions::RECORDED, $class->status);
         $this->assertSame(11, $class->durationSeconds);
@@ -200,14 +203,14 @@ class ClassRecordingsTest extends TestCase
         $this->assertSame([$first->id, $second->id], array_column($timeline, 'id'));
         $this->assertSame([0, 600], array_column($timeline, 'offset'));
         $this->assertNotSame($first->path, $recordings->find($by, $class->id, $second->id)->path);
-        $this->assertSame('hello', Files::disk()->get((string) $recordings->playable($by, $class->id, $first->id)->path));
-        $this->assertSame(' world', Files::disk()->get((string) $recordings->playable($by, $class->id, $second->id)->path));
+        $this->assertSame('hello', PrivateFiles::bytes(LearnerScope::of($by), (string) $recordings->playable($by, $class->id, $first->id)->path, 100));
+        $this->assertSame(' world', PrivateFiles::bytes(LearnerScope::of($by), (string) $recordings->playable($by, $class->id, $second->id)->path, 100));
 
         $response = $this->actingAs($ada)->get(route('workspaces.modules.classes.audio', [$course->id, $cells->id, $class->id, $first->id]));
         $response->assertOk();
         $response->assertHeader('content-type', 'audio/webm');
         $response->assertHeader('x-content-type-options', 'nosniff');
-        $this->assertSame('hello', file_get_contents($response->baseResponse->getFile()->getPathname()));
+        $response->assertStreamedContent('hello');
 
         $this->actingAs($this->student())->get(route('workspaces.modules.classes.audio', [$course->id, $cells->id, $class->id, $first->id]))->assertNotFound();
     }

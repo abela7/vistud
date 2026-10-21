@@ -1,8 +1,8 @@
 # Private file format, version 1 (S3a)
 
 The implementation is `app/Platform/Files`. S3a covers uploads, note images,
-PDF previews and modern Office copies. Recording and extracted-text kinds are
-reserved for S3b. This specification follows the owner's S3 split and OpenSSL
+PDF previews and modern Office copies. S3b adds recording pieces, joined audio,
+extracted JSON and saved transcription diagnostics. This specification follows the owner's S3 split and OpenSSL
 override in the conversation; the older unsplit handoff does not override it.
 
 ## Key and identity
@@ -19,6 +19,14 @@ The trusted caller supplies learner id, object id and kind. Allowed paths are
 or the independent note-image id. Kinds are `upload`, `note-image:png/jpg/webp/gif`
 and `preview:pdf/docx/pptx/xlsx` (each slash-separated alternative is a distinct
 kind). Extensions, learner ownership and path syntax are checked before IO.
+
+S3b also accepts `classes/<class id>/<recording id>` (kind `recording`) and
+the suffix `.chunks/<piece index>` (kind `recording-piece:<index>`). Their object
+identity is `<class id>/<recording id>`, so both the class and piece position are
+bound. `texts/<file id>.json` uses kind `extracted-text`; the existing JSON
+schema/version is unchanged. `transcribe-try/<class id>/<run id>.transcript.md`
+or `.notes.md` uses object `<class id>/<run id>` and kind
+`transcription:transcript` or `transcription:notes`.
 
 Every frame has a fresh cryptographically random 12-byte nonce. Every complete
 write has a fresh random 16-byte generation. Associated data is the ASCII magic
@@ -79,10 +87,13 @@ S3b's offline inventory must count and reconcile it. No delete-target fallback
 is used if atomic publication fails. The disks must be private local seekable
 filesystems; remote adapters are rejected rather than buffered in memory.
 
-GET and single-range GET authenticate the header, physical length and all
-selected frames before returning a successful response, then stream the same
-open descriptor in bounded chunks. Seeking reads only intersecting chunks.
-Full reads also compare the complete digest. An altered *unrequested* chunk is
+GET and single-range GET authenticate the header, physical length and first
+selected frame before returning a successful response. The iterator retains
+that frame, then streams the same open descriptor: each later frame authenticates
+before yielding any bytes. A corrupt later frame ends the stream, without sending
+its bytes; the Content-Length makes the incomplete response detectable. No range
+is decrypted twice. Seeking reads only intersecting chunks.
+Offline full verification also compares the complete digest. An altered *unrequested* chunk is
 detected on full verification or when requested, not by an unrelated range.
 HEAD authenticates the header and physical length, without scanning content.
 Opaque ETags use the random generation. Responses are private/no-store.
@@ -95,3 +106,14 @@ workspaces, closed in finally blocks or after export streaming. See
 for the required production RAM-backed temp configuration. The existing capped
 GD, Smalot PDF and base64 AI consumers still use memory within their old caps;
 the codec, storage, verification and HTTP transport do not grow with file size.
+
+S3b assembly feeds decrypted piece generators to the same writer, which reframes
+them at 256 KiB. It never makes a plaintext joined file. Pieces are removed only
+after the recording metadata commits. ffmpeg input and output are leased temp
+workspaces. The offline command uses exclusive sibling `.converting-*` stages
+and read-back verification before atomic replacement. Per-object conversion
+receipts live under the learner's `file-conversion/` tree: raw GCM-sealed JSON,
+fresh nonce, files key, AAD `vistud:file-state:v1:` followed by the canonical path.
+Receipts contain the bound path, keyed fingerprint, length, target direction and
+pending/completed status; their filenames are HMAC-SHA256 of the path. They are
+included with canonical backups and disappear with the learner's source tree.

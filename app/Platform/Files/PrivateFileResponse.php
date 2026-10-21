@@ -49,17 +49,18 @@ final class PrivateFileResponse
             return new StreamedResponse(null, $status, $headers);
         }
         try {
-            // No successful headers/body for a corrupt selected range. Keep the same
-            // descriptor for streaming; service writes publish immutable replacements.
-            $reader->verify($start, $length);
+            // Start the iterator before headers: the first selected frame is authenticated
+            // once and retained. Every later frame authenticates before yielding bytes.
+            $chunks = $reader->chunks($start, $length);
+            $chunks->rewind();
         } catch (\Throwable $e) {
             $reader->close();
             throw $e;
         }
 
-        return new StreamedResponse(function () use ($reader, $start, $length) {
+        return new StreamedResponse(function () use ($reader, $chunks) {
             try {
-                foreach ($reader->chunks($start, $length) as $chunk) {
+                foreach ($chunks as $chunk) {
                     echo $chunk;
                 }
             } finally {

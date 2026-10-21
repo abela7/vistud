@@ -12,6 +12,16 @@ final readonly class FileIdentity
 
     public static function at(LearnerScope $scope, string $path): self
     {
+        $prefix = 'learners/'.preg_quote($scope->learnerId, '#').'/';
+        if (preg_match('#^'.$prefix.'classes/([a-zA-Z0-9-]{1,64})/([a-zA-Z0-9-]{1,64})(?:\.chunks/([1-9][0-9]{0,3}))?$#D', $path, $recording) === 1) {
+            return new self($scope->learnerId, $recording[1].'/'.$recording[2], isset($recording[3]) ? 'recording-piece:'.$recording[3] : 'recording');
+        }
+        if (preg_match('#^'.$prefix.'texts/([a-zA-Z0-9-]{1,64})\.json$#D', $path, $text) === 1) {
+            return new self($scope->learnerId, $text[1], 'extracted-text');
+        }
+        if (preg_match('#^'.$prefix.'transcribe-try/([a-zA-Z0-9-]{1,64})/([a-zA-Z0-9-]{1,64})\.(transcript|notes)\.md$#D', $path, $try) === 1) {
+            return new self($scope->learnerId, $try[1].'/'.$try[2], 'transcription:'.$try[3]);
+        }
         if (preg_match('#^learners/([^/]+)/(files|previews|note-images)/([a-zA-Z0-9-]{1,64})(?:\.(pdf|docx|pptx|xlsx|png|jpg|webp|gif))?$#D', $path, $m) !== 1 || $m[1] !== $scope->learnerId) {
             throw new RuntimeException('Invalid private file identity.');
         }

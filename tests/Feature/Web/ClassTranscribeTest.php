@@ -69,6 +69,9 @@ class ClassTranscribeTest extends TestCase
         {
             public function split(string $file, int $seconds, string $directory): array
             {
+                if (file_get_contents($file) !== 'webm bytes') {
+                    throw new \RuntimeException('Transcriber did not receive decrypted recording bytes.');
+                }
                 File::ensureDirectoryExists($directory);
                 File::put($directory.'/piece-000.mp3', 'first');
                 File::put($directory.'/piece-001.mp3', 'second');

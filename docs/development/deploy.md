@@ -161,6 +161,40 @@ content/key backups; exclude derived files and all processing/upload temps.
 Do not use the generic migration rollback below for a partially converted file
 store. Stop writers and use S3b's verified recovery procedure instead.
 
+### Private files (S3b): offline conversion
+
+S3b completes the file converter required by S3a. Abel runs these steps later;
+the builder has not run them on his database or files. Complete S1 key setup
+(including Abel's key) and both S2 text conversions first. Configure private
+source/derived disks and production RAM-backed temp paths as above. Keep matching
+verified database/canonical-file/receipt/key backups and private master recovery.
+
+1. Enter maintenance, stop workers, stop the scheduler and every upload writer.
+   Never run old and new file writers together. Keep maintenance through checks.
+2. `php artisan vistud:encrypt:files --dry-run`. Reconcile missing/orphan objects,
+   conflicting copies, missing keys and old diagnostics against the backup.
+   Save only the count report. Read the S3b handoff's legacy-header limitation.
+3. `php artisan vistud:encrypt:files --backup-confirmed`. Repeat if interrupted.
+   If the dry run found old disposable processing/upload temps, review/archive
+   needed artifacts first, then add `--purge-temp-confirmed`. Saved Markdown is
+   imported or blocked, never silently discarded by that flag.
+4. `php artisan vistud:encrypt:files --verify`. Require unrestricted success with
+   zero blockers. A learner-filtered or limited run is not a full release check.
+5. As Abel, check file/image download, Office preview, extracted text, recording
+   upload/recovery and seeking, and transcription. Restart the workers with the
+   configured private temp environment, resume the scheduler and reopen for
+   Abel only. The second-learner gate remains closed pending later phases.
+
+Rollback stays offline: stop all writers, take/verify matching backups and run
+`php artisan vistud:encrypt:files --decrypt --backup-confirmed`, repeating until
+successful. Previews return to the source disk and hashes become original SHA;
+old diagnostic Markdown is preserved at its learner-owned path. Deploy the
+approved S2b code (before S3a), keeping S2 text encrypted and its schema in place.
+Check plaintext file reads there before restarting. Do not deploy S3a alone over
+decrypted files. If a source cannot verify, preserve it and restore matching
+backups with Abel; do not delete keys, discard sources or improvise partial
+schema/data rollback. See [the S3b handoff](../handoff/second-learner-S3b.md).
+
 ## A release
 
 Run on the server, as the deploy user:

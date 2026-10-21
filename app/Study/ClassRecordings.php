@@ -11,6 +11,7 @@ use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Conflict;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Platform\Files\PrivateFiles;
 use App\Platform\Ids;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Number;
@@ -134,7 +135,12 @@ final class ClassRecordings
             $this->withinQuota($scope, $size);
 
             $path = (string) $row->path;
-            $this->writeChunk($path, $index, $sourcePath);
+            $in = fopen($sourcePath, 'rb');
+            try {
+                PrivateFiles::write($scope, $path.'.chunks/'.$index, $in);
+            } finally {
+                fclose($in);
+            }
             $type = self::baseMime($mime);
             LearnerTables::query($scope, 'class_recordings')->where('id', $recordingId)->update([
                 'chunks' => $index,
@@ -185,15 +191,15 @@ final class ClassRecordings
                 throw new Unprocessable('validation_failed', 'Some fields need attention.', ['fields' => ['recording' => ['Nothing was recorded.']]]);
             }
             $path = (string) $row->path;
-            $this->assemble($path, (int) $row->chunks);
-            $full = Files::disk()->path($path);
+            $stored = PrivateFiles::writeChunks($scope, $path, $this->pieces($scope, $path, (int) $row->chunks));
             LearnerTables::query($scope, 'class_recordings')->where('id', $recordingId)->update([
-                'bytes' => (int) filesize($full),
-                'sha256' => hash_file('sha256', $full),
+                'bytes' => $stored['size'],
+                'sha256' => $stored['fingerprint'],
                 'duration_seconds' => $seconds,
                 'finished_at' => now(),
                 'updated_at' => now(),
             ]);
+            DB::afterCommit(fn () => Files::disk()->deleteDirectory($path.'.chunks'));
             $total = (int) LearnerTables::query($scope, 'class_recordings')
                 ->where('class_session_id', $classId)
                 ->whereNull('deleted_at')
@@ -336,62 +342,20 @@ final class ClassRecordings
         }
     }
 
-    private function writeChunk(string $path, int $index, string $sourcePath): void
+    /** Decrypt each persisted piece in order, reframed by the joined-file writer. */
+    private function pieces(LearnerScope $scope, string $path, int $chunks): \Generator
     {
-        $directory = Files::disk()->path($path.'.chunks');
-        if (! is_dir($directory) && ! mkdir($directory, 0775, true) && ! is_dir($directory)) {
-            throw new \RuntimeException('The recording could not be stored.');
-        }
-        $in = fopen($sourcePath, 'rb');
-        $out = fopen($directory.DIRECTORY_SEPARATOR.$index, 'wb');
-        if ($in === false || $out === false) {
-            if (is_resource($in)) {
-                fclose($in);
+        for ($i = 1; $i <= $chunks; $i++) {
+            if (! Files::disk()->exists($path.'.chunks/'.$i)) {
+                throw new Unprocessable('validation_failed', 'Some fields need attention.', ['fields' => ['recording' => ['A piece of the recording is missing.']]]);
             }
-            if (is_resource($out)) {
-                fclose($out);
+            $reader = PrivateFiles::read($scope, $path.'.chunks/'.$i);
+            try {
+                yield from $reader->chunks();
+            } finally {
+                $reader->close();
             }
-            throw new \RuntimeException('The recording could not be stored.');
         }
-        try {
-            stream_copy_to_stream($in, $out);
-        } finally {
-            fclose($in);
-            fclose($out);
-        }
-    }
-
-    private function assemble(string $path, int $chunks): void
-    {
-        $disk = Files::disk();
-        $target = $disk->path($path);
-        $parent = dirname($target);
-        if (! is_dir($parent) && ! mkdir($parent, 0775, true) && ! is_dir($parent)) {
-            throw new \RuntimeException('The recording could not be stored.');
-        }
-        $out = fopen($target, 'wb');
-        if ($out === false) {
-            throw new \RuntimeException('The recording could not be stored.');
-        }
-        try {
-            for ($i = 1; $i <= $chunks; $i++) {
-                $in = fopen($disk->path($path.'.chunks/'.$i), 'rb');
-                if ($in === false) {
-                    throw new Unprocessable('validation_failed', 'Some fields need attention.', ['fields' => ['recording' => ['A piece of the recording is missing.']]]);
-                }
-                try {
-                    stream_copy_to_stream($in, $out);
-                } finally {
-                    fclose($in);
-                }
-            }
-        } catch (\Throwable $e) {
-            fclose($out);
-            $disk->delete($path);
-            throw $e;
-        }
-        fclose($out);
-        $disk->deleteDirectory($path.'.chunks');
     }
 
     private static function baseMime(string $mime): string

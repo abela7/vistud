@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use RuntimeException;
 
-/** All S3a durable byte IO. Recording and extracted-text kinds arrive in S3b. */
+/** Durable learner byte IO, shared by web, workers and offline conversion. */
 final class PrivateFiles
 {
     /** S3b's offline inventory must include all these trees, including trashed uploads. */
@@ -17,6 +17,8 @@ final class PrivateFiles
         'note-images' => ['disk' => 'vistud.files.disk', 'kinds' => ['note-image:png', 'note-image:jpg', 'note-image:webp', 'note-image:gif']],
         'previews' => ['disk' => 'vistud.files.derived_disk', 'kinds' => ['preview:pdf', 'preview:docx', 'preview:pptx', 'preview:xlsx']],
     ];
+
+    public const S3B_BACKFILL = ['classes' => ['recording', 'recording-piece:<index>'], 'texts' => ['extracted-text'], 'transcribe-try' => ['transcription:transcript', 'transcription:notes']];
 
     public static function disk(string $path): FilesystemAdapter
     {
@@ -33,6 +35,19 @@ final class PrivateFiles
      */
     public static function write(LearnerScope $scope, string $path, $input): array
     {
+        return self::publish($scope, $path, fn ($out, $key, $identity) => FileCipher::write($input, $out, $key, $identity));
+    }
+
+    /** @param iterable<string> $input
+     * @return array{size:int, fingerprint:string}
+     */
+    public static function writeChunks(LearnerScope $scope, string $path, iterable $input): array
+    {
+        return self::publish($scope, $path, fn ($out, $key, $identity) => FileCipher::writeChunks($input, $out, $key, $identity));
+    }
+
+    private static function publish(LearnerScope $scope, string $path, callable $write): array
+    {
         $identity = FileIdentity::at($scope, $path);
         $disk = self::disk($path);
         $disk->makeDirectory(dirname($path));
@@ -45,7 +60,7 @@ final class PrivateFiles
         @chmod($stage, 0600);
         try {
             $key = $scope->key('files');
-            $info = FileCipher::write($input, $out, $key, $identity);
+            $info = $write($out, $key, $identity);
             fclose($out);
             $out = null;
             $read = new PrivateFileReader(self::open($stage), $key, $identity);

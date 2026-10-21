@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Identity\PrincipalFactory;
+use App\Platform\Access\Guard;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Platform\Files\PrivateFileResponse;
+use App\Platform\Files\PrivateFiles;
+use App\Platform\Files\UploadTemps;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
-use App\Study\Files;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /** One piece of a class recording, sent while it is being recorded. */
 final class ClassRecordingController
@@ -37,20 +40,20 @@ final class ClassRecordingController
         $elapsed = $request->input('elapsed');
         $seconds = is_string($elapsed) && preg_match('/^[0-9]{1,6}$/', $elapsed) === 1 ? (int) $elapsed : null;
 
-        $part = $recordings->accept($by, $class->id, $recording, (int) $index, $upload->getRealPath(), is_string($mime) ? $mime : '', $seconds);
+        $part = UploadTemps::using($upload, fn ($path) => $recordings->accept($by, $class->id, $recording, (int) $index, $path, is_string($mime) ? $mime : '', $seconds));
 
         return response()->json(['chunks' => $part->chunks, 'bytes' => $part->bytes]);
     }
 
     /** The finished audio, so the student can listen and mark a stretch. */
-    public function audio(Request $request, PrincipalFactory $principals, ClassSessions $classes, ClassRecordings $recordings, string $workspace, string $module, string $classSession, string $recording): BinaryFileResponse
+    public function audio(Request $request, PrincipalFactory $principals, ClassSessions $classes, ClassRecordings $recordings, string $workspace, string $module, string $classSession, string $recording): StreamedResponse
     {
         $by = $principals->fromRequest($request);
         $class = $classes->find($by, $classSession);
         ($class->workspaceId === $workspace && $class->moduleId === $module) || throw new NotFound;
         $part = $recordings->playable($by, $class->id, $recording);
 
-        return response()->file(Files::disk()->path((string) $part->path), [
+        return PrivateFileResponse::make($request, PrivateFiles::read(Guard::learner($by), (string) $part->path), 'class.'.$part->extension, [
             'Content-Type' => $part->mime,
             'Content-Disposition' => 'inline; filename="class.'.$part->extension.'"',
             'X-Content-Type-Options' => 'nosniff',

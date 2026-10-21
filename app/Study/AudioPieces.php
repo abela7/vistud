@@ -27,15 +27,15 @@ class AudioPieces
             '-i', $file, '-vn', '-ac', '1', '-ar', '16000', '-b:a', '32k',
             '-f', 'segment', '-segment_time', (string) $seconds, '-reset_timestamps', '1',
             $directory.DIRECTORY_SEPARATOR.'piece-%03d.mp3',
-        ]);
+        ], null, ['TMPDIR' => $directory, 'TMP' => $directory, 'TEMP' => $directory]);
         $process->setTimeout(1800);
         try {
             $process->run();
         } catch (\Throwable $e) {
-            throw new \RuntimeException('ffmpeg could not be started: '.$e->getMessage());
+            throw new \RuntimeException('ffmpeg could not be started.');
         }
         if (! $process->isSuccessful()) {
-            throw new \RuntimeException('ffmpeg could not read the recording: '.mb_substr(trim($process->getErrorOutput()), 0, 300));
+            throw new \RuntimeException('ffmpeg could not read the recording.');
         }
         $pieces = glob($directory.DIRECTORY_SEPARATOR.'piece-*.mp3') ?: [];
         sort($pieces);

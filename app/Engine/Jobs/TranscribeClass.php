@@ -3,20 +3,21 @@
 namespace App\Engine\Jobs;
 
 use App\Engine\EngineFailed;
+use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
+use App\Platform\Files\PrivateFiles;
+use App\Platform\Files\TempWorkspace;
 use App\Study\AudioPieces;
 use App\Study\ClassHeader;
 use App\Study\ClassNote;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
 use App\Study\Fence;
-use App\Study\Files;
 use App\Study\MarkdownDoc;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Workspaces;
-use Illuminate\Support\Facades\File;
 
 /**
  * A class written down from its recording, in two steps. First an audio model writes each 10-minute piece word for
@@ -76,12 +77,18 @@ final class TranscribeClass extends Job
         }
         $headers = app(ClassHeader::class);
         $about = self::about($by, $class->workspaceId, $class->moduleId, $class->title, $headers->fileNames($by, $class));
-        $work = storage_path('app/transcribe/'.$class->id.'-'.bin2hex(random_bytes(4)));
+        $temp = new TempWorkspace;
+        $work = $temp->path;
 
         try {
             [$transcript, $offset] = ['', 0];
             foreach ($parts as $part) {
-                $pieces = app(AudioPieces::class)->split(Files::disk()->path((string) $part->path), self::PIECE_MINUTES * 60, $work.'/take-'.$part->position);
+                $input = PrivateFiles::temporary(Guard::learner($by), (string) $part->path);
+                try {
+                    $pieces = app(AudioPieces::class)->split($input->path.'/input', self::PIECE_MINUTES * 60, $work.'/take-'.$part->position);
+                } finally {
+                    $input->close();
+                }
                 foreach ($pieces as $i => $piece) {
                     $from = $offset + $i * self::PIECE_MINUTES * 60;
                     $reply = $run->ask(self::HEAR, [['role' => 'user', 'content' => [
@@ -98,7 +105,7 @@ final class TranscribeClass extends Job
             }
             throw new EngineFailed('ffmpeg_missing', 'The recording could not be cut into pieces: ffmpeg is missing on this server, or the recording could not be read.');
         } finally {
-            File::deleteDirectory($work);
+            $temp->close();
         }
 
         // What the student wrote while the class ran, each against the minutes it was written in: the notes answer them.

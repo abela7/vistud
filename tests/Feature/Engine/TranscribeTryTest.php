@@ -6,7 +6,10 @@ use App\Engine\Engine;
 use App\Engine\Fake;
 use App\Engine\Request;
 use App\Engine\Settings;
+use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
+use App\Platform\Files\FileCipher;
+use App\Platform\Files\PrivateFiles;
 use App\Study\AudioPieces;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
@@ -62,6 +65,9 @@ class TranscribeTryTest extends TestCase
         {
             public function split(string $file, int $seconds, string $directory): array
             {
+                if (file_get_contents($file) !== 'webm bytes') {
+                    throw new \RuntimeException('Transcriber did not receive decrypted recording bytes.');
+                }
                 File::ensureDirectoryExists($directory);
                 File::put($directory.'/piece-000.mp3', 'first');
                 File::put($directory.'/piece-001.mp3', 'second');
@@ -104,10 +110,15 @@ class TranscribeTryTest extends TestCase
 
         $this->assertSame(['transcribe_notes', 'transcribe_piece', 'transcribe_piece'], DB::table('engine_jobs')->orderBy('kind')->pluck('kind')->all());
         $this->assertSame($noteBefore, DB::table('class_sessions')->where('id', $this->class)->value('note_id'));
-        $folder = collect(File::directories(storage_path('app/transcribe-try')))->first(fn (string $d) => str_contains($d, $this->class));
-        $this->assertStringContainsString('[unclear]', File::get($folder.'/transcript.md'));
-        $this->assertStringContainsString('Mitosis', File::get($folder.'/notes.md'));
-        File::deleteDirectory($folder);
+        $scope = LearnerScope::of($this->by);
+        $outputs = Storage::disk('local')->allFiles('learners/'.$scope->learnerId.'/transcribe-try/'.$this->class);
+        $this->assertCount(2, $outputs);
+        foreach ($outputs as $output) {
+            $this->assertStringStartsWith(FileCipher::MAGIC, Storage::disk('local')->get($output));
+            $this->assertStringNotContainsString('Mitosis', Storage::disk('local')->get($output));
+            $this->assertStringContainsString(str_ends_with($output, '.transcript.md') ? '[unclear]' : 'Mitosis', PrivateFiles::bytes($scope, $output, 10000));
+        }
+        $this->assertSame([], glob(config('vistud.files.temp_root').'/work-*'));
     }
 
     public function test_a_class_with_no_finished_recording_or_no_ffmpeg_says_so(): void

@@ -184,6 +184,46 @@ erasure; old temp directories and pre-S3 backups need the later offline inventor
 and S4's approved calendar deletion plan. No real student files have been
 converted, deleted or deployed as an S3a development check.
 
+## Private file conversion and recovery (S3b)
+
+S3b encrypts recording pieces on arrival, assembles encrypted joined recordings
+without plaintext staging, encrypts extracted JSON and saves TranscribeTry output
+under the learner's private tree. ffmpeg now receives leased temporary input;
+its output and TMP/TEMP/TMPDIR are private processing paths. Use the production
+RAM-backed configuration above for FPM, CLI, workers, scheduler and nginx.
+The old S3a statement that ffmpeg/extracts remain future work is superseded here.
+
+Run the offline [S3b release procedure](deploy.md#private-files-s3b-offline-conversion).
+Maintain matching source files, learner `file-conversion` receipts, database,
+separate keys and master recovery backups. Derived previews stay rebuildable.
+Receipts are authenticated and encrypted, contain no readable unkeyed content
+hash, and allow conversion/rollback to resume through publication/metadata gaps.
+No key recreation or plaintext runtime fallback is permitted.
+
+Dry-run and verification reports contain counts only; save them privately with
+the release record. A limit returns a partial failure, and a learner filter is
+only a selected inventory. Verify without either before reopening. Missing
+sources/owners/keys, mismatched row fingerprints, unknown objects, corrupted
+frames/receipts, conflicting copies and unresolved stages block. Refer to
+[the handoff](../handoff/second-learner-S3b.md) for the first-inventory ambiguity
+of destroyed magic on untracked legacy images/extracts: resolve against a good
+backup instead of converting guessed legacy bytes.
+
+Backfill imports old saved transcript/notes to encrypted learner-owned storage.
+It inventories old source-disk previews-work, exports-work and livewire-tmp,
+plus storage/app processing/transcription folders. Remaining disposable temp
+files need explicit operator review and `--purge-temp-confirmed` (global only).
+Unknown saved Markdown blocks and remains intact. Neither dry run nor verify
+deletes it. Deleting a temp file is not secure media erasure; S4 must still
+approve retention and a calendar date for removing readable old backups.
+
+Rollback decrypts/fully verifies files offline and restores source-disk preview
+locations and original fingerprints; retain receipts and deploy S2b, keeping its
+text conversion/schema. If interrupted, repeat with the same keys/backups and
+direction. Never reopen a mixed store, destroy keys to fix a read, or overwrite
+a conflicting recoverable source. No production restore or local conversion
+was performed during S3b development.
+
 ## Log of drills (results)
 
 | Date | Drill | Result |

@@ -50,7 +50,7 @@ final class FileTexts
         }
         $disk = Files::disk();
         $textKey = self::key($key);
-        if (($kept = self::kept($file, $textKey)) !== null) {
+        if (($kept = self::kept(Guard::learner($by), $file, $textKey)) !== null) {
             return $kept;
         }
         if ($file->size > self::MAX_BYTES) {
@@ -62,7 +62,7 @@ final class FileTexts
         if ($file->extension === 'pdf' && $file->size > (int) config('vistud.files.inline_pdf_bytes', self::INLINE_PDF_BYTES)) {
             ExtractFileText::dispatch($file->id, $key, Guard::learner($by)->learnerId);
 
-            return self::kept($file, $textKey)
+            return self::kept(Guard::learner($by), $file, $textKey)
                 ?? new FileText($file, $disk->exists("{$textKey}.failed") ? FileText::NONE : FileText::PREPARING);
         }
 
@@ -94,7 +94,7 @@ final class FileTexts
         }
         $pages = array_values(array_map(fn (string $page) => mb_substr(self::tidy($page), 0, self::PAGE_CHARS), $read->pages));
         $captions = count($read->captions) === count($pages) ? array_map(fn (string $caption) => mb_substr(self::tidy($caption), 0, 160), $read->captions) : [];
-        $disk->put($textKey, (string) json_encode(['v' => self::VERSION, 'unit' => $read->unit, 'pages' => $pages, 'captions' => $captions, 'facts' => $read->facts]));
+        PrivateFiles::writeChunks(Guard::learner($by), $textKey, [(string) json_encode(['v' => self::VERSION, 'unit' => $read->unit, 'pages' => $pages, 'captions' => $captions, 'facts' => $read->facts])]);
 
         return new FileText($file, FileText::READY, $pages, $read->unit, $captions, $read->facts);
     }
@@ -112,7 +112,7 @@ final class FileTexts
             $local = self::local($scope, $storageKey);
             $read = self::pdf($local->path.'/input');
             $pages = array_map(fn (string $page) => mb_substr(self::tidy($page), 0, self::PAGE_CHARS), $read->pages);
-            $disk->put($textKey, (string) json_encode(['v' => self::VERSION, 'unit' => $read->unit, 'pages' => $pages, 'captions' => [], 'facts' => $read->facts]));
+            PrivateFiles::writeChunks($scope, $textKey, [(string) json_encode(['v' => self::VERSION, 'unit' => $read->unit, 'pages' => $pages, 'captions' => [], 'facts' => $read->facts])]);
             $disk->delete("{$textKey}.failed");
         } catch (Throwable $e) {
             Log::warning('A file could not be read for the tutor.', ['key' => $storageKey, 'code' => 'parse_failed']);
@@ -128,13 +128,13 @@ final class FileTexts
      *
      * @phpstan-impure
      */
-    private static function kept(FileDetails $file, string $textKey): ?FileText
+    private static function kept(LearnerScope $scope, FileDetails $file, string $textKey): ?FileText
     {
         $disk = Files::disk();
         if (! $disk->exists($textKey)) {
             return null;
         }
-        $kept = json_decode((string) $disk->get($textKey), true);
+        $kept = json_decode(PrivateFiles::bytes($scope, $textKey, PHP_INT_MAX), true);
         if (! is_array($kept) || ($kept['v'] ?? null) !== self::VERSION || ! is_array($kept['pages'] ?? null)) {
             return null;
         }

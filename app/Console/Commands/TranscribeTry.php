@@ -9,19 +9,21 @@ use App\Engine\Jobs\TranscribeClass;
 use App\Engine\Role;
 use App\Identity\PrincipalFactory;
 use App\Models\User;
+use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\AppError;
+use App\Platform\Files\PrivateFiles;
+use App\Platform\Files\TempWorkspace;
+use App\Platform\Ids;
 use App\Study\AudioPieces;
 use App\Study\ClassRecordings;
 use App\Study\ClassSessions;
 use App\Study\Fence;
-use App\Study\Files;
 use App\Study\Modules;
 use App\Study\Workspaces;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\File;
 
 /**
  * A try-out of class transcription before it has a button: one class's recording is cut into pieces (ffmpeg), each
@@ -46,6 +48,7 @@ class TranscribeTry extends Command
         $minutes = max(1, min(20, (int) $this->option('minutes')));
         $model = (string) $this->option('model');
 
+        $temp = new TempWorkspace;
         try {
             $class = $classes->find($by, (string) $this->argument('class'));
             $parts = array_values(array_filter($recordings->forClass($by, $class->id), fn ($p) => $p->finishedAt !== null && $p->deletedAt === null && $p->path !== null));
@@ -58,11 +61,16 @@ class TranscribeTry extends Command
                 .($class->moduleId !== null ? '. Module: '.$modules->find($by, $class->moduleId)->title : '')
                 .'. Class: '.$class->title.'.';
 
-            $work = storage_path('app/transcribe-try/'.$class->id.'-'.now()->format('Ymd-His'));
+            $work = $temp->path;
             [$transcript, $hearCost, $offset] = ['', 0, 0];
             foreach ($parts as $part) {
                 $this->line('Cutting take '.$part->position.' into '.$minutes.'-minute pieces…');
-                $files = $pieces->split(Files::disk()->path($part->path), $minutes * 60, $work.'/take-'.$part->position);
+                $input = PrivateFiles::temporary(Guard::learner($by), (string) $part->path);
+                try {
+                    $files = $pieces->split($input->path.'/input', $minutes * 60, $work.'/take-'.$part->position);
+                } finally {
+                    $input->close();
+                }
                 foreach ($files as $i => $file) {
                     $from = $offset + $i * $minutes * 60;
                     $heading = '## '.self::clock($from).'–'.self::clock($from + $minutes * 60);
@@ -84,19 +92,22 @@ class TranscribeTry extends Command
 
             return self::FAILURE;
         } catch (\RuntimeException $e) {
-            $this->error($e->getMessage().' Install ffmpeg (winget install Gyan.FFmpeg), or set VISTUD_FFMPEG_BINARY to where it is.');
+            $this->error('The recording could not be processed. Install ffmpeg or check private file storage.');
 
             return self::FAILURE;
+        } finally {
+            $temp->close();
         }
 
-        File::ensureDirectoryExists($work);
-        File::put($work.'/transcript.md', "# Transcript: {$class->title}\n\n{$transcript}");
-        File::put($work.'/notes.md', "# Notes: {$class->title}\n\n{$notes}\n");
+        $scope = Guard::learner($by);
+        $work = 'learners/'.$scope->learnerId.'/transcribe-try/'.$class->id.'/'.Ids::new();
+        PrivateFiles::writeChunks($scope, $work.'.transcript.md', ["# Transcript: {$class->title}\n\n{$transcript}"]);
+        PrivateFiles::writeChunks($scope, $work.'.notes.md', ["# Notes: {$class->title}\n\n{$notes}\n"]);
         $this->newLine();
         $this->line($notes);
         $this->newLine();
         $this->comment('Transcript ('.$model.'): '.Choices::dollars($hearCost).' · notes: '.Choices::dollars($notesCost).' · together: '.Choices::dollars($hearCost + $notesCost));
-        $this->comment('Both are in '.$work.' (transcript.md, notes.md). Nothing in ViStud was changed.');
+        $this->comment('Encrypted transcript and notes saved on the private files disk under '.$work.'. No study notes were changed.');
 
         return self::SUCCESS;
     }
