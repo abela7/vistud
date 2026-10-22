@@ -13,7 +13,7 @@ nginx; the data safety rules in [operations.md](operations.md) apply unchanged (
 | Container | Does | Memory cap |
 |---|---|---|
 | `db` | MySQL 8.4. Not reachable from outside the box. | 1 GB |
-| `app` | nginx + PHP-FPM, published only on `127.0.0.1:8081` | 1 GB |
+| `app` | nginx + PHP-FPM, published only on `127.0.0.1:18081` | 1 GB |
 | `worker` | the queue (reads PDFs and Office files, runs the AI jobs, transcribes recordings) | 1.5 GB |
 | `scheduler` | the scheduled jobs | 256 MB |
 
@@ -49,7 +49,7 @@ context /.well-known/acme-challenge {
 
 extprocessor vistud_box {
   type                    proxy
-  address                 127.0.0.1:8081
+  address                 127.0.0.1:18081
   maxConns                100
   pcKeepAliveTimeout      60
   initTimeout             60

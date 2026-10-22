@@ -28,8 +28,8 @@ free_gb=$(df -BG --output=avail "$ROOT" 2> /dev/null | tail -1 | tr -dc '0-9')
 echo "Free memory: ${available_mb} MB. Free disk: ${free_gb:-?} GB."
 [ "$available_mb" -ge 2500 ] || die "Less than 2.5 GB of memory is free right now. Stop and ask for help before going on."
 [ "${free_gb:-0}" -ge 20 ] || die "Less than 20 GB of disk is free."
-if ss -ltn 2> /dev/null | awk '{print $4}' | grep -q '[:.]8081$'; then
-  docker ps --format '{{.Names}}' | grep -q '^vistud-app-1$' || die "Port 8081 is already used by something else."
+if ss -ltn 2> /dev/null | awk '{print $4}' | grep -q '[:.]18081$'; then
+  docker ps --format '{{.Names}}' | grep -q '^vistud-app-1$' || die "Port 18081 is already used by something else."
 fi
 
 say "Making the folders (data stays outside the code)"
@@ -141,7 +141,7 @@ vistud-compose up -d --wait
 
 cat <<MSG
 
-== Done. ViStud is running inside its box on this server, on 127.0.0.1:8081 only (not on the internet yet).
+== Done. ViStud is running inside its box on this server, on 127.0.0.1:18081 only (not on the internet yet).
 
 Next, in this order:
   1. Connect the website address to the box (CyberPanel step in docs/development/docker-deploy.md).
