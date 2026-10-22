@@ -135,10 +135,15 @@
         </ol>
         <form wire:submit="saveShared" novalidate class="space-y-4">
             <x-field name="sharedKey" label="Key for students" type="password" wire:model="sharedKey" autocomplete="off" :revealable="true" placeholder="sk-or-…" :hint="$status['shared_key_hint'] !== null ? 'Saved, ending '.$status['shared_key_hint'].'. Leave empty to keep it.' : 'Kept encrypted. Not the admin key above.'" />
-            <div class="grid gap-4 sm:grid-cols-2">
-                <x-field name="sharedModel" label="The one model" wire:model="sharedModel" list="engine-default-models" autocomplete="off" placeholder="google/gemini-2.5-flash" hint="Every student on the shared key uses only this." />
-                <x-field name="sharedDaily" label="Daily limit per student, in dollars" wire:model="sharedDaily" inputmode="decimal" autocomplete="off" placeholder="0.10" hint="Counted in each student's own day." />
+            <div class="space-y-1.5">
+                <label for="field-sharedModels" class="field-label">Models students can choose</label>
+                <textarea id="field-sharedModels" class="input" rows="4" wire:model="sharedModels" autocomplete="off" spellcheck="false" placeholder="google/gemini-2.5-flash-lite" aria-describedby="field-sharedModels-hint"></textarea>
+                <p id="field-sharedModels-hint" class="text-sm text-fg-muted">One per line; the first is the one they start with. Only free or very cheap models are accepted (up to ${{ number_format(\App\Engine\Setup::MAX_SHARED_PRICE, 2) }} a million tokens).</p>
+                @error('sharedModels')
+                    <p id="field-sharedModels-error" class="field-error"><x-icon name="circle-alert" class="mt-0.5 size-4" /><span>{{ $message }}</span></p>
+                @enderror
             </div>
+            <x-field name="sharedDaily" label="Daily limit per student, in dollars" wire:model="sharedDaily" inputmode="decimal" autocomplete="off" placeholder="0.10" hint="Counted in each student's own day." />
             <x-checkbox name="sharedOn" label="Let students without a key use it" wire:model="sharedOn" />
             <div class="flex flex-wrap gap-2">
                 <x-button type="submit" variant="primary" icon="check" wire:loading.attr="aria-busy" wire:target="saveShared" busy-label="Saving…">Save</x-button>
@@ -147,5 +152,23 @@
                 @endif
             </div>
         </form>
+        @if ($status['shared_key_hint'] !== null)
+            <details class="text-sm" @if ($cheapModels !== []) open @endif>
+                <summary class="cursor-pointer text-fg-muted">Free and very cheap models this key can use ({{ count($cheapModels) }})</summary>
+                @if ($cheapModels === [])
+                    <p class="pt-3 text-fg-muted">The list couldn't be loaded with the students' key. Check the key at OpenRouter, then reload this page.</p>
+                @else
+                    <p class="pt-3 text-fg-muted">Cheapest first. Press Add, then Save. Some free models only answer students who allow their chats to be used for training (a choice in their AI settings).</p>
+                    <ul class="max-h-80 space-y-1 overflow-y-auto pt-2" role="list">
+                        @foreach ($cheapModels as $cheap)
+                            <li class="flex flex-wrap items-center justify-between gap-2">
+                                <span class="min-w-0"><span class="font-medium text-fg">{{ $cheap->name }}</span> <code class="break-all">{{ $cheap->id }}</code> · {{ $cheap->priceWords() }}</span>
+                                <x-button size="sm" icon="plus" wire:click="addShared('{{ $cheap->id }}')">Add</x-button>
+                            </li>
+                        @endforeach
+                    </ul>
+                @endif
+            </details>
+        @endif
     </section>
 </div>

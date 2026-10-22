@@ -5,9 +5,9 @@ namespace App\Engine;
 use Closure;
 
 /**
- * Every call made with the shared key for students runs the one model the admin chose, with nothing to fall back
- * to (the owner's ask, 2026-10-22). The screens already offer only that model; this holds at the service's door,
- * so a chat that names another model, or a model picked before, still can't run on the shared key.
+ * Every call made with the shared key for students runs one of the free or very cheap models the admin chose, the
+ * default when it names another (the owner's ask, 2026-10-22). The screens already offer only those; this holds at
+ * the service's door, so a chat that names another model, or one picked before, still can't run on the shared key.
  */
 final class SharedKeyPin implements Engine
 {
@@ -35,6 +35,8 @@ final class SharedKeyPin implements Engine
             return $request;
         }
 
-        return new Request($shared['model'], $request->system, $request->messages, $request->tools, [], $request->maxTokens, $request->noTraining, $request->key);
+        $model = in_array($request->model, $shared['models'], true) ? $request->model : $shared['model'];
+
+        return new Request($model, $request->system, $request->messages, $request->tools, array_values(array_intersect($request->fallbacks, $shared['models'])), $request->maxTokens, $request->noTraining, $request->key);
     }
 }

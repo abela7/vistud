@@ -41,18 +41,20 @@ final class Settings
         $key = $this->decrypt(Guard::learner($by), $row);
         $rawFavorites = $row->favorite_models ?? null;
         $favoriteModels = is_string($rawFavorites) ? (json_decode($rawFavorites, true) ?: []) : (is_array($rawFavorites) ? $rawFavorites : []);
-        // On the shared key, every role is its one model and there is nothing else to switch to.
+        // On the shared key, each role is the student's choice when it is one of the shared key's models, else its
+        // default, and those models are all there is to switch to in a chat.
         $shared = $key === null ? $this->shared($by) : null;
-        $pinned = $shared['model'] ?? null;
-        if ($pinned !== null) {
-            $favoriteModels = [$pinned];
+        $allowed = $shared['models'] ?? null;
+        $pick = fn (?string $chosen, string $fallback) => $allowed === null ? (string) ($chosen ?? $fallback) : (in_array($chosen, $allowed, true) ? $chosen : $allowed[0]);
+        if ($allowed !== null) {
+            $favoriteModels = $allowed;
         }
 
         return new Choices(
-            tutorModel: $pinned ?? (string) ($row->tutor_model ?? $defaults['tutor']),
-            readerModel: $pinned ?? (string) ($row->reader_model ?? $defaults['reader']),
-            helperModel: $pinned ?? (string) ($row->helper_model ?? $defaults['helper']),
-            fallbackModel: $pinned !== null ? '' : (string) ($row->fallback_model ?? ''),
+            tutorModel: $pick($row->tutor_model ?? null, $defaults['tutor']),
+            readerModel: $pick($row->reader_model ?? null, $defaults['reader']),
+            helperModel: $pick($row->helper_model ?? null, $defaults['helper']),
+            fallbackModel: $allowed !== null ? '' : (string) ($row->fallback_model ?? ''),
             sessionCapMicros: (int) ($row->session_cap_micros ?? self::DEFAULT_SESSION_CAP),
             monthCapMicros: (int) ($row->month_cap_micros ?? self::DEFAULT_MONTH_CAP),
             noTraining: $row === null || (bool) $row->no_training,

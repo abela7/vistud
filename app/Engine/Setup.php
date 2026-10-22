@@ -31,7 +31,7 @@ final class Setup
 
     public const HELPER = 'engine.helper_model';
 
-    /** The shared key for students without their own (the owner's ask, 2026-10-22): on or off, its own key, one model, a daily limit. */
+    /** The shared key for students without their own (the owner's ask, 2026-10-22): on or off, its own key, the free and very cheap models students may switch between, a daily limit. */
     public const SHARED_ON = 'engine.shared_on';
 
     public const SHARED_KEY = 'engine.shared_key';
@@ -43,6 +43,11 @@ final class Setup
     public const DEFAULT_SHARED_DAILY = 100_000;
 
     public const MAX_SHARED_DAILY_DOLLARS = 10;
+
+    /** The most a model on the shared key may cost, in dollars a million tokens, in and out: free and very cheap only. */
+    public const MAX_SHARED_PRICE = 1.0;
+
+    public const MAX_SHARED_MODELS = 12;
 
     private const MODEL_ID = '#^[a-z0-9][a-z0-9._:/-]{0,118}$#i';
 
@@ -92,11 +97,11 @@ final class Setup
     }
 
     /**
-     * The shared key a student without their own may use, with the one model it runs and how much a student may
-     * spend on it a day (millionths of a dollar); null while it is off or not fully set up. It is never the admin
-     * key: a student on it can't reach the admin key's models or limits.
+     * The shared key a student without their own may use, with the models it may run (the first is the default)
+     * and how much a student may spend on it a day (millionths of a dollar); null while it is off or not fully set
+     * up. It is never the admin key: a student on it can't reach the admin key's models or limits.
      *
-     * @return array{key: string, model: string, daily_micros: int}|null
+     * @return array{key: string, model: string, models: list<string>, daily_micros: int}|null
      */
     public function shared(): ?array
     {
@@ -105,12 +110,21 @@ final class Setup
             return null;
         }
         $key = $this->sharedKey();
-        $model = (string) ($rows[self::SHARED_MODEL]->value ?? '');
+        $models = $this->sharedModels();
         $daily = (int) ($rows[self::SHARED_DAILY]->value ?? 0);
 
-        return $key !== '' && $model !== '' && $daily > 0 && $key !== $this->key()
-            ? ['key' => $key, 'model' => $model, 'daily_micros' => $daily]
+        return $key !== '' && $models !== [] && $daily > 0 && $key !== $this->key()
+            ? ['key' => $key, 'model' => $models[0], 'models' => $models, 'daily_micros' => $daily]
             : null;
+    }
+
+    /** @return list<string> the models saved for the shared key, the default first (one id on its own, from before lists) */
+    private function sharedModels(): array
+    {
+        $value = (string) ($this->rows()[self::SHARED_MODEL]->value ?? '');
+        $list = str_starts_with($value, '[') ? json_decode($value, true) : [$value];
+
+        return array_values(array_filter(is_array($list) ? $list : [], fn ($id) => is_string($id) && $id !== ''));
     }
 
     private function sharedKey(): string
@@ -126,10 +140,34 @@ final class Setup
         }
     }
 
+    /**
+     * The free and very cheap models the students' key can use, cheapest first: what the admin may choose from.
+     *
+     * @return list<Model>
+     */
+    public function cheapModels(): array
+    {
+        $key = $this->sharedKey();
+        if ($key === '') {
+            return [];
+        }
+        $cheap = array_values(array_filter(app(Models::class)->all(key: $key), fn (Model $m) => self::cheap($m)));
+        usort($cheap, fn (Model $a, Model $b) => [$a->inPerMillion + $a->outPerMillion, $a->id] <=> [$b->inPerMillion + $b->outPerMillion, $b->id]);
+
+        return $cheap;
+    }
+
+    /** Free, or at most MAX_SHARED_PRICE a million tokens both in and out. */
+    public static function cheap(Model $model): bool
+    {
+        return $model->inPerMillion >= 0 && $model->outPerMillion >= 0
+            && $model->inPerMillion <= self::MAX_SHARED_PRICE && $model->outPerMillion <= self::MAX_SHARED_PRICE;
+    }
+
     // ---------- The admin's page ----------
 
     /**
-     * @return array{key_set: bool, key_hint: ?string, key_from_env: bool, key_unreadable: bool, key_updated_at: ?string, url: string, tutor_model: string, reader_model: string, helper_model: string, shared_on: bool, shared_key_hint: ?string, shared_model: string, shared_daily: string, shared_working: bool}
+     * @return array{key_set: bool, key_hint: ?string, key_from_env: bool, key_unreadable: bool, key_updated_at: ?string, url: string, tutor_model: string, reader_model: string, helper_model: string, shared_on: bool, shared_key_hint: ?string, shared_models: list<string>, shared_daily: string, shared_working: bool}
      */
     public function status(Principal $by): array
     {
@@ -151,24 +189,26 @@ final class Setup
             'helper_model' => $defaults['helper'],
             'shared_on' => ($this->rows()[self::SHARED_ON]->value ?? null) === '1',
             'shared_key_hint' => ($shared = $this->sharedKey()) !== '' ? '…'.substr($shared, -4) : null,
-            'shared_model' => (string) ($this->rows()[self::SHARED_MODEL]->value ?? ''),
+            'shared_models' => $this->sharedModels(),
             'shared_daily' => Choices::dollars((int) ($this->rows()[self::SHARED_DAILY]->value ?? self::DEFAULT_SHARED_DAILY)),
             'shared_working' => $this->shared() !== null,
         ];
     }
 
     /**
-     * The shared key for students: on or off, its own key (empty keeps the saved one), the one model and the daily
+     * The shared key for students: on or off, its own key (empty keeps the saved one), the models students may use
+     * (one per line or comma, the first is the default; each must be free or very cheap at the service) and the daily
      * limit per student in dollars. It can only be turned on with all three, and never with the admin key.
      *
-     * @param  array<string, mixed>  $input  on, key, model, daily
+     * @param  array<string, mixed>  $input  on, key, models (or model), daily
      */
     public function setShared(Principal $by, array $input): void
     {
         Guard::protectedAdmin($by);
         $on = filter_var($input['on'] ?? false, FILTER_VALIDATE_BOOL);
         $key = is_string($input['key'] ?? null) ? trim($input['key']) : '';
-        $model = is_string($input['model'] ?? null) ? trim($input['model']) : '';
+        $given = $input['models'] ?? ($input['model'] ?? '');
+        $models = array_values(array_unique(array_filter(array_map(fn ($id) => trim((string) $id), is_array($given) ? $given : (preg_split('/[\s,]+/', (string) $given) ?: [])), fn (string $id) => $id !== '')));
         $daily = is_string($input['daily'] ?? null) ? trim(str_replace(['$', ','], '', $input['daily'])) : ($input['daily'] ?? '');
         $errors = [];
         if ($key !== '' && preg_match('/^\S{16,300}$/', $key) !== 1) {
@@ -176,29 +216,66 @@ final class Setup
         } elseif ($key !== '' && $key === $this->key()) {
             $errors['key'] = 'Use a separate key for students, not the admin key, so you can give it its own spending limit.';
         }
-        if ($model !== '' && (preg_match(self::MODEL_ID, $model) !== 1 || str_ends_with($model, ':batch'))) {
-            $errors['model'] = 'Enter the model\'s id as the service names it, like "google/gemini-2.5-flash".';
+        foreach ($models as $model) {
+            if (preg_match(self::MODEL_ID, $model) !== 1 || str_ends_with($model, ':batch')) {
+                $errors['models'] = '"'.mb_substr($model, 0, 60).'" is not a model\'s id. Write ids as the service names them, like "google/gemini-2.5-flash-lite".';
+            }
+        }
+        if (count($models) > self::MAX_SHARED_MODELS) {
+            $errors['models'] = 'Choose at most '.self::MAX_SHARED_MODELS.' models.';
         }
         if (! is_numeric($daily) || (float) $daily <= 0 || (float) $daily > self::MAX_SHARED_DAILY_DOLLARS) {
             $errors['daily'] = 'Enter an amount in dollars, more than 0 and up to '.self::MAX_SHARED_DAILY_DOLLARS.'.';
         }
-        if ($on && $key === '' && $this->sharedKey() === '') {
+        $useKey = $key !== '' ? $key : $this->sharedKey();
+        if ($on && $useKey === '') {
             $errors['key'] = 'Paste a key for students first.';
         }
-        if ($on && $model === '') {
-            $errors['model'] = 'Choose the one model students will use.';
+        if ($on && $models === []) {
+            $errors['models'] = 'Choose at least one model students can use.';
+        }
+        if (! isset($errors['models']) && ! isset($errors['key']) && $models !== [] && $useKey !== '') {
+            $errors += $this->tooDear($models, $useKey);
         }
         Input::refuse($errors);
 
         if ($key !== '') {
             $this->put(self::SHARED_KEY, Crypt::encryptString($key), true, $by);
         }
-        $this->put(self::SHARED_MODEL, $model ?: null, false, $by);
+        $this->put(self::SHARED_MODEL, $models === [] ? null : json_encode($models), false, $by);
         $this->put(self::SHARED_DAILY, (string) (int) round((float) $daily * 1_000_000), false, $by);
         $this->put(self::SHARED_ON, $on ? '1' : '0', false, $by);
         $this->audit->record($by, AuditAction::ENGINE_SHARED_CHANGED, 'engine', 'shared', array_filter([
-            'on' => $on, 'daily_micros' => (int) round((float) $daily * 1_000_000), 'hint' => $key !== '' ? substr($key, -4) : null,
+            'on' => $on, 'models' => count($models), 'daily_micros' => (int) round((float) $daily * 1_000_000), 'hint' => $key !== '' ? substr($key, -4) : null,
         ], fn ($v) => $v !== null));
+    }
+
+    /**
+     * Each model must be offered to the students' key and be free or very cheap there; the prices are read from the
+     * service, so a typed id is never trusted.
+     *
+     * @param  list<string>  $models
+     * @return array<string, string>
+     */
+    private function tooDear(array $models, string $key): array
+    {
+        $offered = [];
+        foreach (app(Models::class)->all(fresh: true, key: $key) as $model) {
+            $offered[$model->id] = $model;
+        }
+        if ($offered === []) {
+            return ['models' => 'The list of models couldn\'t be loaded with the students\' key, so the prices can\'t be checked. Check the key, then try again.'];
+        }
+        foreach ($models as $id) {
+            if (! isset($offered[$id])) {
+                return ['models' => '"'.$id.'" isn\'t offered to the students\' key. Copy an id from the list of cheap models below.'];
+            }
+            if (! self::cheap($offered[$id])) {
+                return ['models' => '"'.$id.'" costs '.$offered[$id]->priceWords().': too much for the shared key. Choose free or very cheap models (up to $'.number_format(self::MAX_SHARED_PRICE, 2).' a million tokens).'];
+            }
+        }
+
+        return [];
     }
 
     /** Removes the students' key, which turns the shared key off. */

@@ -27,7 +27,7 @@
         </x-slot:status>
 
         @if ($keyState === 'shared' && $shared !== null)
-            <p class="acc-note">You're using the shared key: {{ $shared['model'] }}, up to {{ $choices::dollars($shared['daily_micros']) }} a day. Add your own key to choose any model, with no daily limit.</p>
+            <p class="acc-note">You're using the shared key, up to {{ $choices::dollars($shared['daily_micros']) }} a day, with {{ count($shared['models']) === 1 ? 'one model' : count($shared['models']).' models to choose from' }}. Add your own key to choose any model, with no daily limit.</p>
         @elseif ($keyState === 'shared')
             <p class="acc-note">The owner's key is in use. Paste your own to pay yourself.</p>
         @endif
@@ -178,7 +178,7 @@
         <x-panel id="models" title="Your models" icon="brain">
             <x-slot:status>{{ $tutorModel !== '' ? 'Tutor: '.$tutorModel : 'Choose a tutor' }}</x-slot:status>
             @if ($shared !== null)
-                <p class="acc-note">On the shared key every role uses {{ $shared['model'] }}. What you choose here applies once you add your own key.</p>
+                <p class="acc-note">On the shared key you can choose: {{ implode(', ', $shared['models']) }}. Another model is replaced by {{ $shared['model'] }}.</p>
             @endif
             @if ($keyState !== 'none' && $models === [])
                 <p class="acc-note">The list didn't load. Type a model's id, or press <em>Try it</em> to see why.</p>

@@ -248,6 +248,11 @@ final class EngineSettings extends Component
         $ownKey = $this->settings->key($by);
         $keyState = $ownKey !== null ? 'own' : ($this->settings->keyAvailable($by) ? 'shared' : 'none');
         $models = $keyState === 'none' ? [] : $this->models->all(key: $this->settings->credential($by));
+        // On the shared key, only its models are offered.
+        $shared = $this->settings->shared($by);
+        if ($shared !== null) {
+            $models = array_values(array_filter($models, fn ($m) => in_array($m->id, $shared['models'], true)));
+        }
         $byId = [];
         foreach ($models as $model) {
             $byId[$model->id] = $model;
@@ -278,7 +283,7 @@ final class EngineSettings extends Component
             'cachedShare' => $this->usage->cachedShare($by),
             'keyState' => $keyState,
             // The shared key for students, when this student is on it: its one model and daily limit.
-            'shared' => $this->settings->shared($by),
+            'shared' => $shared,
             'models' => $models,
             'setupUrl' => $by->hasRole(Role::Admin) ? route('admin.engine') : null,
             'tutorWords' => $words($this->tutorModel),

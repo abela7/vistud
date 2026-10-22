@@ -30,7 +30,7 @@ use Tests\TestCase;
 
 /**
  * The shared key for students without their own (the owner's ask, 2026-10-22): off unless an admin turns it on with
- * its own key, one model and a daily limit; a student on it runs only that model, up to the limit, and never the
+ * its own key, free or very cheap models and a daily limit; a student on it runs only those models, up to the limit, and never the
  * admin key; their own key always wins.
  */
 class SharedStudentKeyTest extends TestCase
@@ -59,7 +59,9 @@ class SharedStudentKeyTest extends TestCase
         $this->assertNull(app(Setup::class)->shared());
 
         $this->turnOn($admin);
-        $this->assertSame(['key' => $this->studentsKey, 'model' => 'fake/quick', 'daily_micros' => 100_000], app(Setup::class)->shared());
+        $this->assertSame(['key' => $this->studentsKey, 'model' => 'fake/quick', 'models' => ['fake/quick', 'fake/plain'], 'daily_micros' => 100_000], app(Setup::class)->shared());
+        // The cheap ones the key can use, cheapest first; the dear one is not offered.
+        $this->assertSame(['fake/plain', 'fake/quick'], array_map(fn ($m) => $m->id, app(Setup::class)->cheapModels()));
         $raw = DB::table('platform_settings')->where('key', Setup::SHARED_KEY)->value('value');
         $this->assertStringNotContainsString($this->studentsKey, $raw);
         $this->assertSame($this->studentsKey, Crypt::decryptString($raw));
@@ -67,7 +69,7 @@ class SharedStudentKeyTest extends TestCase
         $this->assertStringNotContainsString($this->studentsKey, (string) $audit);
 
         // Turned off: the key is kept, students get nothing again.
-        app(Setup::class)->setShared($admin, ['on' => false, 'model' => 'fake/quick', 'daily' => '0.10']);
+        app(Setup::class)->setShared($admin, ['on' => false, 'models' => 'fake/quick', 'daily' => '0.10']);
         $this->assertNull(app(Setup::class)->shared());
         $this->assertSame('', app(Settings::class)->credential($student));
         $this->assertSame('…'.substr($this->studentsKey, -4), app(Setup::class)->status($admin)['shared_key_hint']);
@@ -76,16 +78,19 @@ class SharedStudentKeyTest extends TestCase
         $this->assertSame([false, null], [app(Setup::class)->status($admin)['shared_on'], app(Setup::class)->status($admin)['shared_key_hint']]);
     }
 
-    public function test_the_admin_key_a_missing_model_or_a_bad_limit_is_refused_and_a_password_check_is_needed(): void
+    public function test_the_admin_key_a_dear_or_unknown_model_or_a_bad_limit_is_refused_and_a_password_check_is_needed(): void
     {
         $admin = $this->principal($this->admin());
         foreach ([
-            [['on' => true, 'key' => $this->adminKey, 'model' => 'fake/quick', 'daily' => '0.10'], 'key'],
-            [['on' => true, 'model' => 'fake/quick', 'daily' => '0.10'], 'key'],
-            [['on' => true, 'key' => $this->studentsKey, 'model' => '', 'daily' => '0.10'], 'model'],
-            [['on' => true, 'key' => $this->studentsKey, 'model' => 'fake/quick', 'daily' => '0'], 'daily'],
-            [['on' => true, 'key' => $this->studentsKey, 'model' => 'fake/quick', 'daily' => '50'], 'daily'],
-            [['on' => true, 'key' => $this->studentsKey, 'model' => 'fake/quick:batch', 'daily' => '0.10'], 'model'],
+            [['on' => true, 'key' => $this->adminKey, 'models' => 'fake/quick', 'daily' => '0.10'], 'key'],
+            [['on' => true, 'models' => 'fake/quick', 'daily' => '0.10'], 'key'],
+            [['on' => true, 'key' => $this->studentsKey, 'models' => '', 'daily' => '0.10'], 'models'],
+            [['on' => true, 'key' => $this->studentsKey, 'models' => 'fake/quick', 'daily' => '0'], 'daily'],
+            [['on' => true, 'key' => $this->studentsKey, 'models' => 'fake/quick', 'daily' => '50'], 'daily'],
+            [['on' => true, 'key' => $this->studentsKey, 'models' => 'fake/quick:batch', 'daily' => '0.10'], 'models'],
+            // $1 in and $5 out a million tokens: too dear for the shared key.
+            [['on' => true, 'key' => $this->studentsKey, 'models' => "fake/quick\nfake/tutor", 'daily' => '0.10'], 'models'],
+            [['on' => true, 'key' => $this->studentsKey, 'models' => 'nobody/offers-this', 'daily' => '0.10'], 'models'],
         ] as [$input, $field]) {
             try {
                 app(Setup::class)->setShared($admin, $input);
@@ -97,21 +102,22 @@ class SharedStudentKeyTest extends TestCase
         $this->assertNull(app(Setup::class)->shared());
 
         $this->expectException(PasswordConfirmationRequired::class);
-        app(Setup::class)->setShared($this->principal($this->admin(), confirmed: false), ['on' => true, 'key' => $this->studentsKey, 'model' => 'fake/quick', 'daily' => '0.10']);
+        app(Setup::class)->setShared($this->principal($this->admin(), confirmed: false), ['on' => true, 'key' => $this->studentsKey, 'models' => 'fake/quick', 'daily' => '0.10']);
     }
 
-    public function test_a_student_without_a_key_gets_the_shared_key_and_its_one_model_and_their_own_key_wins(): void
+    public function test_a_student_without_a_key_gets_the_shared_key_and_chooses_among_its_models_and_their_own_key_wins(): void
     {
         $admin = $this->principal($this->admin());
         $this->turnOn($admin);
         $settings = app(Settings::class);
         $student = $this->principal($this->student());
-        $settings->set($student, ['tutor_model' => 'fake/tutor', 'fallback_model' => 'fake/plain', 'favorite_models' => ['fake/tutor'], 'consent' => true]);
+        $settings->set($student, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/plain', 'fallback_model' => 'fake/plain', 'favorite_models' => ['fake/tutor'], 'consent' => true]);
 
         $this->assertSame($this->studentsKey, $settings->credential($student));
         $choices = $settings->get($student);
-        $this->assertSame(['fake/quick', 'fake/quick', 'fake/quick', ''], [$choices->tutorModel, $choices->readerModel, $choices->helperModel, $choices->fallbackModel]);
-        $this->assertSame(['fake/quick'], $choices->chatModels());
+        // fake/tutor isn't one of the shared key's models: the default instead. fake/plain is, so it stays.
+        $this->assertSame(['fake/quick', 'fake/plain', 'fake/quick', ''], [$choices->tutorModel, $choices->readerModel, $choices->helperModel, $choices->fallbackModel]);
+        $this->assertSame(['fake/quick', 'fake/plain'], $choices->chatModels());
         $this->assertSame([$this->studentsKey, 'fake/quick'], array_slice($settings->ready($student, Role::Tutor), 1));
         // Recordings are long and costly: not on the shared key.
         $this->assertNull($settings->audioModel($student));
@@ -131,17 +137,18 @@ class SharedStudentKeyTest extends TestCase
         $this->assertSame($own, $settings->ready($student, Role::Tutor)[1]);
     }
 
-    public function test_a_call_on_the_shared_key_runs_only_its_model_whatever_the_chat_asked_for(): void
+    public function test_a_call_on_the_shared_key_runs_only_its_models_whatever_the_chat_asked_for(): void
     {
         $this->turnOn($this->principal($this->admin()));
         $pin = new SharedKeyPin($inner = new Fake, app(Setup::class));
 
-        $pin->reply(new Request('fake/tutor', 'S', [['role' => 'user', 'content' => 'Hi']], fallbacks: ['fake/plain'], key: $this->studentsKey));
+        $pin->reply(new Request('fake/tutor', 'S', [['role' => 'user', 'content' => 'Hi']], fallbacks: ['fake/plain', 'fake/tutor'], key: $this->studentsKey));
         $pin->stream(new Request('anthropic/claude-opus', 'S', [['role' => 'user', 'content' => 'Hi']], key: $this->studentsKey), fn () => null);
+        $pin->reply(new Request('fake/plain', 'S', [['role' => 'user', 'content' => 'Hi']], key: $this->studentsKey));
         $pin->reply(new Request('fake/tutor', 'S', [['role' => 'user', 'content' => 'Hi']], fallbacks: ['fake/plain'], key: $this->adminKey));
 
-        $this->assertSame(['fake/quick', 'fake/quick', 'fake/tutor'], array_map(fn (Request $r) => $r->model, $inner->requests));
-        $this->assertSame([[], [], ['fake/plain']], array_map(fn (Request $r) => $r->fallbacks, $inner->requests));
+        $this->assertSame(['fake/quick', 'fake/quick', 'fake/plain', 'fake/tutor'], array_map(fn (Request $r) => $r->model, $inner->requests));
+        $this->assertSame([['fake/plain'], [], [], ['fake/plain']], array_map(fn (Request $r) => $r->fallbacks, $inner->requests));
         $this->assertInstanceOf(SharedKeyPin::class, (function () {
             $this->app->forgetInstance(Engine::class);
 
@@ -195,19 +202,24 @@ class SharedStudentKeyTest extends TestCase
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
         Livewire::test(EngineSetup::class)
             ->assertSee('Students without a key')
-            ->set('sharedOn', true)->set('sharedModel', 'fake/quick')->set('sharedDaily', '0.25')->call('saveShared')->assertHasErrors(['sharedKey'])
-            ->set('sharedKey', $this->studentsKey)->call('saveShared')->assertHasNoErrors()
-            ->assertSet('sharedKey', '')->assertSee('Students without a key now use the shared one.')->assertSee('…'.substr($this->studentsKey, -4));
+            ->set('sharedOn', true)->set('sharedModels', 'fake/quick')->set('sharedDaily', '0.25')->call('saveShared')->assertHasErrors(['sharedKey'])
+            ->set('sharedKey', $this->studentsKey)->set('sharedModels', "fake/quick\nfake/tutor")->call('saveShared')->assertHasErrors(['sharedModels'])
+            ->set('sharedModels', 'fake/quick')->call('saveShared')->assertHasNoErrors()
+            ->assertSet('sharedKey', '')->assertSee('Students without a key now use the shared one.')->assertSee('…'.substr($this->studentsKey, -4))
+            ->assertSee('Free and very cheap models this key can use (2)')->assertSee('fake/plain')
+            ->call('addShared', 'fake/plain')->assertSet('sharedModels', "fake/quick\nfake/plain")->call('saveShared')->assertHasNoErrors();
+        $this->assertSame(['fake/quick', 'fake/plain'], app(Setup::class)->shared()['models']);
         $this->assertSame(250_000, app(Setup::class)->shared()['daily_micros']);
 
         $student = $this->student();
         $this->actingAs($student);
-        Livewire::test(EngineSettings::class)->assertSee('You\'re using the shared key: fake/quick, up to $0.25 a day.', false);
+        Livewire::test(EngineSettings::class)->assertSee('You\'re using the shared key, up to $0.25 a day, with 2 models to choose from.', false)
+            ->assertSee('On the shared key you can choose: fake/quick, fake/plain.', false);
     }
 
     private function turnOn($admin): void
     {
-        app(Setup::class)->setShared($admin, ['on' => true, 'key' => $this->studentsKey, 'model' => 'fake/quick', 'daily' => '0.10']);
+        app(Setup::class)->setShared($admin, ['on' => true, 'key' => $this->studentsKey, 'models' => "fake/quick\nfake/plain", 'daily' => '0.10']);
     }
 
     private function spend($student, int $micros): void

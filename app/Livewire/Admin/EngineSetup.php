@@ -37,7 +37,8 @@ final class EngineSetup extends Component
 
     public string $sharedKey = '';
 
-    public string $sharedModel = '';
+    /** One model id a line; the first is the default. */
+    public string $sharedModels = '';
 
     public string $sharedDaily = '';
 
@@ -71,10 +72,10 @@ final class EngineSetup extends Component
     {
         $this->resetErrorBag();
         try {
-            $this->setup->setShared($this->principal(), ['on' => $this->sharedOn, 'key' => $this->sharedKey, 'model' => $this->sharedModel, 'daily' => $this->sharedDaily]);
+            $this->setup->setShared($this->principal(), ['on' => $this->sharedOn, 'key' => $this->sharedKey, 'models' => $this->sharedModels, 'daily' => $this->sharedDaily]);
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
-                $this->addError(['key' => 'sharedKey', 'model' => 'sharedModel', 'daily' => 'sharedDaily'][$field] ?? $field, $messages[0]);
+                $this->addError(['key' => 'sharedKey', 'models' => 'sharedModels', 'daily' => 'sharedDaily'][$field] ?? $field, $messages[0]);
             }
 
             return;
@@ -101,10 +102,20 @@ final class EngineSetup extends Component
         $this->notify('The key for students is removed, and the shared key is off.');
     }
 
+    /** Adds a model from the list of cheap ones to the box; Save keeps it. */
+    public function addShared(string $id): void
+    {
+        $ids = array_values(array_filter(array_map('trim', explode("\n", $this->sharedModels))));
+        if (! in_array($id, $ids, true)) {
+            $ids[] = $id;
+        }
+        $this->sharedModels = implode("\n", $ids);
+    }
+
     /** @param array<string, mixed> $status */
     private function loadShared(array $status): void
     {
-        [$this->sharedOn, $this->sharedModel, $this->sharedDaily] = [(bool) $status['shared_on'], (string) $status['shared_model'], ltrim((string) $status['shared_daily'], '$')];
+        [$this->sharedOn, $this->sharedModels, $this->sharedDaily] = [(bool) $status['shared_on'], implode("\n", $status['shared_models']), ltrim((string) $status['shared_daily'], '$')];
     }
 
     /** Keeps the key and tries it at once, so the admin sees it work (or why it doesn't). */
@@ -184,6 +195,8 @@ final class EngineSetup extends Component
         return view('livewire.admin.engine-setup', [
             'status' => $status,
             'models' => $status['key_set'] ? $this->models->all(key: $this->setup->key()) : [],
+            // The free and very cheap models the students' key can use, to pick from.
+            'cheapModels' => $status['shared_key_hint'] !== null ? $this->setup->cheapModels() : [],
         ]);
     }
 
