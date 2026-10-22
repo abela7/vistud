@@ -2,6 +2,7 @@
 
 namespace App\Engine\Vistud;
 
+use App\Engine\Context\StudentName;
 use App\Engine\Settings;
 use App\Platform\Access\Guard;
 use App\Platform\Access\Principal;
@@ -98,6 +99,8 @@ final class Overview
     {
         $me = trim($this->instructions->get($by, 'me'));
         $lines = ['## About them', 'In their words: '.($me !== '' ? $me : 'nothing written yet.')];
+        // Last: their first name, how to use it, and to ask who they are when no one knows (ViStud AI has the remember tool).
+        $who = StudentName::lines(StudentName::of($by), $this->memories->enabled($by));
         $language = $this->settings->get($by)->language;
         if ($language !== null) {
             $lines[] = "They chose to be helped in {$language}: write in it.";
@@ -105,7 +108,7 @@ final class Overview
         if (! $this->memories->enabled($by)) {
             $lines[] = 'They turned off remembering things about them: keep nothing with remember.';
 
-            return implode("\n", $lines);
+            return implode("\n", [...$lines, ...$who]);
         }
         $everywhere = [];
         $perCourse = [];
@@ -121,7 +124,7 @@ final class Overview
             $lines[] = 'Remembered for one course (the memories tool lists them): '.implode(' · ', array_map(fn (string $id, int $n) => ($names[$id] ?? 'a removed course')." {$n}", array_keys($perCourse), $perCourse)).'.';
         }
 
-        return implode("\n", $lines);
+        return implode("\n", [...$lines, ...$who]);
     }
 
     /**

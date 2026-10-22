@@ -2,6 +2,7 @@
 
 namespace App\Study;
 
+use App\Engine\Context\StudentName;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use Carbon\CarbonImmutable;
@@ -78,7 +79,8 @@ final class Briefings
         $add(0, 0, null, [Tutoring::prompt($session->tutoring), "---\n\n# Briefing"], whole: true);
         // In their words, then what their tutors remember about them (kept short, so never cut).
         $remembered = $this->memories->lines($by, $workspace->id);
-        $add(10, 0, 'About the student', [$instructions['me'] !== '' ? $instructions['me'] : 'Nothing written yet.', ...($remembered === [] ? [] : ['### What their tutors remember about them', ...array_map(fn (string $line) => "- {$line}", $remembered)])], whole: true);
+        $name = StudentName::of($by);
+        $add(10, 0, 'About the student', [...($name !== null ? ["Their name: {$name}. Call them by it now and then, where it fits."] : []), $instructions['me'] !== '' ? $instructions['me'] : 'Nothing written yet.', ...($remembered === [] ? [] : ['### What their tutors remember about them', ...array_map(fn (string $line) => "- {$line}", $remembered)])], whole: true);
         $course = implode(' · ', array_filter([$workspace->code ? "Course code {$workspace->code}" : null, $workspace->term ? "Term: {$workspace->term}" : null]));
         // What the course is (its kind, level, language, tools, exams, what it is about, its textbook) and where the student
         // starts from in it: the same for every AI, so another model picks up where the last one stopped.

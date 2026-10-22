@@ -324,6 +324,7 @@ class TutorMemoryTest extends TestCase
         // Turned off: neither is told.
         app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true, 'tutor_remembers' => false]);
         $this->assertStringNotContainsString('What their tutors remember', app(Briefings::class)->forSession($this->by, $session->id)->markdown);
-        $this->assertStringNotContainsString('## The student', app(Stack::class)->helper($this->by, $this->module, [])->system);
+        // (Their first name is still there: it is from their account, not something remembered.)
+        $this->assertStringNotContainsString('What their tutor remembers', app(Stack::class)->helper($this->by, $this->module, [])->system);
     }
 }

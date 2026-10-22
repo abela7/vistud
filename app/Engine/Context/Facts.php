@@ -88,6 +88,8 @@ final readonly class Facts
         public array $materialText = [],
         // 6 · the chat so far, when its oldest turns were folded
         public ?string $folded = null,
+        // 3 · the student's first name, from their account (App\Engine\Context\StudentName); null when unknown
+        public ?string $studentName = null,
     ) {}
 
     /**
@@ -98,5 +100,11 @@ final readonly class Facts
     public function withMemories(array $memories): self
     {
         return new self(...[...get_object_vars($this), 'memories' => $memories]);
+    }
+
+    /** The same facts with the student's first name (null when unknown). */
+    public function withName(?string $name): self
+    {
+        return new self(...[...get_object_vars($this), 'studentName' => $name]);
     }
 }

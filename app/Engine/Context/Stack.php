@@ -129,7 +129,7 @@ final class Stack
     /** The tutor's standing context for a session: its system prompt, its tools and the report on its layers. */
     public function build(Principal $by, SessionDetails $session, ?string $folded, bool $withTools): Built
     {
-        return $this->compose($this->gather($by, $session, $folded, $withTools), $withTools, $withTools ? $this->toolbox->except(SessionChat::ASSIGNMENT_CHAT_ONLY)->definitions() : []);
+        return $this->compose($this->gather($by, $session, $folded, $withTools)->withName(StudentName::of($by)), $withTools, $withTools ? $this->toolbox->except(SessionChat::ASSIGNMENT_CHAT_ONLY)->definitions() : []);
     }
 
     /** The tutor's standing context for an assignment: companion rules, course, student, and the assignment layer. */
@@ -159,6 +159,7 @@ final class Stack
             marksTopics: $choices->tutorMarksTopics,
             withTools: $withTools,
             folded: $folded,
+            studentName: StudentName::of($by),
         );
 
         $rulesText = self::rules($withTools)."\n\n".trim((string) file_get_contents(base_path('resources/prompts/assignment-companion.md')));
@@ -266,7 +267,7 @@ final class Stack
         }
 
         // What the student's tutors remember about them for every course: a few short lines, so it explains their way.
-        $facts = $facts->withMemories($this->memories->lines($by, null));
+        $facts = $facts->withMemories($this->memories->lines($by, null))->withName(StudentName::of($by));
 
         return $this->composeHelper($facts, $tools);
     }
@@ -279,7 +280,12 @@ final class Stack
         $about = $facts->moduleTitle === null && $facts->courseName !== '' && $facts->folderName === null
             ? [["## The course: {$facts->courseName}", true]]
             : $this->module($facts, isHelper: true);
-        $student = $facts->memories === [] ? [] : [['## The student', true], ['What their tutor remembers about them:', true], ...array_map(fn (string $line) => ["- {$line}", true], $facts->memories)];
+        // Its name, to use where it fits, and what their tutors remember about them (no asking: the helper does quick jobs).
+        $student = [
+            ...($facts->memories === [] ? [] : [['What their tutor remembers about them:', true], ...array_map(fn (string $line) => ["- {$line}", true], $facts->memories)]),
+            ...($facts->studentName !== null ? [["Their name: {$facts->studentName}. Use it now and then, where it fits, not in every message.", true]] : []),
+        ];
+        $student = $student === [] ? [] : [['## The student', true], ...$student];
         $layers = [0 => ['Rules', [[self::helperRules(), true]], self::HELPER_BUDGET], 3 => ['Student', $student, self::BUDGETS[3]], 4 => ['Module', $about, self::BUDGETS[4]]];
         $report = [];
         $texts = [];
@@ -306,7 +312,7 @@ final class Stack
      */
     public function standing(Principal $by, SessionDetails $session): string
     {
-        $facts = $this->gather($by, $session, null, true);
+        $facts = $this->gather($by, $session, null, true)->withName(StudentName::of($by));
         $layers = [$this->course($facts), $this->student($facts, true), $this->module($facts), $this->session($facts)];
         $texts = [];
         foreach ([2, 3, 4, 5] as $i => $number) {
@@ -604,7 +610,7 @@ final class Stack
     /** @return list<array{0: string, 1: bool}> */
     private function student(Facts $f, bool $withTools): array
     {
-        $lines = [['## The student', true], ['About you, in their words: '.($f->aboutYou !== '' ? $f->aboutYou : 'nothing written yet.'), true]];
+        $lines = [['## The student', true], ...array_map(fn (string $line) => [$line, true], StudentName::lines($f->studentName, $withTools && $f->remembers)), ['About you, in their words: '.($f->aboutYou !== '' ? $f->aboutYou : 'nothing written yet.'), true]];
         if ($f->preferences !== []) {
             $lines[] = ['How they like to learn in this course: '.implode(' · ', $f->preferences).'.', true];
         }

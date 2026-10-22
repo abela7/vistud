@@ -2,6 +2,7 @@
 
 namespace App\Engine;
 
+use App\Engine\Context\StudentName;
 use App\Engine\Jobs\ProfileCourse;
 use App\Engine\Jobs\Run;
 use App\Engine\Jobs\Runner;
@@ -103,7 +104,7 @@ final class CourseGuide
         $model = trim((string) $model);
         [$shown, $read] = $this->prepared($by, $pictures, $model !== '' ? $model : null);
         // The student's own day, not the server's: the guide counts weeks and dates from it.
-        $system = self::rules($for)."\n\n## Today\n".CarbonImmutable::now($this->sessions->timezone($by))->toDateString()."\n\n## What is set up\n".$this->state($by, $workspaceId, $for);
+        $system = self::rules($for)."\n\n## The student\n".implode("\n", StudentName::lines(StudentName::of($by), false))."\n\n## Today\n".CarbonImmutable::now($this->sessions->timezone($by))->toDateString()."\n\n## What is set up\n".$this->state($by, $workspaceId, $for);
         $messages = self::remembered($history);
         $messages[] = ['role' => 'user', 'content' => self::said($message, $shown, $read)];
 

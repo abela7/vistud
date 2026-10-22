@@ -4,6 +4,8 @@ ViStud keeps your account, your courses, your notes, your files, your class reco
 
 Backups of your courses and files are kept for 35 days. Backups of those keys are kept for 7 days. Ordinary logs are kept for 30 days. When an account is deleted, a record of that deletion is kept indefinitely. It holds only ids and times, never your words, so a restored backup can be deleted again.
 
+A chat with the AI includes your first name (from your account), so it can call you by it, and what you wrote about yourself or told it to remember. Never your full name or your email address.
+
 Your AI key is yours. A chat is sent with that key, on your own account at the provider the key belongs to. An OpenRouter key is sent to OpenRouter, which passes the chat to the model you chose. Their terms:
 
 - OpenRouter: [privacy](https://openrouter.ai/privacy) and [terms](https://openrouter.ai/terms)
