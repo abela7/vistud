@@ -52,6 +52,8 @@ jobs:
         run: |
           cp .env.example .env
           php artisan key:generate
+          # The AI-app sign-in (OAuth) needs its own key pair; the keys are never in git.
+          php artisan passport:keys --force
 
       - name: Code style
         run: vendor/bin/pint --test
@@ -112,6 +114,7 @@ jobs:
           cp .env.example .env
           php -r 'file_put_contents(getenv("GITHUB_ENV"), "VISTUD_MASTER_KEY=base64:".base64_encode(random_bytes(32)).PHP_EOL, FILE_APPEND);'
           php artisan key:generate
+          php artisan passport:keys --force
           php artisan migrate --database=mysql_keys_owner --path=database/key-migrations --force
           composer migrate
           npm run build

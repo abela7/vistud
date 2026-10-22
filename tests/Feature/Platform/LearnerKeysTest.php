@@ -236,7 +236,8 @@ class LearnerKeysTest extends TestCase
         ProbeLearnerKey::dispatch($b->learnerId, true)->onConnection('database');
         ProbeLearnerKey::dispatch($a->learnerId)->onConnection('database');
         $this->artisan('queue:work', [
-            'connection' => 'database', '--stop-when-empty' => true, '--sleep' => 0, '--tries' => 1,
+            // The default 128 MB cap ends a worker (exit 12) inside a long test process.
+            'connection' => 'database', '--stop-when-empty' => true, '--sleep' => 0, '--tries' => 1, '--memory' => 4096,
         ])->assertSuccessful();
         $this->assertSame([
             [$a->learnerId, 0, 1, 'synthetic probe'], [$b->learnerId, 0, 1, 'synthetic probe'], [$a->learnerId, 0, 1, 'synthetic probe'],
