@@ -47,9 +47,10 @@ final class Settings
         $allowed = $shared['models'] ?? null;
         $pick = fn (?string $chosen, string $fallback) => $allowed === null ? (string) ($chosen ?? $fallback) : (in_array($chosen, $allowed, true) ? $chosen : $allowed[0]);
         if ($allowed !== null) {
-            // The ones the student switched on for the chat (all of them until they choose), never one outside the list.
-            // With none left, the tutor's alone (an empty list would offer the popular ones, which the shared key can't run).
-            $favoriteModels = ($rawFavorites === null ? $allowed : array_values(array_intersect($allowed, $favoriteModels)))
+            // Every shared model but the ones the student switched off for the chat: a model the admin adds later is
+            // there at once. With none left, the tutor's alone (an empty list would offer the popular ones, which the
+            // shared key can't run).
+            $favoriteModels = array_values(array_diff($allowed, self::sharedOff($row)))
                 ?: [$pick($row->tutor_model ?? null, $defaults['tutor'])];
         }
 
@@ -223,6 +224,14 @@ final class Settings
         return $this->get($by);
     }
 
+    /** @return list<string> the shared key's models this student switched off for the chat */
+    private static function sharedOff(?object $row): array
+    {
+        $off = json_decode((string) ($row->shared_models_off ?? ''), true);
+
+        return is_array($off) ? array_values(array_filter($off, 'is_string')) : [];
+    }
+
     /** Whose the stored key is: a provider's id, or OpenRouter's. */
     private static function providerOf(?object $row): string
     {
@@ -337,7 +346,12 @@ final class Settings
         if (is_array($favs)) {
             $validFavs = array_values(array_unique(array_filter(array_map('trim', $favs), fn ($m) => is_string($m) && $m !== '' && preg_match(self::MODEL_ID, $m) === 1)));
         }
+        // The shared key's models switched off for the chat, when given; kept as they are otherwise.
+        $off = array_key_exists('shared_models_off', $input)
+            ? array_values(array_unique(array_filter(is_array($input['shared_models_off']) ? $input['shared_models_off'] : [], fn ($m) => is_string($m) && preg_match(self::MODEL_ID, $m) === 1)))
+            : self::sharedOff($existing);
         $values = [
+            'shared_models_off' => $off === [] ? null : json_encode($off),
             'tutor_model' => $models['tutor_model'],
             'reader_model' => $models['reader_model'],
             'helper_model' => $models['helper_model'],

@@ -224,15 +224,17 @@ final class EngineSettings extends Component
     {
         $this->resetErrorBag();
         try {
+            $shared = $this->settings->shared($this->principal());
             $this->settings->set($this->principal(), [
                 'tutor_model' => $this->tutorModel, 'reader_model' => $this->readerModel, 'helper_model' => $this->helperModel, 'fallback_model' => $this->fallbackModel,
-                // On the shared key the tutor is always in the chat, so a list with everything else switched off is
-                // never empty (an empty one would mean "never chosen", which switches them all back on).
-                'favorite_models' => $this->settings->shared($this->principal()) !== null && $this->tutorModel !== ''
-                    ? array_values(array_unique([$this->tutorModel, ...$this->favoriteModels])) : $this->favoriteModels,
-                'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language, 'ask_topics' => $this->askTopics,
-                'auto_read_files' => $this->autoReadFiles, 'tutor_marks_topics' => $this->tutorMarksTopics, 'tutor_remembers' => $this->tutorRemembers, 'copy_paste_ai' => $this->copyPasteAi,
-            ]);
+            ] + ($shared !== null
+                // On the shared key the switches say which of its models are off (never the tutor), so one the admin
+                // adds later is on at once; the favourites kept for their own key stay as they are.
+                ? ['shared_models_off' => array_values(array_diff($shared['models'], $this->favoriteModels, [$this->tutorModel]))]
+                : ['favorite_models' => $this->favoriteModels]) + [
+                    'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language, 'ask_topics' => $this->askTopics,
+                    'auto_read_files' => $this->autoReadFiles, 'tutor_marks_topics' => $this->tutorMarksTopics, 'tutor_remembers' => $this->tutorRemembers, 'copy_paste_ai' => $this->copyPasteAi,
+                ]);
         } catch (Unprocessable $e) {
             foreach ($e->details['fields'] ?? [] as $field => $messages) {
                 $this->addError(['tutor_model' => 'tutorModel', 'reader_model' => 'readerModel', 'helper_model' => 'helperModel', 'fallback_model' => 'fallbackModel', 'session_cap' => 'sessionCap', 'month_cap' => 'monthCap'][$field] ?? $field, $messages[0]);

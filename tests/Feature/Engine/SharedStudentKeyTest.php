@@ -50,7 +50,12 @@ class SharedStudentKeyTest extends TestCase
         $this->adminKey = 'sk-or-admin-'.bin2hex(random_bytes(8));
         $this->studentsKey = 'sk-or-students-'.bin2hex(random_bytes(8));
         config(['vistud.engine.key' => $this->adminKey]);
-        $this->app->instance(Engine::class, new Fake);
+        $this->app->instance(Engine::class, new Fake([
+            new Model('fake/tutor', 'Fake tutor', 1.0, 5.0, 200_000, true, true, true),
+            new Model('fake/quick', 'Fake quick', 0.1, 0.4, 32_000, true, false, false),
+            new Model('fake/plain', 'Fake plain', 0.05, 0.2, 8_000, false, false, false),
+            new Model('fake/new', 'Fake new', 0.2, 0.6, 64_000, true, false, false),
+        ]));
     }
 
     public function test_it_is_off_until_an_admin_turns_it_on_with_a_key_a_model_and_a_daily_limit(): void
@@ -63,7 +68,7 @@ class SharedStudentKeyTest extends TestCase
         $this->turnOn($admin);
         $this->assertSame(['key' => $this->studentsKey, 'model' => 'fake/quick', 'models' => ['fake/quick', 'fake/plain'], 'daily_micros' => 100_000], app(Setup::class)->shared());
         // The cheap ones the key can use, cheapest first; the dear one is not offered.
-        $this->assertSame(['fake/plain', 'fake/quick'], array_map(fn ($m) => $m->id, app(Setup::class)->cheapModels()));
+        $this->assertSame(['fake/plain', 'fake/quick', 'fake/new'], array_map(fn ($m) => $m->id, app(Setup::class)->cheapModels()));
         $raw = DB::table('platform_settings')->where('key', Setup::SHARED_KEY)->value('value');
         $this->assertStringNotContainsString($this->studentsKey, $raw);
         $this->assertSame($this->studentsKey, Crypt::decryptString($raw));
@@ -119,8 +124,8 @@ class SharedStudentKeyTest extends TestCase
         $choices = $settings->get($student);
         // fake/tutor isn't one of the shared key's models: the default instead. fake/plain is, so it stays.
         $this->assertSame(['fake/quick', 'fake/plain', 'fake/quick', ''], [$choices->tutorModel, $choices->readerModel, $choices->helperModel, $choices->fallbackModel]);
-        // Their chat favourite (fake/tutor) isn't a shared model: the tutor alone, never a model outside the list.
-        $this->assertSame(['fake/quick'], $choices->chatModels());
+        // Their chat favourite for their own key (fake/tutor) plays no part: every shared model, none outside the list.
+        $this->assertSame(['fake/quick', 'fake/plain'], $choices->chatModels());
         $this->assertSame([$this->studentsKey, 'fake/quick'], array_slice($settings->ready($student, Role::Tutor), 1));
         // Recordings are long and costly: not on the shared key.
         $this->assertNull($settings->audioModel($student));
@@ -209,7 +214,7 @@ class SharedStudentKeyTest extends TestCase
             ->set('sharedKey', $this->studentsKey)->set('sharedModels', "fake/quick\nfake/tutor")->call('saveShared')->assertHasErrors(['sharedModels'])
             ->set('sharedModels', 'fake/quick')->call('saveShared')->assertHasNoErrors()
             ->assertSet('sharedKey', '')->assertSee('Students without a key now use the shared one.')->assertSee('…'.substr($this->studentsKey, -4))
-            ->assertSee('Free and very cheap models this key can use (2)')->assertSee('fake/plain')
+            ->assertSee('Free and very cheap models this key can use (3)')->assertSee('fake/plain')
             ->call('addShared', 'fake/plain')->assertSet('sharedModels', "fake/quick\nfake/plain")->call('saveShared')->assertHasNoErrors();
         $this->assertSame(['fake/quick', 'fake/plain'], app(Setup::class)->shared()['models']);
         $this->assertSame(250_000, app(Setup::class)->shared()['daily_micros']);
@@ -241,10 +246,21 @@ class SharedStudentKeyTest extends TestCase
         // Everything else switched off: the tutor alone, and it stays that way (not back to all of them).
         $this->assertSame(['fake/plain'], $choices->chatModels());
 
-        Livewire::test(EngineSettings::class)->set('favoriteModels', ['fake/quick'])->call('save')->assertHasNoErrors();
-        $chat = $settings->get($student)->chatModels();
-        sort($chat);
-        $this->assertSame(['fake/plain', 'fake/quick'], $chat);
+        // The admin adds a model and drops one: the student has it in the chat and the job lists at once, without
+        // saving anything, and the one they switched off stays off.
+        app(Setup::class)->setShared($this->principal($this->admin()), ['on' => true, 'models' => "fake/plain\nfake/quick\nfake/new", 'daily' => '0.10']);
+        // A new request reads the admin's list again (one Settings keeps what it read).
+        $this->assertSame(['fake/plain', 'fake/new'], app(Settings::class)->get($student)->chatModels());
+        Livewire::test(EngineSettings::class)->assertSee('Fake new')->assertSet('favoriteModels', ['fake/plain', 'fake/new']);
+        app(Setup::class)->setShared($this->principal($this->admin()), ['on' => true, 'models' => "fake/new\nfake/quick", 'daily' => '0.10']);
+        $choices = app(Settings::class)->get($student);
+        // Their tutor (fake/plain) is gone: the admin's default instead, at once.
+        $this->assertSame(['fake/new', 'fake/quick', 'fake/new'], [$choices->tutorModel, $choices->readerModel, $choices->helperModel]);
+        $this->assertSame(['fake/new'], $choices->chatModels());
+
+        // Switched back on.
+        Livewire::test(EngineSettings::class)->set('favoriteModels', ['fake/new', 'fake/quick'])->call('save')->assertHasNoErrors();
+        $this->assertSame(['fake/new', 'fake/quick'], app(Settings::class)->get($student)->chatModels());
     }
 
     public function test_a_student_on_the_shared_key_starts_the_ai_from_the_chat_in_one_click(): void
