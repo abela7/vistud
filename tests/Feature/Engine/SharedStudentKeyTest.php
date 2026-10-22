@@ -5,6 +5,7 @@ namespace Tests\Feature\Engine;
 use App\Audit\AuditAction;
 use App\Engine\Engine;
 use App\Engine\Fake;
+use App\Engine\Model;
 use App\Engine\Request;
 use App\Engine\Role;
 use App\Engine\Settings;
@@ -215,6 +216,37 @@ class SharedStudentKeyTest extends TestCase
         $this->actingAs($student);
         Livewire::test(EngineSettings::class)->assertSee('You\'re using the shared key, up to $0.25 a day, with 2 models to choose from.', false)
             ->assertSee('On the shared key you can choose: fake/quick, fake/plain.', false);
+    }
+
+    public function test_the_list_of_cheap_models_narrows_by_words_price_pictures_and_tools(): void
+    {
+        $models = [
+            new Model('google/gemini-flash-lite', 'Gemini Flash Lite', 0.1, 0.4, 1_000_000, true, true, true),
+            new Model('meta/llama-free:free', 'Llama Free', 0.0, 0.0, 128_000, false, false, false),
+            new Model('deepseek/chat', 'DeepSeek Chat', 0.3, 0.9, 64_000, true, false, false),
+        ];
+        $ids = fn (array $found) => array_map(fn (Model $m) => $m->id, $found);
+        $this->assertSame(['google/gemini-flash-lite', 'meta/llama-free:free', 'deepseek/chat'], $ids(EngineSetup::filterModels($models, '', '1', false, false)));
+        $this->assertSame(['meta/llama-free:free'], $ids(EngineSetup::filterModels($models, '', 'free', false, false)));
+        $this->assertSame(['google/gemini-flash-lite', 'meta/llama-free:free'], $ids(EngineSetup::filterModels($models, '', '0.5', false, false)));
+        $this->assertSame(['google/gemini-flash-lite'], $ids(EngineSetup::filterModels($models, 'GEMINI lite', '1', false, false)));
+        $this->assertSame(['google/gemini-flash-lite'], $ids(EngineSetup::filterModels($models, '', '1', true, false)));
+        $this->assertSame(['google/gemini-flash-lite', 'deepseek/chat'], $ids(EngineSetup::filterModels($models, '', '1', false, true)));
+        $this->assertSame([], $ids(EngineSetup::filterModels($models, 'claude', '1', false, false)));
+    }
+
+    public function test_a_password_check_while_saving_comes_back_to_the_ai_engine_page(): void
+    {
+        $this->withoutVite();
+        $this->actingAs($this->admin())->withSession(['auth.password_confirmed_at' => now()->getTimestamp() - 3600]);
+        $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
+        Livewire::test(EngineSetup::class)
+            ->set('sharedKey', $this->studentsKey)->set('sharedModels', 'fake/quick')->set('sharedDaily', '0.10')->call('saveShared')
+            ->assertRedirect(route('password.confirm'));
+        $this->assertSame(route('admin.engine', ['confirmed' => 1]), session('url.intended'));
+        $this->assertNull(app(Setup::class)->status($this->principal($this->admin()))['shared_key_hint']);
+
+        Livewire::withQueryParams(['confirmed' => 1])->test(EngineSetup::class)->assertSee('Password confirmed. Paste the key again and press Save');
     }
 
     private function turnOn($admin): void

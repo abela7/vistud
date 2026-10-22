@@ -142,16 +142,17 @@ final class Setup
 
     /**
      * The free and very cheap models the students' key can use, cheapest first: what the admin may choose from.
+     * $fresh asks the service again instead of the list kept for a few hours.
      *
      * @return list<Model>
      */
-    public function cheapModels(): array
+    public function cheapModels(bool $fresh = false): array
     {
         $key = $this->sharedKey();
         if ($key === '') {
             return [];
         }
-        $cheap = array_values(array_filter(app(Models::class)->all(key: $key), fn (Model $m) => self::cheap($m)));
+        $cheap = array_values(array_filter(app(Models::class)->all(fresh: $fresh, key: $key), fn (Model $m) => self::cheap($m)));
         usort($cheap, fn (Model $a, Model $b) => [$a->inPerMillion + $a->outPerMillion, $a->id] <=> [$b->inPerMillion + $b->outPerMillion, $b->id]);
 
         return $cheap;

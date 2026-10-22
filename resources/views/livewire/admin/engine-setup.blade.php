@@ -153,19 +153,43 @@
             </div>
         </form>
         @if ($status['shared_key_hint'] !== null)
-            <details class="text-sm" @if ($cheapModels !== []) open @endif>
+            <details class="text-sm" open>
                 <summary class="cursor-pointer text-fg-muted">Free and very cheap models this key can use ({{ count($cheapModels) }})</summary>
                 @if ($cheapModels === [])
-                    <p class="pt-3 text-fg-muted">The list couldn't be loaded with the students' key. Check the key at OpenRouter, then reload this page.</p>
+                    <p class="pt-3 text-fg-muted">The list couldn't be loaded with the students' key. Check the key at OpenRouter, then press Refresh.</p>
+                    <div class="pt-2"><x-button size="sm" icon="rotate-cw" wire:click="refreshModels" wire:loading.attr="aria-busy" wire:target="refreshModels" busy-label="Asking OpenRouter…">Refresh the list</x-button></div>
                 @else
-                    <p class="pt-3 text-fg-muted">Cheapest first. Press Add, then Save. Some free models only answer students who allow their chats to be used for training (a choice in their AI settings).</p>
-                    <ul class="max-h-80 space-y-1 overflow-y-auto pt-2" role="list">
-                        @foreach ($cheapModels as $cheap)
-                            <li class="flex flex-wrap items-center justify-between gap-2">
-                                <span class="min-w-0"><span class="font-medium text-fg">{{ $cheap->name }}</span> <code class="break-all">{{ $cheap->id }}</code> · {{ $cheap->priceWords() }}</span>
-                                <x-button size="sm" icon="plus" wire:click="addShared('{{ $cheap->id }}')">Add</x-button>
+                    <div class="grid gap-3 pt-3 sm:grid-cols-2">
+                        <x-field name="modelSearch" label="Search" wire:model.live.debounce.300ms="modelSearch" autocomplete="off" placeholder="gemini, llama, deepseek…" />
+                        <div class="space-y-1.5">
+                            <label for="field-modelPrice" class="field-label">Price</label>
+                            <select id="field-modelPrice" class="input" wire:model.live="modelPrice">
+                                <option value="free">Free only</option>
+                                <option value="0.1">Up to $0.10 a million tokens</option>
+                                <option value="0.5">Up to $0.50 a million tokens</option>
+                                <option value="1">Up to $1 a million tokens (all allowed)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 pt-2">
+                        <x-checkbox name="modelPictures" label="Can see pictures" wire:model.live="modelPictures" />
+                        <x-checkbox name="modelTools" label="Can use tools (marks topics, looks things up)" wire:model.live="modelTools" />
+                        <x-button size="sm" variant="ghost" icon="rotate-cw" wire:click="refreshModels" wire:loading.attr="aria-busy" wire:target="refreshModels" busy-label="Asking OpenRouter…">Refresh the list</x-button>
+                    </div>
+                    <p class="pt-2 text-fg-muted">{{ count($shownModels) }} of {{ count($cheapModels) }} shown, cheapest first. Press Add, then Save. Some free models only answer students who allow their chats to be used for training (a choice in their AI settings).</p>
+                    <ul class="max-h-96 space-y-1 overflow-y-auto pt-2" role="list">
+                        @forelse ($shownModels as $cheap)
+                            <li class="flex flex-wrap items-center justify-between gap-2" wire:key="cheap-{{ $cheap->id }}">
+                                <span class="min-w-0"><span class="font-medium text-fg">{{ $cheap->name }}</span> <code class="break-all">{{ $cheap->id }}</code> · {{ $cheap->priceWords() }}@if ($cheap->images) · pictures @endif @if ($cheap->tools) · tools @endif</span>
+                                @if (in_array($cheap->id, $chosenModels, true))
+                                    <span class="badge badge-success"><x-icon name="circle-check" class="size-3.5" />Added</span>
+                                @else
+                                    <x-button size="sm" icon="plus" wire:click="addShared('{{ $cheap->id }}')">Add</x-button>
+                                @endif
                             </li>
-                        @endforeach
+                        @empty
+                            <li class="text-fg-muted">No model matches. Clear the search or choose a higher price.</li>
+                        @endforelse
                     </ul>
                 @endif
             </details>
