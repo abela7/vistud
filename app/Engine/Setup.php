@@ -31,6 +31,19 @@ final class Setup
 
     public const HELPER = 'engine.helper_model';
 
+    /** The shared key for students without their own (the owner's ask, 2026-10-22): on or off, its own key, one model, a daily limit. */
+    public const SHARED_ON = 'engine.shared_on';
+
+    public const SHARED_KEY = 'engine.shared_key';
+
+    public const SHARED_MODEL = 'engine.shared_model';
+
+    public const SHARED_DAILY = 'engine.shared_daily_micros';
+
+    public const DEFAULT_SHARED_DAILY = 100_000;
+
+    public const MAX_SHARED_DAILY_DOLLARS = 10;
+
     private const MODEL_ID = '#^[a-z0-9][a-z0-9._:/-]{0,118}$#i';
 
     /** @var array<string, object>|null */
@@ -78,10 +91,45 @@ final class Setup
         ];
     }
 
+    /**
+     * The shared key a student without their own may use, with the one model it runs and how much a student may
+     * spend on it a day (millionths of a dollar); null while it is off or not fully set up. It is never the admin
+     * key: a student on it can't reach the admin key's models or limits.
+     *
+     * @return array{key: string, model: string, daily_micros: int}|null
+     */
+    public function shared(): ?array
+    {
+        $rows = $this->rows();
+        if (($rows[self::SHARED_ON]->value ?? null) !== '1') {
+            return null;
+        }
+        $key = $this->sharedKey();
+        $model = (string) ($rows[self::SHARED_MODEL]->value ?? '');
+        $daily = (int) ($rows[self::SHARED_DAILY]->value ?? 0);
+
+        return $key !== '' && $model !== '' && $daily > 0 && $key !== $this->key()
+            ? ['key' => $key, 'model' => $model, 'daily_micros' => $daily]
+            : null;
+    }
+
+    private function sharedKey(): string
+    {
+        $value = $this->rows()[self::SHARED_KEY]->value ?? null;
+        if ($value === null) {
+            return '';
+        }
+        try {
+            return Crypt::decryptString($value);
+        } catch (DecryptException) {
+            return '';
+        }
+    }
+
     // ---------- The admin's page ----------
 
     /**
-     * @return array{key_set: bool, key_hint: ?string, key_from_env: bool, key_unreadable: bool, key_updated_at: ?string, url: string, tutor_model: string, reader_model: string, helper_model: string}
+     * @return array{key_set: bool, key_hint: ?string, key_from_env: bool, key_unreadable: bool, key_updated_at: ?string, url: string, tutor_model: string, reader_model: string, helper_model: string, shared_on: bool, shared_key_hint: ?string, shared_model: string, shared_daily: string, shared_working: bool}
      */
     public function status(Principal $by): array
     {
@@ -101,7 +149,65 @@ final class Setup
             'tutor_model' => $defaults['tutor'],
             'reader_model' => $defaults['reader'],
             'helper_model' => $defaults['helper'],
+            'shared_on' => ($this->rows()[self::SHARED_ON]->value ?? null) === '1',
+            'shared_key_hint' => ($shared = $this->sharedKey()) !== '' ? '…'.substr($shared, -4) : null,
+            'shared_model' => (string) ($this->rows()[self::SHARED_MODEL]->value ?? ''),
+            'shared_daily' => Choices::dollars((int) ($this->rows()[self::SHARED_DAILY]->value ?? self::DEFAULT_SHARED_DAILY)),
+            'shared_working' => $this->shared() !== null,
         ];
+    }
+
+    /**
+     * The shared key for students: on or off, its own key (empty keeps the saved one), the one model and the daily
+     * limit per student in dollars. It can only be turned on with all three, and never with the admin key.
+     *
+     * @param  array<string, mixed>  $input  on, key, model, daily
+     */
+    public function setShared(Principal $by, array $input): void
+    {
+        Guard::protectedAdmin($by);
+        $on = filter_var($input['on'] ?? false, FILTER_VALIDATE_BOOL);
+        $key = is_string($input['key'] ?? null) ? trim($input['key']) : '';
+        $model = is_string($input['model'] ?? null) ? trim($input['model']) : '';
+        $daily = is_string($input['daily'] ?? null) ? trim(str_replace(['$', ','], '', $input['daily'])) : ($input['daily'] ?? '');
+        $errors = [];
+        if ($key !== '' && preg_match('/^\S{16,300}$/', $key) !== 1) {
+            $errors['key'] = 'Paste the whole key, with no spaces.';
+        } elseif ($key !== '' && $key === $this->key()) {
+            $errors['key'] = 'Use a separate key for students, not the admin key, so you can give it its own spending limit.';
+        }
+        if ($model !== '' && (preg_match(self::MODEL_ID, $model) !== 1 || str_ends_with($model, ':batch'))) {
+            $errors['model'] = 'Enter the model\'s id as the service names it, like "google/gemini-2.5-flash".';
+        }
+        if (! is_numeric($daily) || (float) $daily <= 0 || (float) $daily > self::MAX_SHARED_DAILY_DOLLARS) {
+            $errors['daily'] = 'Enter an amount in dollars, more than 0 and up to '.self::MAX_SHARED_DAILY_DOLLARS.'.';
+        }
+        if ($on && $key === '' && $this->sharedKey() === '') {
+            $errors['key'] = 'Paste a key for students first.';
+        }
+        if ($on && $model === '') {
+            $errors['model'] = 'Choose the one model students will use.';
+        }
+        Input::refuse($errors);
+
+        if ($key !== '') {
+            $this->put(self::SHARED_KEY, Crypt::encryptString($key), true, $by);
+        }
+        $this->put(self::SHARED_MODEL, $model ?: null, false, $by);
+        $this->put(self::SHARED_DAILY, (string) (int) round((float) $daily * 1_000_000), false, $by);
+        $this->put(self::SHARED_ON, $on ? '1' : '0', false, $by);
+        $this->audit->record($by, AuditAction::ENGINE_SHARED_CHANGED, 'engine', 'shared', array_filter([
+            'on' => $on, 'daily_micros' => (int) round((float) $daily * 1_000_000), 'hint' => $key !== '' ? substr($key, -4) : null,
+        ], fn ($v) => $v !== null));
+    }
+
+    /** Removes the students' key, which turns the shared key off. */
+    public function removeSharedKey(Principal $by): void
+    {
+        Guard::protectedAdmin($by);
+        DB::table('platform_settings')->whereIn('key', [self::SHARED_KEY])->delete();
+        $this->put(self::SHARED_ON, '0', false, $by);
+        $this->audit->record($by, AuditAction::ENGINE_SHARED_CHANGED, 'engine', 'shared', ['on' => false, 'key_removed' => true]);
     }
 
     /** Keeps the key, encrypted. The audit log gets its last four characters, never the key. */

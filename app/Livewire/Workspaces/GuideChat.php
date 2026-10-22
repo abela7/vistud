@@ -515,6 +515,7 @@ final class GuideChat extends Component
         return match ($code) {
             'engine_key', 'engine_model', 'engine_consent' => 'Set up your AI first, then come back.',
             'engine_cap' => 'This month\'s AI limit is reached. Raise it in your AI settings.',
+            'engine_daily' => 'Today\'s free AI is used up. It starts again tomorrow, or add your own key in your AI settings.',
             'validation_failed' => $message,
             default => 'The AI didn\'t answer. Try again.',
         };

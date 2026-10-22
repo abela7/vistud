@@ -277,6 +277,8 @@ final class EngineSettings extends Component
             'usage' => $this->usage->month($by),
             'cachedShare' => $this->usage->cachedShare($by),
             'keyState' => $keyState,
+            // The shared key for students, when this student is on it: its one model and daily limit.
+            'shared' => $this->settings->shared($by),
             'models' => $models,
             'setupUrl' => $by->hasRole(Role::Admin) ? route('admin.engine') : null,
             'tutorWords' => $words($this->tutorModel),

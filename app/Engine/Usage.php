@@ -62,6 +62,24 @@ final class Usage
         }
     }
 
+    /** What today has cost all together, in the student's own day. */
+    public function todayTotal(LearnerScope $scope, string $zone): int
+    {
+        return $this->since($scope, CarbonImmutable::now($zone)->startOfDay()->utc())['total'];
+    }
+
+    /**
+     * Refuses a call on the shared key once today's use reaches the admin's daily limit per student.
+     *
+     * @throws Unprocessable
+     */
+    public function refuseOverSharedDaily(LearnerScope $scope, int $dailyMicros, string $zone): void
+    {
+        if ($this->todayTotal($scope, $zone) >= $dailyMicros) {
+            throw new Unprocessable('engine_daily', "You have used today's free AI. It starts again tomorrow, or add your own key in your AI settings to keep going.");
+        }
+    }
+
     /** @return array{tutor: int, reader: int, helper: int, total: int} */
     private function since(LearnerScope $scope, CarbonImmutable $since): array
     {

@@ -435,6 +435,7 @@ final class CourseSetup extends Component
         return match ($code) {
             'engine_key', 'engine_model', 'engine_consent' => 'Set up your AI first, then read the syllabus.',
             'engine_cap' => 'This month\'s AI limit is reached. Raise it in AI settings.',
+            'engine_daily' => 'Today\'s free AI is used up. It starts again tomorrow, or add your own key in AI settings.',
             'file_preparing' => 'The file is still being prepared. Try again in a minute.',
             'no_text' => 'No words found in it. Paste the syllabus text instead.',
             'engine_unreadable' => 'The AI\'s answer couldn\'t be read. Try again.',

@@ -6,6 +6,8 @@ use App\Appearance\Themes;
 use App\Engine\Engine;
 use App\Engine\Jobs\Heartbeat;
 use App\Engine\OpenRouter;
+use App\Engine\Setup;
+use App\Engine\SharedKeyPin;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureTwoFactorEnrolled;
 use App\Http\Middleware\EnterAdminArea;
@@ -38,7 +40,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(LearnerKeys::class);
         $this->app->singleton(Themes::class, fn () => new Themes(resource_path('themes')));
         // The built-in chat's engine: OpenRouter, or any service with the OpenAI chat format (config/vistud.php).
-        $this->app->bind(Engine::class, OpenRouter::class);
+        // The shared key for students runs only the model the admin chose (App\Engine\SharedKeyPin).
+        $this->app->bind(Engine::class, fn ($app) => new SharedKeyPin($app->make(OpenRouter::class), $app->make(Setup::class)));
         // An AI app's sign-in always shows ViStud's consent page, which may not be framed (docs/specs/mcp-connections-plan.md §3.2).
         $this->app->bind(AuthorizationController::class, AuthorizeConnection::class);
         // Passport gives its own controller the web login by class name; the subclass needs the same, or the code

@@ -11,6 +11,7 @@ use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
 use App\Study\Input;
+use App\Study\Sessions;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -40,12 +41,18 @@ final class Settings
         $key = $this->decrypt(Guard::learner($by), $row);
         $rawFavorites = $row->favorite_models ?? null;
         $favoriteModels = is_string($rawFavorites) ? (json_decode($rawFavorites, true) ?: []) : (is_array($rawFavorites) ? $rawFavorites : []);
+        // On the shared key, every role is its one model and there is nothing else to switch to.
+        $shared = $key === null ? $this->shared($by) : null;
+        $pinned = $shared['model'] ?? null;
+        if ($pinned !== null) {
+            $favoriteModels = [$pinned];
+        }
 
         return new Choices(
-            tutorModel: (string) ($row->tutor_model ?? $defaults['tutor']),
-            readerModel: (string) ($row->reader_model ?? $defaults['reader']),
-            helperModel: (string) ($row->helper_model ?? $defaults['helper']),
-            fallbackModel: (string) ($row->fallback_model ?? ''),
+            tutorModel: $pinned ?? (string) ($row->tutor_model ?? $defaults['tutor']),
+            readerModel: $pinned ?? (string) ($row->reader_model ?? $defaults['reader']),
+            helperModel: $pinned ?? (string) ($row->helper_model ?? $defaults['helper']),
+            fallbackModel: $pinned !== null ? '' : (string) ($row->fallback_model ?? ''),
             sessionCapMicros: (int) ($row->session_cap_micros ?? self::DEFAULT_SESSION_CAP),
             monthCapMicros: (int) ($row->month_cap_micros ?? self::DEFAULT_MONTH_CAP),
             noTraining: $row === null || (bool) $row->no_training,
@@ -96,6 +103,10 @@ final class Settings
         }
         if ($choices->consentedAt === null) {
             throw new Unprocessable('engine_consent', 'Agree to the chat in your AI settings first.');
+        }
+        $shared = $this->shared($by);
+        if ($shared !== null && $key === $shared['key']) {
+            app(Usage::class)->refuseOverSharedDaily(Guard::learner($by), $shared['daily_micros'], app(Sessions::class)->timezone($by));
         }
 
         return [$choices, $key, $model];
@@ -359,23 +370,49 @@ final class Settings
         }
     }
 
-    /** Explicit credential for every learner call. Empty never means installation fallback. */
+    /**
+     * Explicit credential for every learner call: their own key; the installation key for an admin account; the
+     * shared key, when the admin turned it on, for a student with neither. Empty never means installation fallback.
+     */
     public function credential(Principal $by): string
     {
         $own = $this->key($by);
         if ($own !== null) {
             return $own;
         }
+        if ($this->isAdmin($by)) {
+            return $this->setup->key();
+        }
 
-        return $by->userId !== null && app(RoleStore::class)->has($by->userId, \App\Platform\Access\Role::Admin)
-            ? $this->setup->key() : '';
+        return $this->setup->shared()['key'] ?? '';
+    }
+
+    /**
+     * The shared key this student is on, with its one model and daily limit; null with a key of their own, for an
+     * admin account (the installation key), or while the admin hasn't turned it on.
+     *
+     * @return array{key: string, model: string, daily_micros: int}|null
+     */
+    public function shared(Principal $by): ?array
+    {
+        if ($this->key($by) !== null || $this->isAdmin($by)) {
+            return null;
+        }
+
+        return $this->setup->shared();
+    }
+
+    private function isAdmin(Principal $by): bool
+    {
+        return $by->userId !== null && app(RoleStore::class)->has($by->userId, \App\Platform\Access\Role::Admin);
     }
 
     /** Audio through the existing chat adapter; unsupported providers fail before processing bytes. */
     public function audioModel(Principal $by): ?string
     {
         $key = $this->credential($by);
-        if ($key === '') {
+        // Recordings are long and costly: the shared key answers chats, not transcriptions.
+        if ($key === '' || $this->shared($by) !== null) {
             return null;
         }
 

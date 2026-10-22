@@ -11,6 +11,8 @@ Your AI key is yours. A chat is sent with that key, on your own account at the p
 - Anthropic: [privacy](https://www.anthropic.com/legal/privacy)
 - Google: [privacy](https://policies.google.com/privacy)
 
+If you have no key of your own and this copy of ViStud offers a shared key, your chats are sent with the shared key instead: on the account of the person who runs this copy, to OpenRouter and the one model they chose, with a daily limit. OpenRouter's terms above apply. Add your own key at any time to stop using it.
+
 Mail about your account, such as an invitation or a confirmation link, is sent by the email service chosen for this copy of ViStud. The computer ViStud runs on is looked after by the same person. Ask them which email service and which host they use, and read those terms.
 
 A class recording includes the voices of everyone in the room. Record only when those people have agreed.

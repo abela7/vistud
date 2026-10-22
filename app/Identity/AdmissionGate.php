@@ -3,6 +3,7 @@
 namespace App\Identity;
 
 use App\Engine\Settings;
+use App\Engine\Setup;
 use App\Platform\Access\LearnerKeyStore;
 use App\Platform\Access\MasterKeys;
 use App\Platform\Access\Principal;
@@ -50,7 +51,7 @@ final class AdmissionGate
             'key database is separate' => $this->keyDatabaseSeparate(),
             'learner text is encrypted' => $this->textEncrypted(),
             'files are encrypted' => $this->filesEncrypted(),
-            'student uses own AI key only' => $this->ownKeyOnly(),
+            'student uses own AI key, or the shared one with a daily limit' => $this->ownKeyOnly(),
             'acceptance run matches this commit' => $this->acceptanceMatches(),
             'privacy policy is reviewed' => $this->policyReviewed(),
         ];
@@ -138,13 +139,21 @@ final class AdmissionGate
         }
     }
 
-    /** A non-admin with no key of their own. Tests may pass another principal to show the failure. */
+    /**
+     * A non-admin with no key of their own never gets the admin key: nothing at all, or the shared key for students
+     * when the admin turned it on (its own key, one model, a daily limit). Tests may pass another principal to show
+     * the failure.
+     */
     public function ownKeyOnly(?Principal $student = null): bool
     {
         $student ??= new Principal(Ids::new(), Ids::new(), [Role::Student], true, null, 'console');
 
         try {
-            return app(Settings::class)->credential($student) === '';
+            $settings = app(Settings::class);
+            $key = $settings->credential($student);
+            $shared = $settings->shared($student);
+
+            return $key === '' || ($shared !== null && $key === $shared['key'] && $shared['daily_micros'] > 0 && $key !== app(Setup::class)->key());
         } catch (Throwable) {
             return false;
         }

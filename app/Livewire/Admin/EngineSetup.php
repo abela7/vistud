@@ -32,6 +32,15 @@ final class EngineSetup extends Component
 
     public string $helperModel = '';
 
+    /** The shared key for students without their own: on or off, its key (sent once), one model, a daily limit in dollars. */
+    public bool $sharedOn = false;
+
+    public string $sharedKey = '';
+
+    public string $sharedModel = '';
+
+    public string $sharedDaily = '';
+
     #[Locked]
     public bool $confirmingRemoval = false;
 
@@ -55,6 +64,47 @@ final class EngineSetup extends Component
     {
         $status = $this->setup->status($this->principal());
         [$this->url, $this->tutorModel, $this->readerModel, $this->helperModel] = [$status['url'], $status['tutor_model'], $status['reader_model'], $status['helper_model']];
+        $this->loadShared($status);
+    }
+
+    public function saveShared(): void
+    {
+        $this->resetErrorBag();
+        try {
+            $this->setup->setShared($this->principal(), ['on' => $this->sharedOn, 'key' => $this->sharedKey, 'model' => $this->sharedModel, 'daily' => $this->sharedDaily]);
+        } catch (Unprocessable $e) {
+            foreach ($e->details['fields'] ?? [] as $field => $messages) {
+                $this->addError(['key' => 'sharedKey', 'model' => 'sharedModel', 'daily' => 'sharedDaily'][$field] ?? $field, $messages[0]);
+            }
+
+            return;
+        } catch (PasswordConfirmationRequired) {
+            $this->redirectRoute('password.confirm');
+
+            return;
+        }
+        $this->sharedKey = '';
+        $this->loadShared($this->setup->status($this->principal()));
+        $this->notify($this->sharedOn ? 'Students without a key now use the shared one.' : 'Saved. The shared key is off.');
+    }
+
+    public function removeSharedKey(): void
+    {
+        try {
+            $this->setup->removeSharedKey($this->principal());
+        } catch (PasswordConfirmationRequired) {
+            $this->redirectRoute('password.confirm');
+
+            return;
+        }
+        $this->loadShared($this->setup->status($this->principal()));
+        $this->notify('The key for students is removed, and the shared key is off.');
+    }
+
+    /** @param array<string, mixed> $status */
+    private function loadShared(array $status): void
+    {
+        [$this->sharedOn, $this->sharedModel, $this->sharedDaily] = [(bool) $status['shared_on'], (string) $status['shared_model'], ltrim((string) $status['shared_daily'], '$')];
     }
 
     /** Keeps the key and tries it at once, so the admin sees it work (or why it doesn't). */

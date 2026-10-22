@@ -346,6 +346,7 @@ final class ClassRecorder extends Component
             'engine_key', 'engine_not_set_up', 'engine_bad_key' => 'Add your AI key in Settings, AI, then try again.',
             'engine_consent' => 'Agree to use the AI in Settings, AI, then try again.',
             'engine_cap' => 'This month\'s AI limit is reached. Raise it in Settings, AI, to keep going.',
+            'engine_daily' => 'Today\'s free AI is used up. It starts again tomorrow, or add your own key in Settings, AI.',
             'engine_credit' => 'Your AI account is out of credit. Top it up, then try again.',
             'engine_model' => 'The model that writes classes down is not available with your key. Check Settings, AI.',
             'ffmpeg_missing' => 'The recording could not be cut into pieces on this server.',

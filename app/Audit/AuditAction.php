@@ -45,6 +45,8 @@ final class AuditAction
 
     public const ENGINE_DEFAULTS_CHANGED = 'engine.defaults_changed';
 
+    public const ENGINE_SHARED_CHANGED = 'engine.shared_changed';
+
     // AI apps connected over MCP (docs/specs/mcp-connections-plan.md §3.4). Lifecycle and exceptions only: never a
     // per-call row, since this log is read by admins and kept for good.
     public const CONNECTION_CONSENTED = 'connection.consented';

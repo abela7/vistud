@@ -34,7 +34,7 @@ class SecondLearnerGateTest extends TestCase
             ->expectsOutputToContain('key database is separate: yes')
             ->expectsOutputToContain('learner text is encrypted: yes')
             ->expectsOutputToContain('files are encrypted: yes')
-            ->expectsOutputToContain('student uses own AI key only: yes')
+            ->expectsOutputToContain('student uses own AI key, or the shared one with a daily limit: yes')
             ->expectsOutputToContain('acceptance run matches this commit: no')
             ->expectsOutputToContain('privacy policy is reviewed: no')
             ->expectsOutputToContain('result: closed')

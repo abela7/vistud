@@ -113,4 +113,39 @@
             <x-button type="submit" variant="primary" icon="check" wire:loading.attr="aria-busy" wire:target="saveDefaults" busy-label="Saving…">Save the defaults</x-button>
         </form>
     </section>
+
+    <section class="question-panel space-y-4" aria-labelledby="engine-shared-heading">
+        <div class="panel-head">
+            <span class="item-icon" aria-hidden="true"><x-icon name="users" class="size-5" /></span>
+            <div class="panel-head-text">
+                <h2 id="engine-shared-heading" class="panel-title">
+                    Students without a key
+                    @if ($status['shared_working'])
+                        <span class="badge badge-success"><x-icon name="circle-check" class="size-3.5" />On</span>
+                    @else
+                        <span class="badge">Off</span>
+                    @endif
+                </h2>
+                <p class="panel-hint">Let students who haven't added their own key use one key you pay for, with one model and a daily limit each. When they add their own key, they use theirs.</p>
+            </div>
+        </div>
+        <ol class="list-decimal space-y-1 pl-5 text-sm text-fg-muted">
+            <li>At OpenRouter, make a <strong>separate key</strong> just for students and give it a <strong>credit limit</strong> (for example $10). That limit is the most it can ever cost you.</li>
+            <li>Paste it below, choose the one model, and set how much each student may use a day.</li>
+        </ol>
+        <form wire:submit="saveShared" novalidate class="space-y-4">
+            <x-field name="sharedKey" label="Key for students" type="password" wire:model="sharedKey" autocomplete="off" :revealable="true" placeholder="sk-or-…" :hint="$status['shared_key_hint'] !== null ? 'Saved, ending '.$status['shared_key_hint'].'. Leave empty to keep it.' : 'Kept encrypted. Not the admin key above.'" />
+            <div class="grid gap-4 sm:grid-cols-2">
+                <x-field name="sharedModel" label="The one model" wire:model="sharedModel" list="engine-default-models" autocomplete="off" placeholder="google/gemini-2.5-flash" hint="Every student on the shared key uses only this." />
+                <x-field name="sharedDaily" label="Daily limit per student, in dollars" wire:model="sharedDaily" inputmode="decimal" autocomplete="off" placeholder="0.10" hint="Counted in each student's own day." />
+            </div>
+            <x-checkbox name="sharedOn" label="Let students without a key use it" wire:model="sharedOn" />
+            <div class="flex flex-wrap gap-2">
+                <x-button type="submit" variant="primary" icon="check" wire:loading.attr="aria-busy" wire:target="saveShared" busy-label="Saving…">Save</x-button>
+                @if ($status['shared_key_hint'] !== null)
+                    <x-button variant="danger" icon="trash-2" wire:click="removeSharedKey">Remove the key for students</x-button>
+                @endif
+            </div>
+        </form>
+    </section>
 </div>
