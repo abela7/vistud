@@ -21,6 +21,7 @@
 /public/storage
 /storage/*.key
 /storage/app/gate/
+/REVISION
 /storage/pail
 /vendor
 _ide_helper.php

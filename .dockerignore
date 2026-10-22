@@ -1,0 +1,26 @@
+.git
+.github
+.tools
+node_modules
+vendor
+tests
+private
+plugins
+test-results
+playwright-report
+*.sql
+.env
+.env.*
+!.env.example
+
+# Runtime data is never part of an image.
+storage/app
+storage/logs
+storage/framework
+storage/*.key
+public/build
+public/hot
+
+# Only the privacy policy is read at runtime.
+docs/*
+!docs/legal

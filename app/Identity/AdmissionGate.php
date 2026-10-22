@@ -181,13 +181,27 @@ final class AdmissionGate
         return preg_match('/^Reviewed by: [^,\r\n]+, \d{4}-\d{2}-\d{2}\s*$/m', $text) === 1;
     }
 
-    public function head(): ?string
+    /**
+     * The commit this code is. From git when the code sits in a git folder, else from the REVISION file the release
+     * script writes next to it (the sealed Docker box has no git inside it).
+     */
+    public function head(?string $directory = null): ?string
     {
-        $process = new Process(['git', 'rev-parse', 'HEAD'], base_path());
-        $process->run();
-        $hash = trim($process->getOutput());
+        $directory ??= base_path();
+        try {
+            $process = new Process(['git', 'rev-parse', 'HEAD'], $directory);
+            $process->run();
+            $hash = trim($process->getOutput());
+            if ($process->isSuccessful() && preg_match('/\A[0-9a-f]{40}\z/', $hash) === 1) {
+                return $hash;
+            }
+        } catch (Throwable) {
+            // No git here: fall through to the REVISION file.
+        }
+        $file = $directory.'/REVISION';
+        $hash = is_file($file) ? trim((string) file_get_contents($file)) : '';
 
-        return $process->isSuccessful() && preg_match('/\A[0-9a-f]{40}\z/', $hash) === 1 ? $hash : null;
+        return preg_match('/\A[0-9a-f]{40}\z/', $hash) === 1 ? $hash : null;
     }
 
     public function acceptancePath(): string

@@ -112,6 +112,27 @@ class SecondLearnerGateTest extends TestCase
         $this->assertTrue(app(AdmissionGate::class)->ownKeyOnly());
     }
 
+    public function test_the_release_is_read_from_the_revision_file_when_the_code_is_not_in_git(): void
+    {
+        $directory = sys_get_temp_dir().'/vistud-release-'.bin2hex(random_bytes(4));
+        mkdir($directory);
+        try {
+            $gate = app(AdmissionGate::class);
+            $this->assertNull($gate->head($directory), 'no git and no REVISION file');
+
+            file_put_contents($directory.'/REVISION', 'not a commit
+');
+            $this->assertNull($gate->head($directory), 'a REVISION file that is not a commit');
+
+            file_put_contents($directory.'/REVISION', str_repeat('ab', 20).'
+');
+            $this->assertSame(str_repeat('ab', 20), $gate->head($directory));
+        } finally {
+            @unlink($directory.'/REVISION');
+            @rmdir($directory);
+        }
+    }
+
     public function test_a_missing_wrong_or_failed_acceptance_record_fails_its_check(): void
     {
         $path = sys_get_temp_dir().'/vistud-gate-'.bin2hex(random_bytes(4)).'.json';
