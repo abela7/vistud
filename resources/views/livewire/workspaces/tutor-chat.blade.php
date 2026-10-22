@@ -30,7 +30,14 @@
         </button>
     </div>
 
-    @if (! $ready)
+    @if (! $ready && $sharedConsent)
+        <div class="chat-empty">
+            <p class="font-medium">Start the AI</p>
+            <p class="text-sm text-fg-muted">It's ready for you, no key needed. Your messages and the study material you use are sent to OpenRouter, to the model chosen for you ({{ $choices->tutorModel }}).</p>
+            <x-button variant="primary" icon="check" wire:click="agreeToAi" wire:loading.attr="aria-busy" wire:target="agreeToAi" busy-label="Starting…">Agree and start</x-button>
+            <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-sm text-link">Choose models in AI settings</a>
+        </div>
+    @elseif (! $ready)
         <div class="chat-empty">
             <p class="font-medium">Set up your AI first</p>
             <p class="text-sm text-fg-muted">Your key, the model that tutors you, and your consent: one page, a few minutes.</p>

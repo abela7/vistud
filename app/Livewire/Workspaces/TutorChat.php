@@ -672,6 +672,8 @@ final class TutorChat extends Component
         return view('livewire.workspaces.tutor-chat', [
             'open' => $session->isOpen(),
             'ready' => $ready,
+            // On the shared key with a model chosen, the consent is all that's missing: asked here, in one click.
+            'sharedConsent' => ! $ready && $choices->consentedAt === null && $choices->tutorModel !== '' && $this->settings->shared($by) !== null,
             'choices' => $choices,
             'turns' => $turns,
             'suggestedReply' => $suggestedReply,
@@ -1019,6 +1021,12 @@ final class TutorChat extends Component
         $this->dispatch('questions-changed');
         $this->dispatch('flashcards-changed');
         $this->dispatch('quizzes-changed');
+    }
+
+    /** A student on the shared key agrees to the chat sending their study material to the service, from the chat itself. */
+    public function agreeToAi(): void
+    {
+        $this->settings->consent($this->principal());
     }
 
     private function principal(): Principal

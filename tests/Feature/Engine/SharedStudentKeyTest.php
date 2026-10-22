@@ -15,6 +15,7 @@ use App\Engine\StudentKeyGate;
 use App\Identity\AdmissionGate;
 use App\Livewire\Admin\EngineSetup;
 use App\Livewire\Study\EngineSettings;
+use App\Livewire\Workspaces\TutorChat;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\PasswordConfirmationRequired;
@@ -244,6 +245,32 @@ class SharedStudentKeyTest extends TestCase
         $chat = $settings->get($student)->chatModels();
         sort($chat);
         $this->assertSame(['fake/plain', 'fake/quick'], $chat);
+    }
+
+    public function test_a_student_on_the_shared_key_starts_the_ai_from_the_chat_in_one_click(): void
+    {
+        $this->withoutVite();
+        $this->turnOn($this->principal($this->admin()));
+        $user = $this->student();
+        $this->actingAs($user);
+        $student = $this->principal($user);
+        app(Settings::class)->set($student, ['tutor_model' => 'fake/plain', 'language' => 'Amharic']);
+        $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
+
+        Livewire::test(TutorChat::class, ['vistud' => true])
+            ->assertSee('Start the AI')->assertSee('to the model chosen for you (fake/plain)')->assertDontSee('Set up your AI first')
+            ->call('agreeToAi')
+            ->assertDontSee('Start the AI')->assertSee('Ask me anything about your study');
+        $choices = app(Settings::class)->get($student);
+        // Only the consent changed: their model and language are as they were.
+        $this->assertNotNull($choices->consentedAt);
+        $this->assertSame(['fake/plain', 'Amharic'], [$choices->tutorModel, $choices->language]);
+
+        // Without the shared key, the chat still sends them to set up their own.
+        $other = $this->student();
+        $this->actingAs($other);
+        app(Setup::class)->setShared($this->principal($this->admin()), ['on' => false, 'models' => 'fake/quick', 'daily' => '0.10']);
+        Livewire::test(TutorChat::class, ['vistud' => true])->assertSee('Set up your AI first')->assertDontSee('Agree and start');
     }
 
     public function test_the_list_of_cheap_models_narrows_by_words_price_pictures_and_tools(): void

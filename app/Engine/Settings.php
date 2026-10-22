@@ -364,6 +364,19 @@ final class Settings
         return $this->get($by);
     }
 
+    /**
+     * The student's yes to the chat sending their study material to the service, and nothing else changed: the one
+     * click a student on the shared key needs before the AI answers (the owner's ask, 2026-10-22).
+     */
+    public function consent(Principal $by): Choices
+    {
+        $scope = Guard::learner($by);
+        $this->ensureRow($scope);
+        LearnerTables::query($scope, 'engine_settings')->whereNull('consented_at')->update(['consented_at' => now(), 'updated_at' => now()]);
+
+        return $this->get($by);
+    }
+
     /** A row with the defaults, so a key can be kept before anything else is chosen. */
     private function ensureRow(LearnerScope $scope): void
     {
