@@ -1109,6 +1109,23 @@ export function tutorChat({ upload, account, mentionItems = [], mentions = true,
                 const isPicture = file.type.startsWith('image/');
                 const localThumb = isPicture ? URL.createObjectURL(file) : null;
                 this.uploading++;
+                if (upload.chatOnly) {
+                    // ViStud AI: the file goes with the next message only (Livewire's upload), into no course.
+                    const key = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+                    try {
+                        await new Promise((resolve, reject) => this.$wire.upload(`uploads.${key}`, file, resolve, () => reject(new Error(`${file.name} couldn't be uploaded. Try it again.`))));
+                        this.attached.push({ ref: `upload:${key}`, name: file.name, kind: isPicture ? 'picture' : 'file', thumbUrl: localThumb, ext: file.name.includes('.') ? file.name.split('.').pop() : null, inScope: true });
+                        this.note = '';
+                    } catch (error) {
+                        if (localThumb) {
+                            try { URL.revokeObjectURL(localThumb); } catch {}
+                        }
+                        this.note = error.message;
+                    } finally {
+                        this.uploading--;
+                    }
+                    continue;
+                }
                 try {
                     const made = await uploadOne(upload, file);
                     const serverThumb = isPicture || made.kind === 'image' ? (made.contentUrl || `/files/${made.id}/content`) : null;

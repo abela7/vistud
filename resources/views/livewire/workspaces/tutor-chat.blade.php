@@ -12,7 +12,7 @@
     use Illuminate\Support\Str;
 @endphp
 <section class="chat" aria-labelledby="chat-heading-{{ $this->getId() }}"
-    x-data="tutorChat(@js(['upload' => $upload, 'account' => $account, 'mentionItems' => $attachable['items'] ?? [], 'mentions' => ! $vistud, 'review' => ($activity ?? null) !== null]))"
+    x-data="tutorChat(@js(['upload' => $upload, 'account' => $account, 'mentionItems' => $attachable['items'] ?? [], 'mentions' => true, 'review' => ($activity ?? null) !== null]))"
     x-on:chat-done.window="done($event.detail.restore)"
     x-on:notes-changed.window="noteChanged($event.detail.notes)"
     x-on:session-toggle-tools.window="toggleTools()"
@@ -600,7 +600,7 @@
                         </div>
                     </div>
 
-                    @php $boxWords = $vistud ? 'Ask ViStud AI… (Enter sends, Shift+Enter for a new line)' : 'Write to your tutor… (Enter sends, Shift+Enter for a new line, @ to mention files & notes)'; @endphp
+                    @php $boxWords = $vistud ? 'Ask ViStud AI… (Enter sends, Shift+Enter for a new line, @ to mention files & notes)' : 'Write to your tutor… (Enter sends, Shift+Enter for a new line, @ to mention files & notes)'; @endphp
                     <label for="chat-box-{{ $this->getId() }}" class="sr-only">{{ $vistud ? 'Ask ViStud AI' : 'Write to your tutor' }}</label>
                     <span x-ref="suggested" hidden>{{ $suggestedReply ?? '' }}</span>
                     <textarea id="chat-box-{{ $this->getId() }}" class="chat-box" rows="1" x-model="draft" x-ref="box" maxlength="8000"
@@ -618,8 +618,7 @@
 
                 <div class="chat-compose-bar">
                     <div class="chat-compose-tools" role="toolbar" aria-label="Attachments and models">
-                        {{-- ViStud AI works across courses: no one course's notes and files to attach or mention. --}}
-                        @unless ($vistud)
+                        {{-- ViStud AI attaches from any course, and its uploads go with the message only (into no course). --}}
                         <div class="chat-attach" x-on:keydown.escape.stop="picking = false" x-on:click.outside="picking = false">
                             <button type="button" class="chat-tool-btn chat-add-btn" :class="{ 'is-active': picking }" x-on:click="picking = ! picking; menu = false" x-bind:aria-expanded="picking.toString()"
                                 aria-controls="chat-picker-{{ $this->getId() }}" aria-label="Add file, photo or note" title="Add file, photo or note" x-bind:disabled="busy">
@@ -661,17 +660,13 @@
                             </div>
                         </div>
 
-                        @endunless
-
                         <button type="button" class="chat-tool-btn" :class="{ 'is-active': formatOpen }" x-on:click="formatOpen = ! formatOpen" x-bind:aria-expanded="formatOpen.toString()" title="Text formatting (Aa)" aria-label="Text formatting">
                             <span class="text-xs font-semibold leading-none">Aa</span>
                         </button>
 
-                        @unless ($vistud)
-                            <button type="button" class="chat-tool-btn" :class="{ 'is-active': mentionOpen }" x-on:click="openMentionPicker()" title="Mention a file or note (@)" aria-label="Mention a file or note">
-                                <x-icon name="at-sign" class="size-3.5" />
-                            </button>
-                        @endunless
+                        <button type="button" class="chat-tool-btn" :class="{ 'is-active': mentionOpen }" x-on:click="openMentionPicker()" title="Mention a file or note (@)" aria-label="Mention a file or note">
+                            <x-icon name="at-sign" class="size-3.5" />
+                        </button>
 
                         <div class="chat-format-group" x-show="formatOpen" x-cloak x-transition>
                             <span class="chat-tool-divider" aria-hidden="true"></span>

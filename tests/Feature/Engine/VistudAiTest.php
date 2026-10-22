@@ -238,10 +238,10 @@ class VistudAiTest extends TestCase
         $this->actingAs($this->ada);
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
 
-        // The same chat, in its ViStud AI mode: its starters, no attaching, and its first words start a conversation.
+        // The same chat, in its ViStud AI mode: its starters, attaching as the tutor's does, and its first words start a conversation.
         $this->engine->will(Fake::says('Physics first: Lab report 1 is due on Thursday.', 1_000, 'fake/tutor'));
         $chat = Livewire::test(TutorChat::class, ['vistud' => true])
-            ->assertSee('Ask me anything about your study')->assertSee('What should I study today?')->assertDontSee('Add file, photo or note')
+            ->assertSee('Ask me anything about your study')->assertSee('What should I study today?')->assertSee('Add file, photo or note')
             ->call('say', TutorChat::VISTUD_STARTERS[0]['prompt'])
             ->assertDispatched('vistud-conversation-started')->assertSee('Physics first: Lab report 1 is due on Thursday.');
         $id = $chat->get('conversationId');

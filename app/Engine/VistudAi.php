@@ -48,7 +48,11 @@ final class VistudAi
         private Sessions $sessions,
         private Runner $runner,
         private Usage $usage,
+        private Attachments $attachments,
     ) {}
+
+    /** Pictures uploaded with the message being answered, by ref, as data URLs: shown with that answer only, kept nowhere. */
+    private array $shown = [];
 
     /**
      * The student's conversations, the latest first, with something in them; with $search, those whose title has it.
@@ -83,19 +87,56 @@ final class VistudAi
      * Sends the student's words in a conversation and returns the final answer; streamed to $onEvent (`text`, `looking`,
      * `saved`) as a session's chat is. Refused words keep nothing; once kept, a failing engine leaves them for retry().
      *
+     * With them (the owner's ask, 2026-10-22): $attach, notes and files from any of the student's courses (`note:{id}`,
+     * `file:{id}`), and $uploads, files uploaded with this message only (name and bytes, by key) and added to no course:
+     * a document is read as text and kept with the message; a picture is shown with this answer only.
+     *
      * @param  (Closure(string, string): void)|null  $onEvent
+     * @param  array<string, array{name: string, bytes: string}>  $uploads
      */
-    public function send(Principal $by, string $id, mixed $text, ?Closure $onEvent = null, ?string $model = null): Reply
+    public function send(Principal $by, string $id, mixed $text, ?Closure $onEvent = null, ?string $model = null, mixed $attach = [], array $uploads = []): Reply
     {
         $scope = Guard::learner($by);
         $choices = $this->ready($by);
-        $text = self::words($text);
         $thread = $this->thread($scope, $id);
+        $activeModel = ($model ?: (string) $thread->model) ?: $choices->tutorModel;
+        [$items, $this->shown] = $this->attached($by, $attach, $uploads, $activeModel);
+        // With something attached, the words may be left out.
+        $text = $items === [] ? self::words($text) : mb_substr(trim(is_string($text) ? str_replace("\r\n", "\n", $text) : ''), 0, SessionChat::MAX_TEXT);
         $this->refuseOverCap($scope, $thread, $choices, $this->sessions->timezone($by));
         $position = (int) LearnerTables::query($scope, 'engine_messages')->where('thread_id', $thread->id)->max('position');
-        $this->keep($scope, $thread->id, ++$position, ['role' => 'user', 'content' => $text]);
+        $this->keep($scope, $thread->id, ++$position, ['role' => 'user', 'content' => $text, 'attachments' => $items === [] ? null : json_encode($items)]);
+        try {
+            return $this->answer($by, $thread, $choices, $position, $onEvent, $model ?: (string) $thread->model);
+        } finally {
+            $this->shown = [];
+        }
+    }
 
-        return $this->answer($by, $thread, $choices, $position, $onEvent, $model ?: (string) $thread->model);
+    /**
+     * What goes with a message: the chosen notes and files, then the uploads, at most Attachments::MOST in all; a picture
+     * only to a model that sees pictures (one the catalogue doesn't know is given the benefit of the doubt).
+     *
+     * @param  array<string, array{name: string, bytes: string}>  $uploads
+     * @return array{0: list<array<string, mixed>>, 1: array<string, string>}
+     */
+    private function attached(Principal $by, mixed $attach, array $uploads, string $model): array
+    {
+        $refs = is_array($attach) ? array_values(array_unique(array_filter($attach, fn ($ref) => is_string($ref) && ! str_starts_with($ref, 'upload:')))) : [];
+        Input::refuse(count($refs) + count($uploads) > Attachments::MOST ? ['attach' => 'Attach up to '.Attachments::MOST.' notes or files to one message.'] : []);
+        $seeing = $this->models->find($model, $this->settings->credential($by));
+        $items = $this->attachments->resolve($by, null, $refs, $seeing);
+        $shown = [];
+        foreach ($uploads as $key => $upload) {
+            $made = Attachments::upload((string) $key, (string) ($upload['name'] ?? ''), (string) ($upload['bytes'] ?? ''));
+            if ($made['url'] !== null) {
+                Input::refuse($seeing !== null && ! $seeing->images ? ['attach' => 'This model can\'t see pictures. Choose one that can, or describe it in words.'] : []);
+                $shown[$made['item']['ref']] = $made['url'];
+            }
+            $items[] = $made['item'];
+        }
+
+        return [$items, $shown];
     }
 
     /** @param (Closure(string, string): void)|null $onEvent */
@@ -190,7 +231,8 @@ final class VistudAi
             }
             $mine = $row->role === 'assistant';
             $turns[] = [
-                'role' => $row->role, 'text' => (string) $row->content, 'attachments' => [],
+                'role' => $row->role, 'text' => (string) $row->content,
+                'attachments' => $row->role === 'user' ? array_map(fn (array $a) => ['ref' => (string) $a['ref'], 'name' => (string) $a['name'], 'kind' => (string) $a['kind'], 'course' => isset($a['course']) ? (string) $a['course'] : null], self::attachedTo($row)) : [],
                 'tools' => $mine ? [...$tools, ...$calls] : [], 'saved' => [], 'notes' => [], 'topic' => null, 'statuses' => [], 'quizzes' => [],
                 'remembered' => $mine ? $remembered : [],
                 'cost_micros' => (int) $row->cost_micros + ($mine ? $cost : 0),
@@ -224,7 +266,7 @@ final class VistudAi
         $model = $this->models->find($activeModel, $key);
         $tools = $model === null || $model->tools ? $this->toolbox->definitions() : [];
         $system = $this->system($by, $thread->summary);
-        $messages = $this->messagesOf($scope, $thread, $activeModel);
+        $messages = $this->messagesOf($by, $thread, $activeModel, $position);
         $context = new Context('', null, null, $this->sessions->timezone($by), threadId: $thread->id);
         $fallbacks = $choices->fallbackModel !== '' ? [$choices->fallbackModel] : [];
         $rounds = max(0, (int) config('vistud.engine.tool_rounds'));
@@ -265,8 +307,9 @@ final class VistudAi
     }
 
     /** @return list<array<string, mixed>> the unfolded messages in the OpenAI chat shape; reasoning back to the model that gave it */
-    private function messagesOf(LearnerScope $scope, object $thread, string $model): array
+    private function messagesOf(Principal $by, object $thread, string $model, int $lastAsked): array
     {
+        $scope = Guard::learner($by);
         $messages = [];
         foreach ($this->rows($scope, $thread->id) as $row) {
             if ((int) $row->position <= (int) $thread->folded_through || ($row->role === 'assistant' && trim((string) $row->content) === '' && ! is_string($row->tool_calls))) {
@@ -276,7 +319,9 @@ final class VistudAi
             $messages[] = match ($row->role) {
                 'tool' => ['role' => 'tool', 'tool_call_id' => (string) $row->tool_call_id, 'content' => (string) $row->content],
                 'assistant' => array_filter(['role' => 'assistant', 'content' => (string) $row->content !== '' ? (string) $row->content : null, 'tool_calls' => is_string($row->tool_calls) ? self::objectArguments(json_decode($row->tool_calls, true) ?: []) : null, 'reasoning_details' => is_array($reasoning) && $reasoning !== [] ? $reasoning : null], fn ($v) => $v !== null),
-                default => ['role' => 'user', 'content' => (string) $row->content],
+                // What the student attached goes with their words; a picture only with the message being answered.
+                default => ['role' => 'user', 'content' => ($attached = self::attachedTo($row)) === [] ? (string) $row->content
+                    : $this->attachments->content($by, (string) $row->content, $attached, (int) $row->position === $lastAsked, $this->shown)],
             };
         }
 
@@ -350,6 +395,14 @@ final class VistudAi
     private function keep(LearnerScope $scope, string $threadId, int $position, array $values): void
     {
         LearnerTables::insert($scope, 'engine_messages', $values + ['id' => Ids::new(), 'thread_id' => $threadId, 'position' => $position, 'created_at' => now()]);
+    }
+
+    /** @return list<array<string, mixed>> what the student attached to a message */
+    private static function attachedTo(object $row): array
+    {
+        $items = isset($row->attachments) && is_string($row->attachments) ? json_decode($row->attachments, true) : null;
+
+        return is_array($items) ? array_values(array_filter($items, fn ($item) => is_array($item) && isset($item['ref'], $item['name'], $item['kind']))) : [];
     }
 
     /** @return list<object> */

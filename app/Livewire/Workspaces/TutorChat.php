@@ -18,6 +18,7 @@ use App\Identity\PrincipalFactory;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
+use App\Platform\Files\UploadTemps;
 use App\Study\Activities;
 use App\Study\AssignmentLog;
 use App\Study\AssignmentSources;
@@ -36,11 +37,15 @@ use App\Study\TopicDetails;
 use App\Study\Topics;
 use App\Study\Tutoring;
 use App\Study\TutorMemories;
+use App\Study\Workspaces;
 use Closure;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Validator;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 
 /**
  * The built-in chat on a study session's page (docs/specs/study-memory.md §6): the student's turns and the
@@ -54,6 +59,16 @@ use Livewire\Component;
  */
 final class TutorChat extends Component
 {
+    use WithFileUploads;
+
+    /**
+     * ViStud AI's uploads waiting to go with the next message, by the key the page gave them (`upload:{key}`): read with
+     * that message and kept in no course (the owner's ask, 2026-10-22).
+     *
+     * @var array<string, TemporaryUploadedFile>
+     */
+    public array $uploads = [];
+
     public const SUGGESTIONS = [
         'Where did we stop last time, and what should we do today?',
         'Explain this topic to me simply, one part at a time.',
@@ -242,15 +257,22 @@ final class TutorChat extends Component
             return;
         }
         if ($this->vistud) {
-            $this->turn(function (Closure $on) use ($words) {
+            // Files uploaded with this message (`upload:{key}`) go with it only; notes and files from any course by ref.
+            $refs = is_array($attach) ? array_values(array_filter($attach, 'is_string')) : [];
+            $keys = array_map(fn (string $ref) => substr($ref, 7), array_filter($refs, fn (string $ref) => str_starts_with($ref, 'upload:')));
+            $this->turn(function (Closure $on) use ($words, $refs, $keys) {
                 $ai = app(VistudAi::class);
+                $uploads = $this->uploaded($keys);
                 if ($this->conversationId === null) {
                     // The first words start the conversation: the page lists it and opens it at its address.
-                    $this->conversationId = $ai->start($this->principal(), $words, $this->activeModel);
+                    $this->conversationId = $ai->start($this->principal(), $words !== '' ? $words : 'Attached files', $this->activeModel);
                     $this->dispatch('vistud-conversation-started', id: $this->conversationId);
                 }
-
-                return $ai->send($this->principal(), $this->conversationId, $words, $on, $this->activeModel);
+                try {
+                    return $ai->send($this->principal(), $this->conversationId, $words, $on, $this->activeModel, $refs, $uploads);
+                } finally {
+                    $this->uploads = array_diff_key($this->uploads, array_flip($keys));
+                }
             }, $words);
 
             return;
@@ -607,7 +629,7 @@ final class TutorChat extends Component
         foreach ($turns as &$turn) {
             $turn['topicChangeWords'] = isset($turn['topicChange']) ? self::topicChangeWords($turn['topicChange']) : null;
             $turn['attachments'] = array_map(fn (array $a) => $a + [
-                'url' => $this->urlOf($a['ref']),
+                'url' => $this->urlOf($a['ref'], $a['course'] ?? null),
                 'icon' => self::ICONS[$a['kind']] ?? 'file',
                 'thumbUrl' => ($a['kind'] === 'picture' && str_starts_with($a['ref'], 'file:')) ? route('files.content', str_replace('file:', '', $a['ref'])) : null,
             ], $turn['attachments']);
@@ -705,7 +727,11 @@ final class TutorChat extends Component
             'testAsk' => self::TEST_ASK,
             'mode' => $session->mode,
             'hasModule' => $ai === null && $this->moduleOf($by, $session) !== null,
-            'attachable' => $ai === null && $ready && $session->isOpen() ? $this->attachable($by, $session) : ['module' => null, 'items' => []],
+            'attachable' => match (true) {
+                $ai !== null && $ready => $this->attachableEverywhere($by),
+                $ai === null && $ready && $session->isOpen() => $this->attachable($by, $session),
+                default => ['module' => null, 'items' => []],
+            },
             'account' => (string) auth()->id(),
             'upload' => [
                 'url' => route('api.v1.files.store'),
@@ -715,6 +741,8 @@ final class TutorChat extends Component
                 'maxBytes' => Files::maxBytes(),
                 'accept' => implode(',', array_map(fn (string $extension) => ".{$extension}", array_keys(FileTypes::TYPES))),
                 'icons' => array_map(fn (string $icon) => Icons::url($icon), self::ICONS),
+                // ViStud AI: uploads go with the message only (Livewire's upload), into no course.
+                'chatOnly' => $ai !== null,
             ],
             'quizzes' => $onTopic === null && $ai === null && $ready && $session->isOpen() ? $this->quizzes($by, $session) : [],
             'chatModels' => $chatModels,
@@ -915,15 +943,73 @@ final class TutorChat extends Component
         }
     }
 
-    private function urlOf(string $ref): ?string
+    /** Where an attached note or file opens: in its own course (ViStud AI's come from any); an upload opens nowhere. */
+    private function urlOf(string $ref, ?string $course = null): ?string
     {
         [$kind, $id] = explode(':', $ref, 2) + [1 => ''];
+        $course ??= $this->workspaceId;
+        if ($course === '') {
+            return null;
+        }
 
         return match ($kind) {
-            'note' => route('workspaces.notes.show', [$this->workspaceId, $id]),
-            'file' => route('workspaces.files.show', [$this->workspaceId, $id]),
+            'note' => route('workspaces.notes.show', [$course, $id]),
+            'file' => route('workspaces.files.show', [$course, $id]),
             default => null,
         };
+    }
+
+    /**
+     * The files uploaded for ViStud AI with these keys, as name and bytes, checked as the course guide checks its own:
+     * a picture or a Word, PDF, PowerPoint, Excel or text file, under 10 MB. A missing one is left out.
+     *
+     * @param  list<string>  $keys
+     * @return array<string, array{name: string, bytes: string}>
+     */
+    private function uploaded(array $keys): array
+    {
+        $files = [];
+        foreach ($keys as $key) {
+            $file = $this->uploads[$key] ?? null;
+            if (! $file instanceof TemporaryUploadedFile) {
+                continue;
+            }
+            $check = Validator::make(['file' => $file], ['file' => ['extensions:'.GuideChat::PICTURE_TYPES, 'max:'.GuideChat::PICTURE_KB]]);
+            if ($check->fails()) {
+                throw new Unprocessable('validation_failed', mb_substr(mb_scrub($file->getClientOriginalName()), 0, 80).': attach a picture, or a Word, PDF, PowerPoint, Excel or text file, under 10 MB.', ['fields' => ['attach' => ['That file can\'t be attached.']]]);
+            }
+            $files[$key] = ['name' => $file->getClientOriginalName(), 'bytes' => UploadTemps::bytes($file, Files::maxBytes())];
+        }
+
+        return $files;
+    }
+
+    /**
+     * What ViStud AI can attach: notes and files from every one of the student's courses, the most recently studied
+     * course first, at most 120, each with where it opens.
+     *
+     * @return array{module: null, items: list<array<string, mixed>>}
+     */
+    private function attachableEverywhere(Principal $by): array
+    {
+        $items = [];
+        foreach (app(Workspaces::class)->list($by) as $course) {
+            foreach ($this->notes->list($by, $course->id) as $note) {
+                $items[] = ['ref' => "note:{$note->id}", 'name' => $note->displayTitle()." · {$course->name}", 'kind' => 'note', 'ext' => 'note', 'chosen' => false, 'inScope' => true];
+            }
+            foreach ($this->files->list($by, $course->id) as $file) {
+                $items[] = [
+                    'ref' => "file:{$file->id}", 'name' => $file->fileName()." · {$course->name}", 'kind' => $file->kind === 'image' ? 'picture' : 'file',
+                    'ext' => strtolower(pathinfo($file->name, PATHINFO_EXTENSION)) ?: 'file', 'chosen' => false,
+                    'thumbUrl' => $file->kind === 'image' ? route('files.content', $file->id) : null, 'inScope' => true,
+                ];
+            }
+            if (count($items) >= 120) {
+                break;
+            }
+        }
+
+        return ['module' => null, 'items' => array_slice($items, 0, 120)];
     }
 
     /**
