@@ -226,7 +226,10 @@ final class EngineSettings extends Component
         try {
             $this->settings->set($this->principal(), [
                 'tutor_model' => $this->tutorModel, 'reader_model' => $this->readerModel, 'helper_model' => $this->helperModel, 'fallback_model' => $this->fallbackModel,
-                'favorite_models' => $this->favoriteModels,
+                // On the shared key the tutor is always in the chat, so a list with everything else switched off is
+                // never empty (an empty one would mean "never chosen", which switches them all back on).
+                'favorite_models' => $this->settings->shared($this->principal()) !== null && $this->tutorModel !== ''
+                    ? array_values(array_unique([$this->tutorModel, ...$this->favoriteModels])) : $this->favoriteModels,
                 'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language, 'ask_topics' => $this->askTopics,
                 'auto_read_files' => $this->autoReadFiles, 'tutor_marks_topics' => $this->tutorMarksTopics, 'tutor_remembers' => $this->tutorRemembers, 'copy_paste_ai' => $this->copyPasteAi,
             ]);
@@ -259,6 +262,13 @@ final class EngineSettings extends Component
         }
         $words = fn (string $id) => $id !== '' && isset($byId[$id]) ? $byId[$id]->priceWords().($byId[$id]->tools ? '' : ' · no look-ups: this model can\'t call tools') : null;
 
+        // The shared key's models, in the admin's order, with their names and prices, for the switches and the lists.
+        $sharedList = array_map(fn (string $id) => [
+            'id' => $id,
+            'name' => isset($byId[$id]) ? $byId[$id]->name : (str_contains($id, '/') ? explode('/', $id, 2)[1] : $id),
+            'price' => $words($id),
+        ], $shared['models'] ?? []);
+
         $favDetails = [];
         foreach ($this->favoriteModels as $favId) {
             $favDetails[] = [
@@ -284,6 +294,7 @@ final class EngineSettings extends Component
             'keyState' => $keyState,
             // The shared key for students, when this student is on it: its one model and daily limit.
             'shared' => $shared,
+            'sharedList' => $sharedList,
             'models' => $models,
             'setupUrl' => $by->hasRole(Role::Admin) ? route('admin.engine') : null,
             'tutorWords' => $words($this->tutorModel),

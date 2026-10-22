@@ -178,8 +178,41 @@
         <x-accordion id="models" title="Your models" icon="brain">
             <x-slot:status>{{ $tutorModel !== '' ? 'Tutor: '.$tutorModel : 'Choose a tutor' }}</x-slot:status>
             @if ($shared !== null)
-                <p class="acc-note">On the shared key you can choose: {{ implode(', ', $shared['models']) }}. Another model is replaced by {{ $shared['model'] }}.</p>
-            @endif
+                {{-- On the shared key: only the models the owner allowed, a purpose each, and which of them the chat offers. --}}
+                <p class="acc-note">You're on the shared key. Choose which of its models does each job, and which you can switch to in a chat.</p>
+                <div class="model-fields">
+                    @foreach ([['tutorModel', 'Tutor', $roles[0]->does()], ['readerModel', 'Reader', $roles[1]->does()], ['helperModel', 'Helper', $roles[2]->does()]] as [$field, $label, $does])
+                        <div class="space-y-1.5">
+                            <label for="field-{{ $field }}" class="field-label">{{ $label }}</label>
+                            <select id="field-{{ $field }}" class="input" wire:model.live="{{ $field }}" aria-describedby="field-{{ $field }}-hint">
+                                @foreach ($sharedList as $option)
+                                    <option value="{{ $option['id'] }}">{{ $option['name'] }}{{ $option['price'] ? ' · '.$option['price'] : '' }}</option>
+                                @endforeach
+                            </select>
+                            <p id="field-{{ $field }}-hint" class="text-sm text-fg-muted">{{ $does }}</p>
+                            @error($field)
+                                <p class="field-error"><x-icon name="circle-alert" class="mt-0.5 size-4" /><span>{{ $message }}</span></p>
+                            @enderror
+                        </div>
+                    @endforeach
+                </div>
+
+                <div class="fav-block">
+                    <h3 class="fav-title">In the chat</h3>
+                    <p class="acc-note">Switch on the models you want to pick from while you study. Your tutor is always there.</p>
+                    <ul class="fav-list" role="list">
+                        @foreach ($sharedList as $option)
+                            <li class="fav-item" wire:key="shared-{{ $option['id'] }}">
+                                @if ($option['id'] === $tutorModel)
+                                    <x-checkbox :name="'shared-'.$loop->index" :label="$option['name']" :hint="$option['id'].' · your tutor, always in the chat'" :checked="true" disabled />
+                                @else
+                                    <x-checkbox :name="'shared-'.$loop->index" :label="$option['name']" :hint="$option['id'].($option['price'] ? ' · '.$option['price'] : '')" :value="$option['id']" wire:model.live="favoriteModels" />
+                                @endif
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @else
             @if ($keyState !== 'none' && $models === [])
                 <p class="acc-note">The list didn't load. Type a model's id, or press <em>Try it</em> to see why.</p>
             @endif
@@ -222,6 +255,7 @@
                     @endforeach
                 </div>
             </div>
+            @endif
         </x-accordion>
 
         <x-accordion id="tutor" title="How the tutor works" icon="languages">

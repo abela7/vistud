@@ -47,7 +47,10 @@ final class Settings
         $allowed = $shared['models'] ?? null;
         $pick = fn (?string $chosen, string $fallback) => $allowed === null ? (string) ($chosen ?? $fallback) : (in_array($chosen, $allowed, true) ? $chosen : $allowed[0]);
         if ($allowed !== null) {
-            $favoriteModels = $allowed;
+            // The ones the student switched on for the chat (all of them until they choose), never one outside the list.
+            // With none left, the tutor's alone (an empty list would offer the popular ones, which the shared key can't run).
+            $favoriteModels = ($rawFavorites === null ? $allowed : array_values(array_intersect($allowed, $favoriteModels)))
+                ?: [$pick($row->tutor_model ?? null, $defaults['tutor'])];
         }
 
         return new Choices(

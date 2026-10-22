@@ -118,7 +118,8 @@ class SharedStudentKeyTest extends TestCase
         $choices = $settings->get($student);
         // fake/tutor isn't one of the shared key's models: the default instead. fake/plain is, so it stays.
         $this->assertSame(['fake/quick', 'fake/plain', 'fake/quick', ''], [$choices->tutorModel, $choices->readerModel, $choices->helperModel, $choices->fallbackModel]);
-        $this->assertSame(['fake/quick', 'fake/plain'], $choices->chatModels());
+        // Their chat favourite (fake/tutor) isn't a shared model: the tutor alone, never a model outside the list.
+        $this->assertSame(['fake/quick'], $choices->chatModels());
         $this->assertSame([$this->studentsKey, 'fake/quick'], array_slice($settings->ready($student, Role::Tutor), 1));
         // Recordings are long and costly: not on the shared key.
         $this->assertNull($settings->audioModel($student));
@@ -215,7 +216,34 @@ class SharedStudentKeyTest extends TestCase
         $student = $this->student();
         $this->actingAs($student);
         Livewire::test(EngineSettings::class)->assertSee('You\'re using the shared key, up to $0.25 a day, with 2 models to choose from.', false)
-            ->assertSee('On the shared key you can choose: fake/quick, fake/plain.', false);
+            ->assertSee('Choose which of its models does each job', false);
+    }
+
+    public function test_a_student_on_the_shared_key_gives_each_job_one_of_its_models_and_switches_them_on_and_off_for_the_chat(): void
+    {
+        $this->withoutVite();
+        $this->turnOn($this->principal($this->admin()));
+        $user = $this->student();
+        $this->actingAs($user);
+        $student = $this->principal($user);
+        $settings = app(Settings::class);
+
+        // Until they choose: the default for each job, and every shared model in the chat.
+        $this->assertSame(['fake/quick', 'fake/plain'], $settings->get($student)->chatModels());
+        Livewire::test(EngineSettings::class)
+            ->assertSee('Choose which of its models does each job')->assertSee('In the chat')->assertDontSee('Popular recommendations')
+            ->assertSet('tutorModel', 'fake/quick')
+            ->set('tutorModel', 'fake/plain')->set('readerModel', 'fake/quick')->set('helperModel', 'fake/plain')
+            ->set('favoriteModels', [])->call('save')->assertHasNoErrors();
+        $choices = $settings->get($student);
+        $this->assertSame(['fake/plain', 'fake/quick', 'fake/plain'], [$choices->tutorModel, $choices->readerModel, $choices->helperModel]);
+        // Everything else switched off: the tutor alone, and it stays that way (not back to all of them).
+        $this->assertSame(['fake/plain'], $choices->chatModels());
+
+        Livewire::test(EngineSettings::class)->set('favoriteModels', ['fake/quick'])->call('save')->assertHasNoErrors();
+        $chat = $settings->get($student)->chatModels();
+        sort($chat);
+        $this->assertSame(['fake/plain', 'fake/quick'], $chat);
     }
 
     public function test_the_list_of_cheap_models_narrows_by_words_price_pictures_and_tools(): void
