@@ -1368,11 +1368,11 @@
         }
     }
 
-    /* Recommended models: the kinds side by side as the width allows. */
+    /* Recommended models: one folded group per kind, so the list stays short. */
     .rec-body {
-        display: grid;
-        gap: 1.25rem 1.5rem;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
     }
 
     /* Favorite models: name and id in full, a button beside them. */
@@ -1460,17 +1460,6 @@
     }
 
     /* ---------- Recommended models (AI settings): a card is a link to where its provider is paid ---------- */
-
-    .rec-kind {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.875rem;
-        font-weight: 600;
-        color: var(--fg);
-    }
-
 
     .rec-grid {
         display: grid;

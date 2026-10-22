@@ -1,8 +1,8 @@
 {{--
-    A student's AI settings (App\Livewire\Study\EngineSettings), as folded panels, each with one line of where it
-    stands: their key (pasted once, tried at once, shown again only by its last four characters), the models worth
-    paying for, trying the models, what the month has cost, a model for each of the three roles, how the tutor works
-    and the limits. Nothing is cut short: long words wrap. Hints are one line (DESIGN.md §5.4).
+    A student's AI settings (App\Livewire\Study\EngineSettings). Each major part is an accordion, with one line of
+    where it stands: their key (pasted once, tried at once, shown again only by its last four characters), the models
+    worth paying for, trying the models, what the month has cost, a model for each of the three roles, how the tutor
+    works and the limits. Nothing is cut short: long words wrap. Hints are one line (DESIGN.md §5.4).
 --}}
 @php
     use Illuminate\Support\Carbon;
@@ -15,7 +15,7 @@
 
     @include('livewire.study.partials.recommended-models')
 
-    <x-panel id="key" title="Your key" icon="key-round">
+    <x-accordion id="key" title="Your key" icon="key-round" :open="$keyState === 'none' || (bool) $result || $confirmingRemoval">
         <x-slot:status>
             @if ($keyState === 'own')
                 <span class="badge badge-success"><x-icon name="circle-check" class="size-3.5" />Set</span> {{ $own }} key ending {{ $choices->ownKeyHint }}
@@ -101,10 +101,10 @@
         @if ($keyState === 'none' && $setupUrl)
             <p class="acc-note">Admin: <a href="{{ $setupUrl }}" class="text-link">set up one key for admin accounts</a>.</p>
         @endif
-    </x-panel>
+    </x-accordion>
 
     @if ($keyState === 'own' || $trouble)
-        <x-panel id="try-models" title="Try your models" icon="flask-conical">
+        <x-accordion id="try-models" title="Try your models" icon="flask-conical" :open="(bool) $trouble || (bool) $checks || $trial !== []">
             <x-slot:status>
                 @if ($trouble)
                     <span class="badge badge-warning"><x-icon name="triangle-alert" class="size-3.5" />Last problem</span>
@@ -164,7 +164,7 @@
                     </form>
                 </div>
             @endif
-        </x-panel>
+        </x-accordion>
     @endif
 
 
@@ -175,7 +175,7 @@
             @endforeach
         </datalist>
 
-        <x-panel id="models" title="Your models" icon="brain">
+        <x-accordion id="models" title="Your models" icon="brain">
             <x-slot:status>{{ $tutorModel !== '' ? 'Tutor: '.$tutorModel : 'Choose a tutor' }}</x-slot:status>
             @if ($shared !== null)
                 <p class="acc-note">On the shared key you can choose: {{ implode(', ', $shared['models']) }}. Another model is replaced by {{ $shared['model'] }}.</p>
@@ -222,9 +222,9 @@
                     @endforeach
                 </div>
             </div>
-        </x-panel>
+        </x-accordion>
 
-        <x-panel id="tutor" title="How the tutor works" icon="languages">
+        <x-accordion id="tutor" title="How the tutor works" icon="languages">
             <x-slot:status>Your language and what it may do</x-slot:status>
             <datalist id="engine-languages">
                 @foreach (['English', 'Amharic', 'Afaan Oromo', 'Tigrinya', 'Somali', 'Arabic', 'French', 'Spanish', 'Portuguese', 'Swahili', 'Hindi', 'Chinese'] as $name)
@@ -240,9 +240,9 @@
             </div>
             <x-checkbox name="autoReadFiles" label="Read my files automatically" hint="Each new file is read once." wire:model="autoReadFiles" />
             <x-checkbox name="copyPasteAi" label="I use another AI by copy-paste" hint="Shows the copy and paste tools." wire:model="copyPasteAi" />
-        </x-panel>
+        </x-accordion>
 
-        <x-panel id="limits" title="Limits and privacy" icon="shield-check">
+        <x-accordion id="limits" title="Limits and privacy" icon="shield-check">
             <x-slot:status>{{ $choices->sessionCapMicros > 0 ? $choices::dollars($choices->sessionCapMicros).' a session' : 'No session limit' }} · {{ $choices->monthCapMicros > 0 ? $choices::dollars($choices->monthCapMicros).' a month' : 'no monthly limit' }}</x-slot:status>
             <div class="grid gap-4 sm:grid-cols-2">
                 <x-field name="sessionCap" label="Most a session may cost ($)" type="text" inputmode="decimal" wire:model="sessionCap" hint="0 for no limit." />
@@ -250,14 +250,14 @@
             </div>
             <x-checkbox name="noTraining" label="Keep my words out of model training" hint="Only providers that promise this are used." wire:model="noTraining" />
             <x-checkbox name="consent" label="Send my study material to the model's provider" hint="Only when I use the AI." wire:model="consent" />
-        </x-panel>
+        </x-accordion>
 
         <div class="acc-actions">
             <x-button type="submit" variant="primary" icon="check" wire:loading.attr="aria-busy" wire:target="save" busy-label="Saving…">Save</x-button>
         </div>
     </form>
 
-    <x-panel id="usage" title="Usage this month" icon="trending-up">
+    <x-accordion id="usage" title="Usage this month" icon="trending-up">
         <x-slot:status>
             @if ($choices->monthCapMicros > 0)
                 {{ $choices->spent($usage['total']) }} of {{ $choices::dollars($choices->monthCapMicros) }}, all three together
@@ -276,5 +276,5 @@
         @if ($cachedShare !== null)
             <p class="acc-note" data-usage-cached>{{ $cachedShare }}% of what was sent to the AI this month was reused from the last message, which costs about a tenth of the price.</p>
         @endif
-    </x-panel>
+    </x-accordion>
 </div>

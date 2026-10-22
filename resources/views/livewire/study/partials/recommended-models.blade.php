@@ -10,8 +10,8 @@
     <x-slot:status>{{ collect($recommended)->flatten(1)->count() }} picks. Open one to get its key.</x-slot:status>
     <div class="rec-body">
         @foreach ($recommended as $kind => $picks)
-            <div class="space-y-2">
-                <h3 class="rec-kind"><x-icon :name="$kinds[$kind][1]" class="size-4" /><span>{{ $kinds[$kind][0] }}</span></h3>
+            <x-accordion :id="'rec-'.$kind" :title="$kinds[$kind][0]" :icon="$kinds[$kind][1]" :level="3">
+                <x-slot:status>{{ count($picks) === 1 ? '1 pick' : count($picks).' picks' }}</x-slot:status>
                 <ul class="rec-grid" role="list">
                     @foreach ($picks as $pick)
                         <li>
@@ -30,7 +30,7 @@
                         </li>
                     @endforeach
                 </ul>
-            </div>
+            </x-accordion>
         @endforeach
     </div>
 </x-accordion>
