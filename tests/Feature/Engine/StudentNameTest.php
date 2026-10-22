@@ -73,7 +73,7 @@ class StudentNameTest extends TestCase
         ];
         app(SessionChat::class)->send($by, $session->id, 'Hello');
         $prompts['session chat'] = $engine->last()->system;
-        app(VistudAi::class)->start($by, 'Hello');
+        app(VistudAi::class)->send($by, app(VistudAi::class)->start($by, 'Hello'), 'Hello');
         $prompts['vistud chat'] = $engine->last()->system;
         app(CourseGuide::class)->turn($by, $course->id, [], 'Hello');
         $prompts['course guide'] = $engine->last()->system;

@@ -18,6 +18,12 @@
             <p class="vistud-ai-current" title="{{ $title }}">{{ $title }}</p>
         </div>
         <div class="vistud-ai-actions">
+            @if ($conversation !== null)
+                <button type="button" class="vistud-ai-icon-btn" wire:click="clear" wire:confirm="Clear this chat? Its messages go and you carry on here. What ViStud AI remembered about you stays." title="Clear this chat (what it remembered about you stays)">
+                    <x-icon name="eraser" class="size-4" />
+                    <span class="sr-only">Clear this chat</span>
+                </button>
+            @endif
             <x-button size="sm" variant="primary" icon="plus" wire:click="newChat" x-on:click="picked()" title="Start a new conversation"><span class="vistud-ai-label">New chat</span></x-button>
             <button type="button" class="vistud-ai-icon-btn" x-on:click="fullscreen = ! fullscreen" x-bind:aria-pressed="fullscreen.toString()" x-bind:title="fullscreen ? 'Leave full screen (Esc)' : 'Full screen'">
                 <x-icon name="maximize-2" class="size-4" x-show="! fullscreen" />
@@ -52,7 +58,7 @@
                                 <span class="vistud-ai-title">{{ $item['title'] }}</span>
                                 <span class="vistud-ai-when">{{ \Illuminate\Support\Carbon::parse($item['updated_at'], 'UTC')->diffForHumans() }}</span>
                             </button>
-                            <button type="button" class="memory-action is-danger" wire:click="delete('{{ $item['id'] }}')" wire:confirm="Delete this conversation? What it cost stays counted." aria-label="Delete: {{ $item['title'] }}" title="Delete"><x-icon name="trash-2" class="size-4" /></button>
+                            <button type="button" class="memory-action is-danger" wire:click="delete('{{ $item['id'] }}')" wire:confirm="Delete this conversation? What ViStud AI remembered about you stays, and what it cost stays counted." aria-label="Delete: {{ $item['title'] }}" title="Delete"><x-icon name="trash-2" class="size-4" /></button>
                         </li>
                     @endforeach
                 </ul>

@@ -104,6 +104,12 @@
             x-on:wheel.passive="onWheel($event)"
             x-show="live || $el.querySelector('[data-turn]') !== null" @if ($turns === []) x-cloak @endif>
             @foreach ($turns as $i => $turn)
+                @if ($i > 0 && ! ($turn['folded'] ?? false) && ($turns[$i - 1]['folded'] ?? false))
+                    {{-- Where the AI's memory of this chat starts: what is above was summarised for it, so a long chat keeps going. --}}
+                    <li wire:key="folded-{{ $i }}" class="chat-topic-change chat-folded" x-show="!live || {{ $i }} < turnCount">
+                        <span class="chat-topic-change-text"><x-icon name="layers" class="size-3.5" />Earlier messages are summarised for the AI, so the chat can keep going. You still see them all.</span>
+                    </li>
+                @endif
                 @if ($turn['topicChangeWords'])
                     {{-- Where the student changed the session's topic on its page (the tutor's own changes show under its reply). --}}
                     <li wire:key="topic-change-{{ $i }}" class="chat-topic-change" x-show="!live || {{ $i }} < turnCount">

@@ -149,6 +149,21 @@ final class VistudAi
     }
 
     /**
+     * Empties a conversation (the owner's ask, 2026-10-22): its messages and their folded summary go, the conversation
+     * stays to go on from, and what ViStud AI remembered about the student stays (memories aren't the chat's). What the
+     * messages cost stays counted, as when a conversation is deleted.
+     */
+    public function clear(Principal $by, string $id): void
+    {
+        $scope = Guard::learner($by);
+        $thread = $this->thread($scope, $id);
+        DB::transaction(function () use ($scope, $thread) {
+            Spent::forgetMessages($scope, [$thread->id]);
+            LearnerTables::query($scope, 'engine_threads')->where('id', $thread->id)->update(['summary' => null, 'folded_through' => 0, 'updated_at' => now()]);
+        });
+    }
+
+    /**
      * The conversation as the student reads it, in the shape the chat shows (App\Livewire\Workspaces\TutorChat): their
      * words and the answers, with the look-ups each answer made, what it remembered and what it cost.
      *

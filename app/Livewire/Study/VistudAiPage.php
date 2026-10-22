@@ -57,6 +57,20 @@ final class VistudAiPage extends Component
         [$this->conversation, $this->chat] = [null, $this->chat + 1];
     }
 
+    /** Empties the open conversation and shows it again, empty; what ViStud AI remembered stays. */
+    public function clear(): void
+    {
+        if ($this->conversation === null) {
+            return;
+        }
+        try {
+            $this->ai->clear($this->principal(), $this->conversation);
+        } catch (NotFound) {
+            return;
+        }
+        $this->chat++;
+    }
+
     public function open(string $id): void
     {
         try {
