@@ -250,7 +250,10 @@ final class VistudAi
     /** The rules, then the snapshot of the whole study, then what the conversation's folded part held. */
     public function system(Principal $by, ?string $folded = null): string
     {
-        $rules = trim((string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', (string) file_get_contents(base_path(self::PROMPT))))."\n\n".Skills::alwaysOn();
+        $rules = trim((string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', (string) file_get_contents(base_path(self::PROMPT))));
+        // The always-on skills this student has on (none switched off: all of them).
+        $skills = Skills::alwaysOn($by);
+        $rules .= $skills !== '' ? "\n\n".$skills : '';
         $parts = [$rules, "# Their study now\n\n".$this->overview->build($by)];
         if ($folded !== null && trim($folded) !== '') {
             $parts[] = "## Earlier in this conversation (folded to keep it short)\n\n".Fence::wrap(trim($folded));

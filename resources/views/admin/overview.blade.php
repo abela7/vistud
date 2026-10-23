@@ -17,6 +17,7 @@
             @foreach ([
                 ['users', 'Accounts', 'See everyone who can log in, suspend or reactivate accounts, and grant or remove admin.', route('admin.accounts')],
                 ['brain', 'AI engine', 'Set up the model service behind the built-in chat once: paste a key, try it, choose the models everyone starts with.', route('admin.engine')],
+                ['sparkles', 'Skills', 'Turn each skill the AI uses on or off for everyone: in the chats, and in the plugin for Claude, ChatGPT and Gemini.', route('admin.skills')],
                 ['scroll-text', 'Audit log', 'A read-only record of sign-ins to the admin area and every account change.', route('admin.audit-log')],
             ] as [$icon, $name, $description, $href])
                 <section class="relative rounded-xl border border-border bg-surface-raised p-5">

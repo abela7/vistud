@@ -131,7 +131,7 @@ final class Stack
     /** The tutor's standing context for a session: its system prompt, its tools and the report on its layers. */
     public function build(Principal $by, SessionDetails $session, ?string $folded, bool $withTools): Built
     {
-        return $this->compose($this->gather($by, $session, $folded, $withTools)->withName(StudentName::of($by)), $withTools, $withTools ? $this->toolbox->except(SessionChat::ASSIGNMENT_CHAT_ONLY)->definitions() : []);
+        return $this->compose($this->gather($by, $session, $folded, $withTools)->withName(StudentName::of($by))->withSkills(Skills::alwaysOn($by)), $withTools, $withTools ? $this->toolbox->except(SessionChat::ASSIGNMENT_CHAT_ONLY)->definitions() : []);
     }
 
     /** The tutor's standing context for an assignment: companion rules, course, student, and the assignment layer. */
@@ -164,7 +164,7 @@ final class Stack
             studentName: StudentName::of($by),
         );
 
-        $rulesText = self::rules($withTools)."\n\n".trim((string) file_get_contents(base_path('resources/prompts/assignment-companion.md')));
+        $rulesText = self::rules($withTools, Skills::alwaysOn($by))."\n\n".trim((string) file_get_contents(base_path('resources/prompts/assignment-companion.md')));
         $tools = $withTools ? $this->toolbox->only(SessionChat::ASSIGNMENT_TOOLS)->definitions() : [];
 
         $assignmentLines = $this->assignment($by, $assignment);
@@ -333,7 +333,7 @@ final class Stack
     public function compose(Facts $facts, bool $withTools, array $tools = []): Built
     {
         $layers = [
-            0 => ['Rules', [[self::rules($withTools), true]]],
+            0 => ['Rules', [[self::rules($withTools, $facts->skills), true]]],
             2 => ['Course', $this->course($facts)],
             3 => ['Student', $this->student($facts, $withTools)],
             4 => ['Module', $this->module($facts)],
@@ -558,7 +558,11 @@ final class Stack
     }
 
     /** The tutor's rules, for a model that can call tools or one that can't (the file marks the parts for each). */
-    public static function rules(bool $withTools): string
+    /**
+     * The tutor's rules, then the always-on skills: $skills as given (those on for the student, App\Engine\Skills\Skills
+     * ::alwaysOn($by)), or, when null, those on for everyone.
+     */
+    public static function rules(bool $withTools, ?string $skills = null): string
     {
         $text = (string) file_get_contents(base_path(self::PROMPT));
         $text = (string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', $text);
@@ -570,7 +574,9 @@ final class Stack
         $text = (string) preg_replace('/([^\n])\n(#{1,3} )/', "$1\n\n$2", $text);
 
         // The always-on skills (the UI skill) last, as fixed as the rules, so the service caches them with the rules.
-        return trim((string) preg_replace('/\n{3,}/', "\n\n", $text))."\n\n".Skills::alwaysOn();
+        $skills ??= Skills::alwaysOn();
+
+        return trim((string) preg_replace('/\n{3,}/', "\n\n", $text)).($skills !== '' ? "\n\n".$skills : '');
     }
 
     // ---------- The layers ----------

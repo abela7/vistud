@@ -90,6 +90,8 @@ final readonly class Facts
         public ?string $folded = null,
         // 3 · the student's first name, from their account (App\Engine\Context\StudentName); null when unknown
         public ?string $studentName = null,
+        // 0 · the always-on skills on for the student (App\Engine\Skills\Skills::alwaysOn); null for those on for everyone
+        public ?string $skills = null,
     ) {}
 
     /**
@@ -100,6 +102,12 @@ final readonly class Facts
     public function withMemories(array $memories): self
     {
         return new self(...[...get_object_vars($this), 'memories' => $memories]);
+    }
+
+    /** The same facts with the always-on skills' instructions this student has on. */
+    public function withSkills(string $skills): self
+    {
+        return new self(...[...get_object_vars($this), 'skills' => $skills]);
     }
 
     /** The same facts with the student's first name (null when unknown). */

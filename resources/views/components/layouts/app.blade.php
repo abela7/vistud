@@ -17,7 +17,7 @@
     $isStudent = $principal->hasRole(\App\Platform\Access\Role::Student);
     $user = auth()->user();
     $items = $area === 'admin'
-        ? [['Overview', 'admin.overview', 'layout-dashboard'], ['Accounts', 'admin.accounts', 'users'], ['AI engine', 'admin.engine', 'brain'], ['Audit log', 'admin.audit-log', 'scroll-text']]
+        ? [['Overview', 'admin.overview', 'layout-dashboard'], ['Accounts', 'admin.accounts', 'users'], ['AI engine', 'admin.engine', 'brain'], ['Skills', 'admin.skills', 'sparkles'], ['Audit log', 'admin.audit-log', 'scroll-text']]
         : [['Home', 'home', 'house'], ['Settings', 'settings', 'settings']];
     // A student's own workspaces, for the sidebar and the switcher.
     $workspaces = $area === 'student' && $isStudent ? app(\App\Study\Workspaces::class)->list($principal) : null;

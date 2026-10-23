@@ -47,6 +47,8 @@ final class AuditAction
 
     public const ENGINE_SHARED_CHANGED = 'engine.shared_changed';
 
+    public const SKILL_CHANGED = 'skill.changed';
+
     // AI apps connected over MCP (docs/specs/mcp-connections-plan.md §3.4). Lifecycle and exceptions only: never a
     // per-call row, since this log is read by admins and kept for good.
     public const CONNECTION_CONSENTED = 'connection.consented';

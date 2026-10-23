@@ -1,5 +1,6 @@
 ---
 name: ui
+title: Cards and buttons in replies
 description: Use when a reply reads better as a card, a snippet to copy, choices to tap, a checklist or a side-by-side comparison. Built into ViStud's own chats; outside apps don't draw these.
 where: vistud
 ---

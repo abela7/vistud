@@ -64,8 +64,10 @@ final class PluginBuilder
     {
         // Not the skills for ViStud's own chats (App\Engine\Skills\Skills::VISTUD): an outside app can't use them.
         $skills = [];
+        // Nor those an admin switched off for everyone.
+        $off = Skills::platformOff();
         foreach (Skills::all() as $name => $skill) {
-            if ($skill['where'] !== Skills::VISTUD) {
+            if ($skill['where'] !== Skills::VISTUD && ! in_array($name, $off, true)) {
                 $skills[$name] = ['description' => $skill['description'], 'body' => $skill['body']."\n"];
             }
         }

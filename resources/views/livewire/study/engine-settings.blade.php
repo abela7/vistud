@@ -301,6 +301,9 @@
         </div>
     </form>
 
+    {{-- The skills of ViStud's chats, each switched on or off for this student at once. --}}
+    <livewire:study.skill-switches />
+
     <x-accordion id="usage" title="Usage this month" icon="trending-up">
         <x-slot:status>
             @if ($choices->monthCapMicros > 0)

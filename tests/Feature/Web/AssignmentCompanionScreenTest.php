@@ -107,7 +107,8 @@ class AssignmentCompanionScreenTest extends TestCase
         $response->assertSee('Log');
         $response->assertSee('Full screen gives this talk more room');
         $response->assertSee('Use full screen');
-        $response->assertSee('Switch AI model');
+        // The model and voice typing are behind the chat's one gear.
+        $response->assertSee('aria-label="Chat settings"', false);
         $response->assertSee('Speak instead of typing');
     }
 
