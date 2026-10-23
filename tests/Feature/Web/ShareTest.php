@@ -67,7 +67,8 @@ class ShareTest extends TestCase
             $page = $this->get($url)->assertOk()
                 ->assertSee('<meta name="robots" content="noindex, nofollow">', false)
                 ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
-                ->assertDontSee('rel="canonical"', false);
+                ->assertDontSee('rel="canonical"', false)
+                ->assertDontSee('property="og:url"', false);
             // A shared private link's preview is ViStud's own words, never the page's.
             $page->assertSee('<meta property="og:description" content="'.e(Share::DESCRIPTION).'">', false);
         }

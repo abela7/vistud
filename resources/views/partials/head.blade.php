@@ -23,12 +23,18 @@
 <meta name="apple-mobile-web-app-title" content="ViStud">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="{{ $bar['light'] }}">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="{{ $bar['dark'] }}">
-{{-- A shared link's preview (WhatsApp, Telegram, Slack, Facebook, LinkedIn, X): nothing of a student's. --}}
+{{--
+    A shared link's preview (WhatsApp, Telegram, Slack, Facebook, LinkedIn, X): nothing of a student's. Only a listed
+    page names its own address: a private page's head never depends on what was asked for, so another student's course
+    stays exactly as missing as one that does not exist.
+--}}
 <meta property="og:site_name" content="ViStud">
 <meta property="og:type" content="website">
 <meta property="og:title" content="{{ $shareTitle }}">
 <meta property="og:description" content="{{ $description }}">
-<meta property="og:url" content="{{ url()->current() }}">
+@if ($index)
+    <meta property="og:url" content="{{ url()->current() }}">
+@endif
 <meta property="og:image" content="{{ asset($share::IMAGE) }}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
