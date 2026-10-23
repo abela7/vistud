@@ -2,7 +2,7 @@
     The page frame for signed-out screens: login, two-factor challenge,
     password reset and invitation acceptance (DESIGN.md §7.1).
 --}}
-@props(['title', 'description' => null, 'shareTitle' => null, 'index' => false])
+@props(['title', 'pageTitle' => null, 'description' => null, 'shareTitle' => null, 'index' => false])
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
     data-theme="{{ config('vistud.appearance.light') }}"
@@ -11,7 +11,7 @@
     data-appearance="system">
 <head>
     {{-- index: a page search engines may list (App\Appearance\Share::INDEXABLE); the others say noindex. --}}
-    @include('partials.head', ['title' => $title, 'description' => $description, 'shareTitle' => $shareTitle, 'index' => $index])
+    @include('partials.head', ['title' => $title, 'pageTitle' => $pageTitle, 'description' => $description, 'shareTitle' => $shareTitle, 'index' => $index])
 </head>
 <body class="min-h-dvh bg-canvas text-fg antialiased">
     {{ $slot }}

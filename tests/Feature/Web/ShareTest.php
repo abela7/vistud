@@ -26,11 +26,12 @@ class ShareTest extends TestCase
     {
         $bar = Share::barColors();
         $this->get(route('login'))->assertOk()
-            ->assertSee('<title>Log in · ViStud</title>', false)
+            ->assertSee('<title>'.e(Share::TITLE).'</title>', false)
             ->assertSee('<meta name="description" content="'.e(Share::DESCRIPTION).'">', false)
             ->assertSee('<meta name="robots" content="index, follow">', false)
             ->assertSee('<link rel="canonical" href="'.route('login').'">', false)
-            ->assertSee('<meta property="og:title" content="ViStud: Organise your study. Ace your exams.">', false)
+            ->assertSee('<meta property="og:title" content="'.e(Share::TITLE).'">', false)
+            ->assertSee(e(Share::TAGLINE), false)->assertSee(e(Share::SUMMARY), false)
             ->assertSee('<meta property="og:url" content="'.route('login').'">', false)
             ->assertSee('<meta property="og:image" content="'.asset('brand/share.png').'">', false)
             ->assertSee('<meta name="twitter:card" content="summary_large_image">', false)

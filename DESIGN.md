@@ -388,7 +388,7 @@ At least 44 × 44 px for every interactive element on touch devices (`pointer: c
 
 ### 7.1 Signed-out screens
 
-Login, two-factor challenge, password reset and invitation acceptance share `<x-layouts.auth>`: a `surface-brand` panel with the white logo and a short line of copy, and the form on a calm card over `surface-subtle`. The brand line is "Organise your study. Ace your exams." (owner, 2026-10-23: say what a student gets out of it), and the panel reads it and the line under it from `App\Appearance\Share`, the same words a shared link shows. The appearance switcher sits below the form. These screens submit as normal forms because the session changes; that is the one place a full page load is expected.
+Login, two-factor challenge, password reset and invitation acceptance share `<x-layouts.auth>`: a `surface-brand` panel with the white logo and a short line of copy, and the form on a calm card over `surface-subtle`. The brand line is "Ace your exams and assignments." over "All-in-one study organiser with an AI tutor." (owner, 2026-10-23: say what a student gets out of it, in the words people search for), and the panel reads both from `App\Appearance\Share`, the same words a shared link shows. The appearance switcher sits below the form. These screens submit as normal forms because the session changes; that is the one place a full page load is expected.
 
 The invitation page has three answers: the form (name, password, confirmation); "You're already logged in" for a signed-in visitor; and "This link doesn't work" for any invalid link, whatever the reason, so a link's state can't be probed. A first visit after accepting greets the person on home and tells them which email address they log in with.
 

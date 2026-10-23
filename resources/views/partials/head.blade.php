@@ -7,13 +7,15 @@
     $share = \App\Appearance\Share::class;
     $index ??= false;
     $description ??= $share::DESCRIPTION;
-    $shareTitle ??= $share::NAME.': '.$share::TAGLINE;
+    $shareTitle ??= $share::TITLE;
+    // The whole title, for a page whose name is not the one search shows (login: what ViStud is, not "Log in").
+    $pageTitle ??= $title.' · ViStud';
     $bar = $share::barColors();
 @endphp
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>{{ $title }} · ViStud</title>
+<title>{{ $pageTitle }}</title>
 <meta name="description" content="{{ $description }}">
 <meta name="robots" content="{{ $index ? 'index, follow' : 'noindex, nofollow' }}">
 @if ($index)

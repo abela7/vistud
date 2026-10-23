@@ -15,17 +15,26 @@ final class Share
 {
     public const NAME = 'ViStud';
 
-    public const TAGLINE = 'Organise your study. Ace your exams.';
+    /**
+     * The words people search for come first (the owner, 2026-10-23): a study organiser, an AI tutor, exams and
+     * assignments. The tutor helps with an assignment; it never does it for you.
+     */
+    public const TITLE = 'ViStud: All-in-one study organiser with an AI tutor';
 
-    public const DESCRIPTION = 'Every course, note and deadline in one place, with an AI tutor that knows your material. Walk into exams and assignments ready.';
+    /** The headline on the share picture and the sign-in page, with SUMMARY under it. */
+    public const TAGLINE = 'Ace your exams and assignments.';
+
+    public const SUMMARY = 'All-in-one study organiser with an AI tutor.';
+
+    public const DESCRIPTION = 'Organise your courses, notes and deadlines in one place, with an AI tutor that helps with every assignment. Ace your exams.';
 
     /** What an invitation or a class link's preview says, under its title. */
-    public const JOIN = 'Join ViStud to organise your courses, stay ahead of deadlines and ace your exams and assignments, with an AI tutor that knows your material.';
+    public const JOIN = 'Join the all-in-one study organiser with an AI tutor. Ace your exams and assignments.';
 
     /** The picture a shared link shows, 1200 by 630 (public/brand/share.png). */
     public const IMAGE = 'brand/share.png';
 
-    public const IMAGE_ALT = 'ViStud: organise your study, ace your exams.';
+    public const IMAGE_ALT = 'ViStud: ace your exams and assignments. All-in-one study organiser with an AI tutor.';
 
     /** The pages search engines may list: signed out, the same for everyone. */
     public const INDEXABLE = ['login', 'privacy'];

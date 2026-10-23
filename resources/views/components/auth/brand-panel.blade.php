@@ -9,7 +9,7 @@
     <div class="mt-6 max-w-md lg:mt-auto lg:mb-auto">
         <p class="text-2xl font-semibold tracking-tight text-balance sm:text-3xl lg:text-4xl">{{ \App\Appearance\Share::TAGLINE }}</p>
         <p class="mt-3 hidden text-base text-fg-muted sm:block lg:text-lg">
-            {{ \App\Appearance\Share::DESCRIPTION }}
+            {{ \App\Appearance\Share::SUMMARY }}
         </p>
     </div>
 
