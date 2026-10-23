@@ -13,6 +13,8 @@ use App\Engine\Skills\Skills;
 use App\Engine\VistudAi;
 use App\Livewire\Workspaces\TutorChat;
 use App\Mcp\Plugins\PluginBuilder;
+use App\Study\Activities;
+use App\Study\Workspaces;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
@@ -130,6 +132,17 @@ class ChatBlocksTest extends TestCase
 
         $by = $this->principal($this->student());
         $this->assertStringContainsString($skill['body'], app(VistudAi::class)->system($by));
+
+        // The assignment helper's rules start with the tutor's, so it carries the skill too.
+        $course = app(Workspaces::class)->create($by, ['name' => 'Physics']);
+        $assignment = app(Activities::class)->create($by, $course->id, ['title' => 'Lab report 1', 'kind' => 'assignment', 'due_on' => '2026-11-15']);
+        $this->assertStringContainsString($skill['body'], app(Stack::class)->forAssignment($by, $assignment, null, true)->system);
+
+        // It says to use the blocks unasked, and when: a model holds back from vague advice, not from a clear trigger.
+        $this->assertStringContainsString('without being asked', $skill['body']);
+        foreach (['question with set answers', 'worth keeping', 'paste exactly', 'Steps they will carry out', 'set against each other'] as $when) {
+            $this->assertStringContainsString($when, $skill['body']);
+        }
 
         // The AI apps students connect get the other skills, never this one: they can't draw it.
         $packaged = array_keys(app(PluginBuilder::class)->skills());
