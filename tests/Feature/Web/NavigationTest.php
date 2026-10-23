@@ -109,13 +109,13 @@ class NavigationTest extends TestCase
             ->assertSeeInOrder(['Theme', 'ViStud', 'Blossom', 'Ember', 'Light or dark', 'data-appearance-option'], false)
             ->getContent();
 
-        foreach (['vistud', 'blossom', 'ember'] as $id) {
+        foreach (['vistud', 'blossom', 'ember', 'twilight'] as $id) {
             $this->assertStringContainsString('value="'.$id.'" class="sr-only" data-theme-option', $html);
         }
         // Each preview shows the theme's light and dark looks, drawn by their own tokens.
         $this->assertStringContainsString('data-theme="blossom"', $html);
         $this->assertStringContainsString('data-theme="blossom-dark"', $html);
-        $this->assertStringContainsString('vistudThemes = {"vistud":["vistud-light","vistud-dark"],"blossom":["blossom","blossom-dark"],"ember":["ember","vistud-dark"]}', $html);
+        $this->assertStringContainsString('vistudThemes = {"vistud":["vistud-light","vistud-dark"],"blossom":["blossom","blossom-dark"],"ember":["ember","vistud-dark"],"twilight":["twilight","twilight-dark"]}', $html);
     }
 
     public function test_outside_a_course_the_sidebar_has_courses_calendar_and_settings_and_the_journal_is_in_settings(): void

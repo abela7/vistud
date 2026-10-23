@@ -106,6 +106,8 @@ return [
             'vistud' => ['name' => 'ViStud', 'light' => 'vistud-light', 'dark' => 'vistud-dark'],
             'blossom' => ['name' => 'Blossom', 'light' => 'blossom', 'dark' => 'blossom-dark'],
             'ember' => ['name' => 'Ember', 'light' => 'ember', 'dark' => 'vistud-dark'],
+            // Night purple with lime buttons (the owner's ask, 2026-10-23); the light one keeps purple for links and focus.
+            'twilight' => ['name' => 'Twilight', 'light' => 'twilight', 'dark' => 'twilight-dark'],
         ],
     ],
 
