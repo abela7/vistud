@@ -13,13 +13,13 @@
 @endphp
 @if ($isStudent)
 <x-layouts.app title="My courses">
-    <div class="mx-auto max-w-7xl space-y-6">
+    <div class="courses-home mx-auto max-w-7xl space-y-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <div class="space-y-1">
                 <p class="text-fg-muted">{{ $isNew ? 'Welcome' : 'Welcome back' }}, {{ $firstName }}</p>
                 <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">My courses</h1>
             </div>
-            <a href="{{ route('workspaces.create') }}" class="btn btn-primary"><x-icon name="plus" class="size-4" />New course</a>
+            <a href="{{ route('workspaces.create') }}" class="btn btn-primary courses-home-new courses-primary"><x-icon name="plus" class="size-4" />New course</a>
         </div>
 
         @if ($isNew)
@@ -28,7 +28,9 @@
             </x-alert>
         @endif
 
-        {{-- ViStud AI, above every course (App\Engine\VistudAi). --}}
+        <livewire:workspaces.index />
+
+        {{-- A separate job from picking a course, so it follows the list (App\Engine\VistudAi). --}}
         <a href="{{ route('vistud-ai') }}" class="vistud-ai-card">
             <span class="chat-empty-badge" aria-hidden="true"><x-icon name="sparkles" class="size-5" /></span>
             <span class="min-w-0 flex-1">
@@ -37,8 +39,6 @@
             </span>
             <x-icon name="arrow-right" class="size-5 shrink-0" />
         </a>
-
-        <livewire:workspaces.index />
     </div>
 
     <livewire:workspaces.form />

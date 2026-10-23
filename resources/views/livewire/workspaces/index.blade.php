@@ -11,16 +11,16 @@
     </div>
 
     @if ($active === [])
-        <section class="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border-strong px-6 py-12 text-center">
+        <section class="courses-empty mx-auto flex w-full max-w-xl flex-col items-center gap-4 rounded-xl border border-dashed border-border-strong px-6 py-10 text-center">
             <span class="ws-chip size-14"><x-icon name="layout-grid" class="size-6" /></span>
             <div class="space-y-1">
                 <h2 class="text-lg font-semibold">Create your first course</h2>
-                <p class="max-w-md text-fg-muted">One course per subject, like Biology or Spanish. Its modules, notes, files, calendar and progress all live inside it.</p>
+                <p class="max-w-md text-balance text-fg-muted">One course per subject, like Biology or Spanish. Its modules, notes, files, calendar and progress all live inside it.</p>
             </div>
-            <a href="{{ route('workspaces.create') }}" class="btn btn-primary"><x-icon name="plus" class="size-4" />New course</a>
+            <a href="{{ route('workspaces.create') }}" class="btn btn-primary courses-primary"><x-icon name="plus" class="size-4" />New course</a>
         </section>
     @else
-        <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" role="list">
+        <ul class="courses-grid grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4" role="list">
             @foreach ($active as $workspace)
                 @php $wsCounts = $counts[$workspace->id] ?? ['modules' => 0, 'notes' => 0, 'files' => 0]; @endphp
                 <li wire:key="ws-{{ $workspace->id }}" class="workspace-card {{ $workspace->colourClass() }} group" @if ($workspace->colourStyle()) style="{{ $workspace->colourStyle() }}" @endif>
@@ -100,15 +100,17 @@
 
     @if ($archived !== [])
         <details class="group space-y-3">
-            <summary class="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-fg-muted">
+            <summary class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-fg-muted">
                 <x-icon name="chevron-right" class="size-4 transition-transform group-open:rotate-90" />Archived ({{ count($archived) }})
             </summary>
             <ul class="account-list mt-3 divide-y divide-divider" role="list">
                 @foreach ($archived as $workspace)
                     <li wire:key="archived-{{ $workspace->id }}" class="flex flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
-                        <x-workspace.chip :workspace="$workspace" />
-                        <a href="{{ route('workspaces.show', $workspace->id) }}" class="min-w-0 flex-1 font-medium break-words text-fg">{{ $workspace->name }}</a>
-                        <div class="flex items-center gap-2">
+                        <div class="flex min-w-0 flex-1 items-center gap-3">
+                            <x-workspace.chip :workspace="$workspace" />
+                            <a href="{{ route('workspaces.show', $workspace->id) }}" class="min-w-0 flex-1 font-medium break-words text-fg">{{ $workspace->name }}</a>
+                        </div>
+                        <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
                             <x-button variant="ghost" icon="archive-restore" wire:click="restore('{{ $workspace->id }}')">
                                 Restore<span class="sr-only"> {{ $workspace->name }}</span>
                             </x-button>
