@@ -173,6 +173,42 @@ class DictationTest extends TestCase
         $this->assertSame([Dictation::GEMINI, 'am'], [$choices->dictationModel, $choices->dictationLanguage]);
     }
 
+    public function test_chirp_3_is_offered_with_an_own_key_and_never_used_on_the_shared_key(): void
+    {
+        $this->withoutVite();
+        $model = fn () => collect(Http::recorded()->last()[0]->data())->firstWhere('name', 'model')['contents'];
+        $say = fn ($user) => $this->actingAs($user)->post(route('dictation'), ['audio' => UploadedFile::fake()->createWithContent('speech.webm', 'audio')])->assertOk();
+
+        // Their own key: Chirp 3 is offered and used.
+        $own = $this->student();
+        $by = $this->principal($own);
+        $this->ownAiKey($by);
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+        $this->actingAs($own);
+        Livewire::test(VoiceSettings::class)->assertSee('Google Chirp 3 (best quality, costs more)')
+            ->set('model', Dictation::CHIRP)->set('language', 'en')->call('save')->assertHasNoErrors();
+        $say($own);
+        $this->assertSame(Dictation::CHIRP, $model());
+
+        // The shared key: not offered, refused, and one chosen before is not used (Gemini for Amharic, else Whisper).
+        config(['vistud.engine.key' => 'sk-or-admin-'.bin2hex(random_bytes(8))]);
+        $this->app->instance(Engine::class, new Fake([new Model('fake/quick', 'Fake quick', 0.1, 0.4, 32_000, true, false, false)]));
+        app(Setup::class)->setShared($this->principal($this->admin()), ['on' => true, 'key' => 'sk-or-students-'.bin2hex(random_bytes(8)), 'models' => 'fake/quick', 'daily' => '0.10']);
+        $student = $this->student();
+        $on = $this->principal($student);
+        app(Settings::class)->consent($on);
+        $this->actingAs($student);
+        Livewire::test(VoiceSettings::class)->assertDontSee('Chirp')->set('model', Dictation::CHIRP)->call('save')->assertHasErrors(['model']);
+        $this->assertThrows(fn () => app(Settings::class)->setDictation($on, Dictation::CHIRP, 'en'), Unprocessable::class);
+        LearnerTables::query(LearnerScope::of($on), 'engine_settings')->update(['dictation_model' => Dictation::CHIRP, 'dictation_language' => 'en']);
+        $say($student);
+        $this->assertSame(Dictation::WHISPER, $model());
+        LearnerTables::query(LearnerScope::of($on), 'engine_settings')->update(['dictation_language' => 'am']);
+        $this->heard = ['ሰላም'];
+        $say($student);
+        $this->assertSame(Dictation::GEMINI, $model());
+    }
+
     public function test_the_course_guide_records_too(): void
     {
         $this->withoutVite();

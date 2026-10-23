@@ -24,7 +24,7 @@
             <div class="space-y-1">
                 <label for="voice-model-{{ $this->getId() }}" class="field-label">Model</label>
                 <select id="voice-model-{{ $this->getId() }}" class="input" wire:model="model">
-                    @foreach (\App\Engine\Dictation::MODELS as $id => $about)
+                    @foreach ($models as $id => $about)
                         <option value="{{ $id }}">{{ $about['name'] }}</option>
                     @endforeach
                 </select>

@@ -33,7 +33,8 @@ final class VoiceSettings extends Component
     public function mount(): void
     {
         $choices = $this->settings->get($this->principal());
-        $this->model = $choices->dictationModel;
+        // One kept for own keys, chosen before the student was on the shared key, shows as the default.
+        $this->model = isset(Dictation::modelsFor($this->settings->shared($this->principal()))[$choices->dictationModel]) ? $choices->dictationModel : Dictation::WHISPER;
         // Not set here yet: what "Teach me in" means, else Detect it.
         $this->language = $choices->dictationLanguage ?? (Dictation::languageFor($choices) ?? 'auto');
     }
@@ -55,7 +56,8 @@ final class VoiceSettings extends Component
 
     public function render(): View
     {
-        return view('livewire.study.voice-settings');
+        // On the shared key, not the models kept for own keys (Dictation::OWN_KEY_ONLY).
+        return view('livewire.study.voice-settings', ['models' => Dictation::modelsFor($this->settings->shared($this->principal()))]);
     }
 
     private function principal(): Principal

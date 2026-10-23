@@ -369,7 +369,7 @@ final class Settings
             'tutor_remembers' => filter_var($input['tutor_remembers'] ?? ($existing?->tutor_remembers ?? true), FILTER_VALIDATE_BOOL),
             'copy_paste_ai' => filter_var($input['copy_paste_ai'] ?? ($existing?->copy_paste_ai ?? false), FILTER_VALIDATE_BOOL),
             // Voice typing's model, when given and one of Dictation::MODELS; kept as it is otherwise.
-            'dictation_model' => is_string($input['dictation_model'] ?? null) && isset(Dictation::MODELS[$input['dictation_model']])
+            'dictation_model' => is_string($input['dictation_model'] ?? null) && isset(Dictation::modelsFor($this->shared($by))[$input['dictation_model']])
                 ? $input['dictation_model'] : ($existing?->dictation_model ?? null),
             'consented_at' => $consent ? ($existing?->consented_at ?? now()) : null,
             'updated_at' => now(),
@@ -405,7 +405,7 @@ final class Settings
     public function setDictation(Principal $by, mixed $model, mixed $language): Choices
     {
         $scope = Guard::learner($by);
-        Input::refuse(! is_string($model) || ! isset(Dictation::MODELS[$model]) ? ['model' => 'Choose one of the voice models.'] : []);
+        Input::refuse(! is_string($model) || ! isset(Dictation::modelsFor($this->shared($by))[$model]) ? ['model' => 'Choose one of the voice models.'] : []);
         Input::refuse(! is_string($language) || ! isset(Dictation::SPOKEN[$language]) ? ['language' => 'Choose the language you speak.'] : []);
         $this->ensureRow($scope);
         LearnerTables::query($scope, 'engine_settings')->update(['dictation_model' => $model, 'dictation_language' => $language, 'updated_at' => now()]);

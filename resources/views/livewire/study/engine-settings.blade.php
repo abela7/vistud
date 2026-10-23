@@ -270,7 +270,7 @@
             <div class="space-y-1.5">
                 <label for="field-dictationModel" class="field-label">Voice typing</label>
                 <select id="field-dictationModel" class="input" wire:model="dictationModel" aria-describedby="field-dictationModel-hint">
-                    @foreach (\App\Engine\Dictation::MODELS as $id => $model)
+                    @foreach (\App\Engine\Dictation::modelsFor($shared) as $id => $model)
                         <option value="{{ $id }}">{{ $model['name'] }}</option>
                     @endforeach
                 </select>

@@ -28,11 +28,31 @@ final class Dictation
 
     public const GEMINI = 'google/gemini-3.5-transcribe';
 
+    public const CHIRP = 'google/chirp-3';
+
     /** @var array<string, array{name: string, hint: string}> */
     public const MODELS = [
         self::WHISPER => ['name' => 'Whisper Large V3 Turbo', 'hint' => 'Fast and the cheapest. Good for most languages.'],
         self::GEMINI => ['name' => 'Gemini 3.5 Transcribe', 'hint' => 'Better for Amharic and other less common languages.'],
+        self::CHIRP => ['name' => 'Google Chirp 3 (best quality, costs more)', 'hint' => 'Google\'s speech model: the best quality, about 80 times Whisper\'s price. With your own key only.'],
     ];
+
+    /**
+     * Models only for a student's own key (or the admin's): too dear for the shared key's daily limit (the owner's ask,
+     * 2026-10-23). On the shared key they aren't offered, and one chosen before is used as SHARED_INSTEAD.
+     */
+    public const OWN_KEY_ONLY = [self::CHIRP];
+
+    /**
+     * The models this student may choose: all of them, but OWN_KEY_ONLY's on the shared key.
+     *
+     * @param  array<string, mixed>|null  $shared  Settings::shared(), the shared key this student is on, if any
+     * @return array<string, array{name: string, hint: string}>
+     */
+    public static function modelsFor(?array $shared): array
+    {
+        return $shared === null ? self::MODELS : array_diff_key(self::MODELS, array_flip(self::OWN_KEY_ONLY));
+    }
 
     /**
      * The languages "Teach me in" offers, as the service names them (ISO-639-1): told to the model, so it hears Amharic
@@ -114,11 +134,16 @@ final class Dictation
 
         [$audio, $format] = self::speech($bytes, $extension);
         $language = self::languageFor($choices);
-        $text = $this->ask($by, (string) $secret, $audio, $format, $choices->dictationModel, $language, $choices->noTraining);
+        // On the shared key a model kept for own keys is not used: Gemini for the Ethiopic languages, else Whisper.
+        $model = $shared !== null && in_array($choices->dictationModel, self::OWN_KEY_ONLY, true)
+            ? (in_array($language, self::ETHIOPIC, true) ? self::GEMINI : self::WHISPER)
+            : $choices->dictationModel;
+        $text = $this->ask($by, (string) $secret, $audio, $format, $model, $language, $choices->noTraining);
         // Amharic or Tigrinya heard as Arabic (models mix them up): asked once more of the other model, and refused
         // rather than put in the box if it still isn't in the Ethiopic script.
         if (in_array($language, self::ETHIOPIC, true) && ! self::ethiopic($text)) {
-            $other = $choices->dictationModel === self::WHISPER ? self::GEMINI : self::WHISPER;
+            // Whisper and Chirp are asked again of Gemini; Gemini of Whisper.
+            $other = $model === self::GEMINI ? self::WHISPER : self::GEMINI;
             $text = $this->ask($by, (string) $secret, $audio, $format, $other, $language, $choices->noTraining);
             if (! self::ethiopic($text)) {
                 $name = self::SPOKEN[$language];
