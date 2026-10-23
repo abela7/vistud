@@ -11,6 +11,7 @@ use App\Engine\Setup;
 use App\Engine\Usage;
 use App\Livewire\Study\EngineSettings;
 use App\Livewire\Study\VoiceSettings;
+use App\Livewire\Workspaces\TutorChat;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Database\LearnerTables;
 use App\Platform\Errors\Unprocessable;
@@ -207,6 +208,21 @@ class DictationTest extends TestCase
         $this->heard = ['ሰላም'];
         $say($student);
         $this->assertSame(Dictation::GEMINI, $model());
+    }
+
+    public function test_the_chat_has_one_gear_for_the_model_and_voice_typing_and_no_formatting_buttons(): void
+    {
+        $this->withoutVite();
+        $user = $this->student();
+        $this->actingAs($user);
+        $by = $this->principal($user);
+        $this->ownAiKey($by);
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+        $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
+
+        Livewire::test(TutorChat::class, ['vistud' => true])
+            ->assertSee('aria-label="Chat settings"', false)->assertSee('All AI settings')->assertSee('Voice typing')->assertSee("I'll speak", false)
+            ->assertDontSee('aria-label="Text formatting"', false)->assertDontSee('aria-label="Voice typing settings"', false);
     }
 
     public function test_the_course_guide_records_too(): void

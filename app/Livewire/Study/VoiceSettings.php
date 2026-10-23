@@ -21,6 +21,9 @@ final class VoiceSettings extends Component
     /** One of Dictation::SPOKEN's codes. */
     public string $language = 'auto';
 
+    /** Shown inside another panel (the chat's gear), without a button of its own. */
+    public bool $inline = false;
+
     private Settings $settings;
 
     private PrincipalFactory $principals;

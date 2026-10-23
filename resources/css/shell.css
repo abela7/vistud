@@ -730,6 +730,18 @@
         max-width: 100%;
     }
 
+    /* The chat's gear: the AI model list, then voice typing, in one panel that scrolls when the screen is short. */
+    .chat-settings-panel {
+        width: 18rem;
+        max-height: min(75vh, 36rem);
+        overflow-y: auto;
+    }
+
+    .chat-settings-voice {
+        margin-top: 0.25rem;
+        border-top: 1px solid var(--divider);
+    }
+
     /* The course guide's box, for the panel above to open over. */
     .guide-form {
         position: relative;

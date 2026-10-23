@@ -665,51 +665,23 @@
                             </div>
                         </div>
 
-                        <button type="button" class="chat-tool-btn" :class="{ 'is-active': formatOpen }" x-on:click="formatOpen = ! formatOpen" x-bind:aria-expanded="formatOpen.toString()" title="Text formatting (Aa)" aria-label="Text formatting">
-                            <span class="text-xs font-semibold leading-none">Aa</span>
-                        </button>
-
                         <button type="button" class="chat-tool-btn" :class="{ 'is-active': mentionOpen }" x-on:click="openMentionPicker()" title="Mention a file or note (@)" aria-label="Mention a file or note">
                             <x-icon name="at-sign" class="size-3.5" />
                         </button>
 
-                        <div class="chat-format-group" x-show="formatOpen" x-cloak x-transition>
-                            <span class="chat-tool-divider" aria-hidden="true"></span>
-                            <button type="button" class="chat-tool-btn" x-on:click="wrap('**', '**', 'bold text')" title="Bold" aria-label="Bold">
-                                <x-icon name="bold" class="size-3.5" />
-                            </button>
-                            <button type="button" class="chat-tool-btn" x-on:click="wrap('*', '*', 'italic text')" title="Italic" aria-label="Italic">
-                                <x-icon name="italic" class="size-3.5" />
-                            </button>
-                            <button type="button" class="chat-tool-btn" x-on:click="wrap('`', '`', 'code')" title="Code in a line" aria-label="Code in a line">
-                                <x-icon name="code" class="size-3.5" />
-                            </button>
-                            <button type="button" class="chat-tool-btn" x-on:click="wrap('```\n', '\n```', 'code block')" title="Code block" aria-label="Code block">
-                                <x-icon name="square-code" class="size-3.5" />
-                            </button>
-                            <button type="button" class="chat-tool-btn" x-on:click="toggleList()" title="Bulleted list" aria-label="Bulleted list">
-                                <x-icon name="list" class="size-3.5" />
-                            </button>
-                            <button type="button" class="chat-tool-btn" x-on:click="wrap('$', '$', 'formula')" title="Formula" aria-label="Formula">
-                                <x-icon name="sigma" class="size-3.5" />
-                            </button>
-                            <button type="button" class="chat-tool-btn" x-on:click="formatOpen = false" title="Close formatting" aria-label="Close formatting">
-                                <x-icon name="x" class="size-3.5" />
-                            </button>
-                        </div>
                     </div>
 
                     <div class="chat-compose-actions">
-                        <div class="chat-model-picker" x-data="{ modelOpen: false }" x-on:keydown.escape.stop="modelOpen = false" x-on:click.outside="modelOpen = false">
-                            <button type="button" class="chat-model-btn" x-on:click="modelOpen = ! modelOpen" x-bind:aria-expanded="modelOpen.toString()" aria-label="Switch AI model" title="Current model: {{ $activeModelName }} (click to change)" x-bind:disabled="busy">
-                                <span class="chat-model-btn-name">{{ $activeModelName }}</span>
-                                <x-icon name="chevron-down" class="size-3 text-fg-muted transition-transform" ::class="{ 'rotate-180': modelOpen }" />
+                        {{-- One gear for the chat's settings: the AI model answering, and voice typing's model and language. --}}
+                        <div class="chat-model-picker" x-data="{ modelOpen: false }" x-on:keydown.escape.stop="modelOpen = false" x-on:click.outside="modelOpen = false" x-on:voice-settings-saved.window="modelOpen = false">
+                            <button type="button" class="chat-tool-btn chat-settings-btn" :class="{ 'is-active': modelOpen }" x-on:click="modelOpen = ! modelOpen" x-bind:aria-expanded="modelOpen.toString()" aria-label="Chat settings" title="Chat settings · {{ $activeModelName }}" x-bind:disabled="busy">
+                                <x-icon name="settings" class="size-4" />
                             </button>
 
-                            <div class="chat-model-popover" x-show="modelOpen" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" role="dialog" aria-label="Choose AI model">
+                            <div class="chat-model-popover chat-settings-panel" x-show="modelOpen" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" role="dialog" aria-label="Chat settings">
                                 <div class="chat-model-popover-head">
                                     <span class="text-xs font-semibold text-fg">AI model</span>
-                                    <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-xs text-link">Settings</a>
+                                    <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-xs text-link">All AI settings</a>
                                 </div>
                                 <div class="chat-model-popover-list" role="menu">
                                     @foreach ($chatModels as $m)
@@ -729,12 +701,13 @@
                                 <div class="chat-model-popover-foot" role="status">
                                     <span class="chat-model-usage">{{ $activeModel }} · {{ $spentWords }}</span>
                                 </div>
+                                <div x-show="speechSupported" x-cloak class="chat-settings-voice">
+                                    <livewire:study.voice-settings :inline="true" :key="'voice-'.$this->getId()" />
+                                </div>
                             </div>
                         </div>
 
                         <span class="sr-only">{{ $activeModel }} · {{ $spentWords }}</span>
-                        {{-- Voice typing's model and the language spoken, beside the microphone. --}}
-                        <span x-show="speechSupported" x-cloak><livewire:study.voice-settings :key="'voice-'.$this->getId()" /></span>
                         <button type="button" class="chat-mic-btn"
                             :class="{ 'is-active': transcribing }"
                             x-show="speechSupported"
