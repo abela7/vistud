@@ -717,16 +717,22 @@
         color: var(--text);
     }
 
-    /* Voice typing's settings beside the microphone: opened above its button, from its right edge (it sits near the
-       box's right end, so the panel stays inside the box). */
+    /* Voice typing's settings beside the microphone: not positioned, so the panel opens over the whole message box
+       (as the model menu does) and is as wide as it needs, never wider than the box. */
     .voice-settings {
-        position: relative;
+        position: static;
         display: inline-flex;
     }
 
     .voice-settings .voice-settings-panel {
-        width: min(16rem, calc(100vw - 2rem));
+        width: 17rem;
         min-width: 0;
+        max-width: 100%;
+    }
+
+    /* The course guide's box, for the panel above to open over. */
+    .guide-form {
+        position: relative;
     }
 
     /* The conversations list, in the chat's place. */
