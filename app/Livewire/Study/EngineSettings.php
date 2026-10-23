@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Study;
 
+use App\Engine\Dictation;
 use App\Engine\Models;
 use App\Engine\Providers;
 use App\Engine\Role as EngineRole;
@@ -56,6 +57,9 @@ final class EngineSettings extends Component
     public bool $noTraining = true;
 
     public string $language = '';
+
+    /** The model that turns the microphone's recording into words (App\Engine\Dictation::MODELS). */
+    public string $dictationModel = Dictation::WHISPER;
 
     public bool $askTopics = false;
 
@@ -232,7 +236,7 @@ final class EngineSettings extends Component
                 // adds later is on at once; the favourites kept for their own key stay as they are.
                 ? ['shared_models_off' => array_values(array_diff($shared['models'], $this->favoriteModels, [$this->tutorModel]))]
                 : ['favorite_models' => $this->favoriteModels]) + [
-                    'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language, 'ask_topics' => $this->askTopics,
+                    'session_cap' => $this->sessionCap, 'month_cap' => $this->monthCap, 'no_training' => $this->noTraining, 'consent' => $this->consent, 'language' => $this->language, 'dictation_model' => $this->dictationModel, 'ask_topics' => $this->askTopics,
                     'auto_read_files' => $this->autoReadFiles, 'tutor_marks_topics' => $this->tutorMarksTopics, 'tutor_remembers' => $this->tutorRemembers, 'copy_paste_ai' => $this->copyPasteAi,
                 ]);
         } catch (Unprocessable $e) {
@@ -327,6 +331,7 @@ final class EngineSettings extends Component
         $this->monthCap = number_format($choices->monthCapMicros / 1_000_000, 2, '.', '');
         $this->noTraining = $choices->noTraining;
         $this->language = $choices->language ?? '';
+        $this->dictationModel = $choices->dictationModel;
         $this->askTopics = $choices->askTopics;
         $this->autoReadFiles = $choices->autoReadFiles;
         $this->tutorMarksTopics = $choices->tutorMarksTopics;

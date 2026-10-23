@@ -464,7 +464,7 @@
                         </template>
                         <li class="chat-file" x-show="uploading > 0" role="status"><x-icon name="loader-circle" class="size-4 animate-spin" />Uploading…</li>
                     </ul>
-                    {{-- Voice typing (resources/js/dictation.js): the words go straight into the box below as they're said. --}}
+                    {{-- Voice typing (resources/js/recorder.js): it records; Done writes the words into the box below. --}}
                     <div class="chat-dictation-pill" x-show="transcribing" x-cloak x-bind:class="{ 'is-quiet': ! hearing }">
                         <span class="chat-dictation-waves" aria-hidden="true">
                             <span class="chat-dictation-wave"></span>
@@ -473,11 +473,11 @@
                             <span class="chat-dictation-wave"></span>
                             <span class="chat-dictation-wave"></span>
                         </span>
-                        <span class="chat-dictation-status" role="status" aria-live="polite" x-text="hearing ? 'Hearing you…' : 'Listening…'">Listening…</span>
+                        <span class="chat-dictation-status" role="status" aria-live="polite" >Recording…</span>
                         <span class="chat-dictation-time" x-text="dictationTime" aria-hidden="true">0:00</span>
-                        <span class="chat-dictation-hint"><kbd>Enter</kbd> sends · <kbd>Esc</kbd> or <kbd>Alt+S</kbd> stops</span>
+                        <span class="chat-dictation-hint"><kbd>Enter</kbd>, <kbd>Esc</kbd> or Done writes it down</span>
                         <div class="chat-dictation-actions">
-                            <button type="button" class="chat-dictation-done-btn" x-on:click="stopDictation(true)" title="Stop listening and keep the words (Esc)">
+                            <button type="button" class="chat-dictation-done-btn" x-on:click="stopDictation(true)" title="Stop and write down what you said (Esc)">
                                 <x-icon name="check" class="size-3.5" />
                                 <span>Done</span>
                             </button>
@@ -485,6 +485,11 @@
                                 <x-icon name="trash-2" class="size-4" />
                             </button>
                         </div>
+                    </div>
+
+                    <div class="chat-dictation-pill is-quiet" x-show="writingDown" x-cloak role="status">
+                        <x-icon name="loader-circle" class="size-4 animate-spin" />
+                        <span class="chat-dictation-status">Writing down what you said…</span>
                     </div>
 
                     {{-- File & Note @mention autocomplete popover --}}

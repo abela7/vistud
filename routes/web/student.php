@@ -6,6 +6,7 @@ use App\Http\Controllers\AssignmentPageController;
 use App\Http\Controllers\ClassRecordingController;
 use App\Http\Controllers\ConfirmChangeController;
 use App\Http\Controllers\CourseGuidePageController;
+use App\Http\Controllers\DictationController;
 use App\Http\Controllers\FileContentController;
 use App\Http\Controllers\FilePageController;
 use App\Http\Controllers\FilePreviewController;
@@ -98,6 +99,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/courses/{workspace}/notes/{note}/pulse', NotePulseController::class)
         ->where(['workspace' => '[A-Za-z0-9-]{1,64}', 'note' => '[A-Za-z0-9-]{1,64}'])
         ->name('workspaces.notes.pulse');
+
+    // Voice typing: a recording in, its words out, nothing kept (App\Engine\Dictation).
+    Route::post('/dictation', DictationController::class)->middleware('throttle:30,1')->name('dictation');
 
     // In-note quick AI assistant on selected text
     Route::post('/courses/{workspace}/notes/ask-ai', NoteAiController::class)

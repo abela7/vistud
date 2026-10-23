@@ -37,6 +37,8 @@ final readonly class Choices
         public array $favoriteModels = [],
         /** Whose the student's own key is (App\Engine\Providers): OpenRouter or a provider's id; null without a key. */
         public ?string $provider = null,
+        /** The model that turns their voice into words (App\Engine\Dictation::MODELS). */
+        public string $dictationModel = Dictation::WHISPER,
     ) {}
 
     /**

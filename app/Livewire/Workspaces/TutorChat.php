@@ -743,6 +743,8 @@ final class TutorChat extends Component
                 'icons' => array_map(fn (string $icon) => Icons::url($icon), self::ICONS),
                 // ViStud AI: uploads go with the message only (Livewire's upload), into no course.
                 'chatOnly' => $ai !== null,
+                // Voice typing: where the microphone's recording goes to be written down (App\Engine\Dictation).
+                'dictationUrl' => route('dictation'),
             ],
             'quizzes' => $onTopic === null && $ai === null && $ready && $session->isOpen() ? $this->quizzes($by, $session) : [],
             'chatModels' => $chatModels,

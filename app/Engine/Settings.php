@@ -73,6 +73,7 @@ final class Settings
             copyPasteAi: (bool) ($row->copy_paste_ai ?? false),
             favoriteModels: $favoriteModels,
             provider: $key === null ? null : self::providerOf($row),
+            dictationModel: Dictation::model($row->dictation_model ?? null),
         );
     }
 
@@ -366,6 +367,9 @@ final class Settings
             'tutor_marks_topics' => filter_var($input['tutor_marks_topics'] ?? ($existing?->tutor_marks_topics ?? true), FILTER_VALIDATE_BOOL),
             'tutor_remembers' => filter_var($input['tutor_remembers'] ?? ($existing?->tutor_remembers ?? true), FILTER_VALIDATE_BOOL),
             'copy_paste_ai' => filter_var($input['copy_paste_ai'] ?? ($existing?->copy_paste_ai ?? false), FILTER_VALIDATE_BOOL),
+            // Voice typing's model, when given and one of Dictation::MODELS; kept as it is otherwise.
+            'dictation_model' => is_string($input['dictation_model'] ?? null) && isset(Dictation::MODELS[$input['dictation_model']])
+                ? $input['dictation_model'] : ($existing?->dictation_model ?? null),
             'consented_at' => $consent ? ($existing?->consented_at ?? now()) : null,
             'updated_at' => now(),
         ];

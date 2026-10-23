@@ -266,6 +266,16 @@
                 @endforeach
             </datalist>
             <x-field name="language" label="Teach me in (optional)" wire:model="language" list="engine-languages" autocomplete="off" placeholder="Amharic" hint="Empty: the language you write in." />
+            {{-- The model the microphone's recording goes to (App\Engine\Dictation). --}}
+            <div class="space-y-1.5">
+                <label for="field-dictationModel" class="field-label">Voice typing</label>
+                <select id="field-dictationModel" class="input" wire:model="dictationModel" aria-describedby="field-dictationModel-hint">
+                    @foreach (\App\Engine\Dictation::MODELS as $id => $model)
+                        <option value="{{ $id }}">{{ $model['name'] }}</option>
+                    @endforeach
+                </select>
+                <p id="field-dictationModel-hint" class="text-sm text-fg-muted">{{ \App\Engine\Dictation::MODELS[$dictationModel]['hint'] ?? '' }} The 🎤 in the chat records, and this writes it down.</p>
+            </div>
             <x-checkbox name="askTopics" label="Ask me before adding or switching topics" hint="Off: the tutor keeps them and says so." wire:model="askTopics" />
             <x-checkbox name="tutorMarksTopics" label="Let the tutor mark topics" hint="It marks what you've covered. You can undo it." wire:model="tutorMarksTopics" />
             <div class="memory-setting">
