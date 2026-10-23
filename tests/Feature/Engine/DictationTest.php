@@ -172,7 +172,7 @@ class DictationTest extends TestCase
         app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'Amharic']);
 
         Livewire::test(VoiceSettings::class)
-            ->assertSee("I'll speak", false)->assertSee('Amharic')->assertSee('Gemini 3.5 Transcribe')
+            ->assertSee('>Language<', false)->assertSee('Amharic')->assertSee('Gemini 3.5 Transcribe')
             // Not set beside the microphone yet: "Teach me in"'s language.
             ->assertSet('language', 'am')->assertSet('model', Dictation::WHISPER)
             ->set('model', Dictation::GEMINI)->call('save')->assertHasNoErrors()->assertDispatched('voice-settings-saved');
@@ -227,8 +227,15 @@ class DictationTest extends TestCase
         $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
 
         Livewire::test(TutorChat::class, ['vistud' => true])
-            ->assertSee('aria-label="Chat settings"', false)->assertSee('All AI settings')->assertSee('Voice typing')->assertSee("I'll speak", false)
-            ->assertDontSee('aria-label="Text formatting"', false)->assertDontSee('aria-label="Voice typing settings"', false);
+            // The first page: a row for the AI model and one for voice typing, with what is set.
+            ->assertSee('aria-label="Chat settings"', false)->assertSee('All AI settings')->assertSee('AI model')->assertSee('Voice typing')
+            ->assertSee('Detect it · Whisper Large V3 Turbo')
+            // The models' page has a search; voice typing's page its language and model, saved by a button.
+            ->assertSee('Find a model')->assertSee('>Language<', false)->assertSee('wire:click="save"', false)
+            // Never a form inside the chat's form (its Save would send the message), and no formatting buttons.
+            ->assertDontSee('wire:submit="save"', false)->assertDontSee('aria-label="Text formatting"', false);
+        app(Settings::class)->setDictation($by, Dictation::GEMINI, 'am');
+        Livewire::test(TutorChat::class, ['vistud' => true])->assertSee('Amharic · Gemini 3.5 Transcribe');
     }
 
     public function test_a_failed_voice_request_leaves_a_log_line_with_what_was_tried_and_never_the_audio(): void

@@ -34,7 +34,7 @@ final class Dictation
     /** @var array<string, array{name: string, hint: string}> */
     public const MODELS = [
         self::WHISPER => ['name' => 'Whisper Large V3 Turbo', 'hint' => 'Fast and the cheapest. Good for most languages.'],
-        self::GEMINI => ['name' => 'Gemini 3.5 Transcribe', 'hint' => 'Better for Amharic and other less common languages.'],
+        self::GEMINI => ['name' => 'Gemini 3.5 Transcribe', 'hint' => 'Better for less common languages.'],
         self::CHIRP => ['name' => 'Google Chirp 3 (best quality, costs more)', 'hint' => 'Google\'s speech model: the best quality, about 80 times Whisper\'s price. With your own key only.'],
     ];
 

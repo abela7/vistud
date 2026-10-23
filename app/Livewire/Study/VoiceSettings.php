@@ -12,7 +12,7 @@ use Livewire\Component;
 
 /**
  * Voice typing's settings beside the microphone (the owner's ask, 2026-10-23): which model writes down what is said,
- * and the language spoken, so Amharic isn't guessed to be Arabic. The same choices as in AI settings, kept there.
+ * and the language spoken, so it is told rather than guessed. The same choices as in AI settings, kept there.
  */
 final class VoiceSettings extends Component
 {

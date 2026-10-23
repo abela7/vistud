@@ -672,36 +672,83 @@
                     </div>
 
                     <div class="chat-compose-actions">
-                        {{-- One gear for the chat's settings: the AI model answering, and voice typing's model and language. --}}
-                        <div class="chat-model-picker" x-data="{ modelOpen: false }" x-on:keydown.escape.stop="modelOpen = false" x-on:click.outside="modelOpen = false" x-on:voice-settings-saved.window="modelOpen = false">
-                            <button type="button" class="chat-tool-btn chat-settings-btn" :class="{ 'is-active': modelOpen }" x-on:click="modelOpen = ! modelOpen" x-bind:aria-expanded="modelOpen.toString()" aria-label="Chat settings" title="Chat settings · {{ $activeModelName }}" x-bind:disabled="busy">
+                        {{--
+                            One gear for the chat's settings. First two rows (the AI model answering, and voice typing),
+                            each opening its own page with a way back: the models with a search, and voice typing's
+                            language and model.
+                        --}}
+                        <div class="chat-model-picker"
+                            x-data="{ modelOpen: false, page: 'menu', find: '' }"
+                            x-init="$watch('modelOpen', (on) => { if (on) { page = 'menu'; find = ''; } })"
+                            x-on:keydown.escape.stop="page !== 'menu' ? (page = 'menu') : (modelOpen = false)"
+                            x-on:click.outside="modelOpen = false"
+                            x-on:voice-settings-saved.window="page = 'menu'">
+                            <button type="button" class="chat-tool-btn chat-settings-btn" :class="{ 'is-active': modelOpen }" x-on:click="modelOpen = ! modelOpen" x-bind:aria-expanded="modelOpen.toString()" aria-label="Chat settings" title="Chat settings" x-bind:disabled="busy">
                                 <x-icon name="settings" class="size-4" />
                             </button>
 
                             <div class="chat-model-popover chat-settings-panel" x-show="modelOpen" x-cloak x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" role="dialog" aria-label="Chat settings">
-                                <div class="chat-model-popover-head">
-                                    <span class="text-xs font-semibold text-fg">AI model</span>
-                                    <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-xs text-link">All AI settings</a>
+                                {{-- The two rows. --}}
+                                <div x-show="page === 'menu'">
+                                    <div class="chat-model-popover-head">
+                                        <span class="text-xs font-semibold text-fg">Chat settings</span>
+                                        <a href="{{ route('settings', ['part' => 'ai']) }}" class="text-xs text-link">All AI settings</a>
+                                    </div>
+                                    <button type="button" class="chat-settings-row" x-on:click="page = 'model'; $nextTick(() => $refs.findModel?.focus())">
+                                        <x-icon name="sparkles" class="size-4 text-fg-muted flex-none" />
+                                        <span class="chat-settings-row-text">
+                                            <span class="chat-settings-row-name">AI model</span>
+                                            <span class="chat-settings-row-value">{{ $activeModelName }}</span>
+                                        </span>
+                                        <x-icon name="chevron-right" class="size-4 text-fg-muted flex-none" />
+                                    </button>
+                                    <button type="button" class="chat-settings-row" x-show="speechSupported" x-cloak x-on:click="page = 'voice'">
+                                        <x-icon name="mic" class="size-4 text-fg-muted flex-none" />
+                                        <span class="chat-settings-row-text">
+                                            <span class="chat-settings-row-name">Voice typing</span>
+                                            <span class="chat-settings-row-value">{{ $voiceSummary }}</span>
+                                        </span>
+                                        <x-icon name="chevron-right" class="size-4 text-fg-muted flex-none" />
+                                    </button>
+                                    <div class="chat-model-popover-foot" role="status">
+                                        <span class="chat-model-usage">{{ $spentWords }}</span>
+                                    </div>
                                 </div>
-                                <div class="chat-model-popover-list" role="menu">
-                                    @foreach ($chatModels as $m)
-                                        <button type="button" role="menuitem" class="chat-model-option {{ $activeModel === $m['id'] ? 'is-active' : '' }}" wire:click="switchModel('{{ $m['id'] }}')" x-on:click="modelOpen = false">
-                                            <div class="chat-model-option-text">
-                                                <span class="chat-model-option-name">{{ $m['name'] }}</span>
-                                                @if ($m['priceWords'])
-                                                    <span class="chat-model-option-price">{{ $m['priceWords'] }}</span>
+
+                                {{-- The models, found by name. --}}
+                                <div x-show="page === 'model'" x-cloak>
+                                    <div class="chat-model-popover-head">
+                                        <button type="button" class="chat-settings-back" x-on:click="page = 'menu'"><x-icon name="chevron-left" class="size-4" />AI model</button>
+                                    </div>
+                                    <div class="chat-settings-find">
+                                        <x-icon name="search" class="size-4 text-fg-muted" />
+                                        <label for="find-model-{{ $this->getId() }}" class="sr-only">Find a model</label>
+                                        <input id="find-model-{{ $this->getId() }}" type="search" class="chat-settings-find-input" x-ref="findModel" x-model="find" placeholder="Find a model" autocomplete="off">
+                                    </div>
+                                    <div class="chat-model-popover-list" role="menu">
+                                        @foreach ($chatModels as $m)
+                                            <button type="button" role="menuitem" class="chat-model-option {{ $activeModel === $m['id'] ? 'is-active' : '' }}"
+                                                x-show="find.trim() === '' || @js(mb_strtolower($m['name'].' '.$m['id'])).includes(find.trim().toLowerCase())"
+                                                wire:click="switchModel('{{ $m['id'] }}')" x-on:click="modelOpen = false">
+                                                <div class="chat-model-option-text">
+                                                    <span class="chat-model-option-name">{{ $m['name'] }}</span>
+                                                    @if ($m['priceWords'])
+                                                        <span class="chat-model-option-price">{{ $m['priceWords'] }}</span>
+                                                    @endif
+                                                </div>
+                                                @if ($activeModel === $m['id'])
+                                                    <x-icon name="check" class="size-3.5 text-accent flex-none" />
                                                 @endif
-                                            </div>
-                                            @if ($activeModel === $m['id'])
-                                                <x-icon name="check" class="size-3.5 text-accent flex-none" />
-                                            @endif
-                                        </button>
-                                    @endforeach
+                                            </button>
+                                        @endforeach
+                                    </div>
                                 </div>
-                                <div class="chat-model-popover-foot" role="status">
-                                    <span class="chat-model-usage">{{ $activeModel }} · {{ $spentWords }}</span>
-                                </div>
-                                <div x-show="speechSupported" x-cloak class="chat-settings-voice">
+
+                                {{-- Voice typing: the language spoken and the model. --}}
+                                <div x-show="page === 'voice'" x-cloak>
+                                    <div class="chat-model-popover-head">
+                                        <button type="button" class="chat-settings-back" x-on:click="page = 'menu'"><x-icon name="chevron-left" class="size-4" />Voice typing</button>
+                                    </div>
                                     <livewire:study.voice-settings :inline="true" :key="'voice-'.$this->getId()" />
                                 </div>
                             </div>

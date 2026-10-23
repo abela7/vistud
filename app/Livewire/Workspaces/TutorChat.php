@@ -6,6 +6,7 @@ use App\Appearance\Icons;
 use App\Engine\Attachments;
 use App\Engine\ChatMarks;
 use App\Engine\Choices;
+use App\Engine\Dictation;
 use App\Engine\EngineFailed;
 use App\Engine\Models;
 use App\Engine\SessionChat;
@@ -427,6 +428,10 @@ final class TutorChat extends Component
         $this->send($text);
     }
 
+    /** Voice typing's settings were saved in the gear: its row shows them. */
+    #[On('voice-settings-saved')]
+    public function voiceSettingsSaved(): void {}
+
     #[On('chat-send-prompt')]
     public function sendPrompt(string $text): void
     {
@@ -750,6 +755,8 @@ final class TutorChat extends Component
             'chatModels' => $chatModels,
             'activeModel' => $currentModelId,
             'activeModelName' => $activeModelName,
+            // The gear's Voice typing row: the language spoken and the model, as set in its page.
+            'voiceSummary' => (Dictation::SPOKEN[Dictation::languageFor($choices) ?? 'auto'] ?? 'Detect it').' · '.trim((string) strtok(Dictation::MODELS[$choices->dictationModel]['name'] ?? '', '(')),
             'sees' => ($model = $this->models->find($currentModelId, $this->settings->credential($by))) === null || $model->images,
             'tutoring' => $tutoring,
             'tutoringChoices' => Tutoring::CHOICES,
