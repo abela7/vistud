@@ -44,6 +44,15 @@ final class Dictation
         'chinese' => 'zh', 'german' => 'de', 'italian' => 'it', 'turkish' => 'tr',
     ];
 
+    /** What the microphone's settings offer to speak, by code; `auto` leaves the model to tell which it is. */
+    public const SPOKEN = [
+        'auto' => 'Detect it', 'am' => 'Amharic', 'en' => 'English', 'om' => 'Afaan Oromo', 'ti' => 'Tigrinya', 'so' => 'Somali',
+        'ar' => 'Arabic', 'fr' => 'French', 'es' => 'Spanish', 'pt' => 'Portuguese', 'sw' => 'Swahili', 'hi' => 'Hindi', 'zh' => 'Chinese',
+    ];
+
+    /** Languages written in the Ethiopic script (ፊደል): a transcript of them in Arabic letters was misheard. */
+    private const ETHIOPIC = ['am', 'ti'];
+
     public const MAX_BYTES = 10 * 1024 * 1024;
 
     /** The longest recording turned into words, in seconds. */
@@ -58,6 +67,22 @@ final class Dictation
     public static function model(?string $id): string
     {
         return is_string($id) && isset(self::MODELS[$id]) ? $id : self::WHISPER;
+    }
+
+    /** A stored language for voice typing: one of SPOKEN, or null (follow "Teach me in"). */
+    public static function spoken(?string $code): ?string
+    {
+        return is_string($code) && isset(self::SPOKEN[$code]) ? $code : null;
+    }
+
+    /** The code told to the model: the one set beside the microphone, else "Teach me in"'s; null to let it tell. */
+    public static function languageFor(Choices $choices): ?string
+    {
+        if ($choices->dictationLanguage !== null) {
+            return $choices->dictationLanguage === 'auto' ? null : $choices->dictationLanguage;
+        }
+
+        return self::LANGUAGES[mb_strtolower(trim((string) $choices->language))] ?? null;
     }
 
     /**
@@ -88,14 +113,45 @@ final class Dictation
         }
 
         [$audio, $format] = self::speech($bytes, $extension);
+        $language = self::languageFor($choices);
+        $text = $this->ask($by, (string) $secret, $audio, $format, $choices->dictationModel, $language, $choices->noTraining);
+        // Amharic or Tigrinya heard as Arabic (models mix them up): asked once more of the other model, and refused
+        // rather than put in the box if it still isn't in the Ethiopic script.
+        if (in_array($language, self::ETHIOPIC, true) && ! self::ethiopic($text)) {
+            $other = $choices->dictationModel === self::WHISPER ? self::GEMINI : self::WHISPER;
+            $text = $this->ask($by, (string) $secret, $audio, $format, $other, $language, $choices->noTraining);
+            if (! self::ethiopic($text)) {
+                $name = self::SPOKEN[$language];
+                throw new Unprocessable('dictation_language', $text === ''
+                    ? 'Nothing was heard. Try again a little closer to the microphone.'
+                    : "It didn't come back in {$name}. Speak a little slower and closer, or try the other model in the microphone's settings.");
+            }
+        }
+
+        return $text;
+    }
+
+    /** Whether some words are in the Ethiopic script (ፊደል) and not mostly in Arabic letters. */
+    private static function ethiopic(string $text): bool
+    {
+        $ethiopic = preg_match_all('/\p{Ethiopic}/u', $text);
+        $arabic = preg_match_all('/\p{Arabic}/u', $text);
+
+        return $ethiopic > 0 && $ethiopic >= $arabic;
+    }
+
+    /** One call to the service: the words, with what they cost counted with the month's AI use. */
+    private function ask(Principal $by, string $secret, string $audio, string $format, string $model, ?string $language, bool $noTraining): string
+    {
         try {
-            $response = Http::withToken((string) $secret)->acceptJson()->timeout(90)
+            $response = Http::withToken($secret)->acceptJson()->timeout(90)
                 ->attach('file', $audio, 'speech.'.$format)
                 ->post(rtrim($this->setup->url(), '/').'/audio/transcriptions', array_filter([
-                    'model' => $choices->dictationModel,
-                    'provider' => json_encode(['data_collection' => $choices->noTraining ? 'deny' : 'allow']),
-                    // The language they chose to be taught in, when it is one the service knows.
-                    'language' => self::LANGUAGES[mb_strtolower(trim((string) $choices->language))] ?? null,
+                    'model' => $model,
+                    'provider' => json_encode(['data_collection' => $noTraining ? 'deny' : 'allow']),
+                    // The language they speak, told so it isn't guessed (Amharic is easily taken for Arabic).
+                    'language' => $language,
+                    'temperature' => $language !== null ? '0' : null,
                 ], fn ($value) => $value !== null));
         } catch (Throwable) {
             throw new Unprocessable('dictation_failed', 'The voice service couldn\'t be reached. Try again.');

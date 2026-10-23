@@ -717,6 +717,18 @@
         color: var(--text);
     }
 
+    /* Voice typing's settings beside the microphone: opened above its button, from its right edge (it sits near the
+       box's right end, so the panel stays inside the box). */
+    .voice-settings {
+        position: relative;
+        display: inline-flex;
+    }
+
+    .voice-settings .voice-settings-panel {
+        width: min(16rem, calc(100vw - 2rem));
+        min-width: 0;
+    }
+
     /* The conversations list, in the chat's place. */
     .ai-dock-list {
         display: flex;

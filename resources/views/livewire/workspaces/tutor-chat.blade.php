@@ -733,6 +733,8 @@
                         </div>
 
                         <span class="sr-only">{{ $activeModel }} · {{ $spentWords }}</span>
+                        {{-- Voice typing's model and the language spoken, beside the microphone. --}}
+                        <span x-show="speechSupported" x-cloak><livewire:study.voice-settings :key="'voice-'.$this->getId()" /></span>
                         <button type="button" class="chat-mic-btn"
                             :class="{ 'is-active': transcribing }"
                             x-show="speechSupported"

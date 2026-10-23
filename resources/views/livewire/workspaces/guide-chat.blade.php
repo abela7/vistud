@@ -364,6 +364,8 @@
                                 </div>
                             </div>
                         </div>
+                        {{-- Voice typing's model and the language spoken, beside the microphone. --}}
+                        <span x-show="speechSupported" x-cloak><livewire:study.voice-settings :key="'voice-'.$this->getId()" /></span>
                         <button type="button" class="chat-mic-btn" :class="{ 'is-active': transcribing }" x-show="speechSupported" x-cloak x-on:click="toggleDictation()" :title="transcribing ? 'Stop and write down what you said (Esc or Alt+S)' : 'Speak instead of typing (Alt+S)'" :aria-label="transcribing ? 'Stop listening' : 'Speak instead of typing'" aria-keyshortcuts="Alt+S" :aria-pressed="transcribing.toString()" x-bind:disabled="live || writingDown">
                             <span x-show="! transcribing"><x-icon name="mic" class="size-4" /></span>
                             <span x-show="transcribing" x-cloak><x-icon name="mic-off" class="size-4" /></span>

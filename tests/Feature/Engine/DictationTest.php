@@ -10,8 +10,10 @@ use App\Engine\Settings;
 use App\Engine\Setup;
 use App\Engine\Usage;
 use App\Livewire\Study\EngineSettings;
+use App\Livewire\Study\VoiceSettings;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Database\LearnerTables;
+use App\Platform\Errors\Unprocessable;
 use App\Study\Workspaces;
 use Illuminate\Http\Client\Request as Sent;
 use Illuminate\Http\UploadedFile;
@@ -26,11 +28,14 @@ class DictationTest extends TestCase
 {
     use CreatesAccounts, RefreshesDatabase;
 
+    /** @var list<string> what the service says next, in turn; then the usual answer */
+    private array $heard = [];
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->app->instance(Engine::class, new Fake);
-        Http::fake(['*/audio/transcriptions' => Http::response(['text' => ' Selam, how are you? ', 'usage' => ['cost' => 0.0002, 'seconds' => 4]])]);
+        Http::fake(['*/audio/transcriptions' => fn () => Http::response(['text' => array_shift($this->heard) ?? ' Selam, how are you? ', 'usage' => ['cost' => 0.0002, 'seconds' => 4]])]);
     }
 
     public function test_a_recording_is_written_down_with_whisper_unless_they_chose_gemini(): void
@@ -95,6 +100,7 @@ class DictationTest extends TestCase
         $say = fn () => $this->actingAs($user)->post(route('dictation'), ['audio' => UploadedFile::fake()->createWithContent('speech.webm', 'audio')])->assertOk();
 
         app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'Amharic', 'dictation_model' => Dictation::GEMINI]);
+        $this->heard = ['ሰላም እንዴት ነህ'];
         $say();
         $this->assertSame('am', $language());
         app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'Afaan Oromo']);
@@ -107,6 +113,64 @@ class DictationTest extends TestCase
         app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'Klingon']);
         $say();
         $this->assertNull($language());
+    }
+
+    public function test_amharic_heard_as_arabic_is_asked_again_of_the_other_model_and_never_put_in_the_box(): void
+    {
+        $user = $this->student();
+        $by = $this->principal($user);
+        $this->ownAiKey($by);
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+        app(Settings::class)->setDictation($by, Dictation::WHISPER, 'am');
+        $say = fn () => $this->actingAs($user)->post(route('dictation'), ['audio' => UploadedFile::fake()->createWithContent('speech.webm', 'audio')]);
+        $models = fn () => Http::recorded()->map(fn ($pair) => collect($pair[0]->data())->firstWhere('name', 'model')['contents'])->values()->all();
+
+        // Whisper hears Arabic; Gemini, asked again, hears Amharic: the Amharic goes in the box.
+        $this->heard = ['مرحبا كيف حالك', 'ሰላም እንዴት ነህ'];
+        $say()->assertOk()->assertExactJson(['text' => 'ሰላም እንዴት ነህ']);
+        $this->assertSame([Dictation::WHISPER, Dictation::GEMINI], $models());
+
+        // Both hear Arabic: nothing goes in the box, and it says what to do.
+        $this->heard = ['مرحبا', 'مرحبا'];
+        $say()->assertStatus(422)->assertJsonPath('error.code', 'dictation_language')->assertJsonPath('error.message', fn ($m) => str_contains($m, 'Amharic'));
+    }
+
+    public function test_the_language_set_beside_the_microphone_wins_and_detect_it_tells_none(): void
+    {
+        $user = $this->student();
+        $by = $this->principal($user);
+        $this->ownAiKey($by);
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'French']);
+        $language = fn () => collect(Http::recorded()->last()[0]->data())->firstWhere('name', 'language')['contents'] ?? null;
+        $say = fn () => $this->actingAs($user)->post(route('dictation'), ['audio' => UploadedFile::fake()->createWithContent('speech.webm', 'audio')])->assertOk();
+
+        $say();
+        $this->assertSame('fr', $language());
+        app(Settings::class)->setDictation($by, Dictation::GEMINI, 'en');
+        $say();
+        $this->assertSame('en', $language());
+        app(Settings::class)->setDictation($by, Dictation::GEMINI, 'auto');
+        $say();
+        $this->assertNull($language());
+        $this->assertThrows(fn () => app(Settings::class)->setDictation($by, Dictation::GEMINI, 'xx'), Unprocessable::class);
+        $this->assertThrows(fn () => app(Settings::class)->setDictation($by, 'someone/else', 'am'), Unprocessable::class);
+    }
+
+    public function test_the_microphones_settings_choose_the_model_and_language(): void
+    {
+        $this->withoutVite();
+        $user = $this->student();
+        $this->actingAs($user);
+        $by = $this->principal($user);
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'Amharic']);
+
+        Livewire::test(VoiceSettings::class)
+            ->assertSee("I'll speak", false)->assertSee('Amharic')->assertSee('Gemini 3.5 Transcribe')
+            // Not set beside the microphone yet: "Teach me in"'s language.
+            ->assertSet('language', 'am')->assertSet('model', Dictation::WHISPER)
+            ->set('model', Dictation::GEMINI)->call('save')->assertHasNoErrors()->assertDispatched('voice-settings-saved');
+        $choices = app(Settings::class)->get($by);
+        $this->assertSame([Dictation::GEMINI, 'am'], [$choices->dictationModel, $choices->dictationLanguage]);
     }
 
     public function test_the_course_guide_records_too(): void

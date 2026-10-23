@@ -39,6 +39,8 @@ final readonly class Choices
         public ?string $provider = null,
         /** The model that turns their voice into words (App\Engine\Dictation::MODELS). */
         public string $dictationModel = Dictation::WHISPER,
+        /** The language they speak to it: an ISO-639-1 code, `auto`, or null to follow $language. */
+        public ?string $dictationLanguage = null,
     ) {}
 
     /**

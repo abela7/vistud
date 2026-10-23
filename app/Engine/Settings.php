@@ -74,6 +74,7 @@ final class Settings
             favoriteModels: $favoriteModels,
             provider: $key === null ? null : self::providerOf($row),
             dictationModel: Dictation::model($row->dictation_model ?? null),
+            dictationLanguage: Dictation::spoken($row->dictation_language ?? null),
         );
     }
 
@@ -391,6 +392,23 @@ final class Settings
         $scope = Guard::learner($by);
         $this->ensureRow($scope);
         LearnerTables::query($scope, 'engine_settings')->whereNull('consented_at')->update(['consented_at' => now(), 'updated_at' => now()]);
+
+        return $this->get($by);
+    }
+
+    /**
+     * Voice typing's model and the language spoken to it, set beside the microphone; nothing else changes. A model
+     * outside Dictation::MODELS or a language outside Dictation::SPOKEN is refused.
+     *
+     * @throws Unprocessable
+     */
+    public function setDictation(Principal $by, mixed $model, mixed $language): Choices
+    {
+        $scope = Guard::learner($by);
+        Input::refuse(! is_string($model) || ! isset(Dictation::MODELS[$model]) ? ['model' => 'Choose one of the voice models.'] : []);
+        Input::refuse(! is_string($language) || ! isset(Dictation::SPOKEN[$language]) ? ['language' => 'Choose the language you speak.'] : []);
+        $this->ensureRow($scope);
+        LearnerTables::query($scope, 'engine_settings')->update(['dictation_model' => $model, 'dictation_language' => $language, 'updated_at' => now()]);
 
         return $this->get($by);
     }
