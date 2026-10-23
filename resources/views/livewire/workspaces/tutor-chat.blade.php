@@ -156,8 +156,8 @@
                                 @foreach ($turn['attachments'] as $item)
                                     <li>
                                         @if ($item['url'])
-                                            <a class="chat-file @if (($item['thumbUrl'] ?? null) || $item['kind'] === 'picture') has-thumb @endif" href="{{ $item['url'] }}" target="_blank" rel="noopener">
-                                                @if (($item['thumbUrl'] ?? null) || $item['kind'] === 'picture')
+                                            <a class="chat-file @if (($item['thumbUrl'] ?? null) || ($item['kind'] === 'picture' && str_starts_with($item['ref'], 'file:'))) has-thumb @endif" href="{{ $item['url'] }}" target="_blank" rel="noopener">
+                                                @if (($item['thumbUrl'] ?? null) || ($item['kind'] === 'picture' && str_starts_with($item['ref'], 'file:')))
                                                     <span class="chat-file-thumb-wrap">
                                                         <img src="{{ $item['thumbUrl'] ?? route('files.content', str_replace('file:', '', $item['ref'])) }}" alt="{{ $item['name'] }}" class="chat-file-thumb" loading="lazy">
                                                     </span>
@@ -167,8 +167,8 @@
                                                 <span class="truncate">{{ $item['name'] }}</span>
                                             </a>
                                         @else
-                                            <span class="chat-file @if (($item['thumbUrl'] ?? null) || $item['kind'] === 'picture') has-thumb @endif">
-                                                @if (($item['thumbUrl'] ?? null) || $item['kind'] === 'picture')
+                                            <span class="chat-file @if (($item['thumbUrl'] ?? null) || ($item['kind'] === 'picture' && str_starts_with($item['ref'], 'file:'))) has-thumb @endif">
+                                                @if (($item['thumbUrl'] ?? null) || ($item['kind'] === 'picture' && str_starts_with($item['ref'], 'file:')))
                                                     <span class="chat-file-thumb-wrap">
                                                         <img src="{{ $item['thumbUrl'] ?? route('files.content', str_replace('file:', '', $item['ref'])) }}" alt="{{ $item['name'] }}" class="chat-file-thumb" loading="lazy">
                                                     </span>
@@ -632,7 +632,7 @@
                                     @forelse ($attachable['items'] as $item)
                                         <li x-show="matches(@js($item['name']))">
                                             <button type="button" class="chat-pick" x-on:click="toggle(@js(['ref' => $item['ref'], 'name' => $item['name'], 'kind' => $item['kind'], 'thumbUrl' => $item['thumbUrl'] ?? null]))" x-bind:aria-pressed="has(@js($item['ref'])).toString()">
-                                                @if (($item['thumbUrl'] ?? null) || $item['kind'] === 'picture')
+                                                @if (($item['thumbUrl'] ?? null) || ($item['kind'] === 'picture' && str_starts_with($item['ref'], 'file:')))
                                                     <span class="chat-picker-thumb-wrap">
                                                         <img src="{{ $item['thumbUrl'] ?? route('files.content', str_replace('file:', '', $item['ref'])) }}" alt="{{ $item['name'] }}" class="chat-picker-thumb" loading="lazy">
                                                     </span>

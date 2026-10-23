@@ -71,6 +71,9 @@ class VistudAiAttachTest extends TestCase
         $later = json_encode($this->engine->last()->messages, JSON_UNESCAPED_SLASHES);
         $this->assertStringNotContainsString('data:image/', $later);
         $this->assertStringContainsString('Attached earlier: the picture', $later);
+        // In the chat it is its name and an icon: it was kept nowhere, so there is no picture to show.
+        Livewire::test(TutorChat::class, ['vistud' => true, 'conversationId' => $id])
+            ->assertSee('board.png')->assertDontSee('alt="board.png"', false);
     }
 
     public function test_a_file_that_cant_be_read_or_too_many_are_refused_before_anything_is_kept(): void

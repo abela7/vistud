@@ -5,6 +5,7 @@ namespace App\Livewire\Study;
 use App\Engine\VistudAi;
 use App\Identity\PrincipalFactory;
 use App\Platform\Access\Principal;
+use App\Platform\Errors\NotFound;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Route;
 use Livewire\Attributes\Locked;
@@ -36,6 +37,13 @@ final class VistudAiDock extends Component
     /** Changes for New chat, so the chat starts over. */
     #[Locked]
     public int $chat = 0;
+
+    /** The conversations list shown instead of the chat, as on the ViStud AI page. */
+    #[Locked]
+    public bool $listing = false;
+
+    /** Words to find a conversation by its title. */
+    public string $search = '';
 
     private VistudAi $ai;
 
@@ -69,7 +77,24 @@ final class VistudAiDock extends Component
 
     public function newChat(): void
     {
-        [$this->conversation, $this->chat] = [null, $this->chat + 1];
+        [$this->conversation, $this->chat, $this->listing] = [null, $this->chat + 1, false];
+    }
+
+    /** Shows the conversations list, or goes back to the chat. */
+    public function toggleList(): void
+    {
+        $this->listing = ! $this->listing;
+    }
+
+    /** Opens one of the student's conversations from the list. */
+    public function pick(string $id): void
+    {
+        try {
+            $this->ai->model($this->principal(), $id);
+        } catch (NotFound) {
+            return;
+        }
+        [$this->conversation, $this->chat, $this->listing] = [$id, $this->chat + 1, false];
     }
 
     /** The chat started a conversation with its first words: it is the one the panel goes on with. */
@@ -81,7 +106,9 @@ final class VistudAiDock extends Component
 
     public function render(): View
     {
-        return view('livewire.study.vistud-ai-dock');
+        return view('livewire.study.vistud-ai-dock', [
+            'conversations' => $this->open && $this->listing ? $this->ai->conversations($this->principal(), trim($this->search)) : [],
+        ]);
     }
 
     private function principal(): Principal

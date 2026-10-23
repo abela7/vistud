@@ -57,6 +57,10 @@ class VistudAiDockTest extends TestCase
             ->call('show')->assertSet('open', true)->assertSet('conversation', $id)
             ->assertSee('Physics is your next course.')
             ->call('newChat')->assertSet('conversation', null)->assertDontSee('Physics is your next course.')
+            // The conversations list: found by its title, opened from it.
+            ->call('toggleList')->assertSet('listing', true)->assertSee('What next?')
+            ->set('search', 'nothing like it')->assertSee('No conversation is called that.')
+            ->set('search', '')->call('pick', $id)->assertSet('listing', false)->assertSet('conversation', $id)->assertSee('Physics is your next course.')
             ->call('hide')->assertSet('open', false);
     }
 }

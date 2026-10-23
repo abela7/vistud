@@ -717,6 +717,17 @@
         color: var(--text);
     }
 
+    /* The conversations list, in the chat's place. */
+    .ai-dock-list {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 0.5rem;
+        min-height: 0;
+        padding: 0.75rem;
+        overflow-y: auto;
+    }
+
     /* The chat fills the sheet, as on the ViStud AI page. */
     .ai-dock-body {
         display: flex;
