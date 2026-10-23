@@ -44,18 +44,17 @@ final readonly class Choices
     ) {}
 
     /**
-     * Models available for quick switching mid-chat: favorite models if set,
-     * otherwise a curated set of popular models, always including the tutor model.
+     * Models available for quick switching mid-chat: every model the student chose for a job (the tutor, the reader,
+     * the helper, then the one tried when the tutor fails), then their favourites, each once (the owner's ask,
+     * 2026-10-23). With none of those on an OpenRouter key, a curated set of popular models.
      *
      * @return list<string>
      */
     public function chatModels(): array
     {
-        $models = array_values(array_filter($this->favoriteModels));
-        if ($models === [] && $this->provider !== null && Providers::direct($this->provider)) {
-            // A provider's own key: its models for the roles (OpenRouter's names would mean nothing to it).
-            $models = array_values(array_filter([$this->tutorModel, $this->readerModel, $this->helperModel]));
-        } elseif ($models === []) {
+        $roles = array_values(array_filter([$this->tutorModel, $this->readerModel, $this->helperModel, $this->fallbackModel]));
+        $models = array_values(array_unique([...$roles, ...array_values(array_filter($this->favoriteModels))]));
+        if ($models === [] && ($this->provider === null || ! Providers::direct($this->provider))) {
             $models = [
                 'anthropic/claude-3.5-sonnet',
                 'openai/gpt-4o',
@@ -64,14 +63,8 @@ final readonly class Choices
                 'deepseek/deepseek-chat',
             ];
         }
-        if ($this->tutorModel !== '' && ! in_array($this->tutorModel, $models, true)) {
-            array_unshift($models, $this->tutorModel);
-        }
-        if ($this->fallbackModel !== '' && ! in_array($this->fallbackModel, $models, true)) {
-            $models[] = $this->fallbackModel;
-        }
 
-        return array_values(array_unique($models));
+        return $models;
     }
 
     public function ready(): bool

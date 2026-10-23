@@ -243,20 +243,21 @@ class SharedStudentKeyTest extends TestCase
             ->set('favoriteModels', [])->call('save')->assertHasNoErrors();
         $choices = $settings->get($student);
         $this->assertSame(['fake/plain', 'fake/quick', 'fake/plain'], [$choices->tutorModel, $choices->readerModel, $choices->helperModel]);
-        // Everything else switched off: the tutor alone, and it stays that way (not back to all of them).
-        $this->assertSame(['fake/plain'], $choices->chatModels());
+        // Everything else switched off: only the models their jobs use (the tutor, and the reader's fake/quick, which a
+        // job uses, so it stays in the chat), and it stays that way (not back to all of them).
+        $this->assertSame(['fake/plain', 'fake/quick'], $choices->chatModels());
 
         // The admin adds a model and drops one: the student has it in the chat and the job lists at once, without
         // saving anything, and the one they switched off stays off.
         app(Setup::class)->setShared($this->principal($this->admin()), ['on' => true, 'models' => "fake/plain\nfake/quick\nfake/new", 'daily' => '0.10']);
         // A new request reads the admin's list again (one Settings keeps what it read).
-        $this->assertSame(['fake/plain', 'fake/new'], app(Settings::class)->get($student)->chatModels());
+        $this->assertSame(['fake/plain', 'fake/quick', 'fake/new'], app(Settings::class)->get($student)->chatModels());
         Livewire::test(EngineSettings::class)->assertSee('Fake new')->assertSet('favoriteModels', ['fake/plain', 'fake/new']);
         app(Setup::class)->setShared($this->principal($this->admin()), ['on' => true, 'models' => "fake/new\nfake/quick", 'daily' => '0.10']);
         $choices = app(Settings::class)->get($student);
         // Their tutor (fake/plain) is gone: the admin's default instead, at once.
         $this->assertSame(['fake/new', 'fake/quick', 'fake/new'], [$choices->tutorModel, $choices->readerModel, $choices->helperModel]);
-        $this->assertSame(['fake/new'], $choices->chatModels());
+        $this->assertSame(['fake/new', 'fake/quick'], $choices->chatModels());
 
         // Switched back on.
         Livewire::test(EngineSettings::class)->set('favoriteModels', ['fake/new', 'fake/quick'])->call('save')->assertHasNoErrors();
