@@ -9,7 +9,8 @@ use App\Platform\Ids;
 /**
  * Deletes chat turns and AI runs while keeping what they cost: the month's usage (App\Engine\Usage) is summed from
  * those rows, so deleting them would lower it and let a cleared chat or a deleted course slip past the month's limit.
- * What they cost stays as one row per role and month in engine_jobs, of no course (a course deleted later keeps it).
+ * What they cost, and their tokens, stay as one row per role and month in engine_jobs, of no course (a course deleted
+ * later keeps it).
  */
 final class Spent
 {
@@ -23,8 +24,8 @@ final class Spent
             return;
         }
         $messages = fn () => LearnerTables::query($scope, 'engine_messages')->whereIn('thread_id', $threadIds);
-        self::keep($scope, $messages()->where('cost_micros', '>', 0)
-            ->selectRaw("'".Role::Tutor->value."' as role, DATE_FORMAT(created_at, '%Y-%m') as month, sum(cost_micros) as cost, max(created_at) as last")
+        self::keep($scope, $messages()->where(fn ($q) => $q->where('cost_micros', '>', 0)->orWhere('tokens_in', '>', 0))
+            ->selectRaw("'".Role::Tutor->value."' as role, DATE_FORMAT(created_at, '%Y-%m') as month, sum(cost_micros) as cost, sum(tokens_in) as tokens_in, sum(tokens_cached) as tokens_cached, sum(tokens_out) as tokens_out, max(created_at) as last")
             ->groupBy('month')->get()->all());
         $messages()->delete();
     }
@@ -33,8 +34,8 @@ final class Spent
     public static function forgetJobs(LearnerScope $scope, string $workspaceId): void
     {
         $jobs = fn () => LearnerTables::query($scope, 'engine_jobs')->where('workspace_id', $workspaceId);
-        self::keep($scope, $jobs()->where('cost_micros', '>', 0)
-            ->selectRaw("role, DATE_FORMAT(created_at, '%Y-%m') as month, sum(cost_micros) as cost, max(created_at) as last")
+        self::keep($scope, $jobs()->where(fn ($q) => $q->where('cost_micros', '>', 0)->orWhere('tokens_in', '>', 0))
+            ->selectRaw("role, DATE_FORMAT(created_at, '%Y-%m') as month, sum(cost_micros) as cost, sum(tokens_in) as tokens_in, sum(tokens_cached) as tokens_cached, sum(tokens_out) as tokens_out, max(created_at) as last")
             ->groupBy('role', 'month')->get()->all());
         $jobs()->delete();
     }
@@ -51,8 +52,8 @@ final class Spent
             return;
         }
         $jobs = fn () => LearnerTables::query($scope, 'engine_jobs')->where('target_type', $targetType)->whereIn('target_id', $ids);
-        self::keep($scope, $jobs()->where('cost_micros', '>', 0)
-            ->selectRaw("role, DATE_FORMAT(created_at, '%Y-%m') as month, sum(cost_micros) as cost, max(created_at) as last")
+        self::keep($scope, $jobs()->where(fn ($q) => $q->where('cost_micros', '>', 0)->orWhere('tokens_in', '>', 0))
+            ->selectRaw("role, DATE_FORMAT(created_at, '%Y-%m') as month, sum(cost_micros) as cost, sum(tokens_in) as tokens_in, sum(tokens_cached) as tokens_cached, sum(tokens_out) as tokens_out, max(created_at) as last")
             ->groupBy('role', 'month')->get()->all());
         $jobs()->delete();
     }
@@ -63,6 +64,8 @@ final class Spent
         LearnerTables::insert($scope, 'engine_jobs', array_map(fn (object $sum) => [
             'id' => Ids::new(), 'workspace_id' => null, 'role' => $sum->role, 'kind' => self::KIND, 'status' => 'done',
             'cost_micros' => (int) $sum->cost, 'created_at' => $sum->last, 'finished_at' => $sum->last,
+            // And their tokens (from 2026-10-23), so the usage page counts what a deleted chat took.
+            'tokens_in' => (int) ($sum->tokens_in ?? 0), 'tokens_cached' => (int) ($sum->tokens_cached ?? 0), 'tokens_out' => (int) ($sum->tokens_out ?? 0),
         ], $sums));
     }
 }

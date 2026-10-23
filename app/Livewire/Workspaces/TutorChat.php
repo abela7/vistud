@@ -12,6 +12,7 @@ use App\Engine\Models;
 use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Engine\SuggestedReply;
+use App\Engine\TokenUsage;
 use App\Engine\Toolbox;
 use App\Engine\Troubles;
 use App\Engine\VistudAi;
@@ -755,6 +756,13 @@ final class TutorChat extends Component
             'chatModels' => $chatModels,
             'activeModel' => $currentModelId,
             'activeModelName' => $activeModelName,
+            // What this chat's AI use took, in tokens, for the gear (App\Engine\TokenUsage).
+            'chatTokens' => app(TokenUsage::class)->chat($by, ...match (true) {
+                $ai !== null => ['id', $this->conversationId],
+                $onTopic !== null => ['topic_id', $this->topicId],
+                $activity !== null => ['activity_id', $this->activityId],
+                default => ['session_id', $this->sessionId],
+            }),
             // The gear's Voice typing row: the language spoken and the model, as set in its page.
             'voiceSummary' => (Dictation::SPOKEN[Dictation::languageFor($choices) ?? 'auto'] ?? 'Detect it').' · '.trim((string) strtok(Dictation::MODELS[$choices->dictationModel]['name'] ?? '', '(')),
             'sees' => ($model = $this->models->find($currentModelId, $this->settings->credential($by))) === null || $model->images,

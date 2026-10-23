@@ -245,7 +245,8 @@ final class Dictation
             // Counted with what the AI costs this month (and today, for the shared key's limit).
             LearnerTables::insert(Guard::learner($by), 'engine_jobs', [
                 'id' => Ids::new(), 'workspace_id' => null, 'role' => Role::Helper->value, 'kind' => 'dictation', 'status' => 'done',
-                'cost_micros' => $cost, 'created_at' => now(), 'finished_at' => now(),
+                'cost_micros' => $cost, 'created_at' => now(), 'finished_at' => now(), 'model' => $model,
+                'tokens_in' => (int) ($response->json('usage.input_tokens') ?? 0), 'tokens_out' => (int) ($response->json('usage.output_tokens') ?? 0),
             ]);
         }
 

@@ -711,7 +711,7 @@
                                         <x-icon name="chevron-right" class="size-4 text-fg-muted flex-none" />
                                     </button>
                                     <div class="chat-model-popover-foot" role="status">
-                                        <span class="chat-model-usage">{{ $spentWords }}</span>
+                                        <span class="chat-model-usage">{{ \App\Engine\TokenUsage::short($chatTokens['total']) }} tokens in this chat · {{ $spentWords }}</span>
                                     </div>
                                 </div>
 
