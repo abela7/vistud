@@ -1352,6 +1352,24 @@
         border-top: 1px solid var(--divider);
     }
 
+    /*
+    | The chat's message box: room to write from the start (two lines on a phone, three from a tablet up), still
+    | growing as the words do. 16px text, so a phone doesn't zoom in when the box is tapped.
+    */
+    .chat-compose .chat-box {
+        min-height: 3.5rem;
+        max-height: 14rem;
+        padding: 0.5rem 0.5rem 0.375rem;
+        font-size: 1rem;
+        line-height: 1.5;
+    }
+
+    @media (min-width: 768px) {
+        .chat-compose .chat-box {
+            min-height: 5rem;
+        }
+    }
+
     /* The course guide's box, for the panel above to open over. */
     .guide-form {
         position: relative;
