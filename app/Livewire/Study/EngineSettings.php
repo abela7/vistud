@@ -141,6 +141,36 @@ final class EngineSettings extends Component
         $this->result = $this->settings->test($this->principal());
     }
 
+    /** The step-by-step guide's key (resources/views/livewire/study/partials/key-guide.blade.php): an OpenRouter key. */
+    public function saveGuideKey(): void
+    {
+        $this->source = 'openrouter';
+        $this->saveKey();
+    }
+
+    /** The guide's last step: the model that teaches, from its picks or any the key offers; nothing else changes. */
+    public function chooseGuideModel(string $model): void
+    {
+        $this->tutorModel = $model;
+        $this->save();
+    }
+
+    /**
+     * The guide's picks: good and cheap OpenRouter models, with their prices when the key's list has them.
+     *
+     * @return list<array{id: string, name: string, why: string, price: ?string}>
+     */
+    public static function guidePicks(array $byId): array
+    {
+        $picks = [
+            ['id' => 'google/gemini-2.5-flash', 'name' => 'Gemini 2.5 Flash', 'why' => 'Clear and quick. A good tutor for most courses.'],
+            ['id' => 'google/gemini-2.5-flash-lite', 'name' => 'Gemini 2.5 Flash Lite', 'why' => 'The cheapest that still teaches well.'],
+            ['id' => 'openai/gpt-4.1-mini', 'name' => 'GPT-4.1 mini', 'why' => 'Careful with steps and code.'],
+        ];
+
+        return array_map(fn (array $p) => $p + ['price' => isset($byId[$p['id']]) ? $byId[$p['id']]->priceWords() : null], $picks);
+    }
+
     /**
      * Sends a one-word ask to each role's saved model, so the student sees which answer with their key before a
      * session leans on them (a provider can list a model its plan won't run). All answering clears the last problem.
@@ -300,6 +330,8 @@ final class EngineSettings extends Component
             'keyState' => $keyState,
             // The shared key for students, when this student is on it: its one model and daily limit.
             'shared' => $shared,
+            // The step-by-step guide's model picks (partials/key-guide.blade.php).
+            'guidePicks' => self::guidePicks($byId),
             'sharedList' => $sharedList,
             'models' => $models,
             'setupUrl' => $by->hasRole(Role::Admin) ? route('admin.engine') : null,

@@ -68,9 +68,15 @@
             </div>
         </fieldset>
 
-        @if ($source === 'openrouter' && $keyState !== 'own')
-            <p class="acc-note">Get a key at <a href="https://openrouter.ai" class="text-link" target="_blank" rel="noopener">openrouter.ai</a> (add a few dollars of credit), paste it, and press <strong>Save and try</strong>.</p>
-        @endif
+        {{-- Getting a key, one step at a time, in a side panel (partials/key-guide.blade.php). --}}
+        <button type="button" @class(['key-guide-start', 'is-quiet' => $keyState === 'own']) x-on:click="$dispatch('key-guide-open')">
+            <x-icon name="list-checks" class="size-5" />
+            <span class="key-guide-start-text">
+                <span class="key-guide-start-title">{{ $keyState === 'own' ? 'Step-by-step key guide' : 'New to this? Get your own key step by step' }}</span>
+                <span class="key-guide-start-sub">OpenRouter account, credit, a key with a spending limit, then your model.</span>
+            </span>
+            <x-icon name="chevron-right" class="size-4" />
+        </button>
 
         <form wire:submit="saveKey" novalidate class="space-y-4">
             <div class="key-fields">
@@ -324,6 +330,8 @@
             <p class="acc-note" data-usage-cached>{{ $cachedShare }}% of what was sent to the AI this month was reused from the last message, which costs about a tenth of the price.</p>
         @endif
     </x-accordion>
+
+    @include('livewire.study.partials.key-guide')
 
     {{-- Tokens: today, this week, this month and all time, by area, course and model (App\Engine\TokenUsage). --}}
     <livewire:study.token-usage-panel />
