@@ -4,6 +4,7 @@ namespace App\Engine;
 
 use App\Engine\Jobs\Run;
 use App\Engine\Jobs\Runner;
+use App\Engine\Skills\Skills;
 use App\Engine\Tools\Context;
 use App\Engine\Vistud\Overview;
 use App\Engine\Vistud\VistudToolbox;
@@ -249,7 +250,7 @@ final class VistudAi
     /** The rules, then the snapshot of the whole study, then what the conversation's folded part held. */
     public function system(Principal $by, ?string $folded = null): string
     {
-        $rules = trim((string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', (string) file_get_contents(base_path(self::PROMPT))));
+        $rules = trim((string) preg_replace('/\A\s*<!--.*?-->\s*/s', '', (string) file_get_contents(base_path(self::PROMPT))))."\n\n".Skills::alwaysOn();
         $parts = [$rules, "# Their study now\n\n".$this->overview->build($by)];
         if ($folded !== null && trim($folded) !== '') {
             $parts[] = "## Earlier in this conversation (folded to keep it short)\n\n".Fence::wrap(trim($folded));

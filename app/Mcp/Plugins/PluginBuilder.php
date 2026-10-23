@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Plugins;
 
+use App\Engine\Skills\Skills;
 use App\Mcp\Servers\ViStudServer;
 use ZipArchive;
 
@@ -61,15 +62,13 @@ final class PluginBuilder
     /** @return array<string, array{description: string, body: string}> skill name => parts */
     public function skills(): array
     {
+        // Not the skills for ViStud's own chats (App\Engine\Skills\Skills::VISTUD): an outside app can't use them.
         $skills = [];
-        foreach (glob(resource_path('skills/*/SKILL.md')) ?: [] as $file) {
-            $raw = str_replace("\r\n", "\n", (string) file_get_contents($file));
-            if (! preg_match('/\A---\nname: ([a-z0-9-]+)\ndescription: (.+)\n---\n(.*)\z/s', $raw, $m)) {
-                throw new \RuntimeException("{$file} must start with a name and a description.");
+        foreach (Skills::all() as $name => $skill) {
+            if ($skill['where'] !== Skills::VISTUD) {
+                $skills[$name] = ['description' => $skill['description'], 'body' => $skill['body']."\n"];
             }
-            $skills[$m[1]] = ['description' => $m[2], 'body' => $m[3]];
         }
-        ksort($skills);
 
         return $skills;
     }

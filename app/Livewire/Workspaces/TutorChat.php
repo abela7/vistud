@@ -4,6 +4,7 @@ namespace App\Livewire\Workspaces;
 
 use App\Appearance\Icons;
 use App\Engine\Attachments;
+use App\Engine\ChatBlocks;
 use App\Engine\ChatMarks;
 use App\Engine\Choices;
 use App\Engine\Dictation;
@@ -29,7 +30,6 @@ use App\Study\Files;
 use App\Study\FileTypes;
 use App\Study\FolderDetails;
 use App\Study\Folders;
-use App\Study\MarkdownPreview;
 use App\Study\Modules;
 use App\Study\Notes;
 use App\Study\Plugins;
@@ -642,7 +642,7 @@ final class TutorChat extends Component
             if ($turn['role'] === 'assistant') {
                 [$turn['text'], $turn['suggest']] = SuggestedReply::split($turn['text']);
                 $presented = ChatMarks::present($turn['text']);
-                $turn['html'] = MarkdownPreview::html($presented);
+                $turn['html'] = ChatBlocks::html($presented);
                 $turn['looked'] = array_values(array_unique(array_map(Toolbox::words(...), array_filter($turn['tools'], fn (string $tool) => ! Toolbox::writes($tool)))));
                 $turn['savedWords'] = self::savedWords($turn['saved'] ?? []);
                 $turn['notes'] = array_map(fn (array $note) => $note + ['url' => route('workspaces.notes.show', [$this->workspaceId, $note['id'], 'window' => 1])], $turn['notes'] ?? []);
@@ -1075,7 +1075,7 @@ final class TutorChat extends Component
             $answer .= $value;
             if (microtime(true) - $sent >= self::EVERY) {
                 $sent = microtime(true);
-                $this->stream->push($this, 'answer', MarkdownPreview::html(ChatMarks::present(ChatMarks::partial($answer))));
+                $this->stream->push($this, 'answer', ChatBlocks::html(ChatMarks::present(ChatBlocks::partial(ChatMarks::partial($answer)))));
             }
         };
 
@@ -1101,7 +1101,7 @@ final class TutorChat extends Component
             return;
         }
         if ($answer !== '') {
-            $this->stream->push($this, 'answer', MarkdownPreview::html(ChatMarks::present(ChatMarks::partial($answer))));
+            $this->stream->push($this, 'answer', ChatBlocks::html(ChatMarks::present(ChatBlocks::partial(ChatMarks::partial($answer)))));
         }
         app(Troubles::class)->clear($this->principal(), 'tutor');
         $this->announce($changed);

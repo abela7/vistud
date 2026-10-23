@@ -6,6 +6,7 @@
 | takes a pasted or dropped screenshot, and can be dictated into.
 */
 
+import { hydrateBlocks } from './chat-blocks.js';
 import { decorateReplies } from './chat-markdown.js';
 import { joinSpeech } from './dictation.js';
 import { record, recordingSupported, writeDown } from './recorder.js';
@@ -43,6 +44,8 @@ export function guideChat() {
 
         init() {
             this.speechSupported = recordingSupported() && Boolean(this.$root.dataset.dictationUrl);
+            // The UI skill's blocks: a tapped choice is sent as the student's words.
+            hydrateBlocks(this.$root, { choose: (words) => { this.$wire.text = words; this.submit(); } });
             const pref = storedFullscreen();
             if (pref === 'on') this.fullscreen = true;
             this.offerFullscreen = this.$root.dataset.fresh === '1' && pref !== 'on' && pref !== 'off';

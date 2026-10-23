@@ -10,6 +10,7 @@
 
 import { placeBeside } from './floating.js';
 import { toast } from './toasts.js';
+import { hydrateBlocks } from './chat-blocks.js';
 import { decorateCodeBlocks } from './chat-markdown.js';
 import { joinSpeech } from './dictation.js';
 import { record, recordingSupported, writeDown } from './recorder.js';
@@ -125,6 +126,8 @@ export function tutorChat({ upload, account, mentionItems = [], mentions = true,
         init() {
             this.turnCount = this.$refs.log ? this.$refs.log.querySelectorAll('li[data-turn]').length : 0;
             this.readSuggested();
+            // The UI skill's blocks: a tapped choice goes as the student's message, a copy block copies.
+            hydrateBlocks(this.$root, { choose: (words) => this.choose(words) });
             if (window.Livewire?.hook) {
                 const mine = this.$wire.id;
                 window.Livewire.hook('commit', ({ component, succeed }) => {
@@ -1022,6 +1025,19 @@ export function tutorChat({ upload, account, mentionItems = [], mentions = true,
             this.scrollDown(false);
             this.$nextTick(() => this.scrollDown(false));
             this.$wire.say(words);
+        },
+
+        /** A choice the student tapped in a reply: sent as their message, exactly the words on the button. */
+        choose(words) {
+            this.stopDictation();
+            if (this.busy || typeof words !== 'string' || words.trim() === '') return;
+            window.dispatchEvent(new CustomEvent('session-ensure-chat'));
+            [this.pending, this.pendingQuote, this.pendingWords, this.live, this.follow] = [words, '', words, true, true];
+            this.turnCount = this.$refs.log ? this.$refs.log.querySelectorAll('li[data-turn]').length : 0;
+            this.resetTypewriter();
+            this.scrollDown(false);
+            this.$nextTick(() => this.scrollDown(false));
+            this.$wire.send(words, []);
         },
 
         retry() {

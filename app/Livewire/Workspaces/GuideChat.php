@@ -3,6 +3,7 @@
 namespace App\Livewire\Workspaces;
 
 use App\Engine\Attachments;
+use App\Engine\ChatBlocks;
 use App\Engine\Choices;
 use App\Engine\CourseGuide;
 use App\Engine\Models;
@@ -16,7 +17,6 @@ use App\Platform\Errors\AppError;
 use App\Platform\Files\UploadTemps;
 use App\Study\CourseProfiles;
 use App\Study\Files;
-use App\Study\MarkdownPreview;
 use App\Study\Plugins;
 use App\Study\Workspaces;
 use Illuminate\Contracts\View\View;
@@ -174,7 +174,7 @@ final class GuideChat extends Component
             // The reply streams in as it is written, as the tutor's does.
             @set_time_limit(120);
             $answer = $this->guide->turn($by, $this->workspaceId, $this->history(), $words, $this->for, $pictures,
-                fn (string $reply) => $this->stream->push($this, 'guide-answer', MarkdownPreview::html($reply)), $chosen);
+                fn (string $reply) => $this->stream->push($this, 'guide-answer', ChatBlocks::html($reply)), $chosen);
         } catch (AppError $e) {
             $this->problem($e);
 

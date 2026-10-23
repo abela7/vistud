@@ -4,6 +4,7 @@ namespace App\Engine\Context;
 
 use App\Engine\SessionChat;
 use App\Engine\Settings;
+use App\Engine\Skills\Skills;
 use App\Engine\Toolbox;
 use App\Engine\Tools\AssignmentPlanTool;
 use App\Platform\Access\Guard;
@@ -62,7 +63,8 @@ use Carbon\CarbonImmutable;
 final class Stack
 {
     /** Tokens, by layer. A layer left out has no budget of its own (the tools; the folded chat). */
-    public const BUDGETS = [0 => 2_500, 2 => 600, 3 => 250, 4 => 700, 5 => 380];
+    // Layer 0 holds the rules and the always-on skills (App\Engine\Skills\Skills::ALWAYS_ON_TOKENS of them).
+    public const BUDGETS = [0 => 2_800, 2 => 600, 3 => 250, 4 => 700, 5 => 380];
 
     public const ASSIGNMENT_BUDGET = 4_000;
 
@@ -567,7 +569,8 @@ final class Stack
         // A part taken out leaves its neighbours close: a heading always has a blank line before it.
         $text = (string) preg_replace('/([^\n])\n(#{1,3} )/', "$1\n\n$2", $text);
 
-        return trim((string) preg_replace('/\n{3,}/', "\n\n", $text));
+        // The always-on skills (the UI skill) last, as fixed as the rules, so the service caches them with the rules.
+        return trim((string) preg_replace('/\n{3,}/', "\n\n", $text))."\n\n".Skills::alwaysOn();
     }
 
     // ---------- The layers ----------

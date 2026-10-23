@@ -107,7 +107,7 @@ class StackTest extends TestCase
         // The report: layer, name, weight, budget, cuts: in order, the tools and the chat having none of their own.
         $this->assertSame([0, 1, 2, 3, 4, 5, 6], array_column($built->report, 'layer'));
         $this->assertSame(['Rules', 'Tools', 'Course', 'Student', 'Module', 'Session', 'Chat so far'], array_column($built->report, 'name'));
-        $this->assertSame([2_500, null, 600, 250, 700, 380, null], array_column($built->report, 'budget'));
+        $this->assertSame([Stack::BUDGETS[0], null, 600, 250, 700, 380, null], array_column($built->report, 'budget'));
         $this->assertSame([], $built->cuts());
         foreach ($built->report as $layer) {
             $this->assertGreaterThan(0, $layer['tokens'], "layer {$layer['layer']} weighs something");
