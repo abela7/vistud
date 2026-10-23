@@ -31,7 +31,7 @@
     };
     $fresh = collect($talk)->where('from', 'you')->isEmpty();
 @endphp
-<div @class(['guide', 'has-steps' => $questions !== []]) x-data="guideChat()" data-fresh="{{ $fresh ? '1' : '0' }}" x-bind:class="{ 'is-fullscreen': fullscreen }" x-on:keydown.window="onKey($event)">
+<div @class(['guide', 'has-steps' => $questions !== []]) x-data="guideChat()" data-fresh="{{ $fresh ? '1' : '0' }}" data-dictation-url="{{ route('dictation') }}" x-bind:class="{ 'is-fullscreen': fullscreen }" x-on:keydown.window="onKey($event)">
     <div role="status" aria-live="polite" class="empty:hidden"><x-toast :message="$notice" :tone="$noticeTone" /></div>
 
     @if ($questions !== [])
@@ -277,9 +277,9 @@
                     <span class="chat-dictation-waves" aria-hidden="true">
                         <span class="chat-dictation-wave"></span><span class="chat-dictation-wave"></span><span class="chat-dictation-wave"></span><span class="chat-dictation-wave"></span><span class="chat-dictation-wave"></span>
                     </span>
-                    <span class="chat-dictation-status" aria-live="polite" x-text="hearing ? 'Hearing you…' : 'Listening…'">Listening…</span>
+                    <span class="chat-dictation-status" aria-live="polite" >Recording…</span>
                     <span class="chat-dictation-time" x-text="dictationTime" aria-hidden="true">0:00</span>
-                    <span class="chat-dictation-hint"><kbd>Enter</kbd> sends · <kbd>Esc</kbd> or <kbd>Alt+S</kbd> stops</span>
+                    <span class="chat-dictation-hint"><kbd>Enter</kbd>, <kbd>Esc</kbd> or the mic writes it down</span>
                     <div class="chat-dictation-actions">
                         <button type="button" class="chat-dictation-done-btn" x-on:click="stopDictation(true)" title="Stop listening and keep the words (Esc)"><x-icon name="check" class="size-3" /><span>Done</span></button>
                         <button type="button" class="chat-dictation-cancel-btn" x-on:click="stopDictation(false)" title="Stop and take out what you said" aria-label="Discard what you said"><x-icon name="x" class="size-3.5" /></button>
@@ -310,7 +310,7 @@
                     placeholder="{{ $boxWords }}"
                     enterkeyhint="send" autocapitalize="sentences" x-bind:disabled="live"
                     x-bind:class="{ 'is-dictating': transcribing }"
-                    x-bind:placeholder="transcribing ? 'Speak now. Your words appear here as you say them.' : @js($boxWords)"
+                    x-bind:placeholder="transcribing ? 'Speak now. Tap the mic when you finish, and your words appear here.' : (writingDown ? 'Writing down what you said…' : @js($boxWords))"
                     x-on:paste="take($event); $nextTick(() => resize())" x-on:drop="take($event)" x-on:dragover.prevent
                     x-on:input="onInput($event)" x-on:keydown="keydown($event)"></textarea>
 
@@ -364,7 +364,7 @@
                                 </div>
                             </div>
                         </div>
-                        <button type="button" class="chat-mic-btn" :class="{ 'is-active': transcribing }" x-show="speechSupported" x-cloak x-on:click="toggleDictation()" :title="transcribing ? 'Stop listening and keep the words (Esc or Alt+S)' : 'Speak instead of typing (Alt+S)'" :aria-label="transcribing ? 'Stop listening' : 'Speak instead of typing'" aria-keyshortcuts="Alt+S" :aria-pressed="transcribing.toString()" x-bind:disabled="live">
+                        <button type="button" class="chat-mic-btn" :class="{ 'is-active': transcribing }" x-show="speechSupported" x-cloak x-on:click="toggleDictation()" :title="transcribing ? 'Stop and write down what you said (Esc or Alt+S)' : 'Speak instead of typing (Alt+S)'" :aria-label="transcribing ? 'Stop listening' : 'Speak instead of typing'" aria-keyshortcuts="Alt+S" :aria-pressed="transcribing.toString()" x-bind:disabled="live || writingDown">
                             <span x-show="! transcribing"><x-icon name="mic" class="size-4" /></span>
                             <span x-show="transcribing" x-cloak><x-icon name="mic-off" class="size-4" /></span>
                         </button>

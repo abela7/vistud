@@ -34,6 +34,16 @@ final class Dictation
         self::GEMINI => ['name' => 'Gemini 3.5 Transcribe', 'hint' => 'Better for Amharic and other less common languages.'],
     ];
 
+    /**
+     * The languages "Teach me in" offers, as the service names them (ISO-639-1): told to the model, so it hears Amharic
+     * as Amharic. Another language (or none) leaves the model to tell which it is.
+     */
+    public const LANGUAGES = [
+        'english' => 'en', 'amharic' => 'am', 'afaan oromo' => 'om', 'oromo' => 'om', 'tigrinya' => 'ti', 'somali' => 'so',
+        'arabic' => 'ar', 'french' => 'fr', 'spanish' => 'es', 'portuguese' => 'pt', 'swahili' => 'sw', 'hindi' => 'hi',
+        'chinese' => 'zh', 'german' => 'de', 'italian' => 'it', 'turkish' => 'tr',
+    ];
+
     public const MAX_BYTES = 10 * 1024 * 1024;
 
     /** The longest recording turned into words, in seconds. */
@@ -81,10 +91,12 @@ final class Dictation
         try {
             $response = Http::withToken((string) $secret)->acceptJson()->timeout(90)
                 ->attach('file', $audio, 'speech.'.$format)
-                ->post(rtrim($this->setup->url(), '/').'/audio/transcriptions', [
+                ->post(rtrim($this->setup->url(), '/').'/audio/transcriptions', array_filter([
                     'model' => $choices->dictationModel,
                     'provider' => json_encode(['data_collection' => $choices->noTraining ? 'deny' : 'allow']),
-                ]);
+                    // The language they chose to be taught in, when it is one the service knows.
+                    'language' => self::LANGUAGES[mb_strtolower(trim((string) $choices->language))] ?? null,
+                ], fn ($value) => $value !== null));
         } catch (Throwable) {
             throw new Unprocessable('dictation_failed', 'The voice service couldn\'t be reached. Try again.');
         }

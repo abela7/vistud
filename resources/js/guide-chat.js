@@ -7,7 +7,8 @@
 */
 
 import { decorateReplies } from './chat-markdown.js';
-import { joinSpeech, listen, speechSupported } from './dictation.js';
+import { joinSpeech } from './dictation.js';
+import { record, recordingSupported, writeDown } from './recorder.js';
 import { toast } from './toasts.js';
 
 /** Whether this browser starts the guide in full screen, or has been asked not to suggest it. */
@@ -32,13 +33,16 @@ export function guideChat() {
         dictationSeconds: 0,
         dictationTimer: null,
         stopListening: null,
+        // The recording under way (resources/js/recorder.js), and whether its words are being written down.
+        recording: null,
+        writingDown: false,
 
         get dictationTime() {
             return `${Math.floor(this.dictationSeconds / 60)}:${String(this.dictationSeconds % 60).padStart(2, '0')}`;
         },
 
         init() {
-            this.speechSupported = speechSupported();
+            this.speechSupported = recordingSupported() && Boolean(this.$root.dataset.dictationUrl);
             const pref = storedFullscreen();
             if (pref === 'on') this.fullscreen = true;
             this.offerFullscreen = this.$root.dataset.fresh === '1' && pref !== 'on' && pref !== 'off';
@@ -92,13 +96,15 @@ export function guideChat() {
             document.documentElement.removeAttribute('data-session-fullscreen');
             document.documentElement.removeAttribute('data-guide-fullscreen');
             this.stopListening?.();
+            this.recording?.cancel();
             clearInterval(this.dictationTimer);
         },
 
         /** Sends what is in the box: shown at once, then the guide's answer as it streams in. */
         submit() {
-            if (this.live) return;
-            this.stopDictation(true);
+            if (this.live || this.writingDown) return;
+            // While recording, Enter first writes down what was said; the student sends it after reading it.
+            if (this.transcribing) return this.stopDictation(true);
             const words = (this.$wire.text || '').trim();
             this.pending = words;
             const waiting = [...this.$root.querySelectorAll('.guide-pictures > li')];
@@ -286,32 +292,32 @@ export function guideChat() {
             }
         },
 
-        /** Starts voice typing: what is said shows in the box as it is said. Enter sends it, Esc stops. */
-        startDictation() {
-            if (this.live || this.transcribing) return;
-            if (!speechSupported()) {
+        /**
+         * Starts voice typing, as the tutor's chat does (resources/js/recorder.js): it records until the student stops,
+         * then the words are written down by the model chosen in their AI settings and put in the box.
+         */
+        async startDictation() {
+            if (this.live || this.transcribing || this.writingDown) return;
+            const url = this.$root.dataset.dictationUrl;
+            if (!recordingSupported() || !url) {
                 toast('Voice typing is not available in this browser. Try Chrome, Edge or Safari.', 'warning');
+                return;
+            }
+            try {
+                this.recording = await record();
+            } catch {
+                toast('ViStud can\'t hear you. Allow the microphone for this site, then try again.', 'warning');
                 return;
             }
             const now = this.$refs.box?.value || this.$wire.text || '';
             [this.dictationStart, this.dictationBase, this.interimSpeech] = [now, now, ''];
-            [this.transcribing, this.hearing, this.dictationSeconds] = [true, false, 0];
+            [this.transcribing, this.hearing, this.dictationSeconds] = [true, true, 0];
             clearInterval(this.dictationTimer);
-            this.dictationTimer = setInterval(() => { this.dictationSeconds += 1; }, 1000);
-            this.stopListening = listen({
-                lang: document.documentElement.lang || navigator.language || 'en-US',
-                onWords: (sure, stillHearing) => this.showSpeech(sure, stillHearing),
-                onHearing: (on) => { this.hearing = on; },
-                onStop: (reason) => {
-                    const why = {
-                        denied: 'ViStud can\'t hear you. Allow the microphone for this site, then try again.',
-                        network: 'Voice typing needs the internet. Check the connection and try again.',
-                        failed: 'Voice typing could not start. Try again.',
-                    }[reason];
-                    if (why) toast(why, 'warning');
-                    this.stopDictation(true);
-                },
-            });
+            this.dictationTimer = setInterval(() => {
+                this.dictationSeconds += 1;
+                // Five minutes at most: past that it is written down by itself.
+                if (this.dictationSeconds >= 295) this.stopDictation(true);
+            }, 1000);
             this.$nextTick(() => this.focusBoxEnd());
         },
 
@@ -333,16 +339,35 @@ export function guideChat() {
             });
         },
 
-        /** Stops voice typing, keeping what was said (or, with keep false, putting the box back as it was). */
-        stopDictation(keep = true) {
+        /**
+         * Stops voice typing: the recording is written down and its words go after what is in the box (or, with
+         * keep false, it is thrown away and the box is as it was).
+         */
+        async stopDictation(keep = true) {
             const stop = this.stopListening;
             this.stopListening = null;
             stop?.();
             clearInterval(this.dictationTimer);
             this.dictationTimer = null;
             if (!this.transcribing) return;
-            if (!keep) this.writeBox(this.dictationStart);
+            const recording = this.recording;
+            this.recording = null;
             [this.transcribing, this.hearing, this.interimSpeech] = [false, false, ''];
+            if (!keep || !recording) {
+                recording?.cancel();
+                this.writeBox(this.dictationStart);
+            } else {
+                this.writingDown = true;
+                try {
+                    const words = await writeDown(this.$root.dataset.dictationUrl, await recording.stop());
+                    if (words === '') toast('Nothing was heard. Try again a little closer to the microphone.', 'warning');
+                    this.writeBox(joinSpeech(this.$refs.box?.value || this.$wire.text || '', words));
+                } catch (error) {
+                    toast(error.message, 'warning');
+                } finally {
+                    this.writingDown = false;
+                }
+            }
             this.$nextTick(() => this.focusBoxEnd());
         },
 

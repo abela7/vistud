@@ -12,6 +12,7 @@ use App\Engine\Usage;
 use App\Livewire\Study\EngineSettings;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Database\LearnerTables;
+use App\Study\Workspaces;
 use Illuminate\Http\Client\Request as Sent;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -83,6 +84,38 @@ class DictationTest extends TestCase
         LearnerTables::query(LearnerScope::of($by), 'engine_settings')->update(['key_provider' => 'anthropic']);
         $send(['audio' => UploadedFile::fake()->createWithContent('speech.webm', 'audio')])->assertStatus(422)->assertJsonPath('error.code', 'dictation_key');
         Http::assertNothingSent();
+    }
+
+    public function test_the_language_they_are_taught_in_is_told_to_the_model(): void
+    {
+        $user = $this->student();
+        $by = $this->principal($user);
+        $this->ownAiKey($by);
+        $language = fn () => collect(Http::recorded()->last()[0]->data())->firstWhere('name', 'language')['contents'] ?? null;
+        $say = fn () => $this->actingAs($user)->post(route('dictation'), ['audio' => UploadedFile::fake()->createWithContent('speech.webm', 'audio')])->assertOk();
+
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'Amharic', 'dictation_model' => Dictation::GEMINI]);
+        $say();
+        $this->assertSame('am', $language());
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'Afaan Oromo']);
+        $say();
+        $this->assertSame('om', $language());
+        // None chosen, or one the service doesn't know: the model tells which it is.
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => '']);
+        $say();
+        $this->assertNull($language());
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true, 'language' => 'Klingon']);
+        $say();
+        $this->assertNull($language());
+    }
+
+    public function test_the_course_guide_records_too(): void
+    {
+        $this->withoutVite();
+        $user = $this->student();
+        $course = app(Workspaces::class)->create($this->principal($user), ['name' => 'Physics']);
+        $this->actingAs($user)->get(route('workspaces.guide', $course->id))->assertOk()
+            ->assertSee('data-dictation-url="'.route('dictation').'"', false);
     }
 
     public function test_the_ai_settings_page_saves_the_voice_typing_model(): void
