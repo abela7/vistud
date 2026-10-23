@@ -76,6 +76,13 @@ Route::middleware('auth')->group(function () {
         return view('vistud-ai');
     })->name('vistud-ai');
 
+    // AI usage: the tokens the student's AI use took, as a report (App\Livewire\Study\UsageReport).
+    Route::get('/ai/usage', function (Request $request, PrincipalFactory $principals) {
+        Guard::learner($principals->fromRequest($request));
+
+        return view('ai-usage');
+    })->name('ai-usage');
+
     // The calendar of every workspace; each workspace's own is its Calendar section.
     Route::get('/calendar', function (Request $request, PrincipalFactory $principals) {
         Guard::learner($principals->fromRequest($request));

@@ -9,6 +9,7 @@ use App\Engine\Settings;
 use App\Engine\TokenUsage;
 use App\Engine\VistudAi;
 use App\Livewire\Study\TokenUsagePanel;
+use App\Livewire\Study\UsageReport;
 use App\Livewire\Workspaces\TutorChat;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
@@ -94,13 +95,48 @@ class TokenUsageTest extends TestCase
         $this->assertArrayNotHasKey('ViStud AI', $report['areas']);
     }
 
-    public function test_the_ai_settings_page_shows_the_periods_and_switches_the_breakdowns(): void
+    public function test_ai_settings_has_one_row_to_the_report(): void
     {
         $this->get(route('settings', ['part' => 'ai']))->assertOk()->assertSee('token-usage-panel', false);
         Livewire::withoutLazyLoading()->test(TokenUsagePanel::class)
-            ->assertSee('Token usage')->assertSee('640 today', false)->assertSee('Reading files')->assertSee('Physics')->assertSee('fake/quick')
+            ->assertSee('Token usage')->assertSee('640 today · 640 this month')->assertSee(route('ai-usage'))->assertSee('Open report')
+            ->assertDontSee('Reading files');
+    }
+
+    public function test_the_report_shows_one_figure_a_chart_over_time_and_one_breakdown_at_a_time(): void
+    {
+        $this->get(route('ai-usage'))->assertOk()->assertSee('AI usage')->assertSee('usage-report', false);
+
+        Livewire::test(UsageReport::class)
+            // This month: the figure, the chart (a column a day of the month), and where it went by area.
+            ->assertSee('640')->assertSee('3 answers')->assertSee('Over time')->assertSee('Where it went')
+            ->assertSeeInOrder(['Reading files', '53%', 'Study sessions', '23%', 'ViStud AI', '23%'])
             ->assertDontSee('Keeping long chats short')
-            ->call('$set', 'period', 'all')->assertSee('Keeping long chats short')->assertSee('1.7k');
+            ->set('by', 'course')->assertSeeInOrder(['Physics', '77%', 'No course', '23%'])
+            ->set('by', 'model')->assertSeeInOrder(['quick', '53%', 'tutor', '47%'])
+            // All time: the folding of 40 days ago, and a column a month.
+            ->set('period', 'all')->set('by', 'area')->assertSee('1.7k')->assertSee('Keeping long chats short');
+
+        // Today by the hour (24 columns), this week by the day (7), and its readout is the column now.
+        $series = app(TokenUsage::class)->series($this->by, 'today');
+        $this->assertCount(24, $series);
+        $this->assertSame(640, array_sum(array_column($series, 'total')));
+        $this->assertCount(7, app(TokenUsage::class)->series($this->by, 'week'));
+        $this->assertCount(12, $all = app(TokenUsage::class)->series($this->by, 'all'));
+        $this->assertSame(1_740, array_sum(array_column($all, 'total')));
+        $this->assertTrue(end($all)['now']);
+    }
+
+    public function test_the_charts_top_is_a_round_number_and_a_long_list_ends_in_other(): void
+    {
+        $this->assertSame([1, 10_000, 2_000, 500, 1_000], [UsageReport::nice(1), UsageReport::nice(8_300), UsageReport::nice(1_200), UsageReport::nice(500), UsageReport::nice(999)]);
+        $list = [];
+        foreach (range(1, 8) as $i) {
+            $list["Course {$i}"] = ['calls' => 1, 'in' => 0, 'cached' => 0, 'out' => 0, 'total' => 100, 'cost' => 10];
+        }
+        $top = TokenUsage::top($list);
+        $this->assertCount(7, $top);
+        $this->assertSame(['Other', 200, 25], [$top[6]['name'], $top[6]['total'], $top[6]['share']]);
     }
 
     private function job(string $kind, int $in, int $out, int $cost, string $model, ?string $course, $at): void

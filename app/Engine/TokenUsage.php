@@ -121,6 +121,70 @@ final class TokenUsage
     }
 
     /**
+     * The period's tokens over time, for its chart, in the student's own time: today by the hour, a week by the day
+     * (Monday to Sunday), a month by the day, all time by the month (the last twelve).
+     *
+     * @return list<array{label: string, tip: string, total: int, in: int, out: int, cost: int, now: bool}>
+     */
+    public function series(Principal $by, string $period): array
+    {
+        $zone = $this->sessions->timezone($by);
+        $now = CarbonImmutable::now($zone);
+        [$start, $count, $step, $label, $tip] = match ($period) {
+            'today' => [$now->startOfDay(), 24, 'hour', 'ga', 'D j M, g a'],
+            'week' => [$now->startOfWeek(CarbonImmutable::MONDAY), 7, 'day', 'D', 'l j M'],
+            'all' => [$now->startOfMonth()->subMonthsNoOverflow(11), 12, 'month', 'M', 'F Y'],
+            default => [$now->startOfMonth(), $now->daysInMonth, 'day', 'j', 'l j M'],
+        };
+        $buckets = [];
+        for ($i = 0; $i < $count; $i++) {
+            $at = $start->addUnit($step, $i);
+            $buckets[] = ['label' => $at->format($label), 'tip' => $at->format($tip), 'now' => $at->lte($now) && $at->addUnit($step, 1)->gt($now)] + self::zero();
+        }
+        foreach ($this->rows(Guard::learner($by)) as $row) {
+            $at = CarbonImmutable::parse($row['at'], 'UTC')->setTimezone($zone);
+            if ($at->lt($start)) {
+                continue;
+            }
+            $i = (int) floor(match ($step) {
+                'hour' => $start->diffInHours($at),
+                'month' => $start->diffInMonths($at),
+                default => $start->diffInDays($at),
+            });
+            if ($i >= 0 && $i < $count) {
+                $buckets[$i] = array_merge($buckets[$i], self::add($buckets[$i], $row));
+            }
+        }
+
+        return array_map(fn (array $b) => ['label' => $b['label'], 'tip' => $b['tip'], 'total' => $b['total'], 'in' => $b['in'], 'out' => $b['out'], 'cost' => $b['cost'], 'now' => $b['now']], $buckets);
+    }
+
+    /**
+     * A breakdown as its largest $keep, with the rest as "Other", and each one's share of the whole in percent.
+     *
+     * @param  array<string, array{calls: int, in: int, cached: int, out: int, total: int, cost: int}>  $list
+     * @return list<array{name: string, total: int, cost: int, share: int}>
+     */
+    public static function top(array $list, int $keep = 6): array
+    {
+        $whole = max(1, array_sum(array_column($list, 'total')));
+        $rows = [];
+        $other = ['total' => 0, 'cost' => 0];
+        foreach (array_values(array_keys($list)) as $i => $name) {
+            if ($i < $keep) {
+                $rows[] = ['name' => (string) $name, 'total' => $list[$name]['total'], 'cost' => $list[$name]['cost']];
+            } else {
+                [$other['total'], $other['cost']] = [$other['total'] + $list[$name]['total'], $other['cost'] + $list[$name]['cost']];
+            }
+        }
+        if ($other['total'] > 0 || $other['cost'] > 0) {
+            $rows[] = ['name' => 'Other', ...$other];
+        }
+
+        return array_map(fn (array $r) => $r + ['share' => (int) round(100 * $r['total'] / $whole)], $rows);
+    }
+
+    /**
      * When each period starts, in UTC (null: all time).
      *
      * @return array{today: string, week: string, month: string, all: null}
