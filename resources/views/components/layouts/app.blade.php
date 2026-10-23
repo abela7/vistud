@@ -128,6 +128,10 @@
                     <livewire:study.pinned-notes :current="$pinnedCurrent" />
                     {{-- What the tutor remembers: opened from a chat's chip, Settings or a course's Instructions for the AI. --}}
                     <livewire:study.memories :workspace-id="$workspace?->id" :key="'memories-'.($workspace?->id ?? 'all')" />
+                    {{-- ViStud AI from any page, but where a chat already is or would be in the way (VistudAiDock::HIDDEN_ON). --}}
+                    @if (\App\Livewire\Study\VistudAiDock::shows())
+                        <livewire:study.vistud-ai-dock />
+                    @endif
                     @if ($workspace)
                         {{-- Ask's sheet: in the page, not the top bar, which re-points the text colours. --}}
                         <livewire:workspaces.ask
