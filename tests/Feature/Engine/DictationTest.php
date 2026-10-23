@@ -19,6 +19,7 @@ use App\Study\Workspaces;
 use Illuminate\Http\Client\Request as Sent;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
 use Tests\Concerns\CreatesAccounts;
 use Tests\Concerns\RefreshesDatabase;
@@ -32,11 +33,16 @@ class DictationTest extends TestCase
     /** @var list<string> what the service says next, in turn; then the usual answer */
     private array $heard = [];
 
+    /** A status the service fails with, instead of answering. */
+    private ?int $failWith = null;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->app->instance(Engine::class, new Fake);
-        Http::fake(['*/audio/transcriptions' => fn () => Http::response(['text' => array_shift($this->heard) ?? ' Selam, how are you? ', 'usage' => ['cost' => 0.0002, 'seconds' => 4]])]);
+        Http::fake(['*/audio/transcriptions' => fn () => $this->failWith !== null
+            ? Http::response(['error' => ['message' => 'Provider returned error']], $this->failWith)
+            : Http::response(['text' => array_shift($this->heard) ?? ' Selam, how are you? ', 'usage' => ['cost' => 0.0002, 'seconds' => 4]])]);
     }
 
     public function test_a_recording_is_written_down_with_whisper_unless_they_chose_gemini(): void
@@ -223,6 +229,40 @@ class DictationTest extends TestCase
         Livewire::test(TutorChat::class, ['vistud' => true])
             ->assertSee('aria-label="Chat settings"', false)->assertSee('All AI settings')->assertSee('Voice typing')->assertSee("I'll speak", false)
             ->assertDontSee('aria-label="Text formatting"', false)->assertDontSee('aria-label="Voice typing settings"', false);
+    }
+
+    public function test_a_failed_voice_request_leaves_a_log_line_with_what_was_tried_and_never_the_audio(): void
+    {
+        $user = $this->student();
+        $by = $this->principal($user);
+        $this->ownAiKey($by);
+        app(Settings::class)->set($by, ['tutor_model' => 'fake/tutor', 'consent' => true]);
+        $this->failWith = 502;
+        $logged = [];
+        Log::listen(function ($event) use (&$logged) {
+            if ($event->message === 'dictation failed') {
+                $logged[] = $event->context;
+            }
+        });
+
+        $this->actingAs($user)->post(route('dictation'), ['audio' => UploadedFile::fake()->createWithContent('speech.mp4', 'secret words in the audio')], ['User-Agent' => 'iPhone Safari'])
+            ->assertStatus(422)->assertJsonPath('error.code', 'dictation_failed');
+        $this->assertCount(1, $logged);
+        [$line] = $logged;
+        $this->assertSame(['mp4', 25, 'dictation_failed', 'iPhone Safari'], [$line['format'], $line['bytes'], $line['code'], $line['agent']]);
+        $this->assertSame([Dictation::WHISPER, 502, 'Provider returned error'], [$line['calls'][0]['model'], $line['calls'][0]['status'], $line['calls'][0]['error']]);
+        $this->assertArrayHasKey('seconds', $line);
+        $this->assertStringNotContainsString('secret words', json_encode($logged));
+
+        // An upload that never arrived is logged too.
+        $this->actingAs($user)->post(route('dictation'), [])->assertStatus(422);
+        $this->assertSame('audio', $logged[1]['code']);
+    }
+
+    public function test_the_whole_request_keeps_within_the_web_servers_limit(): void
+    {
+        // Each call's time is what is left of the budget, so the two calls of a retry never pass it together.
+        $this->assertLessThan(60, Dictation::BUDGET);
     }
 
     public function test_the_course_guide_records_too(): void

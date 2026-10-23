@@ -9,6 +9,7 @@ use App\Platform\Errors\Unprocessable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Voice typing (App\Engine\Dictation): the chat's microphone sends what it recorded, and gets back the words to put in
@@ -22,6 +23,10 @@ final class DictationController
         Guard::learner($by);
         $file = $request->file('audio');
         if (! $file instanceof UploadedFile || ! $file->isValid()) {
+            // A phone's recording that never arrived whole: what came, for the log; never the audio.
+            Log::warning('dictation failed', ['code' => 'audio', 'upload_error' => $file instanceof UploadedFile ? $file->getError() : 'no file',
+                'content_length' => (int) $request->header('Content-Length'), 'agent' => mb_substr((string) $request->userAgent(), 0, 160)]);
+
             return self::refused('audio', 'Nothing was recorded. Try again.');
         }
         // The browser names the recording by what it made: webm on most phones and computers, mp4 on an iPhone.

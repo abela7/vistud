@@ -12,6 +12,7 @@ use App\Study\AudioPieces;
 use App\Study\Input;
 use App\Study\Sessions;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\Process;
 use Throwable;
 
@@ -75,6 +76,21 @@ final class Dictation
 
     public const MAX_BYTES = 10 * 1024 * 1024;
 
+    /**
+     * The most one voice request may take, in seconds, all calls included: the web server in front (OpenLiteSpeed on the
+     * first server) cuts a request at 60, and the phone would get no words and no reason.
+     */
+    public const BUDGET = 55;
+
+    /** A second try (Amharic heard as Arabic) is made only with at least this many seconds left. */
+    private const RETRY_NEEDS = 12;
+
+    /** When this request started (hrtime, nanoseconds), and what it did, for the log line when it fails. */
+    private int $started = 0;
+
+    /** @var array<string, mixed> */
+    private array $trace = [];
+
     /** The longest recording turned into words, in seconds. */
     public const MAX_SECONDS = 300;
 
@@ -112,6 +128,19 @@ final class Dictation
      */
     public function transcribe(Principal $by, string $bytes, string $extension): string
     {
+        $this->started = hrtime(true);
+        $this->trace = ['format' => strtolower($extension), 'bytes' => strlen($bytes), 'calls' => [], 'agent' => mb_substr((string) request()->userAgent(), 0, 160)];
+        try {
+            return $this->writeDown($by, $bytes, $extension);
+        } catch (Unprocessable $e) {
+            // Every failed voice request leaves a line: what was tried and how long it took; never the audio or words.
+            Log::warning('dictation failed', $this->trace + ['code' => $e->errorCode, 'seconds' => $this->elapsed()]);
+            throw $e;
+        }
+    }
+
+    private function writeDown(Principal $by, string $bytes, string $extension): string
+    {
         $extension = strtolower($extension);
         Input::refuse($bytes === '' || strlen($bytes) > self::MAX_BYTES ? ['audio' => 'Record something shorter than five minutes.'] : []);
         Input::refuse(! in_array($extension, self::FORMATS, true) ? ['audio' => 'That recording can\'t be read.'] : []);
@@ -134,6 +163,7 @@ final class Dictation
 
         [$audio, $format] = self::speech($bytes, $extension);
         $language = self::languageFor($choices);
+        $this->trace += ['converted' => $format === 'mp3' && $extension !== 'mp3', 'sent_bytes' => strlen($audio), 'language' => $language ?? 'auto', 'after_convert' => $this->elapsed()];
         // On the shared key a model kept for own keys is not used: Gemini for the Ethiopic languages, else Whisper.
         $model = $shared !== null && in_array($choices->dictationModel, self::OWN_KEY_ONLY, true)
             ? (in_array($language, self::ETHIOPIC, true) ? self::GEMINI : self::WHISPER)
@@ -142,9 +172,11 @@ final class Dictation
         // Amharic or Tigrinya heard as Arabic (models mix them up): asked once more of the other model, and refused
         // rather than put in the box if it still isn't in the Ethiopic script.
         if (in_array($language, self::ETHIOPIC, true) && ! self::ethiopic($text)) {
-            // Whisper and Chirp are asked again of Gemini; Gemini of Whisper.
+            // Whisper and Chirp are asked again of Gemini; Gemini of Whisper; only with time left for it.
             $other = $model === self::GEMINI ? self::WHISPER : self::GEMINI;
-            $text = $this->ask($by, (string) $secret, $audio, $format, $other, $language, $choices->noTraining);
+            if (self::BUDGET - $this->elapsed() >= self::RETRY_NEEDS) {
+                $text = $this->ask($by, (string) $secret, $audio, $format, $other, $language, $choices->noTraining);
+            }
             if (! self::ethiopic($text)) {
                 $name = self::SPOKEN[$language];
                 throw new Unprocessable('dictation_language', $text === ''
@@ -165,11 +197,25 @@ final class Dictation
         return $ethiopic > 0 && $ethiopic >= $arabic;
     }
 
-    /** One call to the service: the words, with what they cost counted with the month's AI use. */
+    /** Seconds since this request started, to a tenth. */
+    private function elapsed(): float
+    {
+        return round((hrtime(true) - $this->started) / 1e9, 1);
+    }
+
+    /**
+     * One call to the service, within what is left of BUDGET: the words, with what they cost counted with the month's
+     * AI use.
+     */
     private function ask(Principal $by, string $secret, string $audio, string $format, string $model, ?string $language, bool $noTraining): string
     {
+        $left = (int) floor(self::BUDGET - $this->elapsed());
+        if ($left < 3) {
+            throw new Unprocessable('dictation_slow', 'That took too long. Try a shorter recording, or Whisper in the chat\'s settings.');
+        }
+        $call = ['model' => $model, 'at' => $this->elapsed()];
         try {
-            $response = Http::withToken($secret)->acceptJson()->timeout(90)
+            $response = Http::withToken($secret)->acceptJson()->timeout($left)->connectTimeout(min(10, $left))
                 ->attach('file', $audio, 'speech.'.$format)
                 ->post(rtrim($this->setup->url(), '/').'/audio/transcriptions', array_filter([
                     'model' => $model,
@@ -178,9 +224,14 @@ final class Dictation
                     'language' => $language,
                     'temperature' => $language !== null ? '0' : null,
                 ], fn ($value) => $value !== null));
-        } catch (Throwable) {
-            throw new Unprocessable('dictation_failed', 'The voice service couldn\'t be reached. Try again.');
+        } catch (Throwable $e) {
+            $this->trace['calls'][] = $call + ['status' => 'no answer', 'took' => round($this->elapsed() - $call['at'], 1), 'why' => mb_substr($e->getMessage(), 0, 160)];
+            throw new Unprocessable('dictation_failed', $this->elapsed() >= self::BUDGET - 1
+                ? 'The voice service was too slow. Try again, or Whisper in the chat\'s settings.'
+                : 'The voice service couldn\'t be reached. Try again.');
         }
+        $this->trace['calls'][] = $call + ['status' => $response->status(), 'took' => round($this->elapsed() - $call['at'], 1)]
+            + ($response->successful() ? [] : ['error' => mb_substr((string) ($response->json('error.message') ?? $response->body()), 0, 200)]);
         if (! $response->successful()) {
             throw new Unprocessable('dictation_failed', match ($response->status()) {
                 401, 403 => 'Your AI key was refused. Check it in your AI settings.',
@@ -220,7 +271,8 @@ final class Dictation
             file_put_contents($in, $bytes);
             $process = new Process([AudioPieces::binary(), '-hide_banner', '-loglevel', 'error', '-y', '-i', $in, '-t', (string) self::MAX_SECONDS,
                 '-vn', '-ac', '1', '-ar', '16000', '-b:a', '32k', $out], null, ['TMPDIR' => $work->path, 'TMP' => $work->path, 'TEMP' => $work->path]);
-            $process->setTimeout(60);
+            // Short: speech-quality mp3 of a few minutes takes a second or two; the request has BUDGET in all.
+            $process->setTimeout(15);
             $process->run();
 
             return $process->isSuccessful() && is_file($out) && filesize($out) > 0
