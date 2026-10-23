@@ -1,1 +1,1 @@
-<x-layouts.auth title="Privacy policy"><main class="prose mx-auto max-w-3xl p-8">{!! $policy !!}</main></x-layouts.auth>
+<x-layouts.auth title="Privacy policy" :index="true" share-title="ViStud privacy policy" description="What ViStud keeps, how it is protected, who it is shared with, and how to delete your account."><main class="prose mx-auto max-w-3xl p-8">{!! $policy !!}</main></x-layouts.auth>

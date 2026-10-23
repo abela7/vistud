@@ -10,7 +10,10 @@
     $invalid = $errors->has('invitation');
     $fieldErrors = collect($errors->get('timezone'))->merge($errors->get('token'));
 @endphp
-<x-layouts.auth title="Accept your invitation">
+{{-- A shared link's preview says what it is, never who sent it or for which class: the code is after the #. --}}
+<x-layouts.auth title="Accept your invitation"
+    :share-title="$classLink ? 'Join your class on ViStud' : 'You\'re invited to ViStud'"
+    :description="\App\Appearance\Share::JOIN">
     <div class="grid min-h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:grid-rows-none">
         <x-auth.brand-panel />
 

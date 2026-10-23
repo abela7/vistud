@@ -7,7 +7,7 @@
     $credentialsError = collect($errors->get('email'))->first(fn ($message) => $message === __('auth.failed')
         || str_starts_with($message, strstr(__('auth.throttle'), ':seconds', true)));
 @endphp
-<x-layouts.auth title="Log in">
+<x-layouts.auth title="Log in" :index="true">
     <div class="grid min-h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:grid-rows-none">
         <x-auth.brand-panel />
 

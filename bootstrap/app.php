@@ -4,6 +4,7 @@ use App\Http\Middleware\EnsureAccountActive;
 use App\Http\Middleware\EnsureRole;
 use App\Http\Middleware\EnsureTwoFactorEnrolled;
 use App\Http\Middleware\EnterAdminArea;
+use App\Http\Middleware\KeepPrivatePagesOutOfSearch;
 use App\Http\Middleware\LogOAuthAttempt;
 use App\Http\Middleware\McpTunnelOnly;
 use App\Http\Middleware\RequirePasswordConfirmation;
@@ -46,6 +47,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->prepend(AssignRequestId::class);
         $middleware->append(LogOAuthAttempt::class);
+        // Every response but the pages search engines may list says noindex in a header (App\Appearance\Share).
+        $middleware->append(KeepPrivatePagesOutOfSearch::class);
         // A test tunnel opens only the AI-app paths (docs/specs/mcp-connections-plan.md M6.1); behind it, the
         // tunnel's https address is the one links are made with.
         $middleware->prepend(McpTunnelOnly::class);

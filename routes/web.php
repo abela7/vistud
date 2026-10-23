@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\IconSpriteController;
+use App\Http\Controllers\ShareController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -17,6 +18,12 @@ Route::get('/', fn () => ! auth()->check() ? redirect()->route('login') : (reque
 
 // Every icon, once, for the browser to keep (App\Appearance\Icons).
 Route::get('/icons.svg', IconSpriteController::class)->name('icons');
+
+// How ViStud shows up outside itself (App\Appearance\Share): what crawlers may read, the pages they may list, and
+// what a phone needs to keep it on its home screen.
+Route::get('/robots.txt', [ShareController::class, 'robots'])->name('robots');
+Route::get('/sitemap.xml', [ShareController::class, 'sitemap'])->name('sitemap');
+Route::get('/manifest.webmanifest', [ShareController::class, 'manifest'])->name('manifest');
 
 require __DIR__.'/web/auth.php';
 require __DIR__.'/web/identity.php';
