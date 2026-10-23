@@ -8,7 +8,9 @@
     $steps = 7;
     $hasKey = $keyState === 'own';
 @endphp
+{{-- ?guide=key (ViStud AI's link, OwnKeyAnswerTool) opens it at once. --}}
 <div x-data="{ open: false, step: 1, steps: {{ $steps }} }"
+    x-init="if (new URLSearchParams(location.search).get('guide') === 'key') { open = true; step = {{ $hasKey ? 7 : 1 }} }"
     x-on:key-guide-open.window="open = true; step = {{ $hasKey ? 7 : 1 }}"
     x-on:keydown.escape.window="open = false">
     <div class="key-guide-scrim" x-show="open" x-cloak x-transition.opacity x-on:click="open = false" aria-hidden="true"></div>

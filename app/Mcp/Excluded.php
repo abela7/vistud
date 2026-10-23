@@ -12,6 +12,7 @@ final class Excluded
     /** @var array<string, string> tool name => why it is not offered */
     public const TOOLS = [
         'plot_graph' => 'The chat apps draw graphs themselves.',
+        'own_key_answer' => 'ViStud AI\'s offer of a key of its own: a chat app connected over MCP brings its own.',
         'calculate' => 'The chat apps calculate themselves.',
         'create_snippet' => 'The chat apps show copyable code themselves.',
         'delete_topic' => 'No deletes over MCP (decision 4).',

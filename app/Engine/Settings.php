@@ -12,6 +12,7 @@ use App\Platform\Errors\Unprocessable;
 use App\Platform\Ids;
 use App\Study\Input;
 use App\Study\Sessions;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -411,6 +412,41 @@ final class Settings
         LearnerTables::query($scope, 'engine_settings')->update(['dictation_model' => $model, 'dictation_language' => $language, 'updated_at' => now()]);
 
         return $this->get($by);
+    }
+
+    /** The answers to ViStud AI's offer of a key of their own; later and yes are asked again after OFFER_AGAIN_DAYS. */
+    public const OFFER_ANSWERS = ['yes', 'no', 'later'];
+
+    public const OFFER_AGAIN_DAYS = 3;
+
+    /**
+     * Whether ViStud AI should offer a student their own key now: only on the shared key, never after "no", and after
+     * "later" or a "yes" not acted on, again once OFFER_AGAIN_DAYS have passed.
+     */
+    public function shouldOfferOwnKey(Principal $by): bool
+    {
+        if ($this->shared($by) === null) {
+            return false;
+        }
+        $row = LearnerTables::query(Guard::learner($by), 'engine_settings')->first(['own_key_offer', 'own_key_offer_at']);
+        $answer = $row->own_key_offer ?? null;
+        $at = $row->own_key_offer_at ?? null;
+
+        return match ($answer) {
+            null => true,
+            'no' => false,
+            // elapsed: a few days after they said later (or yes and didn't add one), not a calendar date
+            default => $at === null || CarbonImmutable::parse((string) $at)->lt(now()->subDays(self::OFFER_AGAIN_DAYS)),
+        };
+    }
+
+    /** Keeps their answer to the offer of a key of their own. */
+    public function answerOwnKeyOffer(Principal $by, string $answer): void
+    {
+        Input::refuse(! in_array($answer, self::OFFER_ANSWERS, true) ? ['answer' => 'Answer yes, no or later.'] : []);
+        $scope = Guard::learner($by);
+        $this->ensureRow($scope);
+        LearnerTables::query($scope, 'engine_settings')->update(['own_key_offer' => $answer, 'own_key_offer_at' => now(), 'updated_at' => now()]);
     }
 
     /** A row with the defaults, so a key can be kept before anything else is chosen. */

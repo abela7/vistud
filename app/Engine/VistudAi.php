@@ -35,6 +35,15 @@ final class VistudAi
 {
     public const PURPOSE = 'vistud';
 
+    /** What ViStud AI is told while a student on the shared key hasn't answered its offer of a key of their own. */
+    public const OWN_KEY_OFFER = "## Their AI key\n"
+        ."They have no AI key of their own: they use the shared one this ViStud offers, with a few cheaper models and a daily limit. "
+        ."In your next answer, after answering what they asked (in a line or two if it is only a greeting), tell them briefly and kindly: "
+        ."how good the answers are depends on the model, and a key of their own from OpenRouter lets them choose smarter models for better results, "
+        ."paid by them as they go (a few dollars lasts a long time). Then ask whether they would like to add one: yes, no, or later. "
+        ."When they answer, keep it with own_key_answer; with yes, give them the link it returns and tell them to follow the guide one step at a time. "
+        ."Ask once in this conversation; if they talk about something else, help with that and don't press.";
+
     public const PROMPT = 'resources/prompts/vistud-ai.md';
 
     /** The conversations the list shows. */
@@ -255,6 +264,10 @@ final class VistudAi
         $skills = Skills::alwaysOn($by);
         $rules .= $skills !== '' ? "\n\n".$skills : '';
         $parts = [$rules, "# Their study now\n\n".$this->overview->build($by)];
+        // On the shared key, never asked or asked a while ago: offer them a key of their own (Settings::shouldOfferOwnKey).
+        if ($this->settings->shouldOfferOwnKey($by)) {
+            $parts[] = self::OWN_KEY_OFFER;
+        }
         if ($folded !== null && trim($folded) !== '') {
             $parts[] = "## Earlier in this conversation (folded to keep it short)\n\n".Fence::wrap(trim($folded));
         }

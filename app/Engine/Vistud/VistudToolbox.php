@@ -18,7 +18,7 @@ use Illuminate\Contracts\Container\Container;
 final class VistudToolbox
 {
     /** @var list<class-string<Tool>> */
-    public const OWN = [CoursesTool::class, StudyTimeTool::class, SearchEverythingTool::class, MemoriesTool::class, RememberTool::class, ForgetMemoryTool::class];
+    public const OWN = [CoursesTool::class, StudyTimeTool::class, SearchEverythingTool::class, MemoriesTool::class, RememberTool::class, ForgetMemoryTool::class, OwnKeyAnswerTool::class];
 
     /** The tutor's tools ViStud AI may use in a course: reading it, and organising it (what can't be undone is agreed first). */
     public const IN_COURSE = [
