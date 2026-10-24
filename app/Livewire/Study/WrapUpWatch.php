@@ -7,6 +7,7 @@ use App\Identity\PrincipalFactory;
 use App\Livewire\Concerns\Notices;
 use App\Platform\Errors\AppError;
 use Illuminate\Contracts\View\View;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 /**
@@ -24,6 +25,10 @@ final class WrapUpWatch extends Component
     {
         $this->check();
     }
+
+    /** A session's summary queued on this page: drawn again, so it starts checking now. */
+    #[On('wrap-up-started')]
+    public function started(): void {}
 
     public function check(): void
     {

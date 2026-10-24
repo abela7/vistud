@@ -49,12 +49,12 @@ class WrapUpInBackgroundTest extends TestCase
         Queue::fake();
         Livewire::test(StudySession::class, ['workspaceId' => $course->id, 'sessionId' => $session->id])
             ->call('confirmEnd')->call('save')
-            ->assertSet('mode', 'done')->assertSee('is writing your summary in the background');
+            ->assertSet('mode', 'done')->assertSee('is writing your summary in the background')->assertDispatched('wrap-up-started');
         Queue::assertPushed(WrapUpSession::class, fn (WrapUpSession $job) => $job->sessionId === $session->id);
         $this->assertFalse(app(Sessions::class)->find($by, $session->id)->isOpen());
         $this->assertSame('writing', app(SessionChat::class)->wrapState($by, $session->id));
         $this->assertSame([$session->id], session(WrapUpWatch::KEY));
-        Livewire::test(WrapUpWatch::class)->assertSet('notice', null);
+        Livewire::test(WrapUpWatch::class)->assertSet('notice', null)->assertSeeHtml('wire:poll.8s="check"');
 
         // The worker writes it with the reader; the next check says it is saved, once.
         $engine->will(Fake::says('{"summary": "Studied joins: a join combines rows.", "checkpoint": "Joins; next, outer joins."}', 100, 'fake/quick'));
@@ -63,7 +63,7 @@ class WrapUpInBackgroundTest extends TestCase
         $this->assertSame('done', app(SessionChat::class)->wrapState($by, $session->id));
         Livewire::test(WrapUpWatch::class)->assertSet('notice', 'Your session summary is saved.');
         $this->assertSame([], session(WrapUpWatch::KEY));
-        Livewire::test(WrapUpWatch::class)->assertSet('notice', null);
+        Livewire::test(WrapUpWatch::class)->assertSet('notice', null)->assertDontSeeHtml('wire:poll');
         $this->assertSame('Studied joins: a join combines rows.', app(Sessions::class)->find($by, $session->id)->summary);
     }
 

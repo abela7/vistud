@@ -1788,6 +1788,8 @@ Output ONLY a valid JSON object:
     {
         if ($this->chat->wrapPending($by, $this->sessionId)) {
             WrapUpSession::start($by, $this->sessionId);
+            // The page's watcher starts checking now, not on the next page (App\Livewire\Study\WrapUpWatch).
+            $this->dispatch('wrap-up-started');
         }
     }
 

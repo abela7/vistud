@@ -248,6 +248,7 @@ final class TutorChat extends Component
         if (! $session->isOpen() && $this->chat->wrapPending($by, $sessionId) && ! WrapUpSession::queued($sessionId)) {
             // A wrap-up that failed before is tried again, in the background (App\Jobs\WrapUpSession).
             WrapUpSession::start($by, $sessionId);
+            $this->dispatch('wrap-up-started');
         }
     }
 

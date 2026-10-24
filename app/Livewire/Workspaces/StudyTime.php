@@ -153,6 +153,7 @@ final class StudyTime extends Component
             $writing = $this->chat->wrapPending($this->principal(), $this->busyId);
             if ($writing) {
                 WrapUpSession::start($this->principal(), $this->busyId);
+                $this->dispatch('wrap-up-started');
             }
             $this->notice = 'Session ended. You studied '.SessionDetails::duration($ended->studySeconds).'.'.($writing ? ' Its summary is being written; you\'ll be told when it\'s saved.' : '');
         } catch (Conflict|NotFound) {
