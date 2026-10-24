@@ -18,7 +18,7 @@
             <p class="settings-note" role="status"><x-icon name="info" class="size-4" />{{ $flash }}</p>
         @endif
 
-        @forelse ($groups as $provider => $connections)
+        @foreach ($groups as $provider => $connections)
             <div class="space-y-2">
                 <p class="text-sm font-medium">{{ \App\Mcp\Provider::name($provider) }}</p>
                 <ul class="item-list" role="list">
@@ -50,24 +50,28 @@
                     @endforeach
                 </ul>
             </div>
-        @empty
-            <ol class="settings-steps">
-                <li>Add the connector on your computer first (Claude: Settings › Connectors › Add custom connector). Your phone picks it up from there.</li>
-                <li>Use this address: <code class="select-all">{{ $url }}</code></li>
-                <li>Sign in to ViStud when it asks, and choose what it may do.</li>
-            </ol>
-        @endforelse
+        @endforeach
 
-        <details class="text-sm" data-test="install-help">
-            <summary class="cursor-pointer text-fg-muted">Install ViStud in your chat app</summary>
+        {{-- One short recipe per app. Every one uses the same address and signs in here; nothing else to set up. --}}
+        <details class="text-sm" data-test="install-help" @if ($groups === []) open @endif>
+            <summary class="cursor-pointer text-fg-muted">How to connect an AI app</summary>
             <div class="mt-2 space-y-3">
-                <p><span class="font-medium">Claude.</span> Download the package, then in Claude open Customize, Plugins, and upload the zip. Say "let's study week 1" and Claude starts a session from your course.</p>
-                <p><span class="font-medium">ChatGPT.</span> Add a custom connector with the address <code class="select-all">{{ $url }}</code>, then sign in here when it asks. The package below holds the same teaching rules; ChatGPT may not load it, and the connector sends the rules either way.</p>
-                <p><span class="font-medium">Gemini.</span> Connect it to the same address, under Settings, Connected apps, Custom apps. Sign-in may stop before ViStud ever sees it. If it does, use Prompt for another AI on a study session, and paste the reply back with Save from the chat. The package is untested.</p>
+                <p>Every app uses this one address: <code class="select-all">{{ $url }}</code>. No key or password goes into the app: it opens ViStud, you sign in, and you choose what it may do. Pick <span class="font-medium">Read, write, and changes you confirm</span> to give it everything.</p>
+                <p><span class="font-medium">Claude</span> (website or desktop app). Settings › Connectors › Add custom connector. Paste the address, click Add, then sign in here. Your phone picks it up from there.</p>
+                <p><span class="font-medium">ChatGPT.</span> Settings › Apps › add a custom app (connector). Paste the address, choose OAuth for sign-in, then sign in here.</p>
+                <p><span class="font-medium">Gemini.</span> Settings › Connected apps › add a custom app (MCP server). Paste the address, click Next, then sign in here. Sign-in may stop before ViStud ever sees it; if it does, use Prompt for another AI on a study session.</p>
+                <p><span class="font-medium">On your computer</span> (Claude Code, Codex, Gemini CLI). Run one line in a terminal, then sign in here when the browser opens:</p>
+                <ul class="space-y-1" role="list">
+                    <li>Claude Code: <code class="select-all">claude mcp add --transport http vistud {{ $url }}</code>, then <code>/mcp</code></li>
+                    <li>Codex: <code class="select-all">codex mcp add vistud --url {{ $url }}</code>, then <code class="select-all">codex mcp login vistud</code></li>
+                    <li>Gemini CLI: <code class="select-all">gemini mcp add --transport http vistud {{ $url }}</code>, then <code>/mcp auth vistud</code></li>
+                </ul>
+                <p class="text-fg-muted">Optional, after connecting: ViStud's teaching rules as a package for the app (Claude: Customize › Plugins › upload the zip). The connection sends the same rules either way.</p>
+                {{-- download: the browser saves the zip; without it ViStud's in-page navigation drew the zip as text. --}}
                 <ul class="flex flex-wrap gap-3" role="list">
-                    <li><a class="link" href="{{ route('connections.plugin', 'claude') }}">Download for Claude</a></li>
-                    <li><a class="link" href="{{ route('connections.plugin', 'openai') }}">Download for ChatGPT</a></li>
-                    <li><a class="link" href="{{ route('connections.plugin', 'gemini') }}">Download for Gemini</a></li>
+                    <li><a class="link" href="{{ route('connections.plugin', 'claude') }}" download>Download for Claude</a></li>
+                    <li><a class="link" href="{{ route('connections.plugin', 'openai') }}" download>Download for ChatGPT</a></li>
+                    <li><a class="link" href="{{ route('connections.plugin', 'gemini') }}" download>Download for Gemini</a></li>
                 </ul>
                 <p class="text-fg-muted">No chat app that connects? Use "Prompt for another AI" on a study session to copy a prompt into any chat. Nothing is saved back that way.</p>
             </div>

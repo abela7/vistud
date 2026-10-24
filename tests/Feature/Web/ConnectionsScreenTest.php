@@ -99,7 +99,8 @@ class ConnectionsScreenTest extends TestCase
         $this->withoutVite();
         $ada = $this->student();
 
-        $page = $this->actingAs($ada)->get(route('settings', ['part' => 'ai']))->assertOk()->assertSee('Install ViStud in your chat app')->assertSee('Download for Claude');
+        $page = $this->actingAs($ada)->get(route('settings', ['part' => 'ai']))->assertOk()->assertSee('How to connect an AI app')->assertSee('Download for Claude')
+            ->assertSee('codex mcp add vistud --url', false)->assertSee(route('connections.plugin', 'gemini').'" download', false);
         $this->assertStringContainsString(route('connections.plugin', 'openai'), $page->getContent());
 
         $zip = $this->actingAs($ada)->get(route('connections.plugin', 'claude'))->assertOk();
