@@ -677,7 +677,11 @@
     @endif
 
     <div class="session-focus-bar">
-        <div class="session-focus-left">
+        {{-- The chat's text size, kept on this device; the tutor menu below changes it (resources/css/shell.css, .chat-log). --}}
+        <div class="session-focus-left"
+            x-data="{ chatZoom: $persist(100).as('vistud.chat-zoom'), zoomSteps: [90, 100, 110, 125, 140, 160],
+                zoomBy(step) { const at = this.zoomSteps.indexOf(this.chatZoom); this.chatZoom = this.zoomSteps[Math.min(this.zoomSteps.length - 1, Math.max(0, (at < 0 ? 1 : at) + step))]; } }"
+            x-effect="document.documentElement.style.setProperty('--chat-zoom', chatZoom / 100)">
             <a href="{{ $backHref }}" class="session-icon-btn shrink-0" title="Back to {{ $placeName ?? 'Course' }}" aria-label="Back to {{ $placeName ?? 'Course' }}">
                 <x-icon name="arrow-left" class="size-3.5" />
             </a>
@@ -756,6 +760,16 @@
                         </div>
 
                         <div class="session-tutor-popover-body">
+                            <section class="session-tutor-popover-section" aria-labelledby="session-tutor-zoom-label">
+                                <h3 id="session-tutor-zoom-label" class="session-tutor-section-label">Chat text size</h3>
+                                <div class="session-tutor-options" role="group" aria-labelledby="session-tutor-zoom-label">
+                                    <button type="button" class="session-tutor-choice-btn" x-on:click="zoomBy(-1)" x-bind:disabled="chatZoom <= zoomSteps[0]" aria-label="Smaller chat text" title="Smaller">A−</button>
+                                    <button type="button" class="session-tutor-choice-btn" x-bind:class="{ 'is-active': chatZoom === 100 }" x-on:click="chatZoom = 100" title="Back to normal size"><span x-text="chatZoom + '%'">100%</span></button>
+                                    <button type="button" class="session-tutor-choice-btn" x-on:click="zoomBy(1)" x-bind:disabled="chatZoom >= zoomSteps[zoomSteps.length - 1]" aria-label="Bigger chat text" title="Bigger">A+</button>
+                                </div>
+                                <p class="session-tutor-section-hint">Makes the chat's messages bigger or smaller, on this device.</p>
+                            </section>
+
                             @foreach ($tuningGroups as $groupKey => $group)
                                 @php
                                     $current = $tutoring[$groupKey] ?? $group['default'];

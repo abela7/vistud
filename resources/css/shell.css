@@ -737,6 +737,11 @@
         overflow-y: auto;
     }
 
+    /* A study session's chat text size (the tutor menu's Chat text size): each message, not the scrolling log. */
+    .session-page .chat-log > li {
+        zoom: var(--chat-zoom, 1);
+    }
+
     /* The gear's Chat memory page: the summary the AI reads instead of the older messages, and "Compact now". */
     .chat-memory {
         display: flex;
