@@ -90,6 +90,25 @@ class GeminiFlowTest extends TestCase
         ])->assertStatus(400);
     }
 
+    public function test_a_refused_sign_up_logs_the_addresses_it_asked_for_with_long_numbers_masked(): void
+    {
+        $seen = [];
+        Log::listen(function ($event) use (&$seen) {
+            if ($event->message === 'oauth.register.refused') {
+                $seen[] = $event->context;
+            }
+        });
+
+        $this->postJson('/oauth/register', [
+            'client_name' => 'Gemini',
+            'redirect_uris' => ['https://other.example.com/cb/user-1033188046612?code=secret'],
+        ])->assertStatus(400);
+
+        $this->assertCount(1, $seen);
+        $this->assertSame('Gemini', $seen[0]['client_name']);
+        $this->assertSame(['https://other.example.com/cb/user-#'], $seen[0]['redirect_uris']);
+    }
+
     public function test_the_connections_page_tells_the_student_what_to_do_when_gemini_does_not_finish(): void
     {
         $this->actingAs($this->student())->get('/settings?part=ai')->assertOk()
