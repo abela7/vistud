@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Mcp;
 
+use App\Mcp\Provider;
 use Illuminate\Support\Facades\Log;
 use Tests\Concerns\ConnectsAiApps;
 use Tests\Concerns\CreatesAccounts;
@@ -75,6 +76,18 @@ class GeminiFlowTest extends TestCase
             'redirect_uris' => ['https://unknown.googleusercontent.com/callback'],
         ])->assertStatus(400);
         $this->assertNotContains('https://unknown.googleusercontent.com', config('mcp.redirect_domains'));
+    }
+
+    public function test_geminis_own_redirect_registers_and_is_named_google_but_the_rest_of_its_host_is_not(): void
+    {
+        $gemini = 'https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-103318804661249178976-vistud_app';
+        $this->postJson('/oauth/register', ['client_name' => 'Gemini', 'redirect_uris' => [$gemini]])->assertCreated();
+        $this->assertSame(Provider::GOOGLE, Provider::fromRedirect($gemini));
+
+        $this->postJson('/oauth/register', [
+            'client_name' => 'Other',
+            'redirect_uris' => ['https://oauth-redirect.googleusercontent.com/elsewhere'],
+        ])->assertStatus(400);
     }
 
     public function test_the_connections_page_tells_the_student_what_to_do_when_gemini_does_not_finish(): void

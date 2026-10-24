@@ -14,6 +14,8 @@ return [
         'https://claude.ai',
         'https://chatgpt.com',
         'https://antigravity.google',
+        // Gemini's web app (2026-10-24, from its "Copy redirect URI"): /r/user_bound_custom-mcp-<account>-<server>.
+        'https://oauth-redirect.googleusercontent.com/r/',
         'http://localhost',
         'http://127.0.0.1',
     ],
