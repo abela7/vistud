@@ -1150,19 +1150,48 @@ final class SessionChat
     /** @param  int  $room  the characters the unfolded chat may hold (historyRoom) */
     private function foldIfLong(Principal $by, string $workspaceId, string $threadId, int $room): void
     {
+        $this->fold($by, $workspaceId, $threadId, $room);
+    }
+
+    /**
+     * Folds a session's chat now, whatever its size, when the student asks ("Compact now"): the same fold, keeping
+     * the last few messages as they are.
+     *
+     * @return 'folded'|'short'|'failed' folded; too short to fold yet; or the reader could not write the summary
+     */
+    public function compact(Principal $by, string $sessionId): string
+    {
+        $session = $this->sessions->find($by, $sessionId);
+        $thread = LearnerTables::query(Guard::learner($by), 'engine_threads')->where('session_id', $sessionId)->first();
+
+        return $thread === null ? 'short' : $this->fold($by, $session->workspaceId, $thread->id, -1);
+    }
+
+    /** What the AI reads instead of a session chat's folded messages; null before any fold. */
+    public function foldedSummary(Principal $by, string $sessionId): ?string
+    {
+        $this->sessions->find($by, $sessionId);
+        $summary = LearnerTables::query(Guard::learner($by), 'engine_threads')->where('session_id', $sessionId)->value('summary');
+
+        return is_string($summary) && trim($summary) !== '' ? trim($summary) : null;
+    }
+
+    /** @return 'folded'|'short'|'failed' */
+    private function fold(Principal $by, string $workspaceId, string $threadId, int $room): string
+    {
         $scope = Guard::learner($by);
         $thread = LearnerTables::query($scope, 'engine_threads')->where('id', $threadId)->first();
         $rows = array_values(array_filter($this->rows($scope, $threadId), fn ($row) => (int) $row->position > (int) $thread->folded_through));
         $size = array_sum(array_map(fn ($row) => mb_strlen((string) $row->content), $rows));
         if ($size <= $room) {
-            return;
+            return 'short';
         }
         $cut = count($rows) - max(1, (int) config('vistud.engine.keep_recent'));
         while ($cut > 0 && $rows[$cut]->role !== 'user') {
             $cut--;
         }
         if ($cut <= 0) {
-            return;
+            return 'short';
         }
         $folded = array_slice($rows, 0, $cut);
         $changes = $this->topicChangesBefore($by, $thread, $this->rows($scope, $threadId));
@@ -1180,16 +1209,18 @@ final class SessionChat
                 800,
             ));
         } catch (EngineFailed|Unprocessable) {
-            return;
+            return 'failed';
         }
         $summary = mb_substr(trim($reply->text), 0, self::SUMMARY_CHARS * 2);
         if ($summary === '') {
-            return;
+            return 'failed';
         }
         LearnerTables::query($scope, 'engine_threads')->where('id', $threadId)->update([
             'summary' => $summary, 'folded_through' => (int) $folded[array_key_last($folded)]->position,
             'spent_micros' => DB::raw('spent_micros + '.(int) ($reply->costMicros ?? 0)), 'updated_at' => now(),
         ]);
+
+        return 'folded';
     }
 
     private function markWrapped(LearnerScope $scope, string $threadId, int $costMicros): void

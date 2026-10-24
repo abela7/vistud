@@ -153,6 +153,10 @@ final class TutorChat extends Component
 
     public bool $marksDismissed = false;
 
+    /** What "Compact now" came to, shown in the gear's Chat memory page. */
+    #[Locked]
+    public ?string $compactNote = null;
+
     public ?string $dismissedMarkFingerprint = null;
 
     private SessionChat $chat;
@@ -473,6 +477,19 @@ final class TutorChat extends Component
         $this->reload();
     }
 
+    /** A study session's "Compact now": its older messages folded into the summary the AI reads, now. */
+    public function compactNow(): void
+    {
+        if ($this->sessionId === '' || $this->vistud || $this->topicId !== null || $this->activityId !== null) {
+            return;
+        }
+        $this->compactNote = match ($this->chat->compact($this->principal(), $this->sessionId)) {
+            'folded' => 'Compacted. The AI now reads the summary below instead of the older messages.',
+            'short' => 'Nothing to compact yet: the chat is still short.',
+            default => 'The summary could not be written just now. Try again in a moment.',
+        };
+    }
+
     /** Answers the last message again, after the engine failed on it. */
     public function retry(): void
     {
@@ -770,6 +787,9 @@ final class TutorChat extends Component
             'tutoringChoices' => Tutoring::CHOICES,
             'tutoringQuestions' => Tutoring::QUESTIONS,
             'tutoringSummary' => Tutoring::summary($session->tutoring),
+            // A study session's chat memory, in the gear: the summary the AI reads instead of the folded messages.
+            'compactable' => $ai === null && $onTopic === null && $activity === null && $turns !== [],
+            'foldedSummary' => $ai === null && $onTopic === null && $activity === null ? $this->chat->foldedSummary($by, $this->sessionId) : null,
         ]);
     }
 

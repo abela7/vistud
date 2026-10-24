@@ -737,6 +737,28 @@
         overflow-y: auto;
     }
 
+    /* The gear's Chat memory page: the summary the AI reads instead of the older messages, and "Compact now". */
+    .chat-memory {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.5rem;
+    }
+
+    .chat-memory-summary {
+        max-height: 14rem;
+        overflow-y: auto;
+        width: 100%;
+        padding: 0.5rem 0.625rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        color: var(--text);
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        white-space: pre-line;
+    }
+
     /* Its first page: a row each for the AI model and voice typing, with what is set, opening a page of its own. */
     .chat-settings-row {
         display: flex;

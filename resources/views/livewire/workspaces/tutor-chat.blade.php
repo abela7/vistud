@@ -710,6 +710,16 @@
                                         </span>
                                         <x-icon name="chevron-right" class="size-4 text-fg-muted flex-none" />
                                     </button>
+                                    @if ($compactable)
+                                        <button type="button" class="chat-settings-row" x-on:click="page = 'memory'">
+                                            <x-icon name="layers" class="size-4 text-fg-muted flex-none" />
+                                            <span class="chat-settings-row-text">
+                                                <span class="chat-settings-row-name">Chat memory</span>
+                                                <span class="chat-settings-row-value">{{ $foldedSummary !== null ? 'Older messages summarised' : 'The whole chat' }}</span>
+                                            </span>
+                                            <x-icon name="chevron-right" class="size-4 text-fg-muted flex-none" />
+                                        </button>
+                                    @endif
                                     <div class="chat-model-popover-foot" role="status">
                                         <span class="chat-model-usage">{{ \App\Engine\TokenUsage::short($chatTokens['total']) }} tokens in this chat · {{ $spentWords }}</span>
                                     </div>
@@ -743,6 +753,32 @@
                                         @endforeach
                                     </div>
                                 </div>
+
+                                {{-- Chat memory: what the AI reads instead of the older messages, and "Compact now". --}}
+                                @if ($compactable)
+                                    <div x-show="page === 'memory'" x-cloak>
+                                        <div class="chat-model-popover-head">
+                                            <button type="button" class="chat-settings-back" x-on:click="page = 'menu'"><x-icon name="chevron-left" class="size-4" />Chat memory</button>
+                                        </div>
+                                        <div class="chat-memory">
+                                            <p class="text-xs text-fg-muted">The AI reads the last few messages word for word. Older ones are summarised, so a long chat stays clear for it, even on a small model. You still see every message.</p>
+                                            @if ($foldedSummary !== null)
+                                                <p class="text-xs font-semibold text-fg">What the AI remembers of the older messages</p>
+                                                <div class="chat-memory-summary">{{ $foldedSummary }}</div>
+                                                <p class="text-xs text-fg-muted">Something wrong in it? Tell the tutor in the chat and it will go by what you say.</p>
+                                            @else
+                                                <p class="text-xs text-fg">Nothing is summarised yet: the AI reads the whole chat.</p>
+                                            @endif
+                                            @if ($compactNote)
+                                                <p class="text-xs text-fg" role="status">{{ $compactNote }}</p>
+                                            @endif
+                                            <button type="button" class="btn btn-secondary btn-sm" wire:click="compactNow" wire:loading.attr="disabled" wire:target="compactNow" x-bind:disabled="busy">
+                                                <span wire:loading.remove wire:target="compactNow">Compact now</span>
+                                                <span wire:loading wire:target="compactNow">Compacting…</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                @endif
 
                                 {{-- Voice typing: the language spoken and the model. --}}
                                 <div x-show="page === 'voice'" x-cloak>
