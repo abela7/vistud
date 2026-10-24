@@ -151,7 +151,7 @@ class EngineSettingsScreenTest extends TestCase
         $page = Livewire::test(EngineSettings::class)
             ->assertSee('Teaches in sessions.')->assertSee('Reads files, writes summaries and cards.')->assertSee('Quick edits and questions.')
             ->assertSee('Reader (optional)')->assertSee('Helper (optional)')
-            ->assertSet('autoReadFiles', true)->assertSet('tutorMarksTopics', true)->assertSet('copyPasteAi', false)
+            ->assertSet('autoReadFiles', false)->assertSet('tutorMarksTopics', true)->assertSet('copyPasteAi', false)
             ->assertSee('Let the tutor mark topics')->assertSee('Read my files automatically')->assertSee('I use another AI by copy-paste');
 
         // A price replaces the role's line once a model is chosen; the toggles and the three models are kept.

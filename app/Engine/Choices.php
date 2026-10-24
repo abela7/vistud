@@ -25,8 +25,8 @@ final readonly class Choices
         public ?string $language = null,
         /** Whether the tutor asks before adding or switching topics; otherwise it keeps them as it teaches. */
         public bool $askTopics = false,
-        /** Files uploaded to a module are read by the reader at once. */
-        public bool $autoReadFiles = true,
+        /** Files uploaded to a module are read by the reader at once. Off unless the student turns it on: reading costs tokens. */
+        public bool $autoReadFiles = false,
         /** The tutor sets a topic's status itself (with undo); otherwise it proposes one. */
         public bool $tutorMarksTopics = true,
         /** The tutor keeps short notes about the student (App\Study\TutorMemories); otherwise it keeps none. */

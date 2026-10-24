@@ -280,8 +280,6 @@
                     <livewire:workspaces.file-actions :file-id="$file->id" />
                 </div>
             </header>
-
-            <livewire:workspaces.file-digest :file-id="$file->id" />
         @endif
 
         <div

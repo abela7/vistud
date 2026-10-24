@@ -311,7 +311,7 @@ class AiMenuScreenTest extends TestCase
         $this->get(route('workspaces.modules.show', [$this->workspace, $this->module, 'tab' => 'files']))->assertOk()->assertSeeLivewire(AiAssist::class)
             ->assertSee('AI help with Words.txt')->assertSee('Make a note from it')->assertSee('Find topics')->assertSee('AI help with Lectures')->assertSee('Where should these go?');
         $this->get(route('workspaces.modules.show', [$this->workspace, $this->module, 'tab' => 'notes']))->assertOk()->assertSee('AI help with Notes');
-        $this->get(route('workspaces.files.show', [$this->workspace, $file->id]))->assertOk()->assertSeeLivewire(AiAssist::class)->assertSee('AI help with Words.txt');
+        $this->get(route('workspaces.files.show', [$this->workspace, $file->id]))->assertOk()->assertSeeLivewire(AiAssist::class)->assertSee('Ask the AI')->assertSee('about Words.txt');
         $this->get(route('workspaces.notes.show', [$this->workspace, $note->id]))->assertOk()->assertSeeLivewire(AiAssist::class)->assertSee('id="note-ai-menu"', false)->assertSee('Fix the text');
         $this->get(route('workspaces.show', [$this->workspace, 'progress']))->assertOk()->assertSeeLivewire(AiAssist::class);
     }

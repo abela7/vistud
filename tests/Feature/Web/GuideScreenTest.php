@@ -208,6 +208,8 @@ class GuideScreenTest extends TestCase
 
     public function test_the_talk_can_fill_the_screen_and_use_another_model(): void
     {
+        // The chat's models are the student's chosen and favourite ones (Choices::chatModels, 2026-10-23).
+        app(Settings::class)->set($this->principal($this->ada), ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'favorite_models' => ['openai/gpt-4o'], 'consent' => true]);
         $page = $this->guide()->assertSee('Full screen')->assertSee('Full screen gives this talk more room.')->assertSee('Use full screen')->assertSee('Not now')
             ->assertSee('Switch AI model')->assertSee('Speak instead of typing')
             ->assertSee('fake/tutor');

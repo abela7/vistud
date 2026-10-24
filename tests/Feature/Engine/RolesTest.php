@@ -79,8 +79,8 @@ class RolesTest extends TestCase
         $settings = app(Settings::class);
         $toggles = fn () => [$settings->get($by)->askTopics, $settings->get($by)->autoReadFiles, $settings->get($by)->tutorMarksTopics, $settings->get($by)->copyPasteAi];
 
-        // Ask before topics: off. Read files by themselves: on. The tutor marks topics: on. Copy-paste: off.
-        $this->assertSame([false, true, true, false], $toggles());
+        // Ask before topics: off. Read files by themselves: off (tokens only when asked). The tutor marks topics: on. Copy-paste: off.
+        $this->assertSame([false, false, true, false], $toggles());
 
         $settings->set($by, ['tutor_model' => 'a/tutor', 'auto_read_files' => false, 'copy_paste_ai' => '1']);
         $this->assertSame([false, false, true, true], $toggles());

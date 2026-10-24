@@ -63,7 +63,7 @@ final class EngineSettings extends Component
 
     public bool $askTopics = false;
 
-    public bool $autoReadFiles = true;
+    public bool $autoReadFiles = false;
 
     public bool $tutorMarksTopics = true;
 

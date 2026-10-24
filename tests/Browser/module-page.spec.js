@@ -5,7 +5,7 @@ import { foreignColours, makeStudentWithModulePage, openStudentHome, THEMES, use
 /*
  * The module page as the working surface (docs/specs/vistud-2-blueprint.md §3.5.3): tabs, what the reader found in the
  * files (Add all / Pick / Not these), files that say whether the AI has read them, Study this ▾, the topic sheet,
- * and the file page's "Read by the AI".
+ * and the file page's "Ask the AI" (nothing goes to the AI until it is asked).
  */
 
 const sizes = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } };
@@ -95,21 +95,18 @@ for (const [name, viewport] of Object.entries(sizes)) {
         expect(await noSidewaysScroll(page)).toBe(true);
     });
 
-    test(`the file page says what the AI read and offers Read now when it has not: ${name}`, async ({ page }) => {
+    test(`the file page sends nothing to the AI and offers Ask the AI: ${name}`, async ({ page }) => {
         await page.setViewportSize(viewport);
         const seed = makeStudentWithModulePage();
         await openStudentHome(page, seed.email);
 
         await page.goto(seed.file);
-        const panel = page.getByRole('region', { name: 'Read by the AI' });
-        await expect(panel).toContainText('Scheduling policies and their trade-offs.');
-        await expect(panel).toContainText('CPU scheduling · Round robin');
-        await panel.getByText('Outline').click();
-        await expect(panel.getByText('Introduction')).toBeVisible();
+        await expect(page.getByRole('region', { name: 'Read by the AI' })).toHaveCount(0);
+        await page.getByRole('button', { name: /Ask the AI/ }).click();
+        for (const choice of ['Summarise', 'Make a note from it', 'Make cards from it', 'Find topics']) {
+            await expect(page.getByRole('button', { name: choice })).toBeVisible();
+        }
         expect(await noSidewaysScroll(page)).toBe(true);
-
-        await page.goto(seed.busy);
-        await expect(page.getByRole('region', { name: 'Read by the AI' })).toContainText('Reading…');
     });
 
     test(`every colour on the module page and the file page comes from a token: ${name}`, async ({ page }) => {
@@ -134,7 +131,7 @@ for (const [name, viewport] of Object.entries(sizes)) {
 
         await page.goto(seed.file);
         await useSentinelTheme(page);
-        await expect(page.getByRole('region', { name: 'Read by the AI' })).toBeVisible();
+        await expect(page.getByRole('button', { name: /Ask the AI/ })).toBeVisible();
         states['file page'] = await foreignColours(page);
 
         expect(Object.fromEntries(Object.entries(states).filter(([, found]) => found.length > 0)), 'colours not from a token').toEqual({});
@@ -159,7 +156,7 @@ for (const [name, viewport] of Object.entries(sizes)) {
 
             await page.goto(seed.file);
             await useTheme(page, theme);
-            await expect(page.getByRole('region', { name: 'Read by the AI' })).toBeVisible();
+            await expect(page.getByRole('button', { name: /Ask the AI/ })).toBeVisible();
             expect(await analyse(page)).toEqual([]);
         });
     }

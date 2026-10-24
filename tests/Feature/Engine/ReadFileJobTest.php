@@ -229,6 +229,12 @@ class ReadFileJobTest extends TestCase
         $reading = app(FileReading::class);
         $this->engine->will(Fake::says(json_encode(self::ANSWER)));
 
+        // Off by default: nothing goes to the AI until the student asks (2026-10-24).
+        $this->assertNull($reading->afterUpload($this->by, $this->upload('Off.
+', 'Off.txt')));
+        $this->assertSame(0, LearnerTables::query(LearnerScope::of($this->by), 'engine_jobs')->count());
+        app(Settings::class)->set($this->by, ['tutor_model' => 'fake/tutor', 'reader_model' => 'fake/quick', 'consent' => true, 'auto_read_files' => true]);
+
         // On, in a module, AI set up: it is read.
         $this->assertNotNull($reading->afterUpload($this->by, $this->upload()));
         $this->assertSame('done', $this->row()->status);

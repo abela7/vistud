@@ -6,7 +6,6 @@ use App\Engine\Engine;
 use App\Engine\Fake;
 use App\Engine\Settings;
 use App\Livewire\Workspaces\Contents;
-use App\Livewire\Workspaces\FileDigest;
 use App\Livewire\Workspaces\TopicSheet;
 use App\Livewire\Workspaces\TutorChat;
 use App\Models\User;
@@ -270,38 +269,19 @@ class ModulePageScreenTest extends TestCase
             ->assertSee('All notes &amp; files', false)->assertSee('role="search"', false)->assertSee('name="q"', false);
     }
 
-    public function test_a_files_page_says_what_the_ai_read_and_reads_it_on_request(): void
+    public function test_a_files_page_sends_nothing_to_the_ai_and_offers_ask_the_ai(): void
     {
         $file = $this->file();
         $this->actingAs($this->ada);
-        $this->app->rebinding('request', fn ($app, $request) => $request->setLaravelSession($app['session.store']));
-        $this->get(route('workspaces.files.show', [$this->workspace, $file]))->assertOk()->assertSee('Read by the AI')->assertSee("hasn't read this file yet", false)->assertSee('Read now');
-
-        $panel = Livewire::test(FileDigest::class, ['fileId' => $file])->assertSee('Read now');
-        // No AI set up: a line says what to do, and nothing runs.
-        $panel->call('readNow')->assertSee('Add your key in your AI settings first.');
+        $this->ready();
+        // Opening it: no panel, no reading; one "Ask the AI" button holds what the AI can do with it (2026-10-24).
+        $this->get(route('workspaces.files.show', [$this->workspace, $file]))->assertOk()
+            ->assertDontSee('Read by the AI')->assertSee('Ask the AI')
+            ->assertSeeInOrder(['Summarise', 'Make a note from it', 'Make cards from it', 'Find topics']);
         $this->assertSame(0, LearnerTables::query(LearnerScope::of($this->by), 'engine_jobs')->count());
 
-        $this->ready();
-        $this->engine->will(Fake::says(json_encode(['summary' => 'Scheduling decides who runs.', 'outline' => [['page' => 2, 'heading' => 'Policies']], 'topics' => ['CPU scheduling'], 'language' => 'English'])));
-        $panel->call('readNow')->assertSee('Scheduling decides who runs.')->assertSee('CPU scheduling')->assertSee('Policies')->assertDontSee('Read now')->assertDontSeeHtml('wire:poll');
-
-        // Being read: it says so and asks again every few seconds.
-        $busy = $this->file('Lecture 4.txt', "Another.\n");
-        LearnerTables::insert(LearnerScope::of($this->by), 'engine_jobs', ['id' => 'job-2', 'role' => 'reader', 'kind' => 'read_file', 'target_type' => 'file', 'target_id' => $busy, 'status' => 'running', 'created_at' => now()]);
-        Livewire::test(FileDigest::class, ['fileId' => $busy])->assertSee('Reading…')->assertSeeHtml('wire:poll.3s');
-
-        // A picture is never sent, so its page has no such block.
+        // A picture is never sent, so it has no such button.
         $picture = app(Files::class)->upload($this->by, 'module', $this->module, $this->temp($this->image()), 'Whiteboard.png')->id;
-        Livewire::test(FileDigest::class, ['fileId' => $picture])->assertDontSee('Read by the AI');
-
-        // Another student's file is not found.
-        $this->actingAs($this->student());
-        try {
-            Livewire::test(FileDigest::class, ['fileId' => $file]);
-            $this->fail('Expected not found.');
-        } catch (\Throwable $e) {
-            $this->assertTrue($e instanceof NotFound || $e->getPrevious() instanceof NotFound);
-        }
+        $this->get(route('workspaces.files.show', [$this->workspace, $picture]))->assertOk()->assertDontSee('Ask the AI');
     }
 }

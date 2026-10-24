@@ -5,7 +5,7 @@
     names it for people using a screen reader. Needs <livewire:workspaces.ai-assist> on the page. Placed and moved like a row
     menu (resources/js/shell.js, floating.js).
 --}}
-@props(['kind', 'id', 'label'])
+@props(['kind', 'id', 'label', 'text' => null])
 @php
     $items = [
         'card' => [['card.improve', 'Improve', 'wand-sparkles'], ['card.shorter', 'Shorter', 'minus'], ['card.fix', 'Fix the wording', 'check'], ['card.more', 'Two more like this', 'copy']],
@@ -17,10 +17,16 @@
     ][$kind] ?? [];
 @endphp
 <div class="relative shrink-0 ai-menu">
-    <button type="button" class="topbar-button ai-menu-button" wire:ignore.self data-menu-button aria-controls="ai-menu-{{ $kind }}-{{ $id }}" aria-expanded="false" title="Ask the AI">
-        <x-icon name="sparkles" class="size-5" />
-        {{-- Text, not an attribute: the button's own attributes are ignored by updates, its content isn't. --}}
-        <span class="sr-only">AI help with {{ $label }}</span>
+    {{-- $text: a labelled button (a file's page: "Ask the AI"); without it, the ✦ alone, as in a row. --}}
+    <button type="button" class="{{ $text !== null ? 'btn btn-secondary btn-sm' : 'topbar-button' }} ai-menu-button" wire:ignore.self data-menu-button aria-controls="ai-menu-{{ $kind }}-{{ $id }}" aria-expanded="false" title="Ask the AI">
+        <x-icon name="sparkles" class="{{ $text !== null ? 'size-4' : 'size-5' }}" />
+        @if ($text !== null)
+            <span class="text-xs">{{ $text }}</span>
+            <span class="sr-only">about {{ $label }}</span>
+        @else
+            {{-- Text, not an attribute: the button's own attributes are ignored by updates, its content isn't. --}}
+            <span class="sr-only">AI help with {{ $label }}</span>
+        @endif
     </button>
     <div id="ai-menu-{{ $kind }}-{{ $id }}" class="row-menu" wire:ignore.self data-menu-panel popover="manual" hidden>
         @foreach ($items as [$action, $text, $icon])

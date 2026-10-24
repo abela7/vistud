@@ -517,7 +517,7 @@
                                 <div class="empty-place py-6">
                                     <span class="item-icon" aria-hidden="true"><x-icon name="list-checks" class="size-5" /></span>
                                     <p class="font-medium">No topics yet</p>
-                                    <p class="text-sm text-fg-muted">Put this part's files in Files: the AI reads them all and suggests the main topics. Or add one below.</p>
+                                    <p class="text-sm text-fg-muted">Open a file in Files and choose Ask the AI › Find topics. Or add one below.</p>
                                     <div class="flex flex-wrap items-center justify-center gap-2 mt-2">
                                         <x-button size="sm" variant="primary" icon="sparkles" wire:click="openChooseAgain" wire:loading.attr="aria-busy" wire:target="openChooseAgain" busy-label="Starting…">Find the main topics</x-button>
                                         <a href="{{ route('workspaces.folders.show', [$workspaceId, $place->id, 'tab' => 'files']) }}" class="btn btn-secondary btn-sm no-underline">
@@ -926,7 +926,7 @@
                     <div class="empty-place">
                         <span class="item-icon" aria-hidden="true"><x-icon name="list-checks" class="size-5" /></span>
                         <p class="font-medium">No topics yet</p>
-                        <p class="text-sm text-fg-muted">Put this part's files in Files: the AI reads them all and suggests the main topics. Or add one below.</p>
+                        <p class="text-sm text-fg-muted">Open a file in Files and choose Ask the AI › Find topics. Or add one below.</p>
                         <div class="flex flex-wrap items-center justify-center gap-2 mt-2">
                             @if (! $isModule)
                                 <x-button size="sm" variant="primary" icon="sparkles" wire:click="openChooseAgain" wire:loading.attr="aria-busy" wire:target="openChooseAgain" busy-label="Starting…">Find the main topics</x-button>
