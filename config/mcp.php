@@ -14,8 +14,14 @@ return [
         'https://claude.ai',
         'https://chatgpt.com',
         'https://antigravity.google',
-        // Gemini's web app (2026-10-24, from its "Copy redirect URI"): /r/user_bound_custom-mcp-<account>-<server>.
+        // Gemini's web app registers all six at once, and one refused refuses it (2026-10-24, from the refused
+        // sign-up in the server log): three relay hosts, /r/ and /a/ each, then user_bound_custom-mcp-<account>-<server>.
         'https://oauth-redirect.googleusercontent.com/r/',
+        'https://oauth-redirect.googleusercontent.com/a/',
+        'https://oauth-redirect-sandbox.googleusercontent.com/r/',
+        'https://oauth-redirect-sandbox.googleusercontent.com/a/',
+        'https://oauth-redirect-test.googleusercontent.com/r/',
+        'https://oauth-redirect-test.googleusercontent.com/a/',
         'http://localhost',
         'http://127.0.0.1',
     ],

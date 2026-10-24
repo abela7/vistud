@@ -80,9 +80,15 @@ class GeminiFlowTest extends TestCase
 
     public function test_geminis_own_redirect_registers_and_is_named_google_but_the_rest_of_its_host_is_not(): void
     {
-        $gemini = 'https://oauth-redirect.googleusercontent.com/r/user_bound_custom-mcp-103318804661249178976-vistud_app';
-        $this->postJson('/oauth/register', ['client_name' => 'Gemini', 'redirect_uris' => [$gemini]])->assertCreated();
-        $this->assertSame(Provider::GOOGLE, Provider::fromRedirect($gemini));
+        // All that Gemini sends at once, as the server's log showed them.
+        $gemini = [];
+        foreach (['oauth-redirect-sandbox', 'oauth-redirect-test', 'oauth-redirect'] as $host) {
+            foreach (['r', 'a'] as $path) {
+                $gemini[] = "https://{$host}.googleusercontent.com/{$path}/user_bound_custom-mcp-103318804661249178976-vistud_app";
+            }
+        }
+        $this->postJson('/oauth/register', ['client_name' => 'Google', 'redirect_uris' => $gemini])->assertCreated();
+        $this->assertSame(Provider::GOOGLE, Provider::fromRedirect($gemini[0]));
 
         $this->postJson('/oauth/register', [
             'client_name' => 'Other',
