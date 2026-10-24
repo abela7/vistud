@@ -6,6 +6,7 @@ use App\Http\Middleware\McpPrincipal;
 use App\Identity\PrincipalFactory;
 use App\Mcp\Apps\Panels;
 use App\Mcp\Calls;
+use App\Mcp\CheckpointNudge;
 use App\Mcp\ContextBuilder;
 use App\Mcp\ToolInfo;
 use App\Platform\Access\Guard;
@@ -122,6 +123,12 @@ abstract class McpTool extends Tool
             $structured = $ack + ($structured ?? []);
             if ($resumed) {
                 $text = 'The session was paused while the chat was quiet; it is running again. '.$text;
+            }
+            $sessionId = ContextBuilder::id($arguments, 'session_id');
+            if ($sessionId !== null && ($nudge = CheckpointNudge::for($scope, $container->make(Sessions::class)->find($by, $sessionId), $this->info())) !== null) {
+                $text .= "\n\n".$nudge;
+                $ack['next'] = 'set_checkpoint';
+                $structured = $ack + ($structured ?? []);
             }
             $effects += ['capture_key' => $key, 'hash' => $hash, 'ack' => $ack];
         }
