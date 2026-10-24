@@ -4,6 +4,7 @@ namespace App\Livewire\Workspaces;
 
 use App\Engine\SessionChat;
 use App\Identity\PrincipalFactory;
+use App\Jobs\WrapUpSession;
 use App\Livewire\Concerns\Notices;
 use App\Livewire\Concerns\PomodoroForm;
 use App\Livewire\Concerns\TeachingForm;
@@ -148,9 +149,12 @@ final class StudyTime extends Component
         }
         try {
             $ended = $this->sessions->end($this->principal(), $this->busyId);
-            // Its chat's summary and checkpoint into its record, for the next session to start from.
-            $wrapped = $this->chat->wrapUp($this->principal(), $this->busyId) !== null;
-            $this->notice = 'Session ended. You studied '.SessionDetails::duration($ended->studySeconds).'.'.($wrapped ? ' The chat\'s summary is saved with it.' : '');
+            // Its chat's summary and checkpoint into its record, for the next session to start from, in the background.
+            $writing = $this->chat->wrapPending($this->principal(), $this->busyId);
+            if ($writing) {
+                WrapUpSession::start($this->principal(), $this->busyId);
+            }
+            $this->notice = 'Session ended. You studied '.SessionDetails::duration($ended->studySeconds).'.'.($writing ? ' Its summary is being written; you\'ll be told when it\'s saved.' : '');
         } catch (Conflict|NotFound) {
             // It ended meanwhile.
         }

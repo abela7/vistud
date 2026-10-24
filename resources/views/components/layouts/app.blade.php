@@ -129,6 +129,8 @@
                     {{-- What the tutor remembers: opened from a chat's chip, Settings or a course's Instructions for the AI. --}}
                     <livewire:study.memories :workspace-id="$workspace?->id" :key="'memories-'.($workspace?->id ?? 'all')" />
                     {{-- ViStud AI from any page, but where a chat already is or would be in the way (VistudAiDock::HIDDEN_ON). --}}
+                    {{-- Says when a session's summary, written in the background, is saved (App\Jobs\WrapUpSession). --}}
+                    <livewire:study.wrap-up-watch />
                     @if (\App\Livewire\Study\VistudAiDock::shows())
                         <livewire:study.vistud-ai-dock />
                     @endif

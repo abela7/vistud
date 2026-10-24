@@ -2548,6 +2548,13 @@
                             <div class="space-y-1">
                                 <h3 class="text-sm font-semibold text-fg-muted">Summary</h3>
                                 <p class="break-words">{{ $session->summary }}</p>
+                                <p class="text-xs text-fg-muted">Summary by {{ $wrapModel }}</p>
+                            </div>
+                        @elseif ($wrapState === 'writing')
+                            {{-- Written in the background (App\Jobs\WrapUpSession): this checks until it is there. --}}
+                            <div class="flex items-start gap-2 text-sm text-fg-muted" wire:poll.4s role="status">
+                                <x-icon name="loader-circle" class="size-4 shrink-0 animate-spin" />
+                                <p>{{ $wrapModel }} is writing your summary in the background. You can close this and keep studying: you'll be told when it's saved.</p>
                             </div>
                         @elseif ($chatted)
                             <p class="text-sm text-fg-muted">The tutor's summary couldn't be written just now. It will be saved the next time you open this session.</p>

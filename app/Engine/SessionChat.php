@@ -6,6 +6,7 @@ use App\Engine\Context\Stack;
 use App\Engine\Jobs\Run;
 use App\Engine\Jobs\Runner;
 use App\Engine\Tools\Context;
+use App\Jobs\WrapUpSession;
 use App\Platform\Access\Guard;
 use App\Platform\Access\LearnerScope;
 use App\Platform\Access\Principal;
@@ -900,6 +901,43 @@ final class SessionChat
         $this->markWrapped($scope, $thread->id, (int) ($reply->costMicros ?? 0));
 
         return $written;
+    }
+
+    /**
+     * Where the wrap-up of an ended session stands, for its end screen and the saved notice: 'writing' while its job
+     * (App\Jobs\WrapUpSession) is queued or running, 'done' once written, 'none' when there is nothing to write or it
+     * could not be written (the session's page tries again when opened); 'empty' when there was nothing to summarise.
+     *
+     * @return 'writing'|'done'|'none'|'empty'
+     */
+    public function wrapState(Principal $by, string $sessionId): string
+    {
+        $session = $this->sessions->find($by, $sessionId);
+        $wrapped = LearnerTables::query(Guard::learner($by), 'engine_threads')->where('session_id', $sessionId)->value('wrapped_at');
+
+        return match (true) {
+            $wrapped !== null => $session->summary !== null || $session->checkpoint !== null ? 'done' : 'empty',
+            WrapUpSession::queued($sessionId) => 'writing',
+            default => 'none',
+        };
+    }
+
+    /** Whether an ended session's chat still waits for its wrap-up (it has a chat, not yet wrapped up). */
+    public function wrapPending(Principal $by, string $sessionId): bool
+    {
+        $this->sessions->find($by, $sessionId);
+        $thread = LearnerTables::query(Guard::learner($by), 'engine_threads')->where('session_id', $sessionId)->first();
+
+        return $thread !== null && $thread->wrapped_at === null;
+    }
+
+    /** The name of the model that writes the wrap-up (the reader), for the end screen. */
+    public function wrapModelName(Principal $by): string
+    {
+        $id = $this->settings->get($by)->modelFor(Role::Reader);
+        $name = $this->models->find($id, $this->settings->credential($by))?->name;
+
+        return trim((string) preg_replace('/^[^:]{1,20}:\s*/', '', (string) $name)) ?: (str_contains($id, '/') ? explode('/', $id, 2)[1] : $id);
     }
 
     /**

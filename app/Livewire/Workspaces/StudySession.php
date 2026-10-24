@@ -8,6 +8,7 @@ use App\Engine\Role;
 use App\Engine\SessionChat;
 use App\Engine\Settings;
 use App\Identity\PrincipalFactory;
+use App\Jobs\WrapUpSession;
 use App\Livewire\Concerns\Notices;
 use App\Livewire\Concerns\PomodoroForm;
 use App\Livewire\Concerns\TeachingForm;
@@ -1336,6 +1337,9 @@ Output ONLY a valid JSON object:
         return view('livewire.workspaces.study-session', [
             'session' => $session,
             'chatted' => in_array($this->mode, ['end', 'done'], true) && $this->chat->transcript($by, $this->sessionId) !== [],
+            // The end screen: the summary being written in the background, and which model writes it.
+            'wrapState' => $this->mode === 'done' ? $this->chat->wrapState($by, $this->sessionId) : null,
+            'wrapModel' => $this->mode === 'done' ? $this->chat->wrapModelName($by) : null,
             'topic' => $topic,
             'module' => $module,
             'folder' => $folder,
@@ -1779,13 +1783,11 @@ Output ONLY a valid JSON object:
         ];
     }
 
-    /** The chat's summary and checkpoint into the session's record, once; an engine that fails leaves them for later. */
-    private function wrapUp(Principal $by): bool
+    /** The chat's summary and checkpoint into the session's record, in the background (App\Jobs\WrapUpSession). */
+    private function wrapUp(Principal $by): void
     {
-        try {
-            return $this->chat->wrapUp($by, $this->sessionId) !== null;
-        } catch (Unprocessable|NotFound) {
-            return false;
+        if ($this->chat->wrapPending($by, $this->sessionId)) {
+            WrapUpSession::start($by, $this->sessionId);
         }
     }
 

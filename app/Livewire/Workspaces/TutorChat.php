@@ -18,6 +18,7 @@ use App\Engine\Toolbox;
 use App\Engine\Troubles;
 use App\Engine\VistudAi;
 use App\Identity\PrincipalFactory;
+use App\Jobs\WrapUpSession;
 use App\Platform\Access\Principal;
 use App\Platform\Errors\NotFound;
 use App\Platform\Errors\Unprocessable;
@@ -244,12 +245,9 @@ final class TutorChat extends Component
                 ? ($this->quizzes($by, $session)[0]['text'] ?? 'Quiz me on what I find hardest in this course.')
                 : self::TEST_ASK;
         }
-        if (! $session->isOpen()) {
-            try {
-                $this->chat->wrapUp($by, $sessionId);
-            } catch (Unprocessable|NotFound) {
-                // Nothing to wrap up, or not now.
-            }
+        if (! $session->isOpen() && $this->chat->wrapPending($by, $sessionId) && ! WrapUpSession::queued($sessionId)) {
+            // A wrap-up that failed before is tried again, in the background (App\Jobs\WrapUpSession).
+            WrapUpSession::start($by, $sessionId);
         }
     }
 
