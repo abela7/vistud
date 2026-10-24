@@ -39,7 +39,11 @@ class ConfirmChangeController
         } catch (NotFound $e) {
             throw $e;
         } catch (AppError $e) {
-            return $this->page(['change' => $change, 'done' => null, 'problem' => $e->getMessage(), 'needsPassword' => false]);
+            // The field's own words ("Keep it to 160 characters"), not only "Some fields need attention".
+            $fields = array_merge(...array_values(array_map(fn ($m) => (array) $m, (array) ($e->details['fields'] ?? []))));
+            $problem = trim($e->getMessage().' '.implode(' ', array_filter($fields, 'is_string')));
+
+            return $this->page(['change' => $change, 'done' => null, 'problem' => $problem, 'needsPassword' => false]);
         }
 
         return $this->page(['change' => $change, 'done' => $done, 'problem' => null, 'needsPassword' => false]);

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Mcp;
 
 use App\Audit\AuditAction;
+use App\Engine\Settings;
 use App\Mcp\Confirmations;
 use App\Mcp\Connections;
 use App\Models\User;
@@ -108,15 +109,36 @@ class ConfirmationTest extends TestCase
         $this->assertSame('CPU scheduling', LearnerTables::query(LearnerScope::of($this->by), 'notes')->where('id', $this->note)->value('title'));
     }
 
-    public function test_what_lands_in_every_prompt_asks_for_the_password_first(): void
+    public function test_what_cannot_be_undone_asks_for_the_password_first(): void
     {
-        $url = $this->ask('remember', ['text' => 'Prefers worked examples.', 'course_id' => $this->course]);
+        $memory = app(TutorMemories::class)->add($this->by, null, 'Likes diagrams.', 'student')->id;
+        $url = $this->ask('forget_memory', ['memory_id' => $memory]);
 
         $this->actingAs($this->ada)->post($url)->assertRedirect(route('password.confirm'));
-        $this->assertSame(0, DB::table('tutor_memories')->count());
+        $this->assertSame(1, DB::table('tutor_memories')->count());
 
         $this->withSession(['auth.password_confirmed_at' => now()->getTimestamp()])->post($url)->assertOk();
+        $this->assertSame(0, DB::table('tutor_memories')->count());
+    }
+
+    public function test_remember_keeps_one_short_line_at_once_as_the_tutor_does_and_says_why_when_it_cannot(): void
+    {
+        // No link, no password: kept now, for the course (the owner's ask, 2026-10-24).
+        $kept = $this->callTool($this->token, 'remember', ['text' => 'Prefers worked examples.', 'course_id' => $this->course])->assertOk();
+        $kept->assertJsonPath('result.structuredContent.status', 'recorded');
+        $this->assertStringStartsWith('Kept for this course: "Prefers worked examples."', (string) $kept->json('result.content.0.text'));
         $this->assertSame('Prefers worked examples.', LearnerTables::query(LearnerScope::of($this->by), 'tutor_memories')->value('text'));
+
+        // Too long: rejected, and the app is told the limit to shorten it to.
+        $long = $this->callTool($this->token, 'remember', ['text' => str_repeat('In study sessions, relate each concept to coursework. ', 5)])->assertOk();
+        $long->assertJsonPath('result.structuredContent.status', 'rejected');
+        $this->assertStringContainsString('160 characters', (string) $long->json('result.content.0.text'));
+
+        // The student turned tutors remembering off: nothing is kept.
+        app(Settings::class)->set($this->by, ['tutor_remembers' => false]);
+        $off = (string) $this->callTool($this->token, 'remember', ['text' => 'Likes diagrams.'])->assertOk()->json('result.content.0.text');
+        $this->assertStringStartsWith('Not kept', $off);
+        $this->assertSame(1, DB::table('tutor_memories')->count());
     }
 
     public function test_forgetting_and_replacing_a_note_also_wait_for_the_student(): void

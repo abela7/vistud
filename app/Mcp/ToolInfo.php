@@ -64,7 +64,7 @@ final class ToolInfo
         'rename_course' => ['title' => 'Ask to rename a course', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
         'rename_note' => ['title' => 'Ask to rename a note', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
         'forget_memory' => ['title' => 'Ask to forget a memory', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
-        'remember' => ['title' => 'Ask to remember something about the student', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
+        'remember' => ['title' => 'Remember something about the student', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
         'replace_note' => ['title' => 'Ask to replace a notes whole text', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],
     ];
 
