@@ -14,7 +14,8 @@ use App\Study\Topics;
  * Topics into the course, each in a module: the headings of a file the student shared, say, when the course
  * doesn't have them yet. Names the course has already are left as they are, so asking twice adds nothing. With no
  * module named, they go in the session's module, and in its folder when it studies in one (docs/specs/vistud-2-
- * blueprint.md, Phase 9).
+ * blueprint.md, Phase 9); else in the module (and folder) a chat app passed with module_id. A course with modules
+ * never gets a topic in no module unasked (2026-10-24: ChatGPT's 8 topics landed outside the module it meant).
  */
 final class AddTopicsTool implements Tool
 {
@@ -37,7 +38,7 @@ final class AddTopicsTool implements Tool
         return ['type' => 'object', 'properties' => [
             'topics' => ['type' => 'array', 'description' => 'The topics to add, in the order they are studied.', 'minItems' => 1, 'maxItems' => self::MAX, 'items' => ['type' => 'object', 'properties' => [
                 'name' => ['type' => 'string', 'description' => 'The topic\'s name, short like a chapter heading.'],
-                'module' => ['type' => 'string', 'description' => 'The module\'s title. Left out: the session\'s module (and its folder, in a folder\'s session).'],
+                'module' => ['type' => 'string', 'description' => 'The module\'s title. Left out: the session\'s module (and its folder, in a folder\'s session), else module_id\'s. A course with modules needs one.'],
             ], 'required' => ['name'], 'additionalProperties' => false]],
         ], 'required' => ['topics'], 'additionalProperties' => false];
     }
@@ -50,8 +51,9 @@ final class AddTopicsTool implements Tool
         }
         $modules = $this->modules->list($by, $context->workspaceId);
         $session = $context->sessionId !== null ? $this->sessions->find($by, $context->sessionId) : null;
-        $sessionModule = $session?->moduleId;
-        $sessionFolder = null;
+        // A chat app with no session names the module by id (App\Mcp\ContextBuilder): it stands in for the session's.
+        $sessionModule = $session !== null ? $session->moduleId : $context->moduleId;
+        $sessionFolder = $session === null ? $context->folderId : null;
         if ($session?->folderId !== null) {
             try {
                 $sessionFolder = $this->folders->find($by, $session->folderId)->id;
@@ -88,6 +90,11 @@ final class AddTopicsTool implements Tool
                 }
                 // Another module than the session's: in that module, in no folder.
                 [$moduleId, $folderId] = [$module->id, $module->id === $sessionModule ? $sessionFolder : null];
+            }
+            if ($moduleId === null && $modules !== []) {
+                $problems[] = "{$name}: say which module it belongs in (module, or module_id from course_overview); the course's modules are ".implode(', ', array_map(fn ($m) => '"'.$m->title.'"', $modules)).'.';
+
+                continue;
             }
             try {
                 $addedIds[] = $this->topics->create($by, $context->workspaceId, $name, $moduleId, $folderId)->id;
