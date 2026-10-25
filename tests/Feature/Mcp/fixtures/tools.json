@@ -339,6 +339,37 @@
             "openWorldHint": false
         }
     },
+    "catch_up": {
+        "arguments": [
+            "course_id"
+        ],
+        "required": [],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "assignment_source": {
+        "arguments": [
+            "assignment_id",
+            "course_id",
+            "module_id",
+            "source"
+        ],
+        "required": [
+            "assignment_id",
+            "course_id",
+            "source"
+        ],
+        "hints": {
+            "readOnlyHint": true,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
     "study_brief": {
         "arguments": [
             "session_id"
@@ -373,7 +404,6 @@
     },
     "set_session_topic": {
         "arguments": [
-            "capture_key",
             "session_id",
             "topic_id"
         ],
@@ -390,7 +420,6 @@
     },
     "set_checkpoint": {
         "arguments": [
-            "capture_key",
             "checkpoint",
             "session_id"
         ],
@@ -407,7 +436,6 @@
     },
     "resume_session": {
         "arguments": [
-            "capture_key",
             "session_id"
         ],
         "required": [
@@ -422,7 +450,6 @@
     },
     "end_session": {
         "arguments": [
-            "capture_key",
             "checkpoint",
             "session_id",
             "summary"
@@ -439,7 +466,6 @@
     },
     "set_topic_status": {
         "arguments": [
-            "capture_key",
             "course_id",
             "module_id",
             "reason",
@@ -478,7 +504,6 @@
     },
     "save_key_points": {
         "arguments": [
-            "capture_key",
             "course_id",
             "module_id",
             "points",
@@ -497,7 +522,6 @@
     },
     "make_flashcards": {
         "arguments": [
-            "capture_key",
             "cards",
             "course_id",
             "module_id",
@@ -516,7 +540,6 @@
     },
     "add_questions": {
         "arguments": [
-            "capture_key",
             "course_id",
             "module_id",
             "questions",
@@ -632,6 +655,7 @@
         ],
         "required": [
             "assignment_id",
+            "course_id",
             "text",
             "title"
         ],
@@ -642,10 +666,252 @@
             "openWorldHint": false
         }
     },
+    "add_assignment_source": {
+        "arguments": [
+            "assignment_id",
+            "capture_key",
+            "course_id",
+            "kind",
+            "module_id",
+            "text",
+            "title"
+        ],
+        "required": [
+            "assignment_id",
+            "course_id",
+            "kind",
+            "text"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "confirm_assignment_understanding": {
+        "arguments": [
+            "assignment_id",
+            "course_id",
+            "module_id",
+            "move_to_plan"
+        ],
+        "required": [
+            "assignment_id",
+            "course_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "save_assignment_plan": {
+        "arguments": [
+            "assignment_id",
+            "capture_key",
+            "course_id",
+            "criteria",
+            "milestones",
+            "module_id",
+            "replace",
+            "sections",
+            "starter",
+            "steps",
+            "tracking"
+        ],
+        "required": [
+            "assignment_id",
+            "course_id",
+            "tracking"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "update_assignment_plan_item": {
+        "arguments": [
+            "assignment_id",
+            "course_id",
+            "item",
+            "kind",
+            "module_id",
+            "notes",
+            "state"
+        ],
+        "required": [
+            "assignment_id",
+            "course_id",
+            "item",
+            "state"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "set_stage": {
+        "arguments": [
+            "assignment_id",
+            "course_id",
+            "module_id",
+            "stage"
+        ],
+        "required": [
+            "assignment_id",
+            "course_id",
+            "stage"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "create_course": {
+        "arguments": [
+            "capture_key",
+            "code",
+            "ends_on",
+            "name",
+            "starts_on",
+            "term"
+        ],
+        "required": [
+            "name"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "create_note": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "folder_id",
+            "module_id",
+            "source",
+            "text",
+            "title"
+        ],
+        "required": [
+            "course_id",
+            "text",
+            "title"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "create_assignment": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "due_on",
+            "due_time",
+            "kind",
+            "module_id",
+            "title"
+        ],
+        "required": [
+            "course_id",
+            "title"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": false,
+            "openWorldHint": false
+        }
+    },
+    "move_topic": {
+        "arguments": [
+            "course_id",
+            "folder_id",
+            "module_id",
+            "topic_id"
+        ],
+        "required": [
+            "course_id",
+            "topic_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "edit_flashcard": {
+        "arguments": [
+            "back",
+            "flashcard_id",
+            "front"
+        ],
+        "required": [
+            "flashcard_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "set_tutoring": {
+        "arguments": [
+            "check_ins",
+            "do",
+            "dont",
+            "level",
+            "method",
+            "pace",
+            "session_id"
+        ],
+        "required": [
+            "session_id"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "set_instructions": {
+        "arguments": [
+            "course_id",
+            "for",
+            "module_id",
+            "text"
+        ],
+        "required": [
+            "for",
+            "text"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": true,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
     "create_module": {
         "arguments": [
             "about",
-            "capture_key",
             "course_id",
             "ends_on",
             "folders",
@@ -665,7 +931,6 @@
     },
     "create_folder": {
         "arguments": [
-            "capture_key",
             "course_id",
             "folder_id",
             "kind",
@@ -695,6 +960,7 @@
         ],
         "required": [
             "assignment_id",
+            "course_id",
             "kind",
             "stage",
             "text"

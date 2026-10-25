@@ -20,6 +20,12 @@ final class Agreement
      */
     public static function needed(Principal $by, Context $context, string $change, string $question): ?string
     {
+        // A chat app over MCP asks the student in its own chat, which ViStud cannot see (the tool's description says to).
+        // Only the assignment companion's steps reach here that way, each one undone on the assignment's page; deleting
+        // and renaming are never offered over MCP (App\Mcp\Excluded, App\Mcp\Confirmations).
+        if ($context->via === 'mcp') {
+            return null;
+        }
         if ($context->threadId === null) {
             return 'This can only be done in a study session\'s chat, once the student has agreed to it.';
         }

@@ -183,17 +183,18 @@ abstract class McpTool extends Tool
         $session = ToolInfo::SESSION[$name] ?? null;
         $properties = [];
         if ($info['course']) {
-            $properties['course_id'] = ['type' => 'string', 'description' => $session !== null ? 'The course\'s id, from courses. Leave out when you pass session_id: the session gives it.' : 'The course\'s id, from the courses tool.'];
-            $properties['module_id'] = ['type' => 'string', 'description' => 'A module\'s id in that course, from course_overview; leave out for the whole course.'];
+            $properties['course_id'] = ['type' => 'string', 'description' => $session !== null ? 'Course id; not needed with session_id.' : 'Course id (courses).'];
+            $properties['module_id'] = ['type' => 'string', 'description' => 'Optional module id (course_overview).'];
         }
         if ($session !== null) {
-            $properties['session_id'] = ['type' => 'string', 'description' => $session === 'required' ? 'The open study session\'s id, from start_session or current_session. Required.' : 'The open study session\'s id, when there is one.'];
+            $properties['session_id'] = ['type' => 'string', 'description' => $session === 'required' ? 'Open session id (start_session, current_session).' : 'Open session id, if any.'];
         }
         if (in_array($name, ToolInfo::ASSIGNMENT, true)) {
-            $properties['assignment_id'] = ['type' => 'string', 'description' => 'The assignment\'s id, from the assignments tool.'];
+            $properties['assignment_id'] = ['type' => 'string', 'description' => 'Assignment id (assignments).'];
         }
-        if (! $info['read_only']) {
-            $properties['capture_key'] = ['type' => 'string', 'description' => 'Optional. Any unique string for this save; sending the same key again does not save twice.'];
+        // Only where a resend could save twice: an idempotent tool is safe to repeat (one sent anyway still works).
+        if (! $info['read_only'] && ! $info['idempotent']) {
+            $properties['capture_key'] = ['type' => 'string', 'description' => 'Optional unique key: resent, it never saves twice.'];
         }
 
         return $properties;
@@ -253,7 +254,7 @@ abstract class McpTool extends Tool
 
         return match (true) {
             $session === 'required' => ['session_id'],
-            in_array($name, ['save_to_assignment', 'log_progress'], true) => ['assignment_id'],
+            in_array($name, ToolInfo::ASSIGNMENT_REQUIRED, true) => ['course_id', 'assignment_id'],
             ToolInfo::of($name)['course'] && $session === null => ['course_id'],
             default => [],
         };

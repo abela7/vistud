@@ -39,6 +39,8 @@ final class ToolInfo
         'earlier_sessions' => ['title' => 'Earlier study sessions', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'read'],
         'flashcards_due' => ['title' => 'Flashcards due', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => true, 'level' => 'read'],
         'show_quiz' => ['title' => 'Show a quiz', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => true, 'level' => 'read'],
+        'catch_up' => ['title' => 'Catch up on the student', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'read'],
+        'assignment_source' => ['title' => 'Read a source of an assignment', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'read'],
         'study_brief' => ['title' => 'Where the student stands, to teach', 'read_only' => true, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'read'],
         // Sessions and writes (M6.3), at level read + write.
         'start_session' => ['title' => 'Start a study session', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'native', 'course' => true, 'level' => 'write'],
@@ -56,6 +58,20 @@ final class ToolInfo
         'answer_flashcard' => ['title' => 'Record a flashcard answer', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'native', 'course' => true, 'level' => 'write'],
         'write_note' => ['title' => 'Write in a note', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
         'save_to_assignment' => ['title' => 'Save to an assignment', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        // The assignment companion (2026-10-24): sources, the agreed understanding, the plan and its stage.
+        'add_assignment_source' => ['title' => 'Add a source to an assignment', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'confirm_assignment_understanding' => ['title' => 'Confirm what the assignment asks', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'save_assignment_plan' => ['title' => 'Save the plan of an assignment', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'update_assignment_plan_item' => ['title' => 'Update a step of the plan', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        'set_stage' => ['title' => 'Move the assignment to its next stage', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        // Making and changing what the tutor works with (2026-10-24); nothing is deleted.
+        'create_course' => ['title' => 'Make a course', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'write'],
+        'create_note' => ['title' => 'Make a note', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'native', 'course' => true, 'level' => 'write'],
+        'create_assignment' => ['title' => 'Add an assignment, exam or class', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'native', 'course' => true, 'level' => 'write'],
+        'move_topic' => ['title' => 'Move a topic', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => true, 'level' => 'write'],
+        'edit_flashcard' => ['title' => 'Change a flashcard', 'read_only' => false, 'destructive' => true, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'write'],
+        'set_tutoring' => ['title' => 'Change how the tutor teaches', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'write'],
+        'set_instructions' => ['title' => 'Write standing instructions for tutors', 'read_only' => false, 'destructive' => true, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'full'],
         // A course's shape (2026-10-24): modules and folders, made once whatever the asking.
         'create_module' => ['title' => 'Make a module', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'write'],
         'create_folder' => ['title' => 'Make a folder', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => true, 'level' => 'write'],
@@ -82,11 +98,14 @@ final class ToolInfo
         'set_session_topic' => 'required', 'set_checkpoint' => 'required', 'resume_session' => 'required', 'end_session' => 'required',
         'set_topic_status' => 'optional', 'add_topics' => 'optional', 'answer_question' => 'optional', 'answer_flashcard' => 'optional',
         'save_key_points' => 'required', 'make_flashcards' => 'required', 'add_questions' => 'required', 'record_quiz' => 'required',
-        'write_note' => 'optional',
+        'write_note' => 'optional', 'set_tutoring' => 'required',
     ];
 
     /** @var list<string> tools that work on one assignment, named by `assignment_id` */
-    public const ASSIGNMENT = ['write_note', 'save_to_assignment', 'log_progress'];
+    public const ASSIGNMENT = ['write_note', ...self::ASSIGNMENT_REQUIRED];
+
+    /** @var list<string> tools that need an `assignment_id`: they work on that one assignment and nothing else */
+    public const ASSIGNMENT_REQUIRED = ['save_to_assignment', 'log_progress', 'assignment_source', 'add_assignment_source', 'confirm_assignment_understanding', 'save_assignment_plan', 'update_assignment_plan_item', 'set_stage'];
 
     /** @return array{title: string, read_only: bool, destructive: bool, idempotent: bool, source: string, course: bool, level: string} */
     public static function of(string $name): array

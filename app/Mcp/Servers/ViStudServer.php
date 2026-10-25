@@ -19,6 +19,7 @@ use App\Mcp\Resources\FilePage;
 use App\Mcp\Resources\NoteText;
 use App\Mcp\ToolInfo;
 use App\Mcp\Tools\AnswerFlashcardTool;
+use App\Mcp\Tools\CatchUpTool;
 use App\Mcp\Tools\CreatePlaceTool;
 use App\Mcp\Tools\CurrentSessionTool;
 use App\Mcp\Tools\EngineTool;
@@ -28,6 +29,7 @@ use App\Mcp\Tools\MeTool;
 use App\Mcp\Tools\SessionStepTool;
 use App\Mcp\Tools\ShowQuizTool;
 use App\Mcp\Tools\StartSessionTool;
+use App\Mcp\Tools\StudyWriteTool;
 use Illuminate\Container\Container;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Name;
@@ -47,7 +49,10 @@ final class ViStudServer extends Server
     public const CONTRACT = '0.5.0';
 
     /** laravel/mcp pages tools at 15 by default, and a chat app may read only the first page (plan §3.1). */
-    public int $defaultPaginationLength = 50;
+    // Every tool on one page (63 of them, 2026-10-24): some chat apps never ask for a second page.
+    public int $defaultPaginationLength = 100;
+
+    public int $maxPaginationLength = 100;
 
     protected array $tools = [];
 
@@ -91,6 +96,7 @@ final class ViStudServer extends Server
         }
         $native = [
             'me' => MeTool::class,
+            'catch_up' => CatchUpTool::class,
             'current_session' => CurrentSessionTool::class,
             'flashcards_due' => FlashcardsDueTool::class,
             'show_quiz' => ShowQuizTool::class,
@@ -104,6 +110,7 @@ final class ViStudServer extends Server
                 isset($native[$name]) => $container->make($native[$name]),
                 in_array($name, SessionStepTool::STEPS, true) => new SessionStepTool($name),
                 in_array($name, CreatePlaceTool::NAMES, true) => new CreatePlaceTool($name),
+                in_array($name, StudyWriteTool::NAMES, true) => new StudyWriteTool($name),
                 isset(Confirmations::TOOLS[$name]) => new ManageTool($name),
                 isset($engine[$name]) => new EngineTool($engine[$name]),
                 default => throw new \LogicException("ToolInfo lists {$name}, but no tool has that name."),

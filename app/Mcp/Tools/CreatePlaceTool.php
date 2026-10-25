@@ -41,23 +41,23 @@ final class CreatePlaceTool extends McpTool
 
     protected function fields(): array
     {
-        $kind = ['type' => 'string', 'enum' => array_keys(ModuleParts::KINDS), 'description' => 'What kind of part it is, when it is one.'];
+        $kind = ['type' => 'string', 'enum' => array_keys(ModuleParts::KINDS)];
 
         return $this->what === 'create_module'
             ? [
-                'course_id' => ['type' => 'string', 'description' => 'The course\'s id, from the courses tool.'],
-                'title' => ['type' => 'string', 'description' => 'The module\'s title, as the course names it, at most '.Modules::MAX_TITLE.' characters.'],
-                'about' => ['type' => 'string', 'description' => 'Optional. What the module covers, in a line or two.'],
-                'starts_on' => ['type' => 'string', 'description' => 'Optional. Its first day, YYYY-MM-DD.'],
-                'ends_on' => ['type' => 'string', 'description' => 'Optional. Its last day, YYYY-MM-DD.'],
-                'folders' => ['type' => 'array', 'maxItems' => self::MAX_FOLDERS, 'description' => 'Optional. Folders to make inside it.', 'items' => ['type' => 'object', 'properties' => [
-                    'name' => ['type' => 'string', 'description' => 'The folder\'s name.'],
+                'course_id' => ['type' => 'string', 'description' => 'Course id (courses).'],
+                'title' => ['type' => 'string', 'description' => 'As the course names it.'],
+                'about' => ['type' => 'string', 'description' => 'Optional, a line or two.'],
+                'starts_on' => ['type' => 'string', 'description' => 'Optional, YYYY-MM-DD.'],
+                'ends_on' => ['type' => 'string', 'description' => 'Optional, YYYY-MM-DD.'],
+                'folders' => ['type' => 'array', 'maxItems' => self::MAX_FOLDERS, 'description' => 'Optional folders inside it.', 'items' => ['type' => 'object', 'properties' => [
+                    'name' => ['type' => 'string'],
                     'kind' => $kind,
                 ], 'required' => ['name'], 'additionalProperties' => false]],
             ]
             : [
-                'folder_id' => ['type' => 'string', 'description' => 'Optional. A folder\'s id, as the files tool gives it, to make this one inside it.'],
-                'name' => ['type' => 'string', 'description' => 'The folder\'s name.'],
+                'folder_id' => ['type' => 'string', 'description' => 'Optional parent folder id (files).'],
+                'name' => ['type' => 'string'],
                 'kind' => $kind,
             ];
     }

@@ -77,7 +77,7 @@ final class ContextBuilder
             throw new NotFound;
         }
         $activityId = $assignment === null ? null : $this->assignment($by, $assignment, $course->id);
-        if (in_array($tool, ['save_to_assignment', 'log_progress'], true) && $activityId === null) {
+        if (in_array($tool, ToolInfo::ASSIGNMENT_REQUIRED, true) && $activityId === null) {
             throw new Unprocessable('assignment_required', 'missing: assignment_id. Call assignments for the ids.');
         }
 
