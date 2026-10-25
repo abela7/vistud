@@ -56,6 +56,9 @@ final class ToolInfo
         'answer_flashcard' => ['title' => 'Record a flashcard answer', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'native', 'course' => true, 'level' => 'write'],
         'write_note' => ['title' => 'Write in a note', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
         'save_to_assignment' => ['title' => 'Save to an assignment', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
+        // A course's shape (2026-10-24): modules and folders, made once whatever the asking.
+        'create_module' => ['title' => 'Make a module', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => false, 'level' => 'write'],
+        'create_folder' => ['title' => 'Make a folder', 'read_only' => false, 'destructive' => false, 'idempotent' => true, 'source' => 'native', 'course' => true, 'level' => 'write'],
         'log_progress' => ['title' => 'Log assignment progress', 'read_only' => false, 'destructive' => false, 'idempotent' => false, 'source' => 'engine', 'course' => true, 'level' => 'write'],
         // Changes the student confirms on a ViStud page (M6.5), at level full: the tool only asks, it never changes anything.
         'rename_topic' => ['title' => 'Ask to rename a topic', 'read_only' => false, 'destructive' => true, 'idempotent' => false, 'source' => 'native', 'course' => false, 'level' => 'full'],

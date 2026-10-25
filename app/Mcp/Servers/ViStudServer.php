@@ -19,6 +19,7 @@ use App\Mcp\Resources\FilePage;
 use App\Mcp\Resources\NoteText;
 use App\Mcp\ToolInfo;
 use App\Mcp\Tools\AnswerFlashcardTool;
+use App\Mcp\Tools\CreatePlaceTool;
 use App\Mcp\Tools\CurrentSessionTool;
 use App\Mcp\Tools\EngineTool;
 use App\Mcp\Tools\FlashcardsDueTool;
@@ -102,6 +103,7 @@ final class ViStudServer extends Server
             $tools[] = match (true) {
                 isset($native[$name]) => $container->make($native[$name]),
                 in_array($name, SessionStepTool::STEPS, true) => new SessionStepTool($name),
+                in_array($name, CreatePlaceTool::NAMES, true) => new CreatePlaceTool($name),
                 isset(Confirmations::TOOLS[$name]) => new ManageTool($name),
                 isset($engine[$name]) => new EngineTool($engine[$name]),
                 default => throw new \LogicException("ToolInfo lists {$name}, but no tool has that name."),

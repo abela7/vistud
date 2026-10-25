@@ -642,6 +642,47 @@
             "openWorldHint": false
         }
     },
+    "create_module": {
+        "arguments": [
+            "about",
+            "capture_key",
+            "course_id",
+            "ends_on",
+            "folders",
+            "starts_on",
+            "title"
+        ],
+        "required": [
+            "course_id",
+            "title"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
+    "create_folder": {
+        "arguments": [
+            "capture_key",
+            "course_id",
+            "folder_id",
+            "kind",
+            "module_id",
+            "name"
+        ],
+        "required": [
+            "course_id",
+            "name"
+        ],
+        "hints": {
+            "readOnlyHint": false,
+            "destructiveHint": false,
+            "idempotentHint": true,
+            "openWorldHint": false
+        }
+    },
     "log_progress": {
         "arguments": [
             "assignment_id",

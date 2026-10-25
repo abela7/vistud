@@ -31,6 +31,7 @@ class AdapterParityTest extends TestCase
             ['capability' => 'Who the student is', 'livewire' => [], 'api' => ['api.v1.me', 'api.v1.me.update'], 'mcp' => ['me']],
             ['capability' => 'Notes: create, read, save with versions', 'livewire' => [self::W.'NoteActions'], 'api' => ['api.v1.notes.store', 'api.v1.notes.show', 'api.v1.notes.update'], 'mcp' => ['notes', 'read_note', 'search_notes', 'write_note']],
             ['capability' => 'Pictures in notes', 'livewire' => [], 'api' => ['api.v1.notes.images.store'], 'mcp' => [], 'no_mcp' => 'Pictures are added in the note editor; a chat app writes text.'],
+            ['capability' => 'Modules and folders: made from a chat app', 'livewire' => [self::W.'Contents', self::W.'SectionPage'], 'api' => [], 'mcp' => ['create_module', 'create_folder'], 'no_api' => 'Made on the course pages, and by chat apps over MCP; the JSON API takes them when Flutter needs them.'],
             ['capability' => 'Files and links', 'livewire' => [self::W.'FileActions'], 'api' => ['api.v1.files.store'], 'mcp' => ['files', 'module_files', 'read_file']],
             ['capability' => 'The journal of evidence', 'livewire' => [], 'api' => ['api.v1.journal.entries.show'], 'mcp' => [], 'no_mcp' => 'Chat apps read the journal through memories, topics and study_time, never entry by entry.'],
             ['capability' => 'Offline sync of deletions', 'livewire' => [], 'api' => ['api.v1.sync.tombstones'], 'mcp' => [], 'no_mcp' => 'For the note editor and Flutter, which keep copies offline.'],
