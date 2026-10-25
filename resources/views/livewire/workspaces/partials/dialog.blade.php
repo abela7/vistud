@@ -75,7 +75,7 @@
                             <x-icon name="upload" class="size-6 text-fg-muted" />
                             <span class="font-semibold only-fine-pointer">Drop files or folders here</span>
                             <span class="font-semibold only-touch">Choose files to upload</span>
-                            <span class="text-sm text-fg-muted">PDF, Word, PowerPoint, Excel, OpenDocument, text and images, up to {{ \Illuminate\Support\Number::fileSize($maxUpload) }} each.<span class="only-fine-pointer"> A folder keeps its folders.</span></span>
+                            <span class="text-sm text-fg-muted">PDF, Word, PowerPoint, Excel, OpenDocument, text, code and images, up to {{ \Illuminate\Support\Number::fileSize($maxUpload) }} each.<span class="only-fine-pointer"> A folder keeps its folders.</span></span>
                             <div class="mt-2 flex flex-wrap justify-center gap-2">
                                 <x-button icon="file-up" x-on:click="$refs.files.click()">Choose files</x-button>
                                 <x-button icon="folder-input" class="only-fine-pointer" x-on:click="$refs.folder.click()">Choose a folder</x-button>

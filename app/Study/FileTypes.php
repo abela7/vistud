@@ -29,6 +29,40 @@ final class FileTypes
         'txt' => ['text', 'text/plain', 'Text'],
         'md' => ['text', 'text/markdown', 'Markdown'],
         'csv' => ['text', 'text/csv', 'CSV'],
+        // Code and config (the owner's ask, 2026-10-25: a lab's .java): plain UTF-8 text, always served as text/plain,
+        // so a script is only ever shown as its source, never run. A web page stays refused.
+        'java' => ['text', 'text/plain', 'Java'],
+        'sql' => ['text', 'text/plain', 'SQL'],
+        'py' => ['text', 'text/plain', 'Python'],
+        'ipynb' => ['text', 'text/plain', 'Jupyter notebook'],
+        'js' => ['text', 'text/plain', 'JavaScript'],
+        'ts' => ['text', 'text/plain', 'TypeScript'],
+        'jsx' => ['text', 'text/plain', 'JavaScript'],
+        'tsx' => ['text', 'text/plain', 'TypeScript'],
+        'c' => ['text', 'text/plain', 'C'],
+        'h' => ['text', 'text/plain', 'C header'],
+        'cpp' => ['text', 'text/plain', 'C++'],
+        'hpp' => ['text', 'text/plain', 'C++ header'],
+        'cs' => ['text', 'text/plain', 'C#'],
+        'kt' => ['text', 'text/plain', 'Kotlin'],
+        'swift' => ['text', 'text/plain', 'Swift'],
+        'go' => ['text', 'text/plain', 'Go'],
+        'rs' => ['text', 'text/plain', 'Rust'],
+        'rb' => ['text', 'text/plain', 'Ruby'],
+        'php' => ['text', 'text/plain', 'PHP'],
+        'dart' => ['text', 'text/plain', 'Dart'],
+        'r' => ['text', 'text/plain', 'R'],
+        'm' => ['text', 'text/plain', 'MATLAB'],
+        'css' => ['text', 'text/plain', 'CSS'],
+        'json' => ['text', 'text/plain', 'JSON'],
+        'xml' => ['text', 'text/plain', 'XML'],
+        'yml' => ['text', 'text/plain', 'YAML'],
+        'yaml' => ['text', 'text/plain', 'YAML'],
+        'sh' => ['text', 'text/plain', 'Shell script'],
+        'properties' => ['text', 'text/plain', 'Properties'],
+        'ini' => ['text', 'text/plain', 'Settings'],
+        'log' => ['text', 'text/plain', 'Log'],
+        'tex' => ['text', 'text/plain', 'LaTeX'],
         'png' => ['image', 'image/png', 'Image'],
         'jpg' => ['image', 'image/jpeg', 'Image'],
         'gif' => ['image', 'image/gif', 'Image'],
@@ -62,7 +96,7 @@ final class FileTypes
     {
         $type = self::TYPES[$extension] ?? null;
         if ($type === null) {
-            Input::refuse(['file' => 'This kind of file can\'t be uploaded. Use PDF, Word, PowerPoint, Excel, OpenDocument, text or an image (PNG, JPG, GIF, WebP).']);
+            Input::refuse(['file' => 'This kind of file can\'t be uploaded. Use PDF, Word, PowerPoint, Excel, OpenDocument, text or code (like .java, .sql, .py), or an image (PNG, JPG, GIF, WebP). Zip files are not taken.']);
         }
 
         // Word, PowerPoint, Excel and OpenDocument files are ZIP files inside: without PHP's zip extension they
