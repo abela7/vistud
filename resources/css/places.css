@@ -658,10 +658,11 @@
 
     .module-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
-        gap: 1rem;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 18.5rem), 1fr));
+        gap: 1.25rem;
     }
 
+    /* A card: its colour along the top, the number beside the title, what it holds, then its progress. */
     .module-tile {
         position: relative;
         display: grid;
@@ -671,36 +672,41 @@
             'number main menu'
             'holds holds holds'
             'progress progress progress';
-        column-gap: 0.75rem;
-        row-gap: 0.875rem;
+        column-gap: 0.875rem;
+        row-gap: 1.125rem;
         min-width: 0;
-        padding: 1.125rem 0.75rem 1rem 1rem;
+        min-height: 11rem;
+        padding: 1.25rem 1rem 1.25rem 1.25rem;
         border: 1px solid var(--border);
         border-radius: var(--radius-xl);
         background-color: var(--surface-raised);
-        box-shadow: inset 0 3px 0 var(--ws, var(--accent));
+        box-shadow:
+            inset 0 4px 0 var(--ws, var(--accent)),
+            var(--elevation-sm);
         transition:
             border-color 0.15s ease,
-            box-shadow 0.15s ease;
+            box-shadow 0.15s ease,
+            transform 0.15s ease;
     }
 
     .module-tile:hover {
         border-color: var(--ws, var(--border-strong));
         box-shadow:
-            inset 0 3px 0 var(--ws, var(--accent)),
+            inset 0 4px 0 var(--ws, var(--accent)),
             var(--elevation-md);
+        transform: translateY(-2px);
     }
 
     .module-number {
         grid-area: number;
         display: inline-grid;
         place-items: center;
-        width: 1.75rem;
-        height: 1.75rem;
-        border-radius: var(--radius-md);
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: var(--radius-lg);
         background-color: var(--ws-subtle, var(--accent-subtle));
         color: var(--ws, var(--accent-contrast));
-        font-size: 0.8125rem;
+        font-size: 0.875rem;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
     }
@@ -715,8 +721,9 @@
         display: -webkit-box;
         overflow: hidden;
         font-size: 1rem;
-        font-weight: 600;
-        line-height: 1.35;
+        font-weight: 650;
+        line-height: 1.4;
+        letter-spacing: -0.005em;
         -webkit-box-orient: vertical;
         -webkit-line-clamp: 2;
         line-clamp: 2;
@@ -726,7 +733,7 @@
         display: flex;
         align-items: center;
         gap: 0.375rem;
-        margin-top: 0.25rem;
+        margin-top: 0.3125rem;
         color: var(--text-muted);
         font-size: 0.8125rem;
     }
@@ -734,7 +741,7 @@
     .module-tile > .module-actions {
         grid-area: menu;
         align-self: start;
-        margin: -0.375rem 0 0;
+        margin: -0.25rem -0.25rem 0 0;
     }
 
     .module-holds {
@@ -742,31 +749,36 @@
         display: flex;
         flex-wrap: wrap;
         align-content: start;
-        gap: 0.375rem;
+        gap: 0.5rem;
     }
 
     .module-hold {
         display: inline-flex;
         align-items: center;
-        gap: 0.3125rem;
-        padding: 0.1875rem 0.5rem;
+        gap: 0.375rem;
+        padding: 0.25rem 0.625rem;
+        border: 1px solid var(--border);
         border-radius: 9999px;
-        background-color: var(--surface-sunken);
+        background-color: var(--surface);
         color: var(--text-muted);
         font-size: 0.75rem;
         font-weight: 500;
         white-space: nowrap;
     }
 
+    /* Nothing in it yet: a quiet dashed chip, so an empty module reads as waiting, not broken. */
     .module-hold.is-empty {
-        padding-inline: 0;
+        border-style: dashed;
         background-color: transparent;
+        color: var(--text-subtle, var(--text-muted));
     }
 
     .module-progress {
         grid-area: progress;
         display: grid;
-        gap: 0.375rem;
+        gap: 0.5rem;
+        padding-top: 0.875rem;
+        border-top: 1px solid var(--divider);
     }
 
     .module-progress-label {
@@ -782,20 +794,21 @@
         font-weight: 600;
     }
 
+    .module-progress .meter {
+        height: 0.375rem;
+    }
+
     @media (min-width: 640px) {
         .module-title {
             font-size: 1.0625rem;
         }
     }
 
-    /* The list: one row per module, in one bordered block. */
+    /* The list: one rounded row per module, with room between them and its colour along the left edge. */
     .module-grid.is-list-view {
         display: flex;
         flex-direction: column;
-        gap: 0;
-        border: 1px solid var(--border);
-        border-radius: var(--radius-xl);
-        background-color: var(--surface-raised);
+        gap: 0.625rem;
     }
 
     .module-grid.is-list-view > .module-tile {
@@ -804,29 +817,23 @@
         grid-template-areas: 'number main menu';
         align-items: center;
         row-gap: 0;
-        padding: 0.75rem 0.75rem 0.75rem 1rem;
-        border: 0;
-        border-radius: 0;
-        background-color: transparent;
-        box-shadow: inset 3px 0 0 var(--ws, var(--accent));
-    }
-
-    .module-grid.is-list-view > .module-tile:first-child {
-        border-top-left-radius: inherit;
-        border-top-right-radius: inherit;
-    }
-
-    .module-grid.is-list-view > .module-tile:last-child {
-        border-bottom-left-radius: inherit;
-        border-bottom-right-radius: inherit;
-    }
-
-    .module-grid.is-list-view > .module-tile + .module-tile {
-        border-top: 1px solid var(--divider);
+        min-height: 4.5rem;
+        padding: 0.875rem 0.75rem 0.875rem 1.25rem;
+        border-radius: var(--radius-lg);
+        box-shadow: inset 4px 0 0 var(--ws, var(--accent));
     }
 
     .module-grid.is-list-view > .module-tile:hover {
-        background-color: var(--hover);
+        box-shadow:
+            inset 4px 0 0 var(--ws, var(--accent)),
+            var(--elevation-md);
+        transform: translateY(-1px);
+    }
+
+    .module-grid.is-list-view .module-number {
+        width: 2rem;
+        height: 2rem;
+        border-radius: var(--radius-md);
     }
 
     .module-grid.is-list-view .module-main {
@@ -842,11 +849,16 @@
         display: none;
     }
 
+    .module-grid.is-list-view .module-progress {
+        padding-top: 0;
+        border-top: 0;
+    }
+
     @media (min-width: 640px) {
         .module-grid.is-list-view > .module-tile {
-            grid-template-columns: auto minmax(0, 1fr) 9rem auto;
+            grid-template-columns: auto minmax(0, 1fr) 10rem auto;
             grid-template-areas: 'number main progress menu';
-            column-gap: 1rem;
+            column-gap: 1.25rem;
         }
 
         .module-grid.is-list-view .module-progress {
@@ -856,13 +868,22 @@
 
     @media (min-width: 1024px) {
         .module-grid.is-list-view > .module-tile {
-            grid-template-columns: auto minmax(0, 1fr) auto 10rem auto;
+            grid-template-columns: auto minmax(0, 1fr) auto 11rem auto;
             grid-template-areas: 'number main holds progress menu';
         }
 
         .module-grid.is-list-view .module-holds {
             display: flex;
             flex-wrap: nowrap;
+            justify-content: flex-end;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .module-tile,
+        .module-tile:hover,
+        .module-grid.is-list-view > .module-tile:hover {
+            transform: none;
         }
     }
 
