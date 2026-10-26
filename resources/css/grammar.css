@@ -1,0 +1,93 @@
+/*
+| Grammar and spelling in notes (resources/js/note/grammar.js): a wavy underline under what Harper found, in the
+| error colour for mistakes and the info colour for suggestions, and the small card a click on one opens.
+*/
+
+@layer components {
+    .grammar-mark {
+        text-decoration-line: underline;
+        text-decoration-style: wavy;
+        text-decoration-thickness: 1.5px;
+        text-underline-offset: 3px;
+        text-decoration-skip-ink: none;
+        cursor: pointer;
+    }
+
+    .grammar-mark.is-error {
+        text-decoration-color: var(--danger);
+    }
+
+    .grammar-mark.is-suggestion {
+        text-decoration-color: var(--info);
+    }
+
+    .grammar-card {
+        position: fixed;
+        z-index: 60;
+        display: grid;
+        gap: 0.5rem;
+        width: min(20rem, calc(100vw - 1rem));
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        background-color: var(--surface-raised);
+        color: var(--text);
+        box-shadow: var(--elevation-md);
+    }
+
+    .grammar-card-kind {
+        color: var(--text-muted);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .grammar-card-message {
+        font-size: 0.875rem;
+        line-height: 1.45;
+    }
+
+    .grammar-card-fixes {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+    }
+
+    .grammar-fix {
+        padding: 0.3125rem 0.625rem;
+        border: 1px solid var(--accent);
+        border-radius: var(--radius-md);
+        background-color: var(--accent-subtle);
+        color: var(--text);
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .grammar-fix:hover,
+    .grammar-fix:focus-visible {
+        background-color: var(--hover);
+    }
+
+    .grammar-card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem 0.75rem;
+        padding-top: 0.375rem;
+        border-top: 1px solid var(--divider);
+    }
+
+    .grammar-action {
+        padding: 0.125rem 0;
+        border: 0;
+        background: transparent;
+        color: var(--text-link, var(--accent));
+        font-size: 0.8125rem;
+        cursor: pointer;
+    }
+
+    .grammar-action:hover {
+        text-decoration: underline;
+    }
+}

@@ -16,6 +16,7 @@
 @import './components.css';
 @import './shell.css';
 @import './editor.css';
+@import './grammar.css';
 @import './flashcards.css';
 @import './places.css';
 @import './chat-blocks.css';

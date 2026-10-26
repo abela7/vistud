@@ -258,6 +258,8 @@
                         <button type="button" class="toolbar-button" data-command="image" title="Insert image (Upload or URL)" aria-label="Insert image" tabindex="-1"><x-icon name="image" class="size-5" /></button>
                         <button type="button" class="toolbar-button" data-command="link" title="Link (Ctrl+K)" aria-label="Link" tabindex="-1" aria-pressed="false" aria-expanded="false" aria-controls="note-link-bar"><x-icon name="link" class="size-5" /></button>
                         <button type="button" class="toolbar-button" data-command="find" title="Find & Replace (Ctrl+F / Ctrl+H)" aria-label="Find and replace" tabindex="-1"><x-icon name="search" class="size-5" /></button>
+                        {{-- Grammar and spelling, on this device (resources/js/note/grammar.js): pressed is on. --}}
+                        <button type="button" class="toolbar-button" data-grammar-toggle title="Grammar check" aria-label="Grammar check" aria-pressed="true" tabindex="-1"><x-icon name="spell-check" class="size-5" /></button>
                         <button type="button" class="toolbar-button" data-command="shortcuts" title="Keyboard shortcuts (Ctrl+/)" aria-label="Keyboard shortcuts" tabindex="-1"><x-icon name="keyboard" class="size-5" /></button>
                         <span class="toolbar-separator" aria-hidden="true"></span>
                         <button type="button" class="toolbar-button" data-command="clear" title="Clear formatting" aria-label="Clear formatting" tabindex="-1"><x-icon name="remove-formatting" class="size-5" /></button>

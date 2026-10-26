@@ -39,6 +39,7 @@
         "@laravel/multiplex": "^0.4.1"
     },
     "dependencies": {
+        "harper.js": "2.13.0",
         "pdfjs-dist": "6.3.289"
     }
 }

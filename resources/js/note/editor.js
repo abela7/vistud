@@ -33,6 +33,7 @@ import { deleteDrafts, openDrafts } from './drafts.js';
 import { createAutosave, randomId, xsrf } from './autosave.js';
 import { toast } from '../toasts.js';
 import { openNoteWindow, show as showInWindow } from '../note-window.js';
+import { Grammar } from './grammar.js';
 
 const BLOCKS = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'listItem', 'taskItem', 'table', 'tableRow', 'tableHeader', 'tableCell', 'callout', 'image', 'pageBreak', 'blockMath'];
 
@@ -792,6 +793,8 @@ export async function mount(host) {
             }),
             CharacterCount,
             Placeholder.configure({ placeholder: 'Start writing…' }),
+            // Underlines grammar and spelling, on the student's own device (resources/js/note/grammar.js).
+            Grammar.configure({ host }),
             // An import replaces the whole note with blocks that have their IDs already (withIds): nothing to check.
             UniqueID.configure({ types: BLOCKS, generateID: () => randomId(8), filterTransaction: (tr) => !tr.getMeta('idsGiven') }),
         ],
